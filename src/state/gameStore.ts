@@ -15,6 +15,7 @@ import {
 } from '../game/domain/items';
 import { craftRecipe, type CraftResult, type RecipeId } from '../game/domain/recipes';
 import { INITIAL_SURVIVAL, advanceSurvival, consumeItem, type SurvivalState } from '../game/domain/survival';
+import type { DeviceType } from '../game/domain/devices';
 
 export type GamePhase = 'title' | 'playing';
 export type QualityPreset = 'low' | 'high';
@@ -50,6 +51,16 @@ export interface RaftFeedback {
   averageIntegrity: number;
 }
 
+export interface DeviceFeedback {
+  placed: number;
+  working: number;
+  ready: number;
+  burnt: number;
+  progress: number;
+}
+
+export type DeviceFeedbackMap = Record<DeviceType, DeviceFeedback>;
+
 export interface PlayerSaveSnapshot {
   inventory: Inventory;
   survival: SurvivalState;
@@ -75,6 +86,8 @@ interface GameState {
   fishing: FishingFeedback;
   shark: SharkFeedback;
   raft: RaftFeedback;
+  devices: DeviceFeedbackMap;
+  placementDevice: DeviceType | null;
   interaction: string | null;
   fps: number;
   notice: string | null;
@@ -100,6 +113,8 @@ interface GameState {
   setFishing: (feedback: Partial<FishingFeedback>) => void;
   setShark: (feedback: Partial<SharkFeedback>) => void;
   setRaft: (feedback: RaftFeedback) => void;
+  setDevices: (feedback: DeviceFeedbackMap) => void;
+  setPlacementDevice: (device: DeviceType | null) => void;
   setInteraction: (interaction: string | null) => void;
   setFps: (fps: number) => void;
   showNotice: (notice: string | null) => void;
@@ -148,6 +163,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   fishing: defaultFishing(),
   shark: defaultShark(),
   raft: { tiles: 9, damagedTiles: 0, averageIntegrity: 100 },
+  devices: {
+    purifier: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
+    grill: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
+  },
+  placementDevice: null,
   interaction: null,
   fps: 0,
   notice: null,
@@ -194,8 +214,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (itemCount(get().inventory, itemId) <= 0) return false;
     const consumed = consumeItem(get().survival, itemId);
     if (!consumed.usable) return false;
-    const inventory = removeItems(get().inventory, { [itemId]: 1 });
-    if (!inventory) return false;
+    const paidInventory = removeItems(get().inventory, { [itemId]: 1 });
+    if (!paidInventory) return false;
+    const inventory =
+      itemId === 'freshWaterCup' ? addItems(paidInventory, { emptyCup: 1 }, INVENTORY_SLOT_CAPACITY).inventory : paidInventory;
     set({ survival: consumed.survival, inventory, inventorySlots: usedInventorySlots(inventory) });
     return true;
   },
@@ -220,6 +242,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         : { shark };
     }),
   setRaft: (raft) => set({ raft }),
+  setDevices: (devices) => set({ devices }),
+  setPlacementDevice: (placementDevice) => set({ placementDevice, interaction: null }),
   setInteraction: (interaction) => set((state) => (state.interaction === interaction ? state : { interaction })),
   setFps: (fps) => set({ fps }),
   showNotice: (notice) => set({ notice }),
@@ -234,6 +258,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       playSeconds: snapshot.playSeconds,
       fishing: defaultFishing(),
       shark: defaultShark(),
+      placementDevice: null,
     }),
   getPlayerSnapshot: () => {
     const state = get();

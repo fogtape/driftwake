@@ -1,7 +1,7 @@
 # 原创资产清单
 
 > 更新日期：2026-07-15  
-> 状态：第二轮美术与材质基线，发布前仍需做最终授权、DCC 替换与相似性复核
+> 状态：第三轮生活设备美术与材质基线，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -141,6 +141,8 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 ## 代码原生模型与动画
 
+本轮净水器与烤架需要精确响应放置坐标、燃料、进度、过烧和筏格破坏，因此先以代码原生形体和实时材质动画建立可玩的近最终基线；没有为这两台设备生成或采用新的位图候选，也没有因图像服务限制降低既有贴图质量。
+
 | ID | 资产 | 位置 | 当前状态 |
 | --- | --- | --- | --- |
 | MOD-001 | 可扩展木筏：每格 3 木板、2 横梁、4 铆钉 | `src/game/systems/RaftSystem.ts` | 动态实例化，支持逐格损伤、修补和拆除 |
@@ -151,14 +153,19 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | MOD-006 | 木矛：长杆、金属尖端与五圈扎结 | `src/game/art/ProceduralModels.ts` | 已进入第一视角刺击 |
 | MOD-007 | 钓竿、卷线轮、浮标与银脊鱼 | `src/game/art/ProceduralModels.ts` | 已进入抛投、鱼讯、挣扎和收获循环 |
 | MOD-008 | 深潮鲨：车削躯干、背鳍、胸鳍、尾柄、双叶尾、眼、口与鳃 | `src/game/art/ProceduralModels.ts` | 12+ 独立网格，已接巡游、袭击与受击动画 |
+| MOD-009 | 潮汐净水器：绑扎木架、火盆、海水槽、编织蒸馏罩、冷凝沟、滴管与透明杯具 | `src/game/art/ProceduralModels.ts` | 35+ 独立网格，运行阶段驱动海水/净水水位和滴水 |
+| MOD-010 | 折铁烤架：绑扎木架、折铁火盆、九根炉条、横撑、把手与银脊鱼 | `src/game/art/ProceduralModels.ts` | 40+ 独立网格，食物按生/熟/焦状态改变颜色与粗糙度 |
 | ANI-001 | 木筏三轴波浪升沉 | `src/game/systems/RaftSystem.ts` | 已实现 |
 | ANI-002 | 第一人称移动、镜头与木筏局部坐标 | `src/game/systems/PlayerController.ts` | 已实现基础版 |
 | ANI-003 | 钩具蓄力、抛射、旋转、拖回与收起 | `src/game/systems/HookSystem.ts` | 已实现基础闭环 |
 | ANI-004 | 建造锤挥击、筏格预览、放置、修补与拆除 | `src/game/systems/BuildSystem.ts` | 已实现交互切片 |
 | ANI-005 | 钓竿抛投、浮标升沉、鱼体绕线、张力和收杆 | `src/game/systems/FishingSystem.ts` | 已实现完整单次循环 |
 | ANI-006 | 鲨鱼尾摆、巡游、逼近、扑咬、受击、撤退与下潜 | `src/game/systems/SharkSystem.ts` | 已实现第一轮威胁循环 |
+| ANI-007 | 设备朝向预览、筏格放置、运行、收取、拆解、碰撞与落海 | `src/game/systems/DeviceSystem.ts` | 已接净水器和烤架完整周期，并保存阶段与进度 |
 | VFX-001 | 入水粒子 | `src/game/systems/SplashSystem.ts` | 已实现 |
 | VFX-002 | 木屑、修补、拆除、武器和咬击冲击粒子 | `src/game/systems/SplashSystem.ts` | 颜色与数量按事件区分 |
+| VFX-003 | 五层加色火焰、动态点光、五块余烬和八层烟雾 | `src/game/art/ProceduralModels.ts` | 火势与设备阶段联动，焦鱼阶段转为深色烟 |
+| VFX-004 | 净水蒸汽、海水退位、杯中水位和循环滴水 | `src/game/systems/DeviceSystem.ts` | 蒸馏进度实时驱动，不使用位图序列 |
 
 ## 程序音频分层
 
@@ -171,6 +178,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | AMB-RAFT | 随机木结构吱响 | `src/game/systems/AudioSystem.ts` |
 | SFX-HOOK/BUILD | 抛钩、落水、收获、木击、修补、拆除与拒绝反馈 | `src/game/systems/AudioSystem.ts` |
 | SFX-FISHING | 抛线、浮标、三连鱼讯、卷线、捕获与断线 | `src/game/systems/AudioSystem.ts` |
+| SFX-DEVICE | 放置木/铁冲击、点火、完成提示、焦糊反馈、持续火焰噪声和蒸汽高通层 | `src/game/systems/AudioSystem.ts` |
 | CREATURE | 鲨鱼低频预兆、扑咬冲击与武器命中 | `src/game/systems/AudioSystem.ts` |
 | UI | 短促确认、拒绝和工具切换 | `src/game/systems/AudioSystem.ts` |
 
@@ -178,9 +186,9 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 ## 后续硬任务
 
-- 用 Blender 或等效 DCC 建立可蒙皮的最终双手、工具和鲨鱼资产，当前代码模型是原创近最终形体基线而非最终蒙皮资产；
+- 用 Blender 或等效 DCC 建立可蒙皮的最终双手、工具、鲨鱼和生活设备资产，当前代码模型是原创近最终形体基线而非最终蒙皮资产；
 - 为木材补充经过人工修整的 normal、roughness 与 AO；鲨皮和编织纤维已使用独立派生图；
 - 在可稳定访问图像服务的环境重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；
 - 建立同一角色比例与材质语言下的模型规范；
-- 录制或生成多样本海浪、绳索、木结构、金属和鲨鱼音效，保留当前程序音频作动态底层；
+- 录制或生成多样本海浪、绳索、木结构、金属、火焰、蒸汽、烹饪和鲨鱼音效，保留当前程序音频作动态底层；
 - 为所有最终资产建立来源、版本、修改记录和发布授权结论。

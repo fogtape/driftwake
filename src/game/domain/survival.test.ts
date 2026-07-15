@@ -17,5 +17,7 @@ describe('survival domain', () => {
     const rawFish = consumeItem(water.survival, 'rawFish');
     expect(rawFish.survival.health).toBe(90);
     expect(rawFish.survival.hunger).toBe(79);
+    const freshWater = consumeItem({ health: 75, thirst: 20, hunger: 30 }, 'freshWaterCup');
+    expect(freshWater.survival).toEqual({ health: 76, thirst: 62, hunger: 30 });
   });
 });

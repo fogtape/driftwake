@@ -1,5 +1,7 @@
 import {
+  CookingPot,
   Droplet,
+  GlassWater,
   Heart,
   MousePointer2,
   PackageOpen,
@@ -12,7 +14,8 @@ import {
   VolumeX,
 } from 'lucide-react';
 import { ITEM_DEFINITIONS, TOOL_ORDER, itemCount, type Inventory, type ToolId } from '../game/domain/items';
-import type { FishingFeedback, RaftFeedback, SharkFeedback } from '../state/gameStore';
+import type { DeviceFeedbackMap, FishingFeedback, RaftFeedback, SharkFeedback } from '../state/gameStore';
+import type { DeviceType } from '../game/domain/devices';
 import { ItemIcon } from './ItemIcon';
 
 interface HudProps {
@@ -26,6 +29,8 @@ interface HudProps {
   fishing: FishingFeedback;
   shark: SharkFeedback;
   raft: RaftFeedback;
+  devices: DeviceFeedbackMap;
+  placementDevice: DeviceType | null;
   interaction: string | null;
   notice: string | null;
   fps: number;
@@ -66,6 +71,8 @@ export function Hud({
   fishing,
   shark,
   raft,
+  devices,
+  placementDevice,
   interaction,
   notice,
   fps,
@@ -77,6 +84,7 @@ export function Hud({
 }: HudProps) {
   const sharkAlert = shark.mode === 'approaching' || shark.mode === 'attacking';
   const fishingActive = fishing.phase === 'hooked';
+  const placedDeviceTypes = (['purifier', 'grill'] as const).filter((type) => devices[type].placed > 0);
   return (
     <section className={`hud ${visible ? 'is-visible' : ''}`} aria-hidden={!visible}>
       <div className="resource-strip">
@@ -159,7 +167,26 @@ export function Hud({
         </div>
       </div>
 
-      <div className={`interaction-prompt ${interaction ? 'is-visible' : ''}`}>{interaction}</div>
+      <div className={`device-rack ${placedDeviceTypes.length > 0 ? 'is-visible' : ''}`} aria-label="筏上设备状态">
+        {placedDeviceTypes.map((type) => {
+          const status = devices[type];
+          const label =
+            status.burnt > 0 ? '焦黑' : status.ready > 0 ? '可收取' : status.working > 0 ? '运行中' : '待机';
+          const phase = status.burnt > 0 ? 'burnt' : status.ready > 0 ? 'ready' : status.working > 0 ? 'working' : 'idle';
+          return (
+            <div className={`device-status device-status--${type} device-status--${phase}`} key={type}>
+              {type === 'purifier' ? <GlassWater size={18} /> : <CookingPot size={18} />}
+              <div>
+                <span>{type === 'purifier' ? '净水器' : '烤架'}</span>
+                <i><b style={{ width: `${status.progress * 100}%` }} /></i>
+              </div>
+              <strong>{label}</strong>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className={`interaction-prompt ${interaction ? 'is-visible' : ''} ${placementDevice ? 'is-placement' : ''}`}>{interaction}</div>
       <div className={`loot-notice ${notice ? 'is-visible' : ''}`} aria-live="polite">{notice}</div>
 
       {!pointerLocked && visible && (

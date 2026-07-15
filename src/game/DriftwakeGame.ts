@@ -33,6 +33,7 @@ import { SAVE_VERSION, createDefaultRaftTiles, loadSave, writeSave, type Driftwa
 import { AudioSystem } from './systems/AudioSystem';
 import { BuildSystem } from './systems/BuildSystem';
 import { DebrisField } from './systems/DebrisField';
+import { DeviceSystem } from './systems/DeviceSystem';
 import { FishingSystem } from './systems/FishingSystem';
 import { HookSystem } from './systems/HookSystem';
 import { OceanSystem } from './systems/OceanSystem';
@@ -59,6 +60,7 @@ export class DriftwakeGame {
   private player: PlayerController | null = null;
   private hook: HookSystem | null = null;
   private build: BuildSystem | null = null;
+  private devices: DeviceSystem | null = null;
   private fishing: FishingSystem | null = null;
   private shark: SharkSystem | null = null;
   private spear: SpearSystem | null = null;
@@ -132,6 +134,17 @@ export class DriftwakeGame {
         this.audio,
         this.splashes,
       );
+      this.devices = new DeviceSystem(
+        this.renderer,
+        this.camera,
+        this.materials,
+        this.raft,
+        this.player,
+        this.audio,
+        this.splashes,
+        save?.raft.devices ?? [],
+      );
+      this.player.setCollisionResolver((position, previous) => this.devices?.resolvePlayerCollision(position, previous));
       this.build = new BuildSystem(
         this.renderer,
         this.camera,
@@ -139,6 +152,8 @@ export class DriftwakeGame {
         this.raft,
         this.audio,
         this.splashes,
+        (coordinate) => this.devices?.hasDeviceAt(coordinate) ?? false,
+        (coordinate) => this.devices?.dismantleAt(coordinate) ?? false,
       );
       this.fishing = new FishingSystem(
         this.renderer,
@@ -170,7 +185,8 @@ export class DriftwakeGame {
           state.pointerLocked !== previous.pointerLocked ||
           state.overlayPanel !== previous.overlayPanel ||
           state.settingsOpen !== previous.settingsOpen ||
-          state.phase !== previous.phase
+          state.phase !== previous.phase ||
+          state.placementDevice !== previous.placementDevice
         ) {
           if (state.selectedTool !== previous.selectedTool) this.audio.playEquip();
           this.syncEquipment();
@@ -260,6 +276,7 @@ export class DriftwakeGame {
     this.player?.dispose();
     this.hook?.dispose(this.scene);
     this.build?.dispose();
+    this.devices?.dispose();
     this.fishing?.dispose(this.scene);
     this.spear?.dispose();
     this.shark?.dispose();
@@ -325,6 +342,7 @@ export class DriftwakeGame {
     this.fishing?.update(this.elapsed, simulationDelta);
     this.spear?.update(this.elapsed, simulationDelta);
     if (simulationActive) this.shark?.update(this.elapsed, simulationDelta);
+    this.devices?.update(this.elapsed, simulationDelta);
     this.splashes?.update(delta);
     this.audio.update(this.elapsed);
     this.physics.step(simulationDelta);
@@ -397,14 +415,17 @@ export class DriftwakeGame {
     const state = useGameStore.getState();
     const inputEnabled =
       state.phase === 'playing' && state.pointerLocked && !state.settingsOpen && state.overlayPanel === null;
-    this.hook?.setEquipped(state.selectedTool === 'hook');
-    this.hook?.setEnabled(inputEnabled && state.selectedTool === 'hook');
-    this.build?.setEquipped(state.selectedTool === 'hammer');
-    this.build?.setInputEnabled(inputEnabled && state.selectedTool === 'hammer');
-    this.fishing?.setEquipped(state.selectedTool === 'fishingRod');
-    this.fishing?.setInputEnabled(inputEnabled && state.selectedTool === 'fishingRod');
-    this.spear?.setEquipped(state.selectedTool === 'spear');
-    this.spear?.setInputEnabled(inputEnabled && state.selectedTool === 'spear');
+    const placingDevice = state.placementDevice !== null;
+    this.devices?.setPlacementType(state.placementDevice);
+    this.devices?.setInputEnabled(inputEnabled);
+    this.hook?.setEquipped(!placingDevice && state.selectedTool === 'hook');
+    this.hook?.setEnabled(inputEnabled && !placingDevice && state.selectedTool === 'hook');
+    this.build?.setEquipped(!placingDevice && state.selectedTool === 'hammer');
+    this.build?.setInputEnabled(inputEnabled && !placingDevice && state.selectedTool === 'hammer');
+    this.fishing?.setEquipped(!placingDevice && state.selectedTool === 'fishingRod');
+    this.fishing?.setInputEnabled(inputEnabled && !placingDevice && state.selectedTool === 'fishingRod');
+    this.spear?.setEquipped(!placingDevice && state.selectedTool === 'spear');
+    this.spear?.setInputEnabled(inputEnabled && !placingDevice && state.selectedTool === 'spear');
     this.player?.setEnabled(inputEnabled);
   }
 
@@ -414,7 +435,7 @@ export class DriftwakeGame {
       version: SAVE_VERSION,
       savedAt: Date.now(),
       player: useGameStore.getState().getPlayerSnapshot(),
-      raft: { tiles: this.raft.getSavedTiles() },
+      raft: { tiles: this.raft.getSavedTiles(), devices: this.devices?.getSavedDevices() ?? [] },
     };
     useGameStore.getState().setSaveStatus(writeSave(save) ? 'saved' : 'error');
   }
@@ -430,13 +451,14 @@ export class DriftwakeGame {
       event.preventDefault();
       const requested = event.code === 'KeyC' ? 'crafting' : 'pack';
       const nextPanel = state.overlayPanel === requested ? null : requested;
+      if (nextPanel !== null) state.setPlacementDevice(null);
       state.setOverlayPanel(nextPanel);
       if (nextPanel !== null && document.pointerLockElement === this.renderer.domElement) document.exitPointerLock();
       this.audio.playUi();
       return;
     }
     const digit = /^Digit([1-4])$/.exec(event.code);
-    if (digit && state.overlayPanel === null && !state.settingsOpen) {
+    if (digit && state.overlayPanel === null && !state.settingsOpen && state.placementDevice === null) {
       const tool = TOOL_ORDER[Number(digit[1]) - 1];
       if (!state.setSelectedTool(tool)) {
         this.audio.playDenied();

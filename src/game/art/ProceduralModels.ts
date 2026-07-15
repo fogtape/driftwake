@@ -1,4 +1,5 @@
 import {
+  AdditiveBlending,
   BoxGeometry,
   BufferGeometry,
   CatmullRomCurve3,
@@ -14,7 +15,9 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  MeshPhysicalMaterial,
   MeshStandardMaterial,
+  PointLight,
   Shape,
   SphereGeometry,
   TorusGeometry,
@@ -30,10 +33,29 @@ import type { MaterialLibrary } from './Materials';
 
 export type DebrisKind = 'timber' | 'polymer' | 'fiber' | 'cache';
 
+export interface DeviceModelVisuals {
+  fire: Group;
+  light: PointLight;
+  puffs: Mesh[];
+  embers: Mesh[];
+  rawWater?: Mesh;
+  cleanWater?: Mesh;
+  drip?: Mesh;
+  food?: Group;
+  foodMeshes?: Mesh<BufferGeometry, MeshStandardMaterial>[];
+}
+
 function shadowed(mesh: Mesh): Mesh {
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
+}
+
+function isLibraryMaterial(material: MeshStandardMaterial, materials: MaterialLibrary): boolean {
+  return (
+    materials.wood.some((candidate) => candidate === material) ||
+    Object.values(materials).some((candidate) => candidate === material)
+  );
 }
 
 export function createHookModel(materials: MaterialLibrary): Group {
@@ -422,6 +444,250 @@ export function createRaftTile(materials: MaterialLibrary, variant: number): Gro
     }
   }
   return tile;
+}
+
+function createFireVisuals(smokeColor = 0xb9c2b5): Pick<DeviceModelVisuals, 'fire' | 'light' | 'puffs' | 'embers'> {
+  const fire = new Group();
+  fire.name = 'device-fire';
+  const flameGeometry = new SphereGeometry(0.12, 10, 7);
+  const flameColors = [0xffd45b, 0xff8a3f, 0xe95032, 0xffb84a, 0xff7041];
+  flameColors.forEach((color, index) => {
+    const material = new MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: index < 2 ? 0.82 : 0.64,
+      depthWrite: false,
+      blending: AdditiveBlending,
+    });
+    const flame = new Mesh(flameGeometry, material);
+    const angle = (index / flameColors.length) * Math.PI * 2;
+    flame.position.set(Math.cos(angle) * 0.095, 0.08 + (index % 2) * 0.05, Math.sin(angle) * 0.075);
+    flame.scale.set(0.58 + (index % 3) * 0.12, 1.15 + (index % 2) * 0.38, 0.58);
+    flame.userData.phase = index * 1.73;
+    flame.userData.baseX = flame.position.x;
+    fire.add(flame);
+  });
+  const light = new PointLight(0xff8b48, 0, 2.35, 2);
+  light.position.set(0, 0.28, 0);
+  fire.add(light);
+
+  const emberGeometry = new RoundedBoxGeometry(0.18, 0.045, 0.065, 2, 0.015);
+  const emberMaterial = new MeshBasicMaterial({ color: 0x7b2c20 });
+  const embers: Mesh[] = [];
+  for (let index = 0; index < 5; index += 1) {
+    const ember = new Mesh(emberGeometry, emberMaterial);
+    ember.position.set((index - 2) * 0.09, 0.01 + (index % 2) * 0.025, (index % 2 - 0.5) * 0.11);
+    ember.rotation.y = index * 1.2;
+    embers.push(ember);
+    fire.add(ember);
+  }
+
+  const puffs: Mesh[] = [];
+  const puffGeometry = new SphereGeometry(0.11, 8, 6);
+  for (let index = 0; index < 8; index += 1) {
+    const puffMaterial = new MeshBasicMaterial({
+      color: smokeColor,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    const puff = new Mesh(puffGeometry, puffMaterial);
+    puff.visible = false;
+    puff.userData.phase = index / 8;
+    puffs.push(puff);
+  }
+  return { fire, light, puffs, embers };
+}
+
+function addBoundFrame(group: Group, materials: MaterialLibrary, width: number, depth: number, height: number): void {
+  const legGeometry = new CylinderGeometry(0.045, 0.06, height, 7);
+  for (const x of [-width / 2, width / 2]) {
+    for (const z of [-depth / 2, depth / 2]) {
+      const leg = shadowed(new Mesh(legGeometry, materials.darkWood));
+      leg.position.set(x, height / 2, z);
+      leg.rotation.z = x * 0.08;
+      leg.rotation.x = z * 0.08;
+      group.add(leg);
+      const binding = shadowed(new Mesh(new TorusGeometry(0.065, 0.009, 5, 12), materials.wovenFiber));
+      binding.position.set(x, height * 0.63, z);
+      binding.rotation.x = Math.PI / 2;
+      group.add(binding);
+    }
+  }
+  const railX = new BoxGeometry(width + 0.14, 0.07, 0.075);
+  const railZ = new BoxGeometry(0.075, 0.07, depth + 0.14);
+  for (const y of [0.14, height - 0.06]) {
+    for (const z of [-depth / 2, depth / 2]) {
+      const rail = shadowed(new Mesh(railX, materials.wood[(y > 0.2 ? 1 : 2) % materials.wood.length]));
+      rail.position.set(0, y, z);
+      group.add(rail);
+    }
+    for (const x of [-width / 2, width / 2]) {
+      const rail = shadowed(new Mesh(railZ, materials.wood[(y > 0.2 ? 2 : 1) % materials.wood.length]));
+      rail.position.set(x, y, 0);
+      group.add(rail);
+    }
+  }
+}
+
+export function createPurifierModel(materials: MaterialLibrary): Group {
+  const purifier = new Group();
+  purifier.name = 'tide-still-purifier';
+  addBoundFrame(purifier, materials, 0.82, 0.72, 0.86);
+
+  const fireVisuals = createFireVisuals(0xd5e8df);
+  fireVisuals.fire.position.set(0, 0.19, 0.03);
+  purifier.add(fireVisuals.fire);
+  fireVisuals.puffs.forEach((puff) => {
+    puff.position.set(0, 0.78, 0);
+    purifier.add(puff);
+  });
+
+  const heatBowl = shadowed(new Mesh(new CylinderGeometry(0.34, 0.27, 0.13, 16, 1, true), materials.rustMetal));
+  heatBowl.position.y = 0.31;
+  const bowlBottom = shadowed(new Mesh(new CylinderGeometry(0.27, 0.27, 0.035, 16), materials.metal));
+  bowlBottom.position.y = 0.255;
+  purifier.add(heatBowl, bowlBottom);
+
+  const rawWaterMaterial = new MeshPhysicalMaterial({
+    color: 0x318d91,
+    roughness: 0.18,
+    metalness: 0,
+    transparent: true,
+    opacity: 0.82,
+    transmission: 0.08,
+  });
+  const rawWater = new Mesh(new CylinderGeometry(0.285, 0.285, 0.018, 20), rawWaterMaterial);
+  rawWater.position.y = 0.36;
+  purifier.add(rawWater);
+
+  const hood = shadowed(new Mesh(new CylinderGeometry(0.2, 0.38, 0.34, 18, 1, true), materials.wovenFiber));
+  hood.position.y = 0.59;
+  const hoodCap = shadowed(new Mesh(new CylinderGeometry(0.2, 0.2, 0.04, 18), materials.metal));
+  hoodCap.position.y = 0.77;
+  const gutter = shadowed(new Mesh(new TorusGeometry(0.38, 0.026, 7, 26), materials.metal));
+  gutter.position.y = 0.43;
+  gutter.rotation.x = Math.PI / 2;
+  purifier.add(hood, hoodCap, gutter);
+
+  const spoutCurve = new CatmullRomCurve3([
+    new Vector3(0.35, 0.46, 0),
+    new Vector3(0.48, 0.43, 0),
+    new Vector3(0.51, 0.35, 0),
+    new Vector3(0.51, 0.29, 0),
+  ]);
+  purifier.add(shadowed(new Mesh(new TubeGeometry(spoutCurve, 14, 0.022, 7, false), materials.metal)));
+
+  const cup = new Group();
+  cup.name = 'purifier-collection-cup';
+  cup.position.set(0.51, 0.18, 0);
+  const cupMaterial = new MeshPhysicalMaterial({
+    color: 0x7fc5ca,
+    roughness: 0.34,
+    transparent: true,
+    opacity: 0.58,
+    transmission: 0.2,
+    thickness: 0.05,
+  });
+  const cupWall = new Mesh(new CylinderGeometry(0.12, 0.095, 0.24, 14, 1, true), cupMaterial);
+  cupWall.position.y = 0.12;
+  const cupRim = new Mesh(new TorusGeometry(0.12, 0.012, 6, 18), materials.polymer);
+  cupRim.position.y = 0.24;
+  cupRim.rotation.x = Math.PI / 2;
+  const cleanWater = new Mesh(
+    new CylinderGeometry(0.096, 0.096, 0.012, 16),
+    new MeshPhysicalMaterial({ color: 0x65d7e7, roughness: 0.12, transparent: true, opacity: 0.86 }),
+  );
+  cleanWater.position.y = 0.08;
+  cleanWater.visible = false;
+  cup.add(cupWall, cupRim, cleanWater);
+  purifier.add(cup);
+
+  const drip = new Mesh(
+    new SphereGeometry(0.026, 8, 6),
+    new MeshPhysicalMaterial({ color: 0x8ae5ee, roughness: 0.08, transparent: true, opacity: 0.9 }),
+  );
+  drip.position.set(0.51, 0.27, 0);
+  drip.scale.y = 1.8;
+  drip.visible = false;
+  purifier.add(drip);
+
+  const pressureBand = shadowed(new Mesh(new TorusGeometry(0.245, 0.014, 5, 22), materials.rope));
+  pressureBand.position.y = 0.69;
+  pressureBand.rotation.x = Math.PI / 2;
+  purifier.add(pressureBand);
+
+  purifier.userData.deviceVisuals = {
+    ...fireVisuals,
+    rawWater,
+    cleanWater,
+    drip,
+  } satisfies DeviceModelVisuals;
+  return purifier;
+}
+
+export function createGrillModel(materials: MaterialLibrary): Group {
+  const grill = new Group();
+  grill.name = 'folded-iron-grill';
+  addBoundFrame(grill, materials, 0.8, 0.7, 0.48);
+
+  const fireVisuals = createFireVisuals(0x848580);
+  fireVisuals.fire.position.set(0, 0.22, 0);
+  grill.add(fireVisuals.fire);
+  fireVisuals.puffs.forEach((puff) => {
+    puff.position.set(0, 0.62, 0);
+    grill.add(puff);
+  });
+
+  const firePan = shadowed(new Mesh(new CylinderGeometry(0.4, 0.31, 0.14, 16, 1, true), materials.rustMetal));
+  firePan.position.y = 0.27;
+  const panBase = shadowed(new Mesh(new CylinderGeometry(0.31, 0.31, 0.035, 16), materials.rustMetal));
+  panBase.position.y = 0.21;
+  grill.add(firePan, panBase);
+
+  const grateMaterial = materials.metal;
+  for (let index = -4; index <= 4; index += 1) {
+    const rod = shadowed(new Mesh(new CylinderGeometry(0.012, 0.012, 0.76, 7), grateMaterial));
+    rod.position.set(index * 0.085, 0.42, 0);
+    rod.rotation.x = Math.PI / 2;
+    grill.add(rod);
+  }
+  for (const z of [-0.31, 0.31]) {
+    const brace = shadowed(new Mesh(new CylinderGeometry(0.018, 0.018, 0.86, 7), materials.rustMetal));
+    brace.position.set(0, 0.415, z);
+    brace.rotation.z = Math.PI / 2;
+    grill.add(brace);
+  }
+
+  const food = createSilverSpineFishModel(materials);
+  food.name = 'grill-fish';
+  food.position.set(0, 0.49, 0);
+  food.rotation.y = Math.PI / 2;
+  food.rotation.z = Math.PI / 2;
+  food.scale.setScalar(0.48);
+  const foodMeshes: Mesh<BufferGeometry, MeshStandardMaterial>[] = [];
+  food.traverse((object) => {
+    if (!(object instanceof Mesh) || !(object.material instanceof MeshStandardMaterial)) return;
+    const sourceMaterial = object.material;
+    object.material = sourceMaterial.clone();
+    if (!isLibraryMaterial(sourceMaterial, materials)) sourceMaterial.dispose();
+    object.material.userData.rawColor = object.material.color.getHex();
+    foodMeshes.push(object as Mesh<BufferGeometry, MeshStandardMaterial>);
+  });
+  food.visible = false;
+  grill.add(food);
+
+  const handle = shadowed(new Mesh(new TorusGeometry(0.21, 0.025, 7, 20, Math.PI), materials.metal));
+  handle.position.set(0.46, 0.31, 0);
+  handle.rotation.set(Math.PI / 2, 0, Math.PI / 2);
+  grill.add(handle);
+
+  grill.userData.deviceVisuals = {
+    ...fireVisuals,
+    food,
+    foodMeshes,
+  } satisfies DeviceModelVisuals;
+  return grill;
 }
 
 function createPalm(materials: MaterialLibrary): Group {

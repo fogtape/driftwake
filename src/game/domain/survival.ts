@@ -44,9 +44,11 @@ export interface ConsumableResult {
 
 const CONSUMABLE_EFFECTS: Partial<Record<ItemId, Omit<ConsumableResult, 'survival' | 'usable'>>> = {
   emergencyWater: { healthDelta: 0, thirstDelta: 34, hungerDelta: 0 },
+  freshWaterCup: { healthDelta: 1, thirstDelta: 42, hungerDelta: 0 },
   ration: { healthDelta: 0, thirstDelta: -2, hungerDelta: 28 },
   rawFish: { healthDelta: -8, thirstDelta: -3, hungerDelta: 9 },
   cookedFish: { healthDelta: 3, thirstDelta: 0, hungerDelta: 36 },
+  burntFish: { healthDelta: -3, thirstDelta: -4, hungerDelta: 12 },
 };
 
 export function consumeItem(current: SurvivalState, itemId: ItemId): ConsumableResult {

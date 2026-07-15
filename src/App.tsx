@@ -8,6 +8,7 @@ import type { DriftwakeGame } from './game/DriftwakeGame';
 import { ITEM_DEFINITIONS, type ItemId, type ToolId } from './game/domain/items';
 import { RECIPES, type RecipeId } from './game/domain/recipes';
 import { loadPreferences, writePreferences } from './game/domain/preferences';
+import type { DeviceType } from './game/domain/devices';
 import { useGameStore, type AudioMix, type OverlayPanel, type QualityPreset } from './state/gameStore';
 
 function detectUnsupportedDevice(): boolean {
@@ -38,6 +39,8 @@ export function App() {
   const fishing = useGameStore((state) => state.fishing);
   const shark = useGameStore((state) => state.shark);
   const raft = useGameStore((state) => state.raft);
+  const devices = useGameStore((state) => state.devices);
+  const placementDevice = useGameStore((state) => state.placementDevice);
   const interaction = useGameStore((state) => state.interaction);
   const saveStatus = useGameStore((state) => state.saveStatus);
   const notice = useGameStore((state) => state.notice);
@@ -89,6 +92,7 @@ export function App() {
   const openSettings = () => {
     gameRef.current?.pauseInput();
     useGameStore.getState().setOverlayPanel(null);
+    useGameStore.getState().setPlacementDevice(null);
     useGameStore.getState().setSettingsOpen(true);
     gameRef.current?.playUi();
   };
@@ -125,6 +129,7 @@ export function App() {
   };
   const openPack = (panel: Exclude<OverlayPanel, null>) => {
     gameRef.current?.pauseInput();
+    useGameStore.getState().setPlacementDevice(null);
     useGameStore.getState().setOverlayPanel(panel);
     gameRef.current?.playUi();
   };
@@ -145,6 +150,13 @@ export function App() {
       showTransientNotice(`${ITEM_DEFINITIONS[itemId].shortName} 已使用`);
     }
     return used;
+  };
+  const placeDevice = (deviceType: DeviceType) => {
+    const store = useGameStore.getState();
+    store.setOverlayPanel(null);
+    store.setPlacementDevice(deviceType);
+    gameRef.current?.playUi();
+    gameRef.current?.begin();
   };
 
   return (
@@ -168,6 +180,8 @@ export function App() {
         fishing={fishing}
         shark={shark}
         raft={raft}
+        devices={devices}
+        placementDevice={placementDevice}
         interaction={interaction}
         notice={notice}
         fps={fps}
@@ -189,6 +203,7 @@ export function App() {
         }}
         onCraft={craft}
         onUse={useItem}
+        onPlace={placeDevice}
         onClose={() => {
           useGameStore.getState().setOverlayPanel(null);
           gameRef.current?.playUi();

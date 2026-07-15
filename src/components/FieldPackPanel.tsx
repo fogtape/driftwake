@@ -6,6 +6,7 @@ import {
   FlaskConical,
   Hammer,
   HeartPulse,
+  MapPin,
   PackageOpen,
   ShieldCheck,
   X,
@@ -18,6 +19,7 @@ import {
   type ItemId,
 } from '../game/domain/items';
 import { RECIPES, missingForRecipe, type CraftResult, type RecipeId } from '../game/domain/recipes';
+import type { DeviceType } from '../game/domain/devices';
 import type { OverlayPanel, RaftFeedback } from '../state/gameStore';
 import { ItemIcon } from './ItemIcon';
 
@@ -30,10 +32,30 @@ interface FieldPackPanelProps {
   onPanelChange: (panel: Exclude<OverlayPanel, null>) => void;
   onCraft: (recipeId: RecipeId) => CraftResult;
   onUse: (itemId: ItemId) => boolean;
+  onPlace: (deviceType: DeviceType) => void;
   onClose: () => void;
 }
 
-const CONSUMABLES = new Set<ItemId>(['emergencyWater', 'ration', 'rawFish', 'cookedFish']);
+const CONSUMABLES = new Set<ItemId>([
+  'emergencyWater',
+  'freshWaterCup',
+  'ration',
+  'rawFish',
+  'cookedFish',
+  'burntFish',
+]);
+const PLACEABLES: Partial<Record<ItemId, DeviceType>> = {
+  purifierKit: 'purifier',
+  grillKit: 'grill',
+};
+
+function categoryLabel(category: (typeof ITEM_DEFINITIONS)[ItemId]['category']): string {
+  if (category === 'tool') return '工具';
+  if (category === 'material') return '材料';
+  if (category === 'container') return '容器';
+  if (category === 'placeable') return '筏上设备';
+  return '补给';
+}
 
 export function FieldPackPanel({
   panel,
@@ -44,6 +66,7 @@ export function FieldPackPanel({
   onPanelChange,
   onCraft,
   onUse,
+  onPlace,
   onClose,
 }: FieldPackPanelProps) {
   const itemIds = useMemo(
@@ -135,7 +158,7 @@ export function FieldPackPanel({
               <div className="item-detail__icon" style={{ '--item-tone': selectedDefinition.tone } as React.CSSProperties}>
                 <ItemIcon itemId={selectedItem} size={40} strokeWidth={1.6} />
               </div>
-              <span>{selectedDefinition.category === 'tool' ? '工具' : selectedDefinition.category === 'material' ? '材料' : '补给'}</span>
+              <span>{categoryLabel(selectedDefinition.category)}</span>
               <h3>{selectedDefinition.name}</h3>
               <p>{selectedDefinition.description}</p>
               <dl>
@@ -146,6 +169,12 @@ export function FieldPackPanel({
                 <button className="panel-command" type="button" onClick={() => onUse(selectedItem)}>
                   <HeartPulse size={18} />
                   {selectedDefinition.category === 'water' ? '饮用' : '食用'}
+                </button>
+              )}
+              {PLACEABLES[selectedItem] && (
+                <button className="panel-command" type="button" onClick={() => onPlace(PLACEABLES[selectedItem]!)}>
+                  <MapPin size={18} />
+                  安置到木筏
                 </button>
               )}
             </aside>

@@ -9,7 +9,7 @@ import {
   type ItemId,
 } from './items';
 
-export type RecipeCategory = 'material' | 'tool';
+export type RecipeCategory = 'material' | 'tool' | 'survival';
 
 export const RECIPES = {
   rope: {
@@ -19,6 +19,30 @@ export const RECIPES = {
     output: { rope: 1 },
     cost: { fiber: 2 },
     description: '把晒干纤维绞紧，制成承力绳。',
+  },
+  emptyCup: {
+    id: 'emptyCup',
+    name: '折边聚合杯',
+    category: 'survival',
+    output: { emptyCup: 1 },
+    cost: { polymer: 2 },
+    description: '压出耐热杯壁，作为净水循环中的可重复容器。',
+  },
+  purifierKit: {
+    id: 'purifierKit',
+    name: '潮汐净水器',
+    category: 'survival',
+    output: { purifierKit: 1 },
+    cost: { timber: 4, polymer: 2, rope: 1 },
+    description: '将海水蒸馏并冷凝到杯具中，需要漂木持续供热。',
+  },
+  grillKit: {
+    id: 'grillKit',
+    name: '折铁烤架',
+    category: 'survival',
+    output: { grillKit: 1 },
+    cost: { timber: 3, scrap: 2, rope: 1 },
+    description: '把鱼烤熟后及时收取，放置过久会焦黑。',
   },
   hammer: {
     id: 'hammer',

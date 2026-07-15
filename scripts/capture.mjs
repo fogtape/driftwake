@@ -16,7 +16,7 @@ const chromiumPath = process.env.CHROMIUM_PATH ?? '/data/data/com.termux/files/u
 const outputDir = new URL('../artifacts/screenshots/', import.meta.url);
 
 const seededSave = {
-  version: 1,
+  version: 2,
   savedAt: 1,
   player: {
     inventory: {
@@ -32,6 +32,12 @@ const seededSave = {
       emergencyWater: 2,
       ration: 2,
       rawFish: 1,
+      cookedFish: 1,
+      burntFish: 1,
+      emptyCup: 1,
+      freshWaterCup: 1,
+      purifierKit: 1,
+      grillKit: 1,
     },
     survival: { health: 92, thirst: 67, hunger: 61 },
     selectedTool: 'hook',
@@ -43,6 +49,10 @@ const seededSave = {
       z: Math.floor(index / 3) - 1,
       health: index === 2 ? 66 : 100,
     })),
+    devices: [
+      { id: 'capture-purifier', type: 'purifier', x: -1, z: 0, rotation: 0, phase: 'ready', elapsed: 18 },
+      { id: 'capture-grill', type: 'grill', x: 1, z: 0, rotation: Math.PI, phase: 'working', elapsed: 8 },
+    ],
   },
 };
 
@@ -90,7 +100,7 @@ async function openDesktopPage(label, options = {}) {
   });
   if (options.seedSave) {
     await context.addInitScript((save) => {
-      localStorage.setItem('driftwake.save.v1', JSON.stringify(save));
+      localStorage.setItem('driftwake.save.v2', JSON.stringify(save));
     }, seededSave);
   }
   const page = await context.newPage();
@@ -176,6 +186,7 @@ async function capturePack() {
   await page.waitForTimeout(500);
   await page.keyboard.press('KeyI');
   await page.getByRole('dialog', { name: '野外背包' }).waitFor();
+  await page.getByRole('button', { name: /潮汐净水器套件/ }).click();
   await page.screenshot({ path: new URL('pack-desktop.png', outputDir).pathname });
   await context.close();
 }
@@ -195,6 +206,14 @@ async function captureSettings() {
   await page.getByRole('button', { name: '设置' }).first().click();
   await page.getByRole('dialog', { name: '设置' }).waitFor();
   await page.screenshot({ path: new URL('settings-desktop.png', outputDir).pathname });
+  await context.close();
+}
+
+async function captureDevices() {
+  const { context, page } = await openDesktopPage('devices', { seedSave: true });
+  await page.getByRole('button', { name: '开始漂流' }).click();
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: new URL('devices-hud-desktop.png', outputDir).pathname });
   await context.close();
 }
 
@@ -235,6 +254,7 @@ try {
   if (captureOnly === 'all' || captureOnly === 'pack') await capturePack();
   if (captureOnly === 'all' || captureOnly === 'crafting') await captureCrafting();
   if (captureOnly === 'all' || captureOnly === 'settings') await captureSettings();
+  if (captureOnly === 'all' || captureOnly === 'devices') await captureDevices();
   if (captureOnly === 'all' || captureOnly === 'mobile') await captureMobile();
 } finally {
   await browser.close();

@@ -9,10 +9,14 @@ export class AudioSystem {
   private creatures: GainNode | null = null;
   private music: GainNode | null = null;
   private ui: GainNode | null = null;
+  private fireLoop: GainNode | null = null;
+  private steamLoop: GainNode | null = null;
   private nextCreakAt = 4;
   private nextReelAt = 0;
   private readonly random = createSeededRandom(0xa0d10);
   private enabled = true;
+  private deviceFireActivity = 0;
+  private deviceSteamActivity = 0;
   private mix: AudioMix = {
     master: 0.78,
     music: 0.2,
@@ -44,6 +48,7 @@ export class AudioSystem {
       this.ui.connect(this.master);
       this.master.connect(this.context.destination);
       this.startAmbientLayers();
+      this.startDeviceLayers();
     }
     if (this.context.state !== 'running') await this.context.resume();
   }
@@ -151,6 +156,59 @@ export class AudioSystem {
   playRepair(): void {
     this.playWoodKnock(0.085, 0.1);
     this.noiseBurst(0.075, 1450, 0.035, 'bandpass');
+  }
+
+  setDeviceActivity(fire: number, steam: number): void {
+    this.deviceFireActivity = Math.max(0, Math.min(1, fire));
+    this.deviceSteamActivity = Math.max(0, Math.min(1, steam));
+    if (!this.context) return;
+    const now = this.context.currentTime;
+    this.fireLoop?.gain.setTargetAtTime(this.deviceFireActivity * 0.052, now, 0.18);
+    this.steamLoop?.gain.setTargetAtTime(this.deviceSteamActivity * 0.035, now, 0.22);
+  }
+
+  playDevicePlace(): void {
+    this.playWoodKnock(0.11, 0.12);
+    this.noiseBurst(0.14, 1280, 0.075, 'bandpass');
+    if (!this.context) return;
+    const timer = window.setTimeout(() => {
+      this.noiseBurst(0.1, 1820, 0.05, 'highpass');
+      window.clearTimeout(timer);
+    }, 82);
+  }
+
+  playIgnite(): void {
+    this.noiseBurst(0.22, 2100, 0.055, 'highpass');
+    this.noiseBurst(0.18, 420, 0.08, 'lowpass');
+  }
+
+  playDeviceReady(isPurifier: boolean): void {
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    const frequencies = isPurifier ? [430, 610] : [330, 495];
+    frequencies.forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      const start = now + index * 0.1;
+      gain.gain.setValueAtTime(0.035, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+      oscillator.connect(gain).connect(this.effects!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.19);
+    });
+    if (isPurifier) this.noiseBurst(0.3, 3200, 0.025, 'highpass');
+  }
+
+  playDeviceBurnt(): void {
+    this.noiseBurst(0.28, 680, 0.06, 'bandpass');
+    this.noiseBurst(0.18, 2400, 0.035, 'highpass');
+  }
+
+  playDeviceLost(): void {
+    this.playWoodKnock(0.12, 0.16);
+    this.noiseBurst(0.38, 720, 0.12, 'lowpass');
   }
 
   playDenied(): void {
@@ -280,6 +338,8 @@ export class AudioSystem {
     this.creatures = null;
     this.music = null;
     this.ui = null;
+    this.fireLoop = null;
+    this.steamLoop = null;
   }
 
   private startAmbientLayers(): void {
@@ -350,6 +410,45 @@ export class AudioSystem {
       oscillator.start(this.context!.currentTime + index * 0.7);
       lfo.start(this.context!.currentTime + index * 1.1);
     });
+  }
+
+  private startDeviceLayers(): void {
+    if (!this.context || !this.effects) return;
+    const duration = 5;
+    const sampleRate = this.context.sampleRate;
+    const buffer = this.context.createBuffer(1, duration * sampleRate, sampleRate);
+    const channel = buffer.getChannelData(0);
+    let brown = 0;
+    for (let index = 0; index < channel.length; index += 1) {
+      const white = this.random() * 2 - 1;
+      brown = (brown + white * 0.05) / 1.05;
+      const crackle = this.random() > 0.996 ? (this.random() * 2 - 1) * 0.9 : 0;
+      channel[index] = brown * 0.62 + white * 0.19 + crackle;
+    }
+
+    const fireSource = this.context.createBufferSource();
+    const fireFilter = this.context.createBiquadFilter();
+    this.fireLoop = this.context.createGain();
+    fireSource.buffer = buffer;
+    fireSource.loop = true;
+    fireFilter.type = 'bandpass';
+    fireFilter.frequency.value = 760;
+    fireFilter.Q.value = 0.42;
+    this.fireLoop.gain.value = this.deviceFireActivity * 0.052;
+    fireSource.connect(fireFilter).connect(this.fireLoop).connect(this.effects);
+    fireSource.start();
+
+    const steamSource = this.context.createBufferSource();
+    const steamFilter = this.context.createBiquadFilter();
+    this.steamLoop = this.context.createGain();
+    steamSource.buffer = buffer;
+    steamSource.loop = true;
+    steamFilter.type = 'highpass';
+    steamFilter.frequency.value = 2650;
+    steamFilter.Q.value = 0.2;
+    this.steamLoop.gain.value = this.deviceSteamActivity * 0.035;
+    steamSource.connect(steamFilter).connect(this.steamLoop).connect(this.effects);
+    steamSource.start(0, 1.7);
   }
 
   private playCreak(): void {

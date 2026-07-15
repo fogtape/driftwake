@@ -1,4 +1,4 @@
-export type ItemCategory = 'material' | 'tool' | 'food' | 'water';
+export type ItemCategory = 'material' | 'tool' | 'food' | 'water' | 'container' | 'placeable';
 
 export const ITEM_DEFINITIONS = {
   timber: {
@@ -46,6 +46,33 @@ export const ITEM_DEFINITIONS = {
     tone: '#c9aa73',
     description: '由长纤维绞成的承力绳，许多工具的关键部件。',
   },
+  emptyCup: {
+    id: 'emptyCup',
+    name: '折边聚合杯',
+    shortName: '空杯',
+    category: 'container',
+    maxStack: 1,
+    tone: '#7dc6c5',
+    description: '用回收聚合片压制的耐热杯具，可在净水器中盛取海水。',
+  },
+  purifierKit: {
+    id: 'purifierKit',
+    name: '潮汐净水器套件',
+    shortName: '净水器',
+    category: 'placeable',
+    maxStack: 2,
+    tone: '#67c6cf',
+    description: '织物蒸馏罩、回收槽与木架组成的套件，需要安置在完整筏格上。',
+  },
+  grillKit: {
+    id: 'grillKit',
+    name: '折铁烤架套件',
+    shortName: '烤架',
+    category: 'placeable',
+    maxStack: 2,
+    tone: '#e58a58',
+    description: '由氧化金属和木支架拼成的低矮烤架，可烧制渔获。',
+  },
   hook: {
     id: 'hook',
     name: '打捞钩',
@@ -91,6 +118,15 @@ export const ITEM_DEFINITIONS = {
     tone: '#4db3cc',
     description: '补给箱中幸存的淡水袋，能够恢复 34 点口渴。',
   },
+  freshWaterCup: {
+    id: 'freshWaterCup',
+    name: '蒸馏淡水',
+    shortName: '淡水杯',
+    category: 'water',
+    maxStack: 1,
+    tone: '#59c7dd',
+    description: '经过蒸馏冷凝的洁净淡水。饮用后会留下可重复使用的空杯。',
+  },
   ration: {
     id: 'ration',
     name: '海员口粮',
@@ -117,6 +153,15 @@ export const ITEM_DEFINITIONS = {
     maxStack: 8,
     tone: '#df9b61',
     description: '火候恰好的鱼肉，能够恢复 36 点饥饿。',
+  },
+  burntFish: {
+    id: 'burntFish',
+    name: '焦黑银脊鱼',
+    shortName: '焦鱼',
+    category: 'food',
+    maxStack: 8,
+    tone: '#7f6254',
+    description: '忘在火上的渔获。仍能勉强充饥，但焦苦表层会损伤生命。',
   },
 } as const satisfies Record<
   string,

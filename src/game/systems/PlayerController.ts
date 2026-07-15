@@ -12,6 +12,8 @@ export class PlayerController {
   private readonly shakeEuler = new Euler(0, 0, 0, 'YXZ');
   private readonly shakeOffset = new Vector3();
   private readonly worldPosition = new Vector3();
+  private readonly previousLocalPosition = new Vector3();
+  private collisionResolver: ((position: Vector3, previous: Vector3) => void) | null = null;
   private moveCycle = 0;
   private shake = 0;
   private shakeTime = 0;
@@ -33,6 +35,7 @@ export class PlayerController {
 
   update(delta: number): void {
     this.shakeTime += delta;
+    this.previousLocalPosition.copy(this.localPosition);
     let inputX = 0;
     let inputZ = 0;
     if (this.enabled) {
@@ -59,6 +62,7 @@ export class PlayerController {
     }
 
     this.raft.clampLocalPosition(this.localPosition);
+    this.collisionResolver?.(this.localPosition, this.previousLocalPosition);
     const headBob = inputLength > 0 ? Math.sin(this.moveCycle) * 0.018 : 0;
     this.localPosition.y = CAMERA_HEIGHT + headBob;
     this.raft.localPointToWorld(this.localPosition, this.worldPosition);
@@ -88,6 +92,10 @@ export class PlayerController {
 
   addCameraShake(strength: number): void {
     this.shake = Math.max(this.shake, MathUtils.clamp(strength, 0, 1));
+  }
+
+  setCollisionResolver(resolver: ((position: Vector3, previous: Vector3) => void) | null): void {
+    this.collisionResolver = resolver;
   }
 
   getForward(target = new Vector3()): Vector3 {

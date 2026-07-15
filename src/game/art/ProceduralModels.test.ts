@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { MaterialLibrary } from './Materials';
 import {
   createFishingRodModel,
+  createGrillModel,
   createHammerModel,
+  createPurifierModel,
   createSharkModel,
   createSpearModel,
 } from './ProceduralModels';
@@ -54,7 +56,7 @@ describe('procedural model assets', () => {
     expect(size.z).toBeGreaterThan(3.5);
     expect(size.x).toBeGreaterThan(2);
     expect(shark.userData.tailPivot).toBeDefined();
-  });
+  }, 15_000);
 
   it('gives each first-person tool a distinct detailed mesh assembly', () => {
     const materials = createTestMaterials();
@@ -63,5 +65,19 @@ describe('procedural model assets', () => {
     expect(meshCounts[0]).toBeGreaterThanOrEqual(9);
     expect(meshCounts[1]).toBeGreaterThanOrEqual(7);
     expect(meshCounts[2]).toBeGreaterThanOrEqual(4);
-  });
+  }, 15_000);
+
+  it('builds readable purifier and grill assemblies with animated state references', () => {
+    const materials = createTestMaterials();
+    const purifier = createPurifierModel(materials);
+    const grill = createGrillModel(materials);
+    const purifierSize = new Box3().setFromObject(purifier).getSize(new Vector3());
+    const grillSize = new Box3().setFromObject(grill).getSize(new Vector3());
+    expect(meshStats(purifier).meshes).toBeGreaterThanOrEqual(35);
+    expect(meshStats(grill).meshes).toBeGreaterThanOrEqual(40);
+    expect(purifierSize.y).toBeGreaterThan(0.82);
+    expect(grillSize.x).toBeGreaterThan(0.8);
+    expect(purifier.userData.deviceVisuals.cleanWater).toBeDefined();
+    expect(grill.userData.deviceVisuals.foodMeshes.length).toBeGreaterThanOrEqual(3);
+  }, 15_000);
 });

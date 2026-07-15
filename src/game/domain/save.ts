@@ -1,8 +1,10 @@
 import { normalizeInventory, type Inventory, type ToolId } from './items';
 import { INITIAL_SURVIVAL, normalizeSurvival, type SurvivalState } from './survival';
+import { MAX_RAFT_DEVICES, deviceKey, sanitizeSavedDevice, type SavedDeviceState } from './devices';
 
-export const SAVE_VERSION = 1;
-export const SAVE_KEY = 'driftwake.save.v1';
+export const SAVE_VERSION = 2;
+export const SAVE_KEY = 'driftwake.save.v2';
+export const LEGACY_SAVE_KEYS = ['driftwake.save.v1'] as const;
 
 export interface SavedRaftTile {
   x: number;
@@ -21,6 +23,7 @@ export interface DriftwakeSave {
   };
   raft: {
     tiles: SavedRaftTile[];
+    devices: SavedDeviceState[];
   };
 }
 
@@ -40,8 +43,13 @@ export function createDefaultRaftTiles(): SavedRaftTile[] {
 
 export function sanitizeSave(value: unknown): DriftwakeSave | null {
   if (!value || typeof value !== 'object') return null;
-  const candidate = value as Partial<DriftwakeSave>;
-  if (candidate.version !== SAVE_VERSION || !candidate.player || !candidate.raft) return null;
+  const candidate = value as {
+    version?: number;
+    savedAt?: number;
+    player?: DriftwakeSave['player'];
+    raft?: { tiles?: SavedRaftTile[]; devices?: SavedDeviceState[] };
+  };
+  if ((candidate.version !== 1 && candidate.version !== SAVE_VERSION) || !candidate.player || !candidate.raft) return null;
   const inventory = normalizeInventory(candidate.player.inventory ?? {});
   inventory.hook = 1;
   const selectedCandidate = candidate.player.selectedTool;
@@ -60,6 +68,21 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       seen.add(key);
       return true;
     });
+  const stableTiles = tiles.length > 0 ? tiles : createDefaultRaftTiles();
+  const tileKeys = new Set(stableTiles.map((tile) => deviceKey(tile.x, tile.z)));
+  const occupied = new Set<string>();
+  const deviceIds = new Set<string>();
+  const rawDevices = candidate.version === SAVE_VERSION && Array.isArray(candidate.raft.devices) ? candidate.raft.devices : [];
+  const devices = rawDevices
+    .map(sanitizeSavedDevice)
+    .filter((device): device is SavedDeviceState => {
+      if (!device || Math.abs(device.x) > 12 || Math.abs(device.z) > 12) return false;
+      const key = deviceKey(device.x, device.z);
+      if (!tileKeys.has(key) || occupied.has(key) || deviceIds.has(device.id) || occupied.size >= MAX_RAFT_DEVICES) return false;
+      occupied.add(key);
+      deviceIds.add(device.id);
+      return true;
+    });
 
   return {
     version: SAVE_VERSION,
@@ -70,17 +93,22 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       selectedTool,
       playSeconds: Math.max(0, finiteInteger(candidate.player.playSeconds)),
     },
-    raft: { tiles: tiles.length > 0 ? tiles : createDefaultRaftTiles() },
+    raft: { tiles: stableTiles, devices },
   };
 }
 
 export function loadSave(storage: Pick<Storage, 'getItem'> = window.localStorage): DriftwakeSave | null {
-  try {
-    const raw = storage.getItem(SAVE_KEY);
-    return raw ? sanitizeSave(JSON.parse(raw)) : null;
-  } catch {
-    return null;
+  for (const key of [SAVE_KEY, ...LEGACY_SAVE_KEYS]) {
+    try {
+      const raw = storage.getItem(key);
+      if (!raw) continue;
+      const save = sanitizeSave(JSON.parse(raw));
+      if (save) return save;
+    } catch {
+      continue;
+    }
   }
+  return null;
 }
 
 export function writeSave(save: DriftwakeSave, storage: Pick<Storage, 'setItem'> = window.localStorage): boolean {

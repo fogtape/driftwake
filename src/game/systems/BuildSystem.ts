@@ -56,6 +56,8 @@ export class BuildSystem {
     private readonly raft: RaftSystem,
     private readonly audio: AudioSystem,
     private readonly splashes: SplashSystem,
+    private readonly hasOccupant: (coordinate: GridCoordinate) => boolean = () => false,
+    private readonly dismantleOccupant: (coordinate: GridCoordinate) => boolean = () => false,
   ) {
     this.viewModel = createHammerModel(materials);
     this.viewModel.name = 'first-person-building-hammer';
@@ -277,6 +279,17 @@ export class BuildSystem {
   }
 
   private performDismantle(): void {
+    if (this.hoveredTileCoordinate && this.hasOccupant(this.hoveredTileCoordinate)) {
+      const coordinate = { ...this.hoveredTileCoordinate };
+      if (!this.dismantleOccupant(coordinate)) return;
+      this.raft.gridToLocal(coordinate, this.worldHit);
+      this.raft.localPointToWorld(this.worldHit, this.worldHit);
+      this.splashes.spawnImpact(this.worldHit, 0x8f5742, 20);
+      this.audio.playBuild();
+      this.swing = 0.34;
+      this.updatePreview();
+      return;
+    }
     if (!this.hoveredTileCoordinate || !this.raft.canRemoveTile(this.hoveredTileCoordinate)) {
       this.audio.playDenied();
       this.showNotice('拆除会破坏结构连通');
