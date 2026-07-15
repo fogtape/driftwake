@@ -15,7 +15,22 @@ export class SplashSystem {
   constructor(private readonly scene: Scene) {}
 
   spawn(position: Vector3): void {
-    const count = 22;
+    this.spawnBurst(position, 0xe5ffff, 22, 0.85, 0.075, 0.65, 2.1);
+  }
+
+  spawnImpact(position: Vector3, color: number, count = 18): void {
+    this.spawnBurst(position, color, count, 0.62, 0.055, 0.35, 1.35);
+  }
+
+  private spawnBurst(
+    position: Vector3,
+    color: number,
+    count: number,
+    duration: number,
+    size: number,
+    minLift: number,
+    maxLift: number,
+  ): void {
     const positions = new Float32Array(count * 3);
     const velocities: Vector3[] = [];
     for (let index = 0; index < count; index += 1) {
@@ -27,7 +42,7 @@ export class SplashSystem {
       velocities.push(
         new Vector3(
           Math.cos(angle) * speed,
-          randomRange(this.random, 0.65, 2.1),
+          randomRange(this.random, minLift, maxLift),
           Math.sin(angle) * speed,
         ),
       );
@@ -35,8 +50,8 @@ export class SplashSystem {
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new BufferAttribute(positions, 3));
     const material = new PointsMaterial({
-      color: 0xe5ffff,
-      size: 0.075,
+      color,
+      size,
       sizeAttenuation: true,
       transparent: true,
       opacity: 0.9,
@@ -44,7 +59,7 @@ export class SplashSystem {
     });
     const points = new Points(geometry, material);
     this.scene.add(points);
-    this.bursts.push({ points, velocities, age: 0, duration: 0.85 });
+    this.bursts.push({ points, velocities, age: 0, duration });
   }
 
   update(delta: number): void {
@@ -82,4 +97,3 @@ export class SplashSystem {
     this.bursts.length = 0;
   }
 }
-

@@ -12,20 +12,14 @@ import {
 } from 'three';
 import type { MaterialLibrary } from '../art/Materials';
 import { createHookModel, type DebrisKind } from '../art/ProceduralModels';
+import { bundleLabel } from '../domain/items';
 import { sampleWaveHeight } from '../math/waves';
-import { useGameStore, type InventorySnapshot } from '../../state/gameStore';
+import { useGameStore } from '../../state/gameStore';
 import type { AudioSystem } from './AudioSystem';
 import type { DebrisField, DebrisItem } from './DebrisField';
 import type { SplashSystem } from './SplashSystem';
 
 type HookState = 'idle' | 'charging' | 'flying' | 'latched' | 'retracting';
-
-const INVENTORY_LABELS: Record<DebrisKind, string> = {
-  timber: '木料',
-  polymer: '聚合片',
-  fiber: '纤维',
-  cache: '补给箱',
-};
 
 export class HookSystem {
   private readonly viewModel: Group;
@@ -43,6 +37,7 @@ export class HookSystem {
   private latchedItem: DebrisItem | null = null;
   private noticeTimer: number | null = null;
   private enabled = false;
+  private equipped = false;
 
   constructor(
     private readonly renderer: WebGLRenderer,
@@ -58,6 +53,7 @@ export class HookSystem {
     this.viewModel.scale.setScalar(0.72);
     this.viewModel.position.set(0.47, -0.64, -0.83);
     this.viewModel.rotation.set(-0.2, -0.25, -0.22);
+    this.viewModel.visible = false;
     this.camera.add(this.viewModel);
 
     this.projectile = this.viewModel.clone(true);
@@ -79,6 +75,12 @@ export class HookSystem {
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
     if (!enabled && this.state === 'charging') this.reset();
+  }
+
+  setEquipped(equipped: boolean): void {
+    this.equipped = equipped;
+    this.viewModel.visible = equipped;
+    if (!equipped && this.state === 'charging') this.reset();
   }
 
   update(time: number, delta: number): void {
@@ -157,10 +159,13 @@ export class HookSystem {
   private completeCollection(item: DebrisItem): void {
     const kind = this.debris.collect(item);
     this.latchedItem = null;
-    useGameStore.getState().addInventory(kind as keyof InventorySnapshot, 1);
-    useGameStore.getState().showNotice(`+1 ${INVENTORY_LABELS[kind]}`);
+    const accepted = useGameStore.getState().addLoot(kind);
+    const notice = bundleLabel(accepted) || '背包已满';
+    useGameStore.getState().showNotice(notice);
     if (this.noticeTimer !== null) window.clearTimeout(this.noticeTimer);
-    this.noticeTimer = window.setTimeout(() => useGameStore.getState().showNotice(null), 1250);
+    this.noticeTimer = window.setTimeout(() => {
+      if (useGameStore.getState().notice === notice) useGameStore.getState().showNotice(null);
+    }, 1250);
     this.audio.playCollect();
     this.reset();
   }
@@ -195,7 +200,7 @@ export class HookSystem {
   }
 
   private readonly onPointerDown = (event: MouseEvent): void => {
-    if (event.button !== 0 || !this.enabled || this.state !== 'idle') return;
+    if (event.button !== 0 || !this.enabled || !this.equipped || this.state !== 'idle') return;
     this.state = 'charging';
     this.charge = 0;
   };

@@ -1,34 +1,39 @@
 import {
-  Anchor,
-  Axe,
   Droplet,
-  Fish,
-  Hammer,
   Heart,
-  Leaf,
   MousePointer2,
-  Package,
-  Recycle,
+  PackageOpen,
   Settings,
-  TreePine,
+  ShieldAlert,
+  ShieldCheck,
+  TriangleAlert,
   Utensils,
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import type { InventorySnapshot } from '../state/gameStore';
+import { ITEM_DEFINITIONS, TOOL_ORDER, itemCount, type Inventory, type ToolId } from '../game/domain/items';
+import type { FishingFeedback, RaftFeedback, SharkFeedback } from '../state/gameStore';
+import { ItemIcon } from './ItemIcon';
 
 interface HudProps {
   visible: boolean;
   pointerLocked: boolean;
   audioEnabled: boolean;
+  selectedTool: ToolId;
   hookCharge: number;
-  inventory: InventorySnapshot;
+  inventory: Inventory;
   survival: { health: number; thirst: number; hunger: number };
+  fishing: FishingFeedback;
+  shark: SharkFeedback;
+  raft: RaftFeedback;
+  interaction: string | null;
   notice: string | null;
   fps: number;
   onResume: () => void;
   onSettings: () => void;
   onToggleAudio: () => void;
+  onSelectTool: (tool: ToolId) => void;
+  onOpenPack: () => void;
 }
 
 interface GaugeProps {
@@ -39,11 +44,12 @@ interface GaugeProps {
 }
 
 function Gauge({ icon, value, tone, label }: GaugeProps) {
+  const rounded = Math.round(value);
   return (
-    <div className={`survival-gauge survival-gauge--${tone}`} aria-label={`${label} ${value}`}>
+    <div className={`survival-gauge survival-gauge--${tone}`} aria-label={`${label} ${rounded}`}>
       <span className="survival-gauge__icon">{icon}</span>
       <span className="survival-gauge__track">
-        <span className="survival-gauge__fill" style={{ width: `${value}%` }} />
+        <span className="survival-gauge__fill" style={{ width: `${rounded}%` }} />
       </span>
     </div>
   );
@@ -53,34 +59,42 @@ export function Hud({
   visible,
   pointerLocked,
   audioEnabled,
+  selectedTool,
   hookCharge,
   inventory,
   survival,
+  fishing,
+  shark,
+  raft,
+  interaction,
   notice,
   fps,
   onResume,
   onSettings,
   onToggleAudio,
+  onSelectTool,
+  onOpenPack,
 }: HudProps) {
+  const sharkAlert = shark.mode === 'approaching' || shark.mode === 'attacking';
+  const fishingActive = fishing.phase === 'hooked';
   return (
     <section className={`hud ${visible ? 'is-visible' : ''}`} aria-hidden={!visible}>
       <div className="resource-strip">
-        <div className="resource-readout" title="木料">
-          <TreePine size={18} />
-          <strong>{inventory.timber}</strong>
-        </div>
-        <div className="resource-readout" title="聚合片">
-          <Recycle size={18} />
-          <strong>{inventory.polymer}</strong>
-        </div>
-        <div className="resource-readout" title="纤维">
-          <Leaf size={18} />
-          <strong>{inventory.fiber}</strong>
-        </div>
-        <div className="resource-readout" title="补给箱">
-          <Package size={18} />
-          <strong>{inventory.cache}</strong>
-        </div>
+        {(['timber', 'polymer', 'fiber', 'scrap'] as const).map((itemId) => (
+          <div className="resource-readout" title={ITEM_DEFINITIONS[itemId].name} key={itemId}>
+            <ItemIcon itemId={itemId} size={18} />
+            <strong>{itemCount(inventory, itemId)}</strong>
+          </div>
+        ))}
+        <button className="resource-pack-button" type="button" onClick={onOpenPack} aria-label="打开背包" title="背包">
+          <PackageOpen size={18} />
+        </button>
+      </div>
+
+      <div className="raft-readout" aria-label={`木筏完整度 ${raft.averageIntegrity}%`}>
+        {raft.damagedTiles > 0 ? <ShieldAlert size={17} /> : <ShieldCheck size={17} />}
+        <span>{raft.averageIntegrity}%</span>
+        <i><b style={{ width: `${raft.averageIntegrity}%` }} /></i>
       </div>
 
       <div className="hud-actions">
@@ -93,39 +107,59 @@ export function Hud({
         </button>
       </div>
 
+      <div className={`shark-warning ${sharkAlert ? 'is-visible' : ''}`} aria-live="polite">
+        <TriangleAlert size={18} />
+        <div>
+          <span>{shark.mode === 'attacking' ? '结构遭到撕咬' : '深潮鲨正在逼近'}</span>
+          <i><b style={{ width: `${Math.round(shark.threat * 100)}%` }} /></i>
+        </div>
+      </div>
+
       <div className="survival-cluster">
         <Gauge icon={<Heart size={18} fill="currentColor" />} value={survival.health} tone="health" label="生命" />
         <Gauge icon={<Droplet size={18} fill="currentColor" />} value={survival.thirst} tone="thirst" label="口渴" />
         <Gauge icon={<Utensils size={18} />} value={survival.hunger} tone="hunger" label="饥饿" />
       </div>
 
-      <div className="hotbar" aria-label="快捷栏">
-        <div className="hotbar-slot is-active" title="打捞钩">
-          <span className="hotbar-slot__number">1</span>
-          <Anchor size={25} />
-        </div>
-        <div className="hotbar-slot" title="建造锤">
-          <span className="hotbar-slot__number">2</span>
-          <Hammer size={24} />
-        </div>
-        <div className="hotbar-slot is-locked" title="斧">
-          <span className="hotbar-slot__number">3</span>
-          <Axe size={23} />
-        </div>
-        <div className="hotbar-slot is-locked" title="钓竿">
-          <span className="hotbar-slot__number">4</span>
-          <Fish size={24} />
-        </div>
-        <div className="hotbar-slot is-empty"><span className="hotbar-slot__number">5</span></div>
-        <div className="hotbar-slot is-empty"><span className="hotbar-slot__number">6</span></div>
+      <div className="hotbar" aria-label="快捷工具">
+        {TOOL_ORDER.map((tool) => {
+          const unlocked = itemCount(inventory, tool) > 0;
+          return (
+            <button
+              className={`hotbar-slot ${selectedTool === tool ? 'is-active' : ''} ${unlocked ? '' : 'is-locked'}`}
+              type="button"
+              title={unlocked ? ITEM_DEFINITIONS[tool].name : '尚未制作'}
+              aria-label={ITEM_DEFINITIONS[tool].name}
+              disabled={!unlocked}
+              onClick={() => onSelectTool(tool)}
+              key={tool}
+            >
+              <ItemIcon itemId={tool} size={25} />
+            </button>
+          );
+        })}
       </div>
 
-      <div className="crosshair" aria-hidden="true"><i /><i /><i /><i /></div>
+      <div className={`crosshair ${fishing.phase === 'nibble' ? 'is-nibble' : ''} ${sharkAlert && selectedTool === 'spear' ? 'is-danger' : ''}`} aria-hidden="true">
+        <i /><i /><i /><i />
+      </div>
 
       <div className={`hook-charge ${hookCharge > 0 ? 'is-active' : ''}`} aria-hidden={hookCharge <= 0}>
         <span style={{ transform: `scaleX(${hookCharge})` }} />
       </div>
 
+      <div className={`fishing-fight ${fishingActive ? 'is-visible' : ''}`} aria-hidden={!fishingActive}>
+        <div className="fishing-fight__row">
+          <span>线张力</span>
+          <i className="fishing-fight__tension"><b style={{ width: `${fishing.tension * 100}%` }} /></i>
+        </div>
+        <div className="fishing-fight__row">
+          <span>收线</span>
+          <i className="fishing-fight__progress"><b style={{ width: `${fishing.progress * 100}%` }} /></i>
+        </div>
+      </div>
+
+      <div className={`interaction-prompt ${interaction ? 'is-visible' : ''}`}>{interaction}</div>
       <div className={`loot-notice ${notice ? 'is-visible' : ''}`} aria-live="polite">{notice}</div>
 
       {!pointerLocked && visible && (
@@ -139,4 +173,3 @@ export function Hud({
     </section>
   );
 }
-

@@ -27,14 +27,20 @@ import {
   type AssetTextures,
   type MaterialLibrary,
 } from './art/Materials';
-import { useGameStore, type QualityPreset } from '../state/gameStore';
+import { useGameStore, type AudioMix, type QualityPreset } from '../state/gameStore';
+import { TOOL_ORDER } from './domain/items';
+import { SAVE_VERSION, createDefaultRaftTiles, loadSave, writeSave, type DriftwakeSave } from './domain/save';
 import { AudioSystem } from './systems/AudioSystem';
+import { BuildSystem } from './systems/BuildSystem';
 import { DebrisField } from './systems/DebrisField';
+import { FishingSystem } from './systems/FishingSystem';
 import { HookSystem } from './systems/HookSystem';
 import { OceanSystem } from './systems/OceanSystem';
 import { PhysicsSystem } from './systems/PhysicsSystem';
 import { PlayerController } from './systems/PlayerController';
 import { RaftSystem } from './systems/RaftSystem';
+import { SharkSystem } from './systems/SharkSystem';
+import { SpearSystem } from './systems/SpearSystem';
 import { SplashSystem } from './systems/SplashSystem';
 import { sampleWaveHeight } from './math/waves';
 
@@ -52,11 +58,19 @@ export class DriftwakeGame {
   private debris: DebrisField | null = null;
   private player: PlayerController | null = null;
   private hook: HookSystem | null = null;
+  private build: BuildSystem | null = null;
+  private fishing: FishingSystem | null = null;
+  private shark: SharkSystem | null = null;
+  private spear: SpearSystem | null = null;
   private splashes: SplashSystem | null = null;
   private island: Group | null = null;
   private elapsed = 0;
   private fpsElapsed = 0;
   private fpsFrames = 0;
+  private simulationAccumulator = 0;
+  private saveElapsed = 0;
+  private unsubscribeStore: (() => void) | null = null;
+  private noticeTimer: number | null = null;
   private disposed = false;
 
   constructor(private readonly mount: HTMLElement) {
@@ -77,6 +91,8 @@ export class DriftwakeGame {
 
     window.addEventListener('resize', this.resize);
     document.addEventListener('pointerlockchange', this.onPointerLockChange);
+    window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('beforeunload', this.onBeforeUnload);
     this.renderer.domElement.addEventListener('click', this.onCanvasClick);
     this.renderer.domElement.addEventListener('webglcontextlost', this.onContextLost);
   }
@@ -86,6 +102,8 @@ export class DriftwakeGame {
     try {
       store.setLoadingLabel('正在调校光线');
       this.setupLightingAndSky();
+      const save = loadSave();
+      if (save) store.hydratePlayer(save.player);
       this.textures = await loadAssetTextures(this.renderer);
       if (this.disposed) return;
 
@@ -93,7 +111,7 @@ export class DriftwakeGame {
       this.materials = createMaterialLibrary(this.textures);
       this.ocean = new OceanSystem(this.textures.foam);
       this.ocean.setQuality(store.quality === 'high');
-      this.raft = new RaftSystem(this.materials);
+      this.raft = new RaftSystem(this.materials, save?.raft.tiles ?? createDefaultRaftTiles());
       this.scene.add(this.ocean.mesh, this.raft.group);
 
       this.island = createDistantIsland(this.materials);
@@ -114,6 +132,51 @@ export class DriftwakeGame {
         this.audio,
         this.splashes,
       );
+      this.build = new BuildSystem(
+        this.renderer,
+        this.camera,
+        this.materials,
+        this.raft,
+        this.audio,
+        this.splashes,
+      );
+      this.fishing = new FishingSystem(
+        this.renderer,
+        this.camera,
+        this.scene,
+        this.materials,
+        this.audio,
+        this.splashes,
+      );
+      this.shark = new SharkSystem(
+        this.scene,
+        this.raft,
+        this.materials,
+        this.audio,
+        this.splashes,
+        (strength) => this.player?.addCameraShake(strength),
+      );
+      this.spear = new SpearSystem(
+        this.renderer,
+        this.camera,
+        this.materials,
+        this.audio,
+        () => this.shark?.receiveSpearStrike(this.camera) ?? false,
+      );
+      store.setRaft(this.raft.getIntegrityStats());
+      this.unsubscribeStore = useGameStore.subscribe((state, previous) => {
+        if (
+          state.selectedTool !== previous.selectedTool ||
+          state.pointerLocked !== previous.pointerLocked ||
+          state.overlayPanel !== previous.overlayPanel ||
+          state.settingsOpen !== previous.settingsOpen ||
+          state.phase !== previous.phase
+        ) {
+          if (state.selectedTool !== previous.selectedTool) this.audio.playEquip();
+          this.syncEquipment();
+        }
+      });
+      this.syncEquipment();
 
       store.setLoadingLabel('正在建立物理世界');
       await this.physics.initialize();
@@ -132,6 +195,9 @@ export class DriftwakeGame {
 
   begin(): void {
     if (!useGameStore.getState().ready) return;
+    useGameStore.getState().setOverlayPanel(null);
+    useGameStore.getState().setSettingsOpen(false);
+    this.audio.setMix(useGameStore.getState().audioMix);
     this.audio.setEnabled(useGameStore.getState().audioEnabled);
     void this.audio.begin();
     void this.renderer.domElement.requestPointerLock();
@@ -146,6 +212,10 @@ export class DriftwakeGame {
     if (enabled) void this.audio.begin();
   }
 
+  setAudioMix(mix: AudioMix): void {
+    this.audio.setMix(mix);
+  }
+
   setQuality(quality: QualityPreset): void {
     const highQuality = quality === 'high';
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, highQuality ? 1.75 : 1.0));
@@ -154,22 +224,25 @@ export class DriftwakeGame {
     this.resize();
   }
 
+  playUi(success = true): void {
+    if (success) this.audio.playUi();
+    else this.audio.playDenied();
+  }
+
+  playConsume(): void {
+    this.audio.playCollect();
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.renderer.setAnimationLoop(null);
     window.removeEventListener('resize', this.resize);
     document.removeEventListener('pointerlockchange', this.onPointerLockChange);
+    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('beforeunload', this.onBeforeUnload);
     this.renderer.domElement.removeEventListener('click', this.onCanvasClick);
     this.renderer.domElement.removeEventListener('webglcontextlost', this.onContextLost);
-    this.player?.dispose();
-    this.hook?.dispose(this.scene);
-    this.splashes?.dispose();
-    this.debris?.dispose(this.scene);
-    this.ocean?.dispose();
-    this.physics.dispose();
-    this.audio.dispose();
-
     const geometries = new Set<BufferGeometry>();
     const materials = new Set<Material>();
     const textures = new Set<Texture>();
@@ -184,6 +257,21 @@ export class DriftwakeGame {
         }
       }
     });
+    this.player?.dispose();
+    this.hook?.dispose(this.scene);
+    this.build?.dispose();
+    this.fishing?.dispose(this.scene);
+    this.spear?.dispose();
+    this.shark?.dispose();
+    this.splashes?.dispose();
+    this.debris?.dispose(this.scene);
+    this.ocean?.dispose();
+    this.physics.dispose();
+    this.audio.dispose();
+    this.unsubscribeStore?.();
+    this.unsubscribeStore = null;
+    if (this.noticeTimer !== null) window.clearTimeout(this.noticeTimer);
+
     geometries.forEach((geometry) => geometry.dispose());
     materials.forEach((material) => material.dispose());
     textures.forEach((texture) => texture.dispose());
@@ -224,14 +312,36 @@ export class DriftwakeGame {
     if (this.disposed) return;
     const delta = Math.min(this.clock.getDelta(), 0.05);
     this.elapsed += delta;
+    const state = useGameStore.getState();
+    const simulationActive =
+      state.phase === 'playing' && state.pointerLocked && !state.settingsOpen && state.overlayPanel === null;
+    const simulationDelta = simulationActive ? delta : 0;
     this.raft?.update(this.elapsed, delta);
-    this.player?.update(delta);
+    this.player?.update(simulationDelta);
     this.ocean?.update(this.elapsed);
     this.debris?.update(this.elapsed, delta);
-    this.hook?.update(this.elapsed, delta);
+    this.hook?.update(this.elapsed, simulationDelta);
+    this.build?.update(this.elapsed, simulationDelta);
+    this.fishing?.update(this.elapsed, simulationDelta);
+    this.spear?.update(this.elapsed, simulationDelta);
+    if (simulationActive) this.shark?.update(this.elapsed, simulationDelta);
     this.splashes?.update(delta);
     this.audio.update(this.elapsed);
-    this.physics.step(delta);
+    this.physics.step(simulationDelta);
+
+    if (simulationActive) {
+      this.simulationAccumulator += simulationDelta;
+      while (this.simulationAccumulator >= 1) {
+        useGameStore.getState().tickSurvival(1);
+        useGameStore.getState().advancePlayTime(1);
+        this.simulationAccumulator -= 1;
+      }
+    }
+    this.saveElapsed += delta;
+    if (this.saveElapsed >= 12) {
+      this.saveElapsed = 0;
+      this.saveNow();
+    }
 
     if (this.island) {
       this.island.position.y = -0.28 + sampleWaveHeight(-18, -78, this.elapsed) * 0.12;
@@ -260,7 +370,7 @@ export class DriftwakeGame {
     const playing = useGameStore.getState().phase === 'playing';
     useGameStore.getState().setPointerLocked(locked);
     this.player?.setEnabled(locked && playing);
-    this.hook?.setEnabled(locked && playing);
+    this.syncEquipment();
   };
 
   private readonly onCanvasClick = (): void => {
@@ -282,4 +392,64 @@ export class DriftwakeGame {
     });
     useGameStore.getState().showNotice('图形上下文已暂停');
   };
+
+  private syncEquipment(): void {
+    const state = useGameStore.getState();
+    const inputEnabled =
+      state.phase === 'playing' && state.pointerLocked && !state.settingsOpen && state.overlayPanel === null;
+    this.hook?.setEquipped(state.selectedTool === 'hook');
+    this.hook?.setEnabled(inputEnabled && state.selectedTool === 'hook');
+    this.build?.setEquipped(state.selectedTool === 'hammer');
+    this.build?.setInputEnabled(inputEnabled && state.selectedTool === 'hammer');
+    this.fishing?.setEquipped(state.selectedTool === 'fishingRod');
+    this.fishing?.setInputEnabled(inputEnabled && state.selectedTool === 'fishingRod');
+    this.spear?.setEquipped(state.selectedTool === 'spear');
+    this.spear?.setInputEnabled(inputEnabled && state.selectedTool === 'spear');
+    this.player?.setEnabled(inputEnabled);
+  }
+
+  private saveNow(): void {
+    if (!this.raft || !useGameStore.getState().ready) return;
+    const save: DriftwakeSave = {
+      version: SAVE_VERSION,
+      savedAt: Date.now(),
+      player: useGameStore.getState().getPlayerSnapshot(),
+      raft: { tiles: this.raft.getSavedTiles() },
+    };
+    useGameStore.getState().setSaveStatus(writeSave(save) ? 'saved' : 'error');
+  }
+
+  private readonly onBeforeUnload = (): void => {
+    this.saveNow();
+  };
+
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    const state = useGameStore.getState();
+    if (state.phase !== 'playing') return;
+    if (event.code === 'Tab' || event.code === 'KeyI' || event.code === 'KeyC') {
+      event.preventDefault();
+      const requested = event.code === 'KeyC' ? 'crafting' : 'pack';
+      const nextPanel = state.overlayPanel === requested ? null : requested;
+      state.setOverlayPanel(nextPanel);
+      if (nextPanel !== null && document.pointerLockElement === this.renderer.domElement) document.exitPointerLock();
+      this.audio.playUi();
+      return;
+    }
+    const digit = /^Digit([1-4])$/.exec(event.code);
+    if (digit && state.overlayPanel === null && !state.settingsOpen) {
+      const tool = TOOL_ORDER[Number(digit[1]) - 1];
+      if (!state.setSelectedTool(tool)) {
+        this.audio.playDenied();
+        this.showTransientNotice('需要先制作该工具');
+      }
+    }
+  };
+
+  private showTransientNotice(message: string): void {
+    useGameStore.getState().showNotice(message);
+    if (this.noticeTimer !== null) window.clearTimeout(this.noticeTimer);
+    this.noticeTimer = window.setTimeout(() => {
+      if (useGameStore.getState().notice === message) useGameStore.getState().showNotice(null);
+    }, 1500);
+  }
 }

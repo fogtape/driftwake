@@ -1,28 +1,30 @@
 # Driftwake
 
-原创网页 3D 海上生存游戏，目前处于高质量纵向切片阶段。
+原创桌面网页 3D 海上生存游戏。当前版本为 `0.2.0` 高质量纵向切片，不以基础 Demo 为完成标准。
 
 ## 当前内容
 
-- 原创标题主视觉、木材纹理与定向海面泡沫遮罩；
-- Three.js 程序化海面、天空、远景岛和昼光氛围；
-- 带波浪升沉的 3x3 木筏与第一人称键鼠移动；
-- 木料、聚合片、纤维和补给箱漂流物；
-- 蓄力抛钩、飞行、绳索、入水、命中、拖回和收获流程；
-- 程序化分层海浪、风声、木筏吱响、抛钩、落水和收获音效；
-- 标题界面、HUD、快捷栏、设置与移动设备能力页；
-- Rapier 物理初始化、Vitest 逻辑测试和 Playwright 截图脚本。
+- Three.js 程序化海面、天空、雾、远景岛、昼光和随波木筏；
+- 第一人称移动、蓄力抛钩、绳索、水花、漂流物命中和补给箱战利品；
+- 数据驱动物品、20 格堆叠背包、便携配方、消耗品和固定步长生存状态；
+- 可寻址木筏筏格、邻接建造、幽灵预览、材料校验、修补、拆除与连通性保护；
+- 浮标抛投、鱼讯窗口、张力/收线对抗、断线、鱼体挣扎和收获；
+- 原创程序鲨鱼模型、巡游、预兆、选边、咬筏、结构损伤、木矛命中和驱离；
+- 版本化自动存档，保存物品、生存状态、当前工具、航行时间和逐格筏体耐久；
+- 六总线程序音频混音：音乐、海况、交互、危险、界面和总音量；
+- 标题、HUD、背包、制作、设置、能力提示和 Playwright 截图回归流程；
+- 原创标题美术、木材、泡沫、鲨皮和编织纤维材质，以及独立 normal/roughness 图。
 
-当前实现不是完整游戏。建造、鲨鱼、钓鱼、岛屿探索、研究与存档仍按追踪文档继续开发。
+当前仍不是完整游戏。净水、烹饪、种植、可探索岛屿、水下采集、研究、熔炼与导航仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
 
 ## 运行
 
 ```sh
-npm install
-npm run dev
+npm ci
+npm run dev -- --port 4173
 ```
 
-默认地址由 Vite 输出。桌面 Chrome / Edge、键鼠与 WebGL2 是当前目标环境。
+目标环境为带真实 GPU、WebGL2 和键鼠的桌面 Chrome / Edge。当前交互包括：鼠标抛投/刺击/建造，数字键切换工具，`I` 或 `Tab` 打开背包，`C` 打开制作。
 
 ## 验证
 
@@ -32,23 +34,23 @@ npm run build
 npm run capture
 ```
 
-`npm run capture` 默认连接 `http://127.0.0.1:4173`，可通过 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH` 和 `CAPTURE_HEIGHT` 调整。
+截图脚本默认连接 `http://127.0.0.1:4173`，支持 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH`、`CAPTURE_HEIGHT` 和 `CAPTURE_ONLY`。可选截图目标包括 `title`、`game`、`hook`、`pack`、`crafting`、`settings` 和 `mobile`。游戏截图会读取 WebGL 像素并拒绝黑屏或已丢失的上下文。
 
-## 图像生成
+Termux Chromium + SwiftShader 会在完整场景首帧后丢失 WebGL 上下文；标题、背包、制作、设置和移动能力页可以在该环境验收，完整 3D 必须在真实 GPU 环境复验。
 
-`scripts/imagegen` 会在运行时读取：
+## 资产管线
 
-- `$CODEX_HOME/config.toml` 中当前 provider 的 `base_url`；
-- `$CODEX_HOME/auth.json` 中的 `OPENAI_API_KEY`。
-
-仓库不保存密钥。示例：
+`scripts/imagegen` 会在运行时读取当前 Codex provider 的 `base_url` 与本地认证文件中的 API Key，仓库不会保存服务 URL 或密钥：
 
 ```sh
 scripts/imagegen generate --prompt "..." --quality high --out output/imagegen/example.png
 ```
 
-## 文档
+确定性材质兜底和 normal/roughness 派生需要 Pillow：
 
-- [项目追踪](PROJECT_TRACKER.md)
-- [原创资产清单](docs/ASSET_MANIFEST.md)
+```sh
+python scripts/generate_procedural_materials.py --out-dir public/assets/textures --size 1024
+python scripts/derive_material_maps.py --input albedo.webp --normal normal.webp --roughness roughness.webp
+```
 
+完整来源、最终提示词、采用/拒绝结论和模型清单见 [原创资产清单](docs/ASSET_MANIFEST.md)。

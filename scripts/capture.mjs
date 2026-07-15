@@ -15,6 +15,37 @@ const desktopHeight = Number(process.env.CAPTURE_HEIGHT ?? 900);
 const chromiumPath = process.env.CHROMIUM_PATH ?? '/data/data/com.termux/files/usr/bin/chromium-browser';
 const outputDir = new URL('../artifacts/screenshots/', import.meta.url);
 
+const seededSave = {
+  version: 1,
+  savedAt: 1,
+  player: {
+    inventory: {
+      hook: 1,
+      hammer: 1,
+      spear: 1,
+      fishingRod: 1,
+      timber: 18,
+      polymer: 12,
+      fiber: 14,
+      scrap: 4,
+      rope: 5,
+      emergencyWater: 2,
+      ration: 2,
+      rawFish: 1,
+    },
+    survival: { health: 92, thirst: 67, hunger: 61 },
+    selectedTool: 'hook',
+    playSeconds: 180,
+  },
+  raft: {
+    tiles: Array.from({ length: 9 }, (_, index) => ({
+      x: (index % 3) - 1,
+      z: Math.floor(index / 3) - 1,
+      health: index === 2 ? 66 : 100,
+    })),
+  },
+};
+
 await mkdir(outputDir, { recursive: true });
 
 const browser = await chromium.launch({
@@ -52,11 +83,16 @@ function monitorPage(page, label) {
   });
 }
 
-async function openDesktopPage(label) {
+async function openDesktopPage(label, options = {}) {
   const context = await browser.newContext({
     viewport: { width: desktopWidth, height: desktopHeight },
     deviceScaleFactor: 1,
   });
+  if (options.seedSave) {
+    await context.addInitScript((save) => {
+      localStorage.setItem('driftwake.save.v1', JSON.stringify(save));
+    }, seededSave);
+  }
   const page = await context.newPage();
   monitorPage(page, label);
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
@@ -69,6 +105,39 @@ async function openDesktopPage(label) {
   }
   await page.waitForTimeout(250);
   return { context, page };
+}
+
+async function inspectCanvasPixels(page, label) {
+  const result = await page.locator('canvas').evaluate((canvas) => {
+    const gl = canvas.getContext('webgl2');
+    if (!gl || gl.isContextLost()) return { contextLost: true, variation: 0, nonBlack: 0 };
+    const width = Math.min(48, canvas.width);
+    const height = Math.min(48, canvas.height);
+    const pixels = new Uint8Array(width * height * 4);
+    gl.readPixels(
+      Math.max(0, Math.floor(canvas.width / 2 - width / 2)),
+      Math.max(0, Math.floor(canvas.height / 2 - height / 2)),
+      width,
+      height,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      pixels,
+    );
+    let min = 255;
+    let max = 0;
+    let nonBlack = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      const luminance = pixels[index] * 0.2126 + pixels[index + 1] * 0.7152 + pixels[index + 2] * 0.0722;
+      min = Math.min(min, luminance);
+      max = Math.max(max, luminance);
+      if (luminance > 4) nonBlack += 1;
+    }
+    return { contextLost: false, variation: Math.round(max - min), nonBlack };
+  });
+  console.log(`${label} canvas pixels: ${JSON.stringify(result)}`);
+  if (result.contextLost || result.variation < 4 || result.nonBlack < 32) {
+    throw new Error(`${label} canvas is blank or unavailable: ${JSON.stringify(result)}`);
+  }
 }
 
 async function captureTitle() {
@@ -96,7 +165,36 @@ async function captureGame() {
     return { width: canvas.width, height: canvas.height, contextLost: gl?.isContextLost() ?? true };
   });
   console.log(`Game canvas before capture: ${JSON.stringify(canvasState)}`);
+  await inspectCanvasPixels(page, 'game');
   await page.screenshot({ path: new URL('game-desktop.png', outputDir).pathname });
+  await context.close();
+}
+
+async function capturePack() {
+  const { context, page } = await openDesktopPage('pack', { seedSave: true });
+  await page.getByRole('button', { name: '开始漂流' }).click();
+  await page.waitForTimeout(500);
+  await page.keyboard.press('KeyI');
+  await page.getByRole('dialog', { name: '野外背包' }).waitFor();
+  await page.screenshot({ path: new URL('pack-desktop.png', outputDir).pathname });
+  await context.close();
+}
+
+async function captureCrafting() {
+  const { context, page } = await openDesktopPage('crafting', { seedSave: true });
+  await page.getByRole('button', { name: '开始漂流' }).click();
+  await page.waitForTimeout(500);
+  await page.keyboard.press('KeyC');
+  await page.getByRole('dialog', { name: '野外背包' }).waitFor();
+  await page.screenshot({ path: new URL('crafting-desktop.png', outputDir).pathname });
+  await context.close();
+}
+
+async function captureSettings() {
+  const { context, page } = await openDesktopPage('settings');
+  await page.getByRole('button', { name: '设置' }).first().click();
+  await page.getByRole('dialog', { name: '设置' }).waitFor();
+  await page.screenshot({ path: new URL('settings-desktop.png', outputDir).pathname });
   await context.close();
 }
 
@@ -134,6 +232,9 @@ try {
   if (captureOnly === 'all' || captureOnly === 'title') await captureTitle();
   if (captureOnly === 'all' || captureOnly === 'game') await captureGame();
   if (captureOnly === 'all' || captureOnly === 'hook') await captureHook();
+  if (captureOnly === 'all' || captureOnly === 'pack') await capturePack();
+  if (captureOnly === 'all' || captureOnly === 'crafting') await captureCrafting();
+  if (captureOnly === 'all' || captureOnly === 'settings') await captureSettings();
   if (captureOnly === 'all' || captureOnly === 'mobile') await captureMobile();
 } finally {
   await browser.close();

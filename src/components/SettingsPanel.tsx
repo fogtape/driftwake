@@ -1,11 +1,25 @@
-import { Check, Gauge, MonitorCog, Volume2, VolumeX, X } from 'lucide-react';
-import type { QualityPreset } from '../state/gameStore';
+import {
+  Check,
+  Gauge,
+  Hammer,
+  MonitorCog,
+  Music2,
+  SlidersHorizontal,
+  TriangleAlert,
+  Volume2,
+  VolumeX,
+  Waves,
+  X,
+} from 'lucide-react';
+import type { AudioMix, QualityPreset } from '../state/gameStore';
 
 interface SettingsPanelProps {
   open: boolean;
   audioEnabled: boolean;
+  audioMix: AudioMix;
   quality: QualityPreset;
   onAudioChange: (enabled: boolean) => void;
+  onAudioMixChange: (mix: Partial<AudioMix>) => void;
   onQualityChange: (quality: QualityPreset) => void;
   onClose: () => void;
 }
@@ -13,8 +27,10 @@ interface SettingsPanelProps {
 export function SettingsPanel({
   open,
   audioEnabled,
+  audioMix,
   quality,
   onAudioChange,
+  onAudioMixChange,
   onQualityChange,
   onClose,
 }: SettingsPanelProps) {
@@ -42,6 +58,37 @@ export function SettingsPanel({
           </button>
         </div>
 
+        <div className="setting-row setting-row--stacked audio-mixer-setting">
+          <div className="setting-row__label">
+            <SlidersHorizontal size={20} />
+            <div><strong>混音</strong><span>独立声音总线</span></div>
+          </div>
+          <div className="audio-mixer">
+            {([
+              ['master', '总音量', Volume2],
+              ['music', '音乐', Music2],
+              ['ambience', '海况', Waves],
+              ['effects', '交互', Hammer],
+              ['creatures', '危险', TriangleAlert],
+              ['ui', '界面', Gauge],
+            ] as const).map(([key, label, Icon]) => (
+              <label className="mixer-channel" key={key}>
+                <span><Icon size={15} /> {label}</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={Math.round(audioMix[key] * 100)}
+                  onChange={(event) => onAudioMixChange({ [key]: Number(event.target.value) / 100 })}
+                  aria-label={label}
+                />
+                <output>{Math.round(audioMix[key] * 100)}</output>
+              </label>
+            ))}
+          </div>
+        </div>
+
         <div className="setting-row setting-row--stacked">
           <div className="setting-row__label">
             <MonitorCog size={20} />
@@ -60,4 +107,3 @@ export function SettingsPanel({
     </div>
   );
 }
-

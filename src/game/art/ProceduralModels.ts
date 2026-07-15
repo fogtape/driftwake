@@ -1,5 +1,6 @@
 import {
   BoxGeometry,
+  BufferGeometry,
   CatmullRomCurve3,
   ConeGeometry,
   CylinderGeometry,
@@ -8,6 +9,7 @@ import {
   ExtrudeGeometry,
   Group,
   InstancedMesh,
+  LatheGeometry,
   MathUtils,
   Matrix4,
   Mesh,
@@ -19,6 +21,8 @@ import {
   TubeGeometry,
   Quaternion,
   Euler,
+  Float32BufferAttribute,
+  Vector2,
   Vector3,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -67,6 +71,254 @@ export function createHookModel(materials: MaterialLibrary): Group {
   }
 
   return group;
+}
+
+export function createHammerModel(materials: MaterialLibrary): Group {
+  const group = new Group();
+  group.name = 'salvaged-building-hammer';
+  const handle = shadowed(new Mesh(new CylinderGeometry(0.065, 0.085, 0.9, 10), materials.darkWood));
+  handle.rotation.z = -0.08;
+  handle.position.y = 0.2;
+  group.add(handle);
+
+  const head = shadowed(new Mesh(new RoundedBoxGeometry(0.58, 0.22, 0.24, 4, 0.055), materials.metal));
+  head.position.y = 0.69;
+  head.rotation.z = -0.04;
+  group.add(head);
+
+  const strikingFace = shadowed(new Mesh(new CylinderGeometry(0.16, 0.13, 0.18, 10), materials.rustMetal));
+  strikingFace.rotation.z = Math.PI / 2;
+  strikingFace.position.set(-0.36, 0.69, 0);
+  group.add(strikingFace);
+
+  const claw = shadowed(new Mesh(new ConeGeometry(0.18, 0.36, 4), materials.rustMetal));
+  claw.rotation.z = -Math.PI / 2;
+  claw.position.set(0.42, 0.7, 0);
+  group.add(claw);
+
+  for (let index = 0; index < 6; index += 1) {
+    const wrap = shadowed(new Mesh(new TorusGeometry(0.082, 0.012, 5, 14), materials.wovenFiber));
+    wrap.position.y = -0.07 + index * 0.047;
+    wrap.rotation.x = Math.PI / 2;
+    wrap.rotation.z = index * 0.08;
+    group.add(wrap);
+  }
+  return group;
+}
+
+export function createSpearModel(materials: MaterialLibrary): Group {
+  const group = new Group();
+  group.name = 'sharpened-wood-spear';
+  const shaft = shadowed(new Mesh(new CylinderGeometry(0.028, 0.045, 2.45, 9), materials.darkWood));
+  shaft.position.y = 0.4;
+  group.add(shaft);
+  const tip = shadowed(new Mesh(new ConeGeometry(0.085, 0.36, 7), materials.metal));
+  tip.position.y = 1.8;
+  group.add(tip);
+  for (let index = 0; index < 5; index += 1) {
+    const binding = shadowed(new Mesh(new TorusGeometry(0.052, 0.009, 5, 12), materials.wovenFiber));
+    binding.position.y = 1.54 + index * 0.045;
+    binding.rotation.x = Math.PI / 2;
+    group.add(binding);
+  }
+  return group;
+}
+
+export function createFishingRodModel(materials: MaterialLibrary): Group {
+  const group = new Group();
+  group.name = 'fiber-fishing-rod';
+  const rodCurve = new CatmullRomCurve3([
+    new Vector3(0, -0.56, 0),
+    new Vector3(0.01, 0.04, 0),
+    new Vector3(0.02, 0.72, -0.015),
+    new Vector3(0.04, 1.34, -0.05),
+    new Vector3(0.08, 1.78, -0.12),
+  ]);
+  const rod = shadowed(new Mesh(new TubeGeometry(rodCurve, 30, 0.028, 7, false), materials.darkWood));
+  group.add(rod);
+  const grip = shadowed(new Mesh(new CylinderGeometry(0.055, 0.065, 0.56, 9), materials.wovenFiber));
+  grip.position.y = -0.26;
+  group.add(grip);
+  const reel = shadowed(new Mesh(new TorusGeometry(0.14, 0.028, 7, 18), materials.rustMetal));
+  reel.position.set(0.12, 0.02, 0);
+  reel.rotation.y = Math.PI / 2;
+  group.add(reel);
+  const reelHub = shadowed(new Mesh(new CylinderGeometry(0.045, 0.045, 0.16, 9), materials.metal));
+  reelHub.position.copy(reel.position);
+  reelHub.rotation.z = Math.PI / 2;
+  group.add(reelHub);
+  return group;
+}
+
+export function createFishingBobber(materials: MaterialLibrary): Group {
+  const group = new Group();
+  group.name = 'fishing-bobber';
+  const cream = new MeshStandardMaterial({ color: 0xe9dfbd, roughness: 0.72 });
+  const coral = new MeshStandardMaterial({ color: 0xd96652, roughness: 0.68 });
+  const body = shadowed(new Mesh(new SphereGeometry(0.115, 14, 10), cream));
+  body.scale.y = 1.22;
+  const cap = shadowed(new Mesh(new CylinderGeometry(0.055, 0.075, 0.13, 10), coral));
+  cap.position.y = 0.13;
+  const eye = shadowed(new Mesh(new TorusGeometry(0.026, 0.007, 5, 12), materials.metal));
+  eye.position.y = 0.23;
+  eye.rotation.x = Math.PI / 2;
+  group.add(body, cap, eye);
+  return group;
+}
+
+export function createSilverSpineFishModel(materials: MaterialLibrary): Group {
+  const fish = new Group();
+  fish.name = 'silver-spine-fish';
+  const profile = [
+    new Vector2(0.025, -0.72),
+    new Vector2(0.2, -0.58),
+    new Vector2(0.3, -0.18),
+    new Vector2(0.27, 0.28),
+    new Vector2(0.12, 0.58),
+    new Vector2(0.045, 0.72),
+  ];
+  const bodyGeometry = new LatheGeometry(profile, 18);
+  bodyGeometry.rotateX(Math.PI / 2);
+  const bodyMaterial = materials.metal.clone();
+  bodyMaterial.color.set(0x8eb9bb);
+  bodyMaterial.metalness = 0.12;
+  bodyMaterial.roughness = 0.46;
+  const body = shadowed(new Mesh(bodyGeometry, bodyMaterial));
+  body.scale.y = 0.68;
+  fish.add(body);
+  const tail = shadowed(
+    new Mesh(
+      createWedgeGeometry(
+        [
+          -0.03, 0, 0.58, -0.03, 0.34, 0.92, -0.03, 0, 0.82, -0.03, -0.34, 0.92,
+          0.03, 0, 0.58, 0.03, 0.34, 0.92, 0.03, 0, 0.82, 0.03, -0.34, 0.92,
+        ],
+        [0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 4, 5, 0, 5, 1, 3, 6, 7, 3, 2, 6],
+      ),
+      materials.polymer,
+    ),
+  );
+  fish.add(tail);
+  for (const side of [-1, 1]) {
+    const eye = new Mesh(new SphereGeometry(0.035, 9, 7), materials.sharkEye);
+    eye.position.set(side * 0.2, 0.06, -0.5);
+    fish.add(eye);
+  }
+  fish.scale.setScalar(0.72);
+  return fish;
+}
+
+function createWedgeGeometry(vertices: readonly number[], indices: readonly number[]): BufferGeometry {
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3));
+  geometry.setIndex([...indices]);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function createSharkFins(materials: MaterialLibrary): Group {
+  const fins = new Group();
+  const dorsal = shadowed(
+    new Mesh(
+      createWedgeGeometry(
+        [
+          -0.045, 0.36, 0.55, -0.045, 0.34, -0.55, -0.045, 1.08, 0.18,
+          0.045, 0.36, 0.55, 0.045, 0.34, -0.55, 0.045, 1.08, 0.18,
+        ],
+        [0, 1, 2, 3, 5, 4, 0, 3, 4, 0, 4, 1, 1, 4, 5, 1, 5, 2, 2, 5, 3, 2, 3, 0],
+      ),
+      materials.sharkSkin,
+    ),
+  );
+  fins.add(dorsal);
+
+  const leftPectoral = shadowed(
+    new Mesh(
+      createWedgeGeometry(
+        [
+          0.38, -0.08, -0.62, 0.54, -0.18, 0.46, 1.48, -0.42, 0.72,
+          0.38, -0.03, -0.62, 0.54, -0.11, 0.46, 1.48, -0.35, 0.72,
+        ],
+        [0, 1, 2, 3, 5, 4, 0, 3, 4, 0, 4, 1, 1, 4, 5, 1, 5, 2, 2, 5, 3, 2, 3, 0],
+      ),
+      materials.sharkSkin,
+    ),
+  );
+  const rightPectoral = leftPectoral.clone();
+  rightPectoral.scale.x = -1;
+  fins.add(leftPectoral, rightPectoral);
+  return fins;
+}
+
+export function createSharkModel(materials: MaterialLibrary): Group {
+  const shark = new Group();
+  shark.name = 'graywake-shark';
+  const profile = [
+    new Vector2(0.05, -2.05),
+    new Vector2(0.34, -1.92),
+    new Vector2(0.56, -1.55),
+    new Vector2(0.69, -0.75),
+    new Vector2(0.66, 0.12),
+    new Vector2(0.52, 0.92),
+    new Vector2(0.28, 1.5),
+    new Vector2(0.11, 1.82),
+  ];
+  const bodyGeometry = new LatheGeometry(profile, 28);
+  bodyGeometry.rotateX(Math.PI / 2);
+  const body = shadowed(new Mesh(bodyGeometry, materials.sharkSkin));
+  body.scale.y = 0.84;
+  shark.add(body, createSharkFins(materials));
+
+  const tailPivot = new Group();
+  tailPivot.name = 'shark-tail-pivot';
+  tailPivot.position.z = 1.72;
+  const peduncle = shadowed(new Mesh(new CylinderGeometry(0.08, 0.16, 0.72, 12), materials.sharkSkin));
+  peduncle.rotation.x = Math.PI / 2;
+  peduncle.position.z = 0.25;
+  const tail = shadowed(
+    new Mesh(
+      createWedgeGeometry(
+        [
+          -0.05, 0, 0.45, -0.04, 1.04, 0.88, -0.03, 0.22, 0.98,
+          0.05, 0, 0.45, 0.04, 1.04, 0.88, 0.03, 0.22, 0.98,
+          -0.04, -0.94, 0.85, -0.03, -0.18, 1.02,
+          0.04, -0.94, 0.85, 0.03, -0.18, 1.02,
+        ],
+        [0, 1, 2, 3, 5, 4, 0, 3, 4, 0, 4, 1, 6, 7, 0, 8, 3, 9, 6, 8, 9, 6, 9, 7],
+      ),
+      materials.sharkSkin,
+    ),
+  );
+  tailPivot.add(peduncle, tail);
+  shark.add(tailPivot);
+
+  const eyeGeometry = new SphereGeometry(0.065, 12, 8);
+  for (const side of [-1, 1]) {
+    const eye = shadowed(new Mesh(eyeGeometry, materials.sharkEye));
+    eye.position.set(side * 0.48, 0.16, -1.55);
+    shark.add(eye);
+  }
+
+  const mouth = shadowed(new Mesh(new TorusGeometry(0.29, 0.025, 6, 22, Math.PI * 1.08), materials.sharkMouth));
+  mouth.position.set(0, -0.25, -1.83);
+  mouth.rotation.set(Math.PI / 2, 0, Math.PI * 0.04);
+  mouth.scale.x = 1.35;
+  shark.add(mouth);
+
+  const gillGeometry = new BoxGeometry(0.018, 0.22, 0.025);
+  for (const side of [-1, 1]) {
+    for (let index = 0; index < 3; index += 1) {
+      const gill = new Mesh(gillGeometry, materials.sharkMouth);
+      gill.position.set(side * 0.59, -0.02, -0.96 + index * 0.13);
+      gill.rotation.z = side * 0.15;
+      shark.add(gill);
+    }
+  }
+
+  shark.userData.tailPivot = tailPivot;
+  shark.userData.body = body;
+  shark.scale.setScalar(0.88);
+  return shark;
 }
 
 function createPalmLeaf(material: MeshStandardMaterial, scale = 1): Mesh {

@@ -8,8 +8,13 @@ export class PlayerController {
   private readonly keys = new Set<string>();
   private readonly lookEuler = new Euler(0, 0, 0, 'YXZ');
   private readonly lookQuaternion = new Quaternion();
+  private readonly shakeQuaternion = new Quaternion();
+  private readonly shakeEuler = new Euler(0, 0, 0, 'YXZ');
+  private readonly shakeOffset = new Vector3();
   private readonly worldPosition = new Vector3();
   private moveCycle = 0;
+  private shake = 0;
+  private shakeTime = 0;
   private enabled = false;
 
   constructor(
@@ -27,6 +32,7 @@ export class PlayerController {
   }
 
   update(delta: number): void {
+    this.shakeTime += delta;
     let inputX = 0;
     let inputZ = 0;
     if (this.enabled) {
@@ -60,6 +66,28 @@ export class PlayerController {
 
     this.lookQuaternion.setFromEuler(this.lookEuler);
     this.camera.quaternion.copy(this.raft.group.quaternion).multiply(this.lookQuaternion);
+    if (this.shake > 0.001) {
+      this.shake = MathUtils.damp(this.shake, 0, 5.2, delta);
+      this.shakeOffset
+        .set(
+          Math.sin(this.shakeTime * 31) * this.shake * 0.055,
+          Math.sin(this.shakeTime * 43 + 0.8) * this.shake * 0.035,
+          0,
+        )
+        .applyQuaternion(this.camera.quaternion);
+      this.camera.position.add(this.shakeOffset);
+      this.shakeEuler.set(
+        Math.sin(this.shakeTime * 37) * this.shake * 0.012,
+        Math.sin(this.shakeTime * 29) * this.shake * 0.018,
+        Math.sin(this.shakeTime * 41) * this.shake * 0.014,
+      );
+      this.shakeQuaternion.setFromEuler(this.shakeEuler);
+      this.camera.quaternion.multiply(this.shakeQuaternion);
+    }
+  }
+
+  addCameraShake(strength: number): void {
+    this.shake = Math.max(this.shake, MathUtils.clamp(strength, 0, 1));
   }
 
   getForward(target = new Vector3()): Vector3 {

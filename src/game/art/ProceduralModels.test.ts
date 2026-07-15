@@ -1,0 +1,67 @@
+import { Box3, Group, Mesh, MeshStandardMaterial, Vector3 } from 'three';
+import { describe, expect, it } from 'vitest';
+import type { MaterialLibrary } from './Materials';
+import {
+  createFishingRodModel,
+  createHammerModel,
+  createSharkModel,
+  createSpearModel,
+} from './ProceduralModels';
+
+function createTestMaterials(): MaterialLibrary {
+  const material = () => new MeshStandardMaterial();
+  return {
+    wood: [material(), material(), material()],
+    darkWood: material(),
+    rope: material(),
+    metal: material(),
+    rustMetal: material(),
+    polymer: material(),
+    leaf: material(),
+    rock: material(),
+    foliage: material(),
+    wovenFiber: material(),
+    sharkSkin: material(),
+    sharkMouth: material(),
+    sharkEye: material(),
+  };
+}
+
+function meshStats(root: Group): { meshes: number; vertices: number } {
+  let meshes = 0;
+  let vertices = 0;
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    meshes += 1;
+    const position = object.geometry.getAttribute('position');
+    vertices += position?.count ?? 0;
+    for (let index = 0; position && index < position.count; index += 1) {
+      expect(Number.isFinite(position.getX(index))).toBe(true);
+      expect(Number.isFinite(position.getY(index))).toBe(true);
+      expect(Number.isFinite(position.getZ(index))).toBe(true);
+    }
+  });
+  return { meshes, vertices };
+}
+
+describe('procedural model assets', () => {
+  it('builds a non-degenerate articulated shark silhouette', () => {
+    const shark = createSharkModel(createTestMaterials());
+    const stats = meshStats(shark);
+    const size = new Box3().setFromObject(shark).getSize(new Vector3());
+    expect(stats.meshes).toBeGreaterThanOrEqual(12);
+    expect(stats.vertices).toBeGreaterThan(500);
+    expect(size.z).toBeGreaterThan(3.5);
+    expect(size.x).toBeGreaterThan(2);
+    expect(shark.userData.tailPivot).toBeDefined();
+  });
+
+  it('gives each first-person tool a distinct detailed mesh assembly', () => {
+    const materials = createTestMaterials();
+    const tools = [createHammerModel(materials), createSpearModel(materials), createFishingRodModel(materials)];
+    const meshCounts = tools.map((tool) => meshStats(tool).meshes);
+    expect(meshCounts[0]).toBeGreaterThanOrEqual(9);
+    expect(meshCounts[1]).toBeGreaterThanOrEqual(7);
+    expect(meshCounts[2]).toBeGreaterThanOrEqual(4);
+  });
+});
