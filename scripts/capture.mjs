@@ -17,7 +17,7 @@ const chromiumPath = process.env.CHROMIUM_PATH ?? '/data/data/com.termux/files/u
 const outputDir = new URL('../artifacts/screenshots/', import.meta.url);
 
 const seededSave = {
-  version: 3,
+  version: 4,
   savedAt: 1,
   player: {
     inventory: {
@@ -42,7 +42,7 @@ const seededSave = {
       purifierKit: 1,
       grillKit: 1,
     },
-    survival: { health: 92, thirst: 67, hunger: 61 },
+    survival: { health: 92, thirst: 67, hunger: 61, oxygen: 100 },
     selectedTool: 'hook',
     playSeconds: 180,
     navigation: { surface: 'raft', x: 0, z: 1.08 },
@@ -66,6 +66,11 @@ const seededSave = {
       elapsed: 78,
       nodes: [],
     },
+    underwater: {
+      islandSeed: 0x51ad7e,
+      islandCycle: 0,
+      nodes: [],
+    },
   },
 };
 
@@ -83,6 +88,16 @@ const islandInteractionSave = {
   player: {
     ...islandSeededSave.player,
     navigation: { surface: 'island', x: 0.568, z: -2 },
+  },
+};
+
+const underwaterSeededSave = {
+  ...seededSave,
+  player: {
+    ...seededSave.player,
+    inventory: { ...seededSave.player.inventory, purifierKit: 0, grillKit: 0 },
+    selectedTool: 'hook',
+    navigation: { surface: 'water', x: -3.117, y: -2.3, z: 4.7 },
   },
 };
 
@@ -164,8 +179,8 @@ async function openDesktopPage(label, options = {}) {
   });
   if (options.seedSave) {
     await context.addInitScript((save) => {
-      localStorage.setItem('driftwake.save.v3', JSON.stringify(save));
-    }, options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
+      localStorage.setItem('driftwake.save.v4', JSON.stringify(save));
+    }, options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
   }
   const page = await context.newPage();
   monitorPage(page, label);
@@ -173,9 +188,18 @@ async function openDesktopPage(label, options = {}) {
   try {
     await page.waitForSelector('.primary-command:not(:disabled)', { timeout: 45_000 });
   } catch (error) {
-    await page.screenshot({ path: new URL('diagnostic-desktop.png', outputDir).pathname });
+    const commandState = await page.locator('.primary-command').evaluate((element) => ({
+      disabled: element.disabled,
+      text: element.textContent?.trim() ?? '',
+      connected: element.isConnected,
+    })).catch(() => ({ disabled: true, text: 'missing', connected: false }));
+    const canvasState = await page.locator('canvas').evaluate((canvas) => {
+      const gl = canvas.getContext('webgl2');
+      return { width: canvas.width, height: canvas.height, contextLost: gl?.isContextLost() ?? true };
+    }).catch(() => ({ width: 0, height: 0, contextLost: true }));
+    await page.screenshot({ path: new URL('diagnostic-desktop.png', outputDir).pathname, timeout: 5_000 }).catch(() => undefined);
     const bodyText = (await page.locator('body').innerText()).replace(/\s+/g, ' ').slice(0, 400);
-    throw new Error(`Game did not become ready. Visible text: ${bodyText}`, { cause: error });
+    throw new Error(`Game did not become ready. Command: ${JSON.stringify(commandState)}. Canvas: ${JSON.stringify(canvasState)}. Visible text: ${bodyText}`, { cause: error });
   }
   await page.waitForTimeout(250);
   return { context, page };
@@ -336,10 +360,41 @@ async function captureIslandInteraction() {
   await context.close();
 }
 
+async function captureUnderwater() {
+  const { context, page } = await openDesktopPage('underwater', { seedSave: true, underwaterStart: true });
+  await page.getByRole('button', { name: '开始漂流' }).click();
+  await page.waitForTimeout(1500);
+  await page.locator('.dive-readout.is-visible').waitFor();
+  const oxygenLabel = await page.locator('.survival-gauge--oxygen').getAttribute('aria-label');
+  const depthLabel = await page.locator('.dive-readout').getAttribute('aria-label');
+  console.log(`Underwater HUD: ${oxygenLabel}; ${depthLabel}`);
+  console.log(`Underwater FPS: ${(await page.locator('.fps-readout').textContent())?.trim() ?? '--'}`);
+  await inspectCanvasPixels(page, 'underwater');
+  await page.screenshot({ path: new URL('underwater-desktop.png', outputDir).pathname, timeout: 90_000 });
+  await context.close();
+}
+
+async function captureUnderwaterInteraction() {
+  const { context, page } = await openDesktopPage('underwater-interaction', { seedSave: true, underwaterStart: true });
+  await page.getByRole('button', { name: '开始漂流' }).click();
+  await page.waitForFunction(
+    () => document.querySelector('.interaction-prompt')?.textContent?.includes('收割长叶海草'),
+    null,
+    { timeout: 20_000 },
+  );
+  const prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  console.log(`Underwater interaction prompt: ${prompt}`);
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => document.querySelector('.loot-notice')?.textContent?.includes('+2 海草'), null, { timeout: 15_000 });
+  await inspectCanvasPixels(page, 'underwater-interaction');
+  await page.screenshot({ path: new URL('underwater-interaction-desktop.png', outputDir).pathname, timeout: 90_000 });
+  await context.close();
+}
+
 async function captureNarrow() {
   const context = await browser.newContext({ viewport: { width: 640, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript((save) => {
-    localStorage.setItem('driftwake.save.v3', JSON.stringify(save));
+    localStorage.setItem('driftwake.save.v4', JSON.stringify(save));
   }, seededSave);
   const page = await context.newPage();
   monitorPage(page, 'narrow');
@@ -349,6 +404,22 @@ async function captureNarrow() {
   await page.waitForTimeout(900);
   await inspectCanvasPixels(page, 'narrow');
   await page.screenshot({ path: new URL('game-narrow.png', outputDir).pathname });
+  await context.close();
+}
+
+async function captureUnderwaterNarrow() {
+  const context = await browser.newContext({ viewport: { width: 640, height: 720 }, deviceScaleFactor: 1 });
+  await context.addInitScript((save) => {
+    localStorage.setItem('driftwake.save.v4', JSON.stringify(save));
+  }, underwaterSeededSave);
+  const page = await context.newPage();
+  monitorPage(page, 'underwater-narrow');
+  await page.goto(baseUrl, { waitUntil: 'networkidle' });
+  await page.waitForSelector('.primary-command:not(:disabled)', { timeout: 45_000 });
+  await page.getByRole('button', { name: '开始漂流' }).click();
+  await page.waitForTimeout(1200);
+  await inspectCanvasPixels(page, 'underwater-narrow');
+  await page.screenshot({ path: new URL('underwater-narrow.png', outputDir).pathname });
   await context.close();
 }
 
@@ -392,7 +463,10 @@ try {
   if (captureOnly === 'all' || captureOnly === 'devices') await captureDevices();
   if (captureOnly === 'all' || captureOnly === 'island') await captureIsland();
   if (captureOnly === 'all' || captureOnly === 'island-interaction') await captureIslandInteraction();
+  if (captureOnly === 'all' || captureOnly === 'underwater') await captureUnderwater();
+  if (captureOnly === 'all' || captureOnly === 'underwater-interaction') await captureUnderwaterInteraction();
   if (captureOnly === 'all' || captureOnly === 'narrow') await captureNarrow();
+  if (captureOnly === 'all' || captureOnly === 'underwater-narrow') await captureUnderwaterNarrow();
   if (captureOnly === 'all' || captureOnly === 'mobile') await captureMobile();
 } finally {
   await browser.close();

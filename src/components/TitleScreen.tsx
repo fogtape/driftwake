@@ -44,7 +44,7 @@ export function TitleScreen({ visible, ready, loadingLabel, onBegin, onSettings 
 
       <footer className="title-screen__footer">
         <span>PRE-ALPHA</span>
-        <span>BUILD 0.4.0</span>
+        <span>BUILD 0.5.0</span>
       </footer>
     </section>
   );

@@ -4,9 +4,14 @@ export interface SurvivalState {
   health: number;
   thirst: number;
   hunger: number;
+  oxygen: number;
 }
 
-export const INITIAL_SURVIVAL: SurvivalState = { health: 100, thirst: 82, hunger: 74 };
+export const INITIAL_SURVIVAL: SurvivalState = { health: 100, thirst: 82, hunger: 74, oxygen: 100 };
+
+export const OXYGEN_DRAIN_PER_SECOND = 2.55;
+export const OXYGEN_RECOVERY_PER_SECOND = 18;
+export const DROWNING_DAMAGE_PER_SECOND = 5.5;
 
 function clampStat(value: number): number {
   return Math.max(0, Math.min(100, value));
@@ -17,20 +22,31 @@ export function normalizeSurvival(value: Partial<SurvivalState> | null | undefin
     health: clampStat(Number.isFinite(value?.health) ? value!.health! : INITIAL_SURVIVAL.health),
     thirst: clampStat(Number.isFinite(value?.thirst) ? value!.thirst! : INITIAL_SURVIVAL.thirst),
     hunger: clampStat(Number.isFinite(value?.hunger) ? value!.hunger! : INITIAL_SURVIVAL.hunger),
+    oxygen: clampStat(Number.isFinite(value?.oxygen) ? value!.oxygen! : INITIAL_SURVIVAL.oxygen),
   };
 }
 
-export function advanceSurvival(current: SurvivalState, seconds: number): SurvivalState {
+export function advanceSurvival(current: SurvivalState, seconds: number, submerged = false): SurvivalState {
   const elapsed = Math.max(0, Math.min(seconds, 60));
   const thirst = clampStat(current.thirst - elapsed * 0.052);
   const hunger = clampStat(current.hunger - elapsed * 0.032);
+  const oxygen = clampStat(
+    submerged
+      ? current.oxygen - elapsed * OXYGEN_DRAIN_PER_SECOND
+      : current.oxygen + elapsed * OXYGEN_RECOVERY_PER_SECOND,
+  );
   const deprived = thirst <= 0 || hunger <= 0;
-  const healthRecovery = thirst > 55 && hunger > 55 && current.health < 100 ? elapsed * 0.018 : 0;
+  const drownedSeconds = submerged
+    ? Math.max(0, elapsed - Math.max(0, current.oxygen) / OXYGEN_DRAIN_PER_SECOND)
+    : 0;
+  const healthRecovery =
+    !submerged && thirst > 55 && hunger > 55 && current.health < 100 ? elapsed * 0.018 : 0;
   const healthDamage = deprived ? elapsed * (thirst <= 0 && hunger <= 0 ? 0.32 : 0.18) : 0;
   return {
-    health: clampStat(current.health + healthRecovery - healthDamage),
+    health: clampStat(current.health + healthRecovery - healthDamage - drownedSeconds * DROWNING_DAMAGE_PER_SECOND),
     thirst,
     hunger,
+    oxygen,
   };
 }
 
@@ -64,6 +80,7 @@ export function consumeItem(current: SurvivalState, itemId: ItemId): ConsumableR
       health: clampStat(current.health + effect.healthDelta),
       thirst: clampStat(current.thirst + effect.thirstDelta),
       hunger: clampStat(current.hunger + effect.hungerDelta),
+      oxygen: current.oxygen,
     },
   };
 }

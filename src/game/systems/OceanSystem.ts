@@ -1,4 +1,4 @@
-import { Color, Mesh, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
+import { Color, DoubleSide, Mesh, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
 import type { Texture } from 'three';
 import { oceanFragmentShader, oceanVertexShader } from '../shaders/ocean';
 
@@ -13,6 +13,7 @@ export class OceanSystem {
     this.material = new ShaderMaterial({
       vertexShader: oceanVertexShader,
       fragmentShader: oceanFragmentShader,
+      side: DoubleSide,
       uniforms: {
         uTime: { value: 0 },
         uFoamMap: { value: foamMap },
@@ -21,6 +22,7 @@ export class OceanSystem {
         uSurfaceColor: { value: new Color('#1b8790') },
         uSkyColor: { value: new Color('#91cad2') },
         uFogColor: { value: new Color('#a9cfd2') },
+        uUnderwater: { value: 0 },
       },
     });
 
@@ -42,9 +44,12 @@ export class OceanSystem {
     this.mesh.geometry = geometry;
   }
 
+  setUnderwater(blend: number): void {
+    this.material.uniforms.uUnderwater.value = Math.max(0, Math.min(1, blend));
+  }
+
   dispose(): void {
     this.mesh.geometry.dispose();
     this.material.dispose();
   }
 }
-

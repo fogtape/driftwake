@@ -1,4 +1,4 @@
-import { MeshStandardMaterial, Vector3 } from 'three';
+import { MeshBasicMaterial, MeshStandardMaterial, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { MaterialLibrary } from '../art/Materials';
 import { RaftSystem } from './RaftSystem';
@@ -19,6 +19,15 @@ function createTestMaterials(): MaterialLibrary {
     sharkSkin: material(),
     sharkMouth: material(),
     sharkEye: material(),
+    reefSeabed: material(),
+    reefRock: material(),
+    coralWarm: material(),
+    coralPale: material(),
+    seaweed: material(),
+    ore: material(),
+    clay: material(),
+    reefFish: material(),
+    reefCaustic: new MeshBasicMaterial(),
   };
 }
 

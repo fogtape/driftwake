@@ -6,6 +6,7 @@ import {
   DirectionalLight,
   FogExp2,
   HemisphereLight,
+  MathUtils,
   PerspectiveCamera,
   PCFSoftShadowMap,
   Scene,
@@ -29,6 +30,7 @@ import { useGameStore, type AudioMix, type QualityPreset } from '../state/gameSt
 import { TOOL_ORDER } from './domain/items';
 import { SAVE_VERSION, createDefaultRaftTiles, loadSave, writeSave, type DriftwakeSave } from './domain/save';
 import { createDefaultIslandState } from './domain/island';
+import { createDefaultUnderwaterState } from './domain/underwater';
 import { AudioSystem } from './systems/AudioSystem';
 import { BuildSystem } from './systems/BuildSystem';
 import { DebrisField } from './systems/DebrisField';
@@ -43,6 +45,7 @@ import { RaftSystem } from './systems/RaftSystem';
 import { SharkSystem } from './systems/SharkSystem';
 import { SpearSystem } from './systems/SpearSystem';
 import { SplashSystem } from './systems/SplashSystem';
+import { UnderwaterSystem } from './systems/UnderwaterSystem';
 
 export class DriftwakeGame {
   private readonly scene = new Scene();
@@ -65,6 +68,15 @@ export class DriftwakeGame {
   private spear: SpearSystem | null = null;
   private splashes: SplashSystem | null = null;
   private island: IslandSystem | null = null;
+  private underwater: UnderwaterSystem | null = null;
+  private sky: Sky | null = null;
+  private hemisphere: HemisphereLight | null = null;
+  private ambient: AmbientLight | null = null;
+  private directional: DirectionalLight | null = null;
+  private readonly airBackground = new Color('#a9cfd2');
+  private readonly waterBackground = new Color('#0b5260');
+  private readonly environmentColor = new Color();
+  private environmentBlend = 0;
   private elapsed = 0;
   private fpsElapsed = 0;
   private fpsFrames = 0;
@@ -118,6 +130,7 @@ export class DriftwakeGame {
       store.setLoadingLabel('正在放流物资');
       this.debris = new DebrisField(this.scene, this.materials, store.quality === 'high' ? 30 : 18);
       this.splashes = new SplashSystem(this.scene);
+      const islandState = save?.world.island ?? createDefaultIslandState();
       this.island = new IslandSystem(
         this.scene,
         this.camera,
@@ -125,7 +138,7 @@ export class DriftwakeGame {
         this.materials,
         this.audio,
         this.splashes,
-        save?.world.island ?? createDefaultIslandState(),
+        islandState,
       );
       this.player = new PlayerController(
         this.camera,
@@ -134,11 +147,25 @@ export class DriftwakeGame {
         (surface) => this.audio.playFootstep(surface),
       );
       this.island.setPlayer(this.player);
+      this.underwater = new UnderwaterSystem(
+        this.scene,
+        this.camera,
+        this.renderer,
+        this.materials,
+        this.audio,
+        this.splashes,
+        this.island,
+        this.player,
+        save?.world.underwater ?? createDefaultUnderwaterState(islandState.seed, islandState.cycle),
+      );
       this.player.setIslandNavigation({
         sampleGroundHeight: (x, z) => this.island?.sampleGroundHeight(x, z) ?? null,
+        sampleWaterFloorHeight: (x, z) => this.underwater?.sampleWaterFloorHeight(x, z) ?? null,
         resolveCollision: (position, previous) => this.island?.resolvePlayerCollision(position, previous),
+        resolveWaterCollision: (position, previous) => this.underwater?.resolvePlayerCollision(position, previous),
         onSurfaceChange: (surface) => {
           this.island?.onPlayerSurfaceChange(surface);
+          this.underwater?.onPlayerSurfaceChange(surface);
           this.syncEquipment();
         },
       });
@@ -183,6 +210,7 @@ export class DriftwakeGame {
       this.shark = new SharkSystem(
         this.scene,
         this.raft,
+        this.player,
         this.materials,
         this.audio,
         this.splashes,
@@ -297,6 +325,7 @@ export class DriftwakeGame {
     this.fishing?.dispose(this.scene);
     this.spear?.dispose();
     this.shark?.dispose();
+    this.underwater?.dispose();
     this.island?.dispose();
     this.splashes?.dispose();
     this.debris?.dispose(this.scene);
@@ -326,6 +355,7 @@ export class DriftwakeGame {
     const sun = new Vector3(0.56, 0.72, 0.4).normalize();
     uniforms.sunPosition.value.copy(sun);
     this.scene.add(sky);
+    this.sky = sky;
 
     const hemisphere = new HemisphereLight(0xc7e9f0, 0x5f4937, 1.85);
     const ambient = new AmbientLight(0x91b8bd, 0.36);
@@ -341,6 +371,9 @@ export class DriftwakeGame {
     directional.shadow.camera.far = 130;
     directional.shadow.bias = -0.00018;
     this.scene.add(hemisphere, ambient, directional);
+    this.hemisphere = hemisphere;
+    this.ambient = ambient;
+    this.directional = directional;
   }
 
   private readonly update = (): void => {
@@ -348,6 +381,7 @@ export class DriftwakeGame {
     const delta = Math.min(this.clock.getDelta(), 0.05);
     this.elapsed += delta;
     const state = useGameStore.getState();
+    if (state.phase === 'title') return;
     const simulationActive =
       state.phase === 'playing' && state.pointerLocked && !state.settingsOpen && state.overlayPanel === null;
     const simulationDelta = simulationActive ? delta : 0;
@@ -362,14 +396,16 @@ export class DriftwakeGame {
     if (simulationActive) this.shark?.update(this.elapsed, simulationDelta);
     this.devices?.update(this.elapsed, simulationDelta);
     this.island?.update(this.elapsed, simulationDelta);
+    this.underwater?.update(this.elapsed, simulationDelta);
     this.splashes?.update(delta);
     this.audio.update(this.elapsed);
     this.physics.step(simulationDelta);
+    this.updateEnvironment(delta);
 
     if (simulationActive) {
       this.simulationAccumulator += simulationDelta;
       while (this.simulationAccumulator >= 1) {
-        useGameStore.getState().tickSurvival(1);
+        useGameStore.getState().tickSurvival(1, this.player?.isSubmerged() ?? false);
         useGameStore.getState().advancePlayTime(1);
         this.simulationAccumulator -= 1;
       }
@@ -432,23 +468,29 @@ export class DriftwakeGame {
       state.phase === 'playing' && state.pointerLocked && !state.settingsOpen && state.overlayPanel === null;
     const placingDevice = state.placementDevice !== null;
     const onRaft = this.player?.isOnRaft() ?? true;
+    const surface = this.player?.getSurface() ?? 'raft';
+    const inWater = surface === 'water';
+    const onIsland = surface === 'island';
     this.devices?.setPlacementType(state.placementDevice);
     this.devices?.setInputEnabled(inputEnabled && onRaft);
     this.hook?.setEquipped(onRaft && !placingDevice && state.selectedTool === 'hook');
     this.hook?.setEnabled(inputEnabled && onRaft && !placingDevice && state.selectedTool === 'hook');
+    this.underwater?.setHookEquipped(inWater && !placingDevice && state.selectedTool === 'hook');
     this.build?.setEquipped(onRaft && !placingDevice && state.selectedTool === 'hammer');
     this.build?.setInputEnabled(inputEnabled && onRaft && !placingDevice && state.selectedTool === 'hammer');
     this.fishing?.setEquipped(onRaft && !placingDevice && state.selectedTool === 'fishingRod');
     this.fishing?.setInputEnabled(inputEnabled && onRaft && !placingDevice && state.selectedTool === 'fishingRod');
-    this.spear?.setEquipped(onRaft && !placingDevice && state.selectedTool === 'spear');
-    this.spear?.setInputEnabled(inputEnabled && onRaft && !placingDevice && state.selectedTool === 'spear');
-    this.island?.setAxeEquipped(!placingDevice && state.selectedTool === 'axe');
+    this.spear?.setEquipped((onRaft || inWater) && !placingDevice && state.selectedTool === 'spear');
+    this.spear?.setInputEnabled(inputEnabled && (onRaft || inWater) && !placingDevice && state.selectedTool === 'spear');
+    this.island?.setAxeEquipped(onIsland && !placingDevice && state.selectedTool === 'axe');
     this.island?.setInputEnabled(inputEnabled);
+    this.underwater?.setInputEnabled(inputEnabled);
     this.player?.setEnabled(inputEnabled);
   }
 
   private saveNow(): void {
     if (!this.raft || !useGameStore.getState().ready) return;
+    const islandState = this.island?.getSavedState() ?? createDefaultIslandState();
     const save: DriftwakeSave = {
       version: SAVE_VERSION,
       savedAt: Date.now(),
@@ -457,7 +499,12 @@ export class DriftwakeGame {
         navigation: this.player?.getSavedNavigation() ?? { surface: 'raft', x: 0, z: 1.08 },
       },
       raft: { tiles: this.raft.getSavedTiles(), devices: this.devices?.getSavedDevices() ?? [] },
-      world: { island: this.island?.getSavedState() ?? createDefaultIslandState() },
+      world: {
+        island: islandState,
+        underwater:
+          this.underwater?.getSavedState() ??
+          createDefaultUnderwaterState(islandState.seed, islandState.cycle),
+      },
     };
     useGameStore.getState().setSaveStatus(writeSave(save) ? 'saved' : 'error');
   }
@@ -465,6 +512,28 @@ export class DriftwakeGame {
   private readonly onBeforeUnload = (): void => {
     this.saveNow();
   };
+
+  private updateEnvironment(delta: number): void {
+    const target = this.player?.isSubmerged()
+      ? MathUtils.clamp(0.62 + (this.player?.getDepth() ?? 0) * 0.1, 0, 1)
+      : 0;
+    const shouldRenderShadows = useGameStore.getState().quality === 'high' && target === 0;
+    if (this.renderer.shadowMap.enabled !== shouldRenderShadows) this.renderer.shadowMap.enabled = shouldRenderShadows;
+    if (target > 0 && this.environmentBlend < 0.78) this.environmentBlend = 0.78;
+    this.environmentBlend = MathUtils.damp(this.environmentBlend, target, target > 0 ? 3.8 : 2.6, delta);
+    this.environmentColor.copy(this.airBackground).lerp(this.waterBackground, this.environmentBlend);
+    if (this.scene.background instanceof Color) this.scene.background.copy(this.environmentColor);
+    if (this.scene.fog instanceof FogExp2) {
+      this.scene.fog.color.copy(this.environmentColor);
+      this.scene.fog.density = MathUtils.lerp(0.0065, 0.072, this.environmentBlend);
+    }
+    this.renderer.toneMappingExposure = MathUtils.lerp(1.08, 0.79, this.environmentBlend);
+    if (this.hemisphere) this.hemisphere.intensity = MathUtils.lerp(1.85, 0.82, this.environmentBlend);
+    if (this.ambient) this.ambient.intensity = MathUtils.lerp(0.36, 0.7, this.environmentBlend);
+    if (this.directional) this.directional.intensity = MathUtils.lerp(3.1, 0.58, this.environmentBlend);
+    if (this.sky) this.sky.visible = target === 0;
+    this.ocean?.setUnderwater(this.environmentBlend);
+  }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     const state = useGameStore.getState();

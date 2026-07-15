@@ -171,8 +171,9 @@ export class IslandSystem {
 
   update(time: number, delta: number): void {
     const playerAshore = this.player?.getSurface() === 'island';
+    const playerOnExpedition = this.player ? this.player.getSurface() !== 'raft' : false;
     if (delta > 0) {
-      const advanced = advanceIslandState(this.state, delta, playerAshore);
+      const advanced = advanceIslandState(this.state, delta, playerOnExpedition);
       this.state = advanced.state;
       if (advanced.event === 'arrived') {
         this.audio.playIslandArrival();
@@ -217,6 +218,16 @@ export class IslandSystem {
       ...this.state,
       elapsed: Number(this.state.elapsed.toFixed(3)),
       nodes: [...this.nodes.values()].map(({ state }) => ({ ...state })),
+    };
+  }
+
+  getEncounterState(): Pick<SavedIslandState, 'seed' | 'cycle' | 'phase'> & { x: number; z: number; scale: number } {
+    const transform = islandTransform(this.state);
+    return {
+      seed: this.state.seed,
+      cycle: this.state.cycle,
+      phase: this.state.phase,
+      ...transform,
     };
   }
 
@@ -448,7 +459,7 @@ export class IslandSystem {
       phase: this.state.phase,
       distance: Math.round(Math.max(0, Math.hypot(transform.x, transform.z) - 7)),
       remaining: Math.max(0, Math.ceil(duration - this.state.elapsed)),
-      ashore: this.player?.getSurface() === 'island',
+      ashore: this.player ? this.player.getSurface() !== 'raft' : false,
       harvested,
       total: this.nodes.size,
     });

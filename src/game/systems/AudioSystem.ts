@@ -2,6 +2,7 @@ import { createSeededRandom, randomRange } from '../math/random';
 import type { AudioMix } from '../../state/gameStore';
 import type { HarvestNodeType } from '../domain/island';
 import type { PlayerSurface } from '../domain/save';
+import type { ReefNodeType } from '../domain/underwater';
 
 export class AudioSystem {
   private context: AudioContext | null = null;
@@ -11,9 +12,11 @@ export class AudioSystem {
   private creatures: GainNode | null = null;
   private music: GainNode | null = null;
   private ui: GainNode | null = null;
+  private worldFilter: BiquadFilterNode | null = null;
   private fireLoop: GainNode | null = null;
   private steamLoop: GainNode | null = null;
   private islandLoop: GainNode | null = null;
+  private underwaterLoop: GainNode | null = null;
   private nextCreakAt = 4;
   private nextBirdAt = 6;
   private nextReelAt = 0;
@@ -22,6 +25,7 @@ export class AudioSystem {
   private deviceFireActivity = 0;
   private deviceSteamActivity = 0;
   private islandActivity = 0;
+  private underwaterActivity = 0;
   private mix: AudioMix = {
     master: 0.78,
     music: 0.2,
@@ -40,21 +44,27 @@ export class AudioSystem {
       this.creatures = this.context.createGain();
       this.music = this.context.createGain();
       this.ui = this.context.createGain();
+      this.worldFilter = this.context.createBiquadFilter();
       this.master.gain.value = this.enabled ? this.mix.master : 0;
       this.ambience.gain.value = this.mix.ambience;
       this.effects.gain.value = this.mix.effects;
       this.creatures.gain.value = this.mix.creatures;
       this.music.gain.value = this.mix.music;
       this.ui.gain.value = this.mix.ui;
-      this.ambience.connect(this.master);
-      this.effects.connect(this.master);
-      this.creatures.connect(this.master);
-      this.music.connect(this.master);
+      this.worldFilter.type = 'lowpass';
+      this.worldFilter.frequency.value = 18000;
+      this.worldFilter.Q.value = 0.2;
+      this.ambience.connect(this.worldFilter);
+      this.effects.connect(this.worldFilter);
+      this.creatures.connect(this.worldFilter);
+      this.music.connect(this.worldFilter);
+      this.worldFilter.connect(this.master);
       this.ui.connect(this.master);
       this.master.connect(this.context.destination);
       this.startAmbientLayers();
       this.startDeviceLayers();
       this.startIslandLayer();
+      this.startUnderwaterLayer();
     }
     if (this.context.state !== 'running') await this.context.resume();
   }
@@ -185,10 +195,24 @@ export class AudioSystem {
     this.islandLoop?.gain.setTargetAtTime(this.islandActivity * 0.06, this.context.currentTime, 0.45);
   }
 
+  setUnderwaterActivity(activity: number): void {
+    this.underwaterActivity = Math.max(0, Math.min(1, activity));
+    if (!this.context) return;
+    const now = this.context.currentTime;
+    this.underwaterLoop?.gain.setTargetAtTime(this.underwaterActivity * 0.085, now, 0.28);
+    this.worldFilter?.frequency.setTargetAtTime(18000 - this.underwaterActivity * 16950, now, 0.16);
+    if (this.worldFilter) this.worldFilter.Q.setTargetAtTime(0.2 + this.underwaterActivity * 0.72, now, 0.16);
+  }
+
   playFootstep(surface: PlayerSurface): void {
     if (surface === 'raft') {
       this.playWoodKnock(0.027, 0.065);
       this.noiseBurst(0.055, 1100, 0.012, 'bandpass');
+      return;
+    }
+    if (surface === 'water') {
+      this.noiseBurst(0.34, 620, 0.042, 'lowpass');
+      this.noiseBurst(0.13, 2100, 0.018, 'bandpass');
       return;
     }
     this.noiseBurst(0.11, 330, 0.035, 'lowpass');
@@ -245,6 +269,68 @@ export class AudioSystem {
       oscillator.start(start);
       oscillator.stop(start + 0.84);
     });
+  }
+
+  playWaterEntry(): void {
+    this.noiseBurst(0.58, 720, 0.13, 'lowpass');
+    this.noiseBurst(0.24, 2350, 0.055, 'bandpass');
+  }
+
+  playReefHookSwing(): void {
+    this.noiseBurst(0.2, 840, 0.048, 'bandpass');
+    this.noiseBurst(0.11, 260, 0.035, 'lowpass');
+  }
+
+  playReefStrike(type: ReefNodeType, finalHit: boolean): void {
+    const lowFrequency = type === 'metalOre' ? 310 : type === 'clay' ? 190 : 245;
+    const highFrequency = type === 'metalOre' ? 1760 : type === 'clay' ? 720 : 1050;
+    this.noiseBurst(finalHit ? 0.34 : 0.22, lowFrequency, finalHit ? 0.11 : 0.072, 'lowpass');
+    this.noiseBurst(finalHit ? 0.18 : 0.1, highFrequency, type === 'metalOre' ? 0.065 : 0.04, 'bandpass');
+    if (!this.context || !this.effects || type !== 'metalOre') return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(finalHit ? 420 : 510, now);
+    oscillator.frequency.exponentialRampToValueAtTime(185, now + 0.13);
+    gain.gain.setValueAtTime(finalHit ? 0.055 : 0.035, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+    oscillator.connect(gain).connect(this.effects);
+    oscillator.start(now);
+    oscillator.stop(now + 0.16);
+  }
+
+  playReefGather(): void {
+    this.noiseBurst(0.3, 460, 0.055, 'lowpass');
+    this.noiseBurst(0.18, 1500, 0.032, 'bandpass');
+    this.playCollect();
+  }
+
+  playBreathWarning(critical: boolean): void {
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    for (let index = 0; index < (critical ? 3 : 2); index += 1) {
+      const start = now + index * 0.16;
+      const oscillator = this.context.createOscillator();
+      const filter = this.context.createBiquadFilter();
+      const gain = this.context.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(critical ? 118 : 92, start);
+      oscillator.frequency.exponentialRampToValueAtTime(critical ? 74 : 58, start + 0.13);
+      filter.type = 'lowpass';
+      filter.frequency.value = 310;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(critical ? 0.085 : 0.052, start + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.15);
+      oscillator.connect(filter).connect(gain).connect(this.effects);
+      oscillator.start(start);
+      oscillator.stop(start + 0.16);
+    }
+  }
+
+  playPlayerBite(): void {
+    this.noiseBurstTo(0.42, 220, 0.24, 'lowpass', this.creatures);
+    this.noiseBurstTo(0.18, 1320, 0.11, 'bandpass', this.creatures);
   }
 
   playDevicePlace(): void {
@@ -418,9 +504,11 @@ export class AudioSystem {
     this.creatures = null;
     this.music = null;
     this.ui = null;
+    this.worldFilter = null;
     this.fireLoop = null;
     this.steamLoop = null;
     this.islandLoop = null;
+    this.underwaterLoop = null;
   }
 
   private startAmbientLayers(): void {
@@ -558,6 +646,36 @@ export class AudioSystem {
     this.islandLoop.gain.value = this.islandActivity * 0.06;
     source.connect(highpass).connect(lowpass).connect(this.islandLoop).connect(this.ambience);
     source.start(0, 2.3);
+  }
+
+  private startUnderwaterLayer(): void {
+    if (!this.context || !this.ambience) return;
+    const duration = 8;
+    const sampleRate = this.context.sampleRate;
+    const buffer = this.context.createBuffer(1, duration * sampleRate, sampleRate);
+    const channel = buffer.getChannelData(0);
+    let slow = 0;
+    for (let index = 0; index < channel.length; index += 1) {
+      const white = this.random() * 2 - 1;
+      slow += (white - slow) * 0.008;
+      const pulse = 0.72 + Math.sin((index / sampleRate) * 0.47) * 0.18;
+      channel[index] = (slow * 0.9 + white * 0.1) * pulse;
+    }
+    const source = this.context.createBufferSource();
+    const lowpass = this.context.createBiquadFilter();
+    const resonance = this.context.createBiquadFilter();
+    this.underwaterLoop = this.context.createGain();
+    source.buffer = buffer;
+    source.loop = true;
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 460;
+    resonance.type = 'peaking';
+    resonance.frequency.value = 138;
+    resonance.Q.value = 1.1;
+    resonance.gain.value = 4.5;
+    this.underwaterLoop.gain.value = this.underwaterActivity * 0.085;
+    source.connect(lowpass).connect(resonance).connect(this.underwaterLoop).connect(this.ambience);
+    source.start(0, 1.4);
   }
 
   private playIslandBird(): void {

@@ -36,11 +36,13 @@ export function App() {
   const inventory = useGameStore((state) => state.inventory);
   const inventorySlots = useGameStore((state) => state.inventorySlots);
   const survival = useGameStore((state) => state.survival);
+  const player = useGameStore((state) => state.player);
   const fishing = useGameStore((state) => state.fishing);
   const shark = useGameStore((state) => state.shark);
   const raft = useGameStore((state) => state.raft);
   const devices = useGameStore((state) => state.devices);
   const island = useGameStore((state) => state.island);
+  const reef = useGameStore((state) => state.reef);
   const placementDevice = useGameStore((state) => state.placementDevice);
   const interaction = useGameStore((state) => state.interaction);
   const saveStatus = useGameStore((state) => state.saveStatus);
@@ -175,6 +177,7 @@ export function App() {
         onBegin={begin}
         onSettings={openSettings}
       />
+      <div className={`underwater-veil ${player.submerged ? 'is-visible' : ''}`} aria-hidden="true" />
       <Hud
         visible={phase === 'playing'}
         pointerLocked={pointerLocked}
@@ -183,11 +186,13 @@ export function App() {
         hookCharge={hookCharge}
         inventory={inventory}
         survival={survival}
+        player={player}
         fishing={fishing}
         shark={shark}
         raft={raft}
         devices={devices}
         island={island}
+        reef={reef}
         placementDevice={placementDevice}
         interaction={interaction}
         notice={notice}

@@ -1,6 +1,8 @@
 import {
+  AdditiveBlending,
   Color,
   DoubleSide,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   NoColorSpace,
   RepeatWrapping,
@@ -20,6 +22,9 @@ export interface AssetTextures {
   wovenFiber: Texture;
   wovenFiberNormal: Texture;
   wovenFiberRoughness: Texture;
+  reefSeabed: Texture;
+  reefSeabedNormal: Texture;
+  reefSeabedRoughness: Texture;
 }
 
 export interface MaterialLibrary {
@@ -36,6 +41,15 @@ export interface MaterialLibrary {
   sharkSkin: MeshStandardMaterial;
   sharkMouth: MeshStandardMaterial;
   sharkEye: MeshStandardMaterial;
+  reefSeabed: MeshStandardMaterial;
+  reefRock: MeshStandardMaterial;
+  coralWarm: MeshStandardMaterial;
+  coralPale: MeshStandardMaterial;
+  seaweed: MeshStandardMaterial;
+  ore: MeshStandardMaterial;
+  clay: MeshStandardMaterial;
+  reefFish: MeshStandardMaterial;
+  reefCaustic: MeshBasicMaterial;
 }
 
 export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetTextures> {
@@ -49,6 +63,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     wovenFiber,
     wovenFiberNormal,
     wovenFiberRoughness,
+    reefSeabed,
+    reefSeabedNormal,
+    reefSeabedRoughness,
   ] = await Promise.all([
     loader.loadAsync('/assets/textures/weathered-cedar.webp'),
     loader.loadAsync('/assets/textures/ocean-foam-mask.png'),
@@ -58,6 +75,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/woven-palm-fiber.webp'),
     loader.loadAsync('/assets/textures/woven-palm-fiber-normal.webp'),
     loader.loadAsync('/assets/textures/woven-palm-fiber-roughness.webp'),
+    loader.loadAsync('/assets/textures/reef-seabed.webp'),
+    loader.loadAsync('/assets/textures/reef-seabed-normal.webp'),
+    loader.loadAsync('/assets/textures/reef-seabed-roughness.webp'),
   ]);
 
   const anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -90,6 +110,16 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   wovenFiberNormal.repeat.copy(wovenFiber.repeat);
   wovenFiberRoughness.repeat.copy(wovenFiber.repeat);
 
+  for (const texture of [reefSeabed, reefSeabedNormal, reefSeabedRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(3.2, 3.35);
+    texture.anisotropy = anisotropy;
+  }
+  reefSeabed.colorSpace = SRGBColorSpace;
+  reefSeabedNormal.colorSpace = NoColorSpace;
+  reefSeabedRoughness.colorSpace = NoColorSpace;
+
   return {
     wood,
     foam,
@@ -99,6 +129,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     wovenFiber,
     wovenFiberNormal,
     wovenFiberRoughness,
+    reefSeabed,
+    reefSeabedNormal,
+    reefSeabedRoughness,
   };
 }
 
@@ -117,6 +150,10 @@ function woodVariant(source: Texture, color: number, offsetX: number): MeshStand
 }
 
 export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary {
+  const causticMap = textures.foam.clone();
+  causticMap.repeat.set(9.5, 9.5);
+  causticMap.rotation = 0.34;
+  causticMap.needsUpdate = true;
   return {
     wood: [
       woodVariant(textures.wood, 0xffffff, 0.0),
@@ -150,11 +187,40 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
     }),
     sharkMouth: new MeshStandardMaterial({ color: 0x341f24, roughness: 0.84 }),
     sharkEye: new MeshStandardMaterial({ color: 0x090d0d, roughness: 0.22, metalness: 0.08 }),
+    reefSeabed: new MeshStandardMaterial({
+      color: 0xcbd0b5,
+      map: textures.reefSeabed,
+      normalMap: textures.reefSeabedNormal,
+      normalScale: new Vector2(0.58, 0.58),
+      roughnessMap: textures.reefSeabedRoughness,
+      roughness: 0.94,
+      metalness: 0,
+    }),
+    reefRock: new MeshStandardMaterial({ color: 0x667b70, roughness: 0.91, flatShading: true }),
+    coralWarm: new MeshStandardMaterial({ color: 0xb85f50, roughness: 0.86, flatShading: true }),
+    coralPale: new MeshStandardMaterial({ color: 0xd4c597, roughness: 0.9, flatShading: true }),
+    seaweed: new MeshStandardMaterial({ color: 0x3f7657, roughness: 0.84, side: DoubleSide }),
+    ore: new MeshStandardMaterial({ color: 0x5f8583, roughness: 0.52, metalness: 0.62, flatShading: true }),
+    clay: new MeshStandardMaterial({ color: 0x9a584b, roughness: 1, flatShading: true }),
+    reefFish: new MeshStandardMaterial({ color: 0x7ea4a2, roughness: 0.62, metalness: 0.08, flatShading: true }),
+    reefCaustic: new MeshBasicMaterial({
+      color: 0x8be6d8,
+      alphaMap: causticMap,
+      transparent: true,
+      opacity: 0.14,
+      depthWrite: false,
+      side: DoubleSide,
+      blending: AdditiveBlending,
+    }),
   };
 }
 
 export function disposeMaterialLibrary(library: MaterialLibrary): void {
-  for (const material of [...library.wood, ...Object.values(library).filter((value) => value instanceof MeshStandardMaterial)]) {
+  for (const material of [
+    ...library.wood,
+    ...Object.values(library).filter((value) => value instanceof MeshStandardMaterial || value instanceof MeshBasicMaterial),
+  ]) {
+    if ('alphaMap' in material && material.alphaMap && material.alphaMap !== material.map) material.alphaMap.dispose();
     material.dispose();
   }
 }

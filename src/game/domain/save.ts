@@ -8,16 +8,25 @@ import {
   sanitizeIslandState,
   type SavedIslandState,
 } from './island';
+import {
+  WATER_SURFACE_Y,
+  createDefaultUnderwaterState,
+  isReefNavigable,
+  sampleReefFloorHeight,
+  sanitizeUnderwaterState,
+  type SavedUnderwaterState,
+} from './underwater';
 
-export const SAVE_VERSION = 3;
-export const SAVE_KEY = 'driftwake.save.v3';
-export const LEGACY_SAVE_KEYS = ['driftwake.save.v2', 'driftwake.save.v1'] as const;
+export const SAVE_VERSION = 4;
+export const SAVE_KEY = 'driftwake.save.v4';
+export const LEGACY_SAVE_KEYS = ['driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
 
-export type PlayerSurface = 'raft' | 'island';
+export type PlayerSurface = 'raft' | 'island' | 'water';
 
 export interface SavedPlayerNavigation {
   surface: PlayerSurface;
   x: number;
+  y?: number;
   z: number;
 }
 
@@ -43,6 +52,7 @@ export interface DriftwakeSave {
   };
   world: {
     island: SavedIslandState;
+    underwater: SavedUnderwaterState;
   };
 }
 
@@ -67,6 +77,20 @@ function sanitizeNavigation(value: unknown, island: SavedIslandState): SavedPlay
       return { surface: 'island', x, z };
     }
   }
+  if (candidate.surface === 'water' && island.phase === 'docked') {
+    const transform = islandTransform(island);
+    const localX = x - transform.x;
+    const localZ = z - transform.z;
+    const floor = sampleReefFloorHeight(island.seed, localX, localZ);
+    if (floor !== null && isReefNavigable(island.seed, localX, localZ)) {
+      return {
+        surface: 'water',
+        x,
+        y: Math.max(floor + 0.72, Math.min(WATER_SURFACE_Y, finiteNumber(candidate.y, WATER_SURFACE_Y))),
+        z,
+      };
+    }
+  }
   return {
     surface: 'raft',
     x: Math.max(-12, Math.min(12, x)),
@@ -89,10 +113,18 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
     savedAt?: number;
     player?: Partial<DriftwakeSave['player']>;
     raft?: { tiles?: SavedRaftTile[]; devices?: SavedDeviceState[] };
-    world?: { island?: SavedIslandState };
+    world?: { island?: SavedIslandState; underwater?: SavedUnderwaterState };
   };
-  if ((candidate.version !== 1 && candidate.version !== 2 && candidate.version !== SAVE_VERSION) || !candidate.player || !candidate.raft) return null;
-  const island = candidate.version === SAVE_VERSION ? sanitizeIslandState(candidate.world?.island) : createDefaultIslandState();
+  if (
+    (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3 && candidate.version !== SAVE_VERSION) ||
+    !candidate.player ||
+    !candidate.raft
+  ) return null;
+  const island = candidate.version >= 3 ? sanitizeIslandState(candidate.world?.island) : createDefaultIslandState();
+  const underwater =
+    candidate.version === SAVE_VERSION
+      ? sanitizeUnderwaterState(candidate.world?.underwater, island.seed, island.cycle)
+      : createDefaultUnderwaterState(island.seed, island.cycle);
   const inventory = normalizeInventory(candidate.player.inventory ?? {});
   inventory.hook = 1;
   const selectedCandidate = candidate.player.selectedTool;
@@ -141,7 +173,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       navigation: sanitizeNavigation(candidate.player.navigation, island),
     },
     raft: { tiles: stableTiles, devices },
-    world: { island },
+    world: { island, underwater },
   };
 }
 

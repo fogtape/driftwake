@@ -21,7 +21,7 @@ describe('save schema', () => {
       },
     });
     expect(save?.player.inventory).toEqual({ hook: 1, hammer: 1 });
-    expect(save?.player.survival).toEqual({ health: 100, thirst: 34, hunger: 0 });
+    expect(save?.player.survival).toEqual({ health: 100, thirst: 34, hunger: 0, oxygen: 100 });
     expect(save?.player.playSeconds).toBe(42);
     expect(save?.raft.tiles).toEqual([{ x: 0, z: 0, health: 75 }]);
     expect(save?.raft.devices).toEqual([
@@ -55,11 +55,12 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v3');
-    expect(save?.version).toBe(3);
+    expect(SAVE_KEY).toBe('driftwake.save.v4');
+    expect(save?.version).toBe(4);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
     expect(save?.world.island.phase).toBe('approaching');
+    expect(save?.world.underwater.nodes).toHaveLength(18);
   });
 
   it('falls back to a legacy save when the current slot is corrupt', () => {
@@ -105,7 +106,7 @@ describe('save schema', () => {
         devices: [{ id: 'legacy-grill', type: 'grill', x: 0, z: 0, rotation: 0, phase: 'ready', elapsed: 18 }],
       },
     });
-    expect(save?.version).toBe(3);
+    expect(save?.version).toBe(SAVE_VERSION);
     expect(save?.raft.devices[0]?.id).toBe('legacy-grill');
     expect(save?.player.navigation).toEqual({ surface: 'raft', x: 0, z: 1.08 });
   });
@@ -124,5 +125,23 @@ describe('save schema', () => {
       world: { island: { seed: 9, cycle: 0, phase: 'docked', elapsed: 5, nodes: [] } },
     });
     expect(save?.player.navigation).toEqual({ surface: 'island', x: 0, z: -7 });
+  });
+
+  it('restores a bounded underwater position on the matching docked reef', () => {
+    const save = sanitizeSave({
+      version: SAVE_VERSION,
+      player: {
+        inventory: { hook: 1 },
+        survival: { oxygen: 73 },
+        selectedTool: 'hook',
+        playSeconds: 8,
+        navigation: { surface: 'water', x: 9, y: -99, z: -7 },
+      },
+      raft: { tiles: [{ x: 0, z: 0, health: 100 }], devices: [] },
+      world: { island: { seed: 9, cycle: 0, phase: 'docked', elapsed: 5, nodes: [] } },
+    });
+    expect(save?.player.navigation.surface).toBe('water');
+    expect(save?.player.navigation.y).toBeGreaterThan(-6);
+    expect(save?.player.survival.oxygen).toBe(73);
   });
 });

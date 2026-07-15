@@ -13,6 +13,7 @@ import {
   Utensils,
   Volume2,
   VolumeX,
+  Waves,
 } from 'lucide-react';
 import { ITEM_DEFINITIONS, TOOL_ORDER, itemCount, type Inventory, type ToolId } from '../game/domain/items';
 import { ISLAND_APPROACH_SECONDS, ISLAND_DEPART_SECONDS, ISLAND_DOCK_SECONDS } from '../game/domain/island';
@@ -20,7 +21,9 @@ import type {
   DeviceFeedbackMap,
   FishingFeedback,
   IslandFeedback,
+  PlayerFeedback,
   RaftFeedback,
+  ReefFeedback,
   SharkFeedback,
 } from '../state/gameStore';
 import type { DeviceType } from '../game/domain/devices';
@@ -33,12 +36,14 @@ interface HudProps {
   selectedTool: ToolId;
   hookCharge: number;
   inventory: Inventory;
-  survival: { health: number; thirst: number; hunger: number };
+  survival: { health: number; thirst: number; hunger: number; oxygen: number };
+  player: PlayerFeedback;
   fishing: FishingFeedback;
   shark: SharkFeedback;
   raft: RaftFeedback;
   devices: DeviceFeedbackMap;
   island: IslandFeedback;
+  reef: ReefFeedback;
   placementDevice: DeviceType | null;
   interaction: string | null;
   notice: string | null;
@@ -53,7 +58,7 @@ interface HudProps {
 interface GaugeProps {
   icon: React.ReactNode;
   value: number;
-  tone: 'health' | 'thirst' | 'hunger';
+  tone: 'health' | 'thirst' | 'hunger' | 'oxygen';
   label: string;
 }
 
@@ -81,11 +86,13 @@ export function Hud({
   hookCharge,
   inventory,
   survival,
+  player,
   fishing,
   shark,
   raft,
   devices,
   island,
+  reef,
   placementDevice,
   interaction,
   notice,
@@ -101,8 +108,15 @@ export function Hud({
   const placedDeviceTypes = island.ashore
     ? []
     : (['purifier', 'grill'] as const).filter((type) => devices[type].placed > 0);
-  const islandProgress =
-    island.phase === 'approaching'
+  const reefExpedition = player.surface === 'water';
+  const resourceItems = reefExpedition
+    ? (['sand', 'clay', 'metalOre', 'seaweed', 'scrap'] as const)
+    : (['timber', 'polymer', 'fiber', 'scrap', 'stone'] as const);
+  const islandProgress = reefExpedition
+    ? reef.total > 0
+      ? reef.harvested / reef.total
+      : 0
+    : island.phase === 'approaching'
       ? 1 - island.remaining / ISLAND_APPROACH_SECONDS
       : island.phase === 'docked'
         ? island.ashore
@@ -111,16 +125,18 @@ export function Hud({
             : 0
           : island.remaining / ISLAND_DOCK_SECONDS
         : island.remaining / ISLAND_DEPART_SECONDS;
-  const islandMetric =
-    island.phase === 'approaching'
+  const islandMetric = reefExpedition
+    ? `${reef.harvested}/${reef.total}`
+    : island.phase === 'approaching'
       ? `${island.distance} m`
       : island.phase === 'docked'
         ? island.ashore
           ? `${island.harvested}/${island.total}`
           : `${Math.floor(island.remaining / 60)}:${String(island.remaining % 60).padStart(2, '0')}`
         : '离流';
-  const islandStatus =
-    island.phase === 'approaching'
+  const islandStatus = reefExpedition
+    ? '浅礁采集'
+    : island.phase === 'approaching'
       ? '正在接近'
       : island.phase === 'docked'
         ? island.ashore
@@ -130,9 +146,9 @@ export function Hud({
   return (
     <section className={`hud ${visible ? 'is-visible' : ''}`} aria-hidden={!visible}>
       <div className="resource-strip">
-        {(['timber', 'polymer', 'fiber', 'scrap', 'stone'] as const).map((itemId) => (
+        {resourceItems.map((itemId) => (
           <div className="resource-readout" title={ITEM_DEFINITIONS[itemId].name} key={itemId}>
-            <ItemIcon itemId={itemId} size={18} />
+            <ItemIcon itemId={itemId} size={18} style={{ color: ITEM_DEFINITIONS[itemId].tone }} />
             <strong>{itemCount(inventory, itemId)}</strong>
           </div>
         ))}
@@ -151,13 +167,19 @@ export function Hud({
         className={`island-readout island-readout--${island.phase} ${island.ashore ? 'is-ashore' : ''}`}
         aria-label={`盐冠浅滩 ${islandStatus} ${islandMetric}`}
       >
-        <Mountain size={19} />
+        {reefExpedition ? <Waves size={19} /> : <Mountain size={19} />}
         <div>
           <span>盐冠浅滩</span>
           <strong>{islandStatus}</strong>
           <i><b style={{ width: `${clampPercent(islandProgress * 100)}%` }} /></i>
         </div>
         <em>{islandMetric}</em>
+      </div>
+
+      <div className={`dive-readout ${player.surface === 'water' ? 'is-visible' : ''}`} aria-label={`潜深 ${player.depth.toFixed(1)} 米`}>
+        <Waves size={17} />
+        <span>{player.submerged ? '潜深' : '水面'}</span>
+        <strong>{player.depth.toFixed(1)} m</strong>
       </div>
 
       <div className="hud-actions">
@@ -173,7 +195,7 @@ export function Hud({
       <div className={`shark-warning ${sharkAlert ? 'is-visible' : ''}`} aria-live="polite">
         <TriangleAlert size={18} />
         <div>
-          <span>{shark.mode === 'attacking' ? '结构遭到撕咬' : '深潮鲨正在逼近'}</span>
+          <span>{shark.target === 'player' ? (shark.mode === 'attacking' ? '深潮鲨正在扑咬' : '深潮鲨锁定了你') : shark.mode === 'attacking' ? '结构遭到撕咬' : '深潮鲨正在逼近'}</span>
           <i><b style={{ width: `${Math.round(shark.threat * 100)}%` }} /></i>
         </div>
       </div>
@@ -182,6 +204,9 @@ export function Hud({
         <Gauge icon={<Heart size={18} fill="currentColor" />} value={survival.health} tone="health" label="生命" />
         <Gauge icon={<Droplet size={18} fill="currentColor" />} value={survival.thirst} tone="thirst" label="口渴" />
         <Gauge icon={<Utensils size={18} />} value={survival.hunger} tone="hunger" label="饥饿" />
+        {player.surface === 'water' && (
+          <Gauge icon={<Waves size={18} />} value={survival.oxygen} tone="oxygen" label="氧气" />
+        )}
       </div>
 
       <div className="hotbar" aria-label="快捷工具">

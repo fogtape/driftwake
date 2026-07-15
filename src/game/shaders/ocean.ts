@@ -40,6 +40,7 @@ export const oceanFragmentShader = /* glsl */ `
   uniform vec3 uSurfaceColor;
   uniform vec3 uSkyColor;
   uniform vec3 uFogColor;
+  uniform float uUnderwater;
 
   varying vec3 vWorldPosition;
   varying vec3 vWorldNormal;
@@ -52,7 +53,7 @@ export const oceanFragmentShader = /* glsl */ `
   }
 
   void main() {
-    vec3 normal = normalize(vWorldNormal);
+    vec3 normal = gl_FrontFacing ? normalize(vWorldNormal) : -normalize(vWorldNormal);
     vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
     float facing = clamp(dot(normal, viewDirection), 0.0, 1.0);
     float fresnel = pow(1.0 - facing, 3.0);
@@ -76,11 +77,17 @@ export const oceanFragmentShader = /* glsl */ `
     color += vec3(1.0, 0.78, 0.48) * sunGlint;
     color = mix(color, vec3(0.91, 0.97, 0.96), foam * 0.86);
 
+    vec2 undersideUv = vWorldPosition.xz * 0.18 + vec2(uTime * 0.045, -uTime * 0.032);
+    float undersideRipple = sin(undersideUv.x + sin(undersideUv.y * 0.83)) * 0.5 + 0.5;
+    vec3 underside = mix(vec3(0.035, 0.34, 0.40), vec3(0.25, 0.69, 0.67), fresnel * 0.48 + undersideRipple * 0.16);
+    underside += vec3(0.18, 0.36, 0.29) * foam * 0.22;
+    color = mix(color, underside, uUnderwater);
+
     float distanceToCamera = length(cameraPosition.xz - vWorldPosition.xz);
     float fogAmount = smoothstep(90.0, 240.0, distanceToCamera);
-    color = mix(color, uFogColor, fogAmount);
+    vec3 distanceFog = mix(uFogColor, vec3(0.043, 0.32, 0.37), uUnderwater);
+    color = mix(color, distanceFog, fogAmount);
 
     gl_FragColor = vec4(color, 1.0);
   }
 `;
-

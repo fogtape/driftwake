@@ -7,6 +7,7 @@ import { useGameStore, type SharkMode } from '../../state/gameStore';
 import type { AudioSystem } from './AudioSystem';
 import type { GridCoordinate, RaftSystem } from './RaftSystem';
 import type { SplashSystem } from './SplashSystem';
+import type { PlayerController } from './PlayerController';
 
 export class SharkSystem {
   readonly model: Group;
@@ -18,6 +19,8 @@ export class SharkSystem {
   private readonly lookTarget = new Vector3();
   private readonly strikeVector = new Vector3();
   private readonly cameraForward = new Vector3();
+  private readonly playerWorld = new Vector3();
+  private readonly pursuitDirection = new Vector3();
   private mode: SharkMode = 'distant';
   private totalTime = 0;
   private phaseTime = 0;
@@ -28,12 +31,15 @@ export class SharkSystem {
   private hitsDuringAttack = 0;
   private health = 100;
   private defeated = false;
+  private targetingPlayer = false;
+  private nextPlayerBiteAt = 0;
   private feedbackTimer = 0;
   private noticeTimer: number | null = null;
 
   constructor(
     private readonly scene: Scene,
     private readonly raft: RaftSystem,
+    private readonly player: PlayerController,
     materials: MaterialLibrary,
     private readonly audio: AudioSystem,
     private readonly splashes: SplashSystem,
@@ -52,11 +58,18 @@ export class SharkSystem {
     this.tailPivot.rotation.y = Math.sin(time * (this.mode === 'attacking' ? 9.5 : 5.2)) * (this.mode === 'attacking' ? 0.42 : 0.26);
     this.model.rotation.z = Math.sin(time * 1.4) * 0.035;
 
-    if (this.mode === 'distant') this.updateDistant(time, delta);
-    else if (this.mode === 'circling') this.updateCircling(time, delta);
-    else if (this.mode === 'approaching') this.updateApproach(time, delta);
-    else if (this.mode === 'attacking') this.updateAttack(time);
-    else this.updateRetreat(time, delta);
+    const playerInWater = this.player.getSurface() === 'water';
+    if (playerInWater && !this.defeated && this.mode !== 'retreating') {
+      if (!this.targetingPlayer) this.beginPlayerApproach();
+      this.updatePlayerHunt(time, delta);
+    } else {
+      if (!playerInWater && this.targetingPlayer) this.beginRetreat();
+      if (this.mode === 'distant') this.updateDistant(time, delta);
+      else if (this.mode === 'circling') this.updateCircling(time, delta);
+      else if (this.mode === 'approaching') this.updateApproach(time, delta);
+      else if (this.mode === 'attacking') this.updateAttack(time);
+      else this.updateRetreat(time, delta);
+    }
 
     if (this.feedbackTimer <= 0) {
       this.feedbackTimer = 0.12;
@@ -134,6 +147,7 @@ export class SharkSystem {
       }
     }
     this.targetTile = { x: best.x, z: best.z };
+    this.targetingPlayer = false;
     this.raft.gridToLocal(this.targetTile, this.targetWorld);
     this.raft.localPointToWorld(this.targetWorld, this.targetWorld);
     this.outward.set(best.x, 0, best.z);
@@ -204,9 +218,72 @@ export class SharkSystem {
     if (result.destroyed) this.beginRetreat();
   }
 
+  private beginPlayerApproach(): void {
+    this.targetingPlayer = true;
+    this.targetTile = null;
+    this.hitsDuringAttack = 0;
+    this.nextPlayerBiteAt = 0;
+    this.audio.playSharkWarning();
+    this.setMode('approaching');
+    this.showNotice('水下传来快速逼近的摆尾声');
+  }
+
+  private updatePlayerHunt(time: number, delta: number): void {
+    this.player.getWorldFootPosition(this.playerWorld);
+    this.playerWorld.y -= 0.12;
+    this.pursuitDirection.copy(this.playerWorld).sub(this.model.position);
+    const distance = this.pursuitDirection.length();
+    if (distance > 0.001) this.pursuitDirection.divideScalar(distance);
+
+    if (this.mode === 'approaching') {
+      const speed = MathUtils.clamp(2.45 + distance * 0.11, 2.7, 4.15);
+      this.model.position.addScaledVector(this.pursuitDirection, Math.min(distance, speed * delta));
+      this.model.position.y += Math.sin(time * 3.1) * delta * 0.05;
+      this.model.lookAt(this.playerWorld);
+      if (distance < 2.65) {
+        this.nextPlayerBiteAt = 0.48;
+        this.setMode('attacking');
+      }
+      this.updateSpearInteraction('鲨鱼正从水下逼近');
+      return;
+    }
+
+    if (this.mode !== 'attacking') {
+      this.setMode('approaching');
+      return;
+    }
+    const lunge = 0.75 + Math.pow(Math.max(0, Math.sin(this.phaseTime * 2.8)), 2) * 1.7;
+    const speed = 3.05 + lunge;
+    this.model.position.addScaledVector(this.pursuitDirection, Math.min(distance, speed * delta));
+    this.model.position.y += Math.sin(time * 4.2) * delta * 0.08;
+    this.model.lookAt(this.playerWorld);
+    if (this.phaseTime >= this.nextPlayerBiteAt) {
+      if (distance <= 1.42) {
+        this.performPlayerBite();
+        this.nextPlayerBiteAt += 2.18;
+      } else {
+        this.nextPlayerBiteAt += 0.18;
+      }
+    }
+    if (distance > 5.4) this.setMode('approaching');
+    else if (this.phaseTime > 5.15) this.beginRetreat();
+    this.updateSpearInteraction('鲨鱼进入扑咬距离');
+  }
+
+  private performPlayerBite(): void {
+    const store = useGameStore.getState();
+    store.damagePlayer(18);
+    this.audio.playPlayerBite();
+    this.splashes.spawnImpact(this.playerWorld, 0xb74f45, 28);
+    this.player.applyWaterImpulse(this.model.position, 2.65);
+    this.onImpact(0.58);
+    this.showNotice(useGameStore.getState().survival.health <= 18 ? '伤势已经十分危险' : '深潮鲨撕开了防线');
+  }
+
   private beginRetreat(): void {
     this.setMode('retreating');
     this.targetTile = null;
+    this.targetingPlayer = false;
     useGameStore.getState().setInteraction(null);
   }
 
@@ -254,6 +331,7 @@ export class SharkSystem {
       threat,
       health: this.health,
       visible: this.model.visible && this.mode !== 'distant',
+      target: this.targetingPlayer ? 'player' : 'raft',
     });
   }
 

@@ -1,4 +1,4 @@
-import { Box3, Group, InstancedMesh, Mesh, MeshStandardMaterial, Vector3 } from 'three';
+import { Box3, Group, InstancedMesh, Mesh, MeshBasicMaterial, MeshStandardMaterial, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { MaterialLibrary } from './Materials';
 import {
@@ -12,6 +12,7 @@ import {
   createSharkModel,
   createSpearModel,
 } from './ProceduralModels';
+import { createReefModel, createReefNodeModel } from './UnderwaterModels';
 
 function createTestMaterials(): MaterialLibrary {
   const material = () => new MeshStandardMaterial();
@@ -29,6 +30,15 @@ function createTestMaterials(): MaterialLibrary {
     sharkSkin: material(),
     sharkMouth: material(),
     sharkEye: material(),
+    reefSeabed: material(),
+    reefRock: material(),
+    coralWarm: material(),
+    coralPale: material(),
+    seaweed: material(),
+    ore: material(),
+    clay: material(),
+    reefFish: material(),
+    reefCaustic: new MeshBasicMaterial(),
   };
 }
 
@@ -125,5 +135,18 @@ describe('procedural model assets', () => {
       expect(node.userData.harvestVisuals.pivot).toBeDefined();
       expect(node.userData.harvestVisuals.highlight).toBeDefined();
     });
+  }, 15_000);
+
+  it('builds a dense reef shelf and distinct underwater resource silhouettes', () => {
+    const materials = createTestMaterials();
+    const reef = createReefModel(materials, 0x51ad7e);
+    const terrain = reef.children[0] as Mesh;
+    const types = ['sand', 'clay', 'metalOre', 'seaweed'] as const;
+    const nodes = types.map((type) => createReefNodeModel(type, materials));
+    expect(terrain.geometry.getAttribute('position').count).toBeGreaterThan(2_500);
+    expect(reef.userData.reefVisuals.frondBatch.count).toBe(34);
+    expect(reef.userData.reefVisuals.fishSchools).toHaveLength(3);
+    expect(nodes.map(renderedPartCount).every((count) => count >= 7)).toBe(true);
+    expect(nodes.every((node) => node.userData.reefNodeVisuals.highlight)).toBe(true);
   }, 15_000);
 });

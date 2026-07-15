@@ -56,6 +56,19 @@ button:focus-visible {
   cursor: crosshair;
 }
 
+.underwater-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0;
+  background: rgba(8, 92, 101, 0.11);
+  box-shadow: inset 0 0 150px rgba(2, 34, 43, 0.58), inset 0 52px 90px rgba(105, 210, 199, 0.1);
+  transition: opacity 360ms ease;
+}
+
+.underwater-veil.is-visible { opacity: 1; }
+
 .title-screen {
   position: absolute;
   inset: 0;
@@ -371,6 +384,28 @@ button:focus-visible {
 .island-readout--departing > svg { color: #8ea6a3; }
 .island-readout.is-ashore { border-left-color: var(--sun); }
 .island-readout.is-ashore i b { background: var(--sun); }
+.dive-readout {
+  position: absolute;
+  top: max(162px, calc(env(safe-area-inset-top) + 142px));
+  left: max(20px, env(safe-area-inset-left));
+  display: grid;
+  width: 150px;
+  height: 30px;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  color: #bcece5;
+  border-left: 2px solid #57b7ae;
+  background: rgba(4, 37, 44, 0.7);
+  font-family: 'Barlow Condensed', sans-serif;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.dive-readout.is-visible { opacity: 1; transform: translateY(0); }
+.dive-readout span { color: #8fbeb8; font-size: 11px; }
+.dive-readout strong { color: #dcfaf4; font-size: 13px; }
 .raft-readout > i,
 .shark-warning i,
 .fishing-fight__row > i {
@@ -458,6 +493,8 @@ button:focus-visible {
 .survival-gauge--thirst .survival-gauge__fill { background: #4db3cc; }
 .survival-gauge--hunger { color: var(--sun); }
 .survival-gauge--hunger .survival-gauge__fill { background: var(--sun); }
+.survival-gauge--oxygen { color: #79d4cc; }
+.survival-gauge--oxygen .survival-gauge__fill { background: #79d4cc; }
 
 .hotbar {
   position: absolute;
@@ -1088,7 +1125,16 @@ button:focus-visible {
   .resource-pack-button { width: 40px; }
   .raft-readout { top: 60px; left: 12px; }
   .island-readout { top: 94px; left: 12px; width: 210px; }
+  .dive-readout { top: 150px; left: 12px; }
   .hud-actions { top: 12px; right: 12px; }
+  .shark-warning {
+    top: 60px;
+    right: 12px;
+    left: auto;
+    min-width: 230px;
+    transform: translateY(-8px);
+  }
+  .shark-warning.is-visible { transform: translateY(0); }
   .hotbar { grid-template-columns: repeat(5, 44px); gap: 4px; }
   .hotbar-slot { width: 44px; height: 44px; }
   .survival-cluster { left: 12px; width: 152px; }

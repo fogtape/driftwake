@@ -17,6 +17,7 @@ import { craftRecipe, type CraftResult, type RecipeId } from '../game/domain/rec
 import { INITIAL_SURVIVAL, advanceSurvival, consumeItem, type SurvivalState } from '../game/domain/survival';
 import type { DeviceType } from '../game/domain/devices';
 import type { IslandPhase } from '../game/domain/island';
+import type { PlayerSurface } from '../game/domain/save';
 
 export type GamePhase = 'title' | 'playing';
 export type QualityPreset = 'low' | 'high';
@@ -44,6 +45,13 @@ export interface SharkFeedback {
   threat: number;
   health: number;
   visible: boolean;
+  target: 'raft' | 'player';
+}
+
+export interface PlayerFeedback {
+  surface: PlayerSurface;
+  depth: number;
+  submerged: boolean;
 }
 
 export interface RaftFeedback {
@@ -71,6 +79,11 @@ export interface IslandFeedback {
   total: number;
 }
 
+export interface ReefFeedback {
+  harvested: number;
+  total: number;
+}
+
 export interface PlayerSaveSnapshot {
   inventory: Inventory;
   survival: SurvivalState;
@@ -93,12 +106,14 @@ interface GameState {
   inventory: Inventory;
   inventorySlots: number;
   survival: SurvivalState;
+  player: PlayerFeedback;
   fishing: FishingFeedback;
   shark: SharkFeedback;
   raft: RaftFeedback;
   devices: DeviceFeedbackMap;
   placementDevice: DeviceType | null;
   island: IslandFeedback;
+  reef: ReefFeedback;
   interaction: string | null;
   fps: number;
   notice: string | null;
@@ -120,13 +135,16 @@ interface GameState {
   spendItems: (bundle: ItemBundle) => boolean;
   craft: (recipeId: RecipeId) => CraftResult;
   useItem: (itemId: ItemId) => boolean;
-  tickSurvival: (seconds: number) => void;
+  tickSurvival: (seconds: number, submerged?: boolean) => void;
+  damagePlayer: (amount: number) => void;
+  setPlayer: (feedback: PlayerFeedback) => void;
   setFishing: (feedback: Partial<FishingFeedback>) => void;
   setShark: (feedback: Partial<SharkFeedback>) => void;
   setRaft: (feedback: RaftFeedback) => void;
   setDevices: (feedback: DeviceFeedbackMap) => void;
   setPlacementDevice: (device: DeviceType | null) => void;
   setIsland: (feedback: IslandFeedback) => void;
+  setReef: (feedback: ReefFeedback) => void;
   setInteraction: (interaction: string | null) => void;
   setFps: (fps: number) => void;
   showNotice: (notice: string | null) => void;
@@ -141,7 +159,11 @@ function defaultFishing(): FishingFeedback {
 }
 
 function defaultShark(): SharkFeedback {
-  return { mode: 'distant', threat: 0, health: 100, visible: false };
+  return { mode: 'distant', threat: 0, health: 100, visible: false, target: 'raft' };
+}
+
+function defaultPlayer(): PlayerFeedback {
+  return { surface: 'raft', depth: 0, submerged: false };
 }
 
 function clampAudioMix(current: AudioMix, patch: Partial<AudioMix>): AudioMix {
@@ -172,6 +194,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   inventory: { ...STARTING_INVENTORY },
   inventorySlots: usedInventorySlots(STARTING_INVENTORY),
   survival: { ...INITIAL_SURVIVAL },
+  player: defaultPlayer(),
   fishing: defaultFishing(),
   shark: defaultShark(),
   raft: { tiles: 9, damagedTiles: 0, averageIntegrity: 100 },
@@ -181,6 +204,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
   placementDevice: null,
   island: { phase: 'approaching', distance: 80, remaining: 72, ashore: false, harvested: 0, total: 18 },
+  reef: { harvested: 0, total: 18 },
   interaction: null,
   fps: 0,
   notice: null,
@@ -234,7 +258,23 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ survival: consumed.survival, inventory, inventorySlots: usedInventorySlots(inventory) });
     return true;
   },
-  tickSurvival: (seconds) => set((state) => ({ survival: advanceSurvival(state.survival, seconds) })),
+  tickSurvival: (seconds, submerged = false) =>
+    set((state) => ({ survival: advanceSurvival(state.survival, seconds, submerged) })),
+  damagePlayer: (amount) =>
+    set((state) => ({
+      survival: {
+        ...state.survival,
+        health: Math.max(0, state.survival.health - Math.max(0, Number.isFinite(amount) ? amount : 0)),
+      },
+    })),
+  setPlayer: (player) =>
+    set((state) =>
+      state.player.surface === player.surface &&
+      state.player.submerged === player.submerged &&
+      Math.abs(state.player.depth - player.depth) < 0.025
+        ? state
+        : { player },
+    ),
   setFishing: (feedback) =>
     set((state) => {
       const fishing = { ...state.fishing, ...feedback };
@@ -250,7 +290,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       return shark.mode === state.shark.mode &&
         shark.threat === state.shark.threat &&
         shark.health === state.shark.health &&
-        shark.visible === state.shark.visible
+        shark.visible === state.shark.visible &&
+        shark.target === state.shark.target
         ? state
         : { shark };
     }),
@@ -258,6 +299,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   setDevices: (devices) => set({ devices }),
   setPlacementDevice: (placementDevice) => set({ placementDevice, interaction: null }),
   setIsland: (island) => set({ island }),
+  setReef: (reef) => set({ reef }),
   setInteraction: (interaction) => set((state) => (state.interaction === interaction ? state : { interaction })),
   setFps: (fps) => set({ fps }),
   showNotice: (notice) => set({ notice }),
@@ -272,6 +314,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       playSeconds: snapshot.playSeconds,
       fishing: defaultFishing(),
       shark: defaultShark(),
+      player: defaultPlayer(),
       placementDevice: null,
     }),
   getPlayerSnapshot: () => {
