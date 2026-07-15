@@ -366,7 +366,7 @@
 - 上一运行时 bundle 的 1200 秒 SwiftShader soak 已通过：121 个状态样本、21 个画面样本、Pointer Lock/模拟全程有效、Context Lost=false、Heap 增长 -6,347,282 bytes、FPS 4-7、四种天气、昼夜范围 0-1、`errors=[]`、`failures=[]`；长稳证据保留于 `stability-2026-07-15T17-18-25-070Z.json`，`latest.json` 按设计已指向后续短 smoke；
 - 新增目标 GPU profile：低画质自动选择 1280x720/30 FPS 与 18 件 active 漂流物，高质量自动选择 1920x1080/60 FPS 与 30 件 active 漂流物；通过公开设置 UI 的 `aria-pressed`、入场 runtime dataset，以及每个稳定性样本的 `qualityKinds/debrisCountMin/debrisCountMax` 验证档位/预算全程不漂移；目标 profile 默认要求渲染比例全程保持 100% 且拒绝 SwiftShader/llvmpipe 等软件 renderer；两项误绿故障注入在最新脚本上同时按预期红灯；显式允许软件 renderer 并放宽至 55% 后，两档 SwiftShader 功能 smoke 均通过；
 - 当前最终 bundle 的 1200 秒 SwiftShader soak 以退出码 0 通过：`entryResource=index-laC9A5u8.js`、`runtimeResource=DriftwakeGame-CH094ExI.js`、121 个状态样本、21 个画面样本、Pointer Lock/模拟全程有效、Context Lost=false、Heap 增长 -4,646,700 bytes、FPS 4-8、四种天气、昼夜范围 0-1、`qualityKinds=[low]`、漂流物全程 18、draw calls 最大 70、三角面最大 50,054、`errors=[]`、`failures=[]`；证据：`artifacts/stability/stability-2026-07-15T22-21-10-905Z.json`；
-- 独立审查 `BLOCKED`：首批两项 600 秒超时无摘要，拆分后的四项全部因子代理额度不足返回 HTTP 403，均无可引用审查正文；不能视为通过。主会话已按 fail-closed 流程执行新增行安全扫描、类型/构建/测试、完整差异审阅，并修复原生分辨率误绿、软件 renderer 误绿、焦点/可见性竞态提前解除静音、运行时切换低画质未降低漂流物预算、3D 世界/Rapier 随菜单首屏急切加载，以及初始化旧 store 快照覆盖加载期设置六项 P1；
+- 独立审查 `BLOCKED`：首批两项 600 秒超时无摘要，拆分后的四项全部因子代理额度不足返回 HTTP 403；最终单项聚焦重试在完成 11 次 API 调用后再次于 600 秒超时，仍无摘要。所有尝试均无可引用审查正文，不能视为通过。主会话已按 fail-closed 流程执行新增行安全扫描、类型/构建/测试、完整差异审阅，并修复原生分辨率误绿、软件 renderer 误绿、焦点/可见性竞态提前解除静音、运行时切换低画质未降低漂流物预算、3D 世界/Rapier 随菜单首屏急切加载，以及初始化旧 store 快照覆盖加载期设置六项 P1；
 
 尚未通过：
 
