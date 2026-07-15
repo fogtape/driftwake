@@ -18,5 +18,15 @@ describe('sampleWave', () => {
     expect(Number.isFinite(sample.slopeX)).toBe(true);
     expect(Number.isFinite(sample.slopeZ)).toBe(true);
   });
+
+  it('scales height and slopes together for changing sea states', () => {
+    const base = sampleWave(4.2, -8.1, 12.5, 1);
+    const storm = sampleWave(4.2, -8.1, 12.5, 1.5);
+
+    expect(storm.height).toBeCloseTo(base.height * 1.5);
+    expect(storm.slopeX).toBeCloseTo(base.slopeX * 1.5);
+    expect(storm.slopeZ).toBeCloseTo(base.slopeZ * 1.5);
+    expect(sampleWaveHeight(4.2, -8.1, 12.5, 1.5)).toBeCloseTo(storm.height);
+  });
 });
 

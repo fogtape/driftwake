@@ -24,8 +24,8 @@ export class RaftSystem {
     this.buildInstancedDeck(materials);
   }
 
-  update(time: number, delta: number): void {
-    const wave = sampleWave(this.group.position.x, this.group.position.z, time);
+  update(time: number, delta: number, waveScale = 1): void {
+    const wave = sampleWave(this.group.position.x, this.group.position.z, time, waveScale);
     const targetY = wave.height + 0.08;
     this.group.position.y = MathUtils.damp(this.group.position.y, targetY, 5.8, delta);
 

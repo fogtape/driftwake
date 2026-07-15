@@ -19,10 +19,11 @@ export const WAVE_COMPONENTS: readonly WaveComponent[] = [
   { directionX: 0.62, directionZ: -0.78, frequency: 1.18, amplitude: 0.055, speed: 1.82, phase: 4.1 },
 ] as const;
 
-export function sampleWave(x: number, z: number, time: number): WaveSample {
+export function sampleWave(x: number, z: number, time: number, amplitudeScale = 1): WaveSample {
   let height = 0;
   let slopeX = 0;
   let slopeZ = 0;
+  const scale = Number.isFinite(amplitudeScale) ? Math.max(0, amplitudeScale) : 1;
 
   for (const wave of WAVE_COMPONENTS) {
     const theta =
@@ -30,8 +31,9 @@ export function sampleWave(x: number, z: number, time: number): WaveSample {
       time * wave.speed +
       wave.phase;
     const sinTheta = Math.sin(theta);
-    const derivative = Math.cos(theta) * wave.amplitude * wave.frequency;
-    height += sinTheta * wave.amplitude;
+    const amplitude = wave.amplitude * scale;
+    const derivative = Math.cos(theta) * amplitude * wave.frequency;
+    height += sinTheta * amplitude;
     slopeX += derivative * wave.directionX;
     slopeZ += derivative * wave.directionZ;
   }
@@ -39,7 +41,7 @@ export function sampleWave(x: number, z: number, time: number): WaveSample {
   return { height, slopeX, slopeZ };
 }
 
-export function sampleWaveHeight(x: number, z: number, time: number): number {
-  return sampleWave(x, z, time).height;
+export function sampleWaveHeight(x: number, z: number, time: number, amplitudeScale = 1): number {
+  return sampleWave(x, z, time, amplitudeScale).height;
 }
 

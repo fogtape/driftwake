@@ -1,5 +1,6 @@
 import { Group, MathUtils, Scene, Vector3 } from 'three';
 import type { MaterialLibrary } from '../art/Materials';
+import type { EnvironmentSample } from '../environment/environment';
 import { createDebrisModel, type DebrisKind, varyModel } from '../art/ProceduralModels';
 import { createSeededRandom, randomRange, type RandomSource } from '../math/random';
 import { sampleWaveHeight } from '../math/waves';
@@ -52,13 +53,19 @@ export class DebrisField {
     }
   }
 
-  update(time: number, delta: number): void {
+  update(time: number, delta: number, environment: EnvironmentSample): void {
     for (const item of this.items) {
       if (item.latched) continue;
-      item.model.position.z += item.driftSpeed * delta;
-      item.model.position.x += Math.sin(time * 0.21 + item.bobPhase) * delta * 0.035;
+      item.model.position.z += (
+        item.driftSpeed * environment.driftScale
+        + environment.windDirectionZ * environment.windStrength * 0.16
+      ) * delta;
+      item.model.position.x += (
+        Math.sin(time * 0.21 + item.bobPhase) * 0.035
+        + environment.windDirectionX * environment.windStrength * 0.16
+      ) * delta;
       item.model.position.y =
-        sampleWaveHeight(item.model.position.x, item.model.position.z, time) +
+        sampleWaveHeight(item.model.position.x, item.model.position.z, time, environment.waveScale) +
         0.07 +
         Math.sin(time * 1.25 + item.bobPhase) * 0.035;
       item.model.rotation.y += item.spinSpeed * delta;

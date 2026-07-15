@@ -81,7 +81,7 @@ export class HookSystem {
     if (!enabled && this.state === 'charging') this.reset();
   }
 
-  update(time: number, delta: number): void {
+  update(time: number, delta: number, waveScale = 1): void {
     if (this.state === 'charging') {
       this.charge = Math.min(1, this.charge + delta / 1.05);
       useGameStore.getState().setHookCharge(this.charge);
@@ -97,7 +97,7 @@ export class HookSystem {
         this.state = 'latched';
         this.audio.playSplash();
       } else {
-        const surface = sampleWaveHeight(this.hookPosition.x, this.hookPosition.z, time);
+        const surface = sampleWaveHeight(this.hookPosition.x, this.hookPosition.z, time, waveScale);
         if (this.hookPosition.y <= surface + 0.03 || this.hookPosition.distanceTo(this.camera.position) > 31) {
           this.hookPosition.y = Math.max(this.hookPosition.y, surface);
           this.splashes.spawn(this.hookPosition);

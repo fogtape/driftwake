@@ -1,5 +1,6 @@
 export const oceanVertexShader = /* glsl */ `
   uniform float uTime;
+  uniform float uWaveScale;
 
   varying vec3 vWorldPosition;
   varying vec3 vWorldNormal;
@@ -9,7 +10,7 @@ export const oceanVertexShader = /* glsl */ `
     float first = sin(dot(point, vec2(0.94, 0.34)) * 0.38 + uTime * 0.92) * 0.26;
     float second = sin(dot(point, vec2(-0.22, 0.98)) * 0.71 + uTime * 1.34 + 1.7) * 0.12;
     float third = sin(dot(point, vec2(0.62, -0.78)) * 1.18 + uTime * 1.82 + 4.1) * 0.055;
-    return first + second + third;
+    return (first + second + third) * uWaveScale;
   }
 
   void main() {
