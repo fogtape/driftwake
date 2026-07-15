@@ -70,6 +70,21 @@ function monitorPage(page, label) {
   });
 }
 
+function summarizeCapturedFrame(screenshot, gateLabel) {
+  const image = PNG.sync.read(screenshot);
+  if (forceBlankFrame) {
+    for (let offset = 0; offset < image.data.length; offset += 4) {
+      image.data[offset] = 0;
+      image.data[offset + 1] = 0;
+      image.data[offset + 2] = 0;
+      image.data[offset + 3] = 255;
+    }
+  }
+  const frame = summarizeRgbaPixels(image.data, image.width, image.height);
+  assertFrameContent(frame, gateLabel);
+  return frame;
+}
+
 async function inspectCanvas(page, label, checkpoint) {
   const state = await page.evaluate(() => {
     const canvas = document.querySelector('canvas');
@@ -91,19 +106,28 @@ async function inspectCanvas(page, label, checkpoint) {
   const gateLabel = `${label}/${checkpoint}`;
   assertCanvasHealthy(state, gateLabel);
   const screenshot = await page.locator('canvas').screenshot();
-  const image = PNG.sync.read(screenshot);
-  if (forceBlankFrame) {
-    for (let offset = 0; offset < image.data.length; offset += 4) {
-      image.data[offset] = 0;
-      image.data[offset + 1] = 0;
-      image.data[offset + 2] = 0;
-      image.data[offset + 3] = 255;
-    }
-  }
-  state.frame = summarizeRgbaPixels(image.data, image.width, image.height);
-  assertFrameContent(state.frame, gateLabel);
+  state.frame = summarizeCapturedFrame(screenshot, gateLabel);
   diagnostics.push({ label, checkpoint, ...state });
   console.log(`${label} canvas ${checkpoint}: ${JSON.stringify(state)}`);
+  return state;
+}
+
+async function inspectTitlePage(page, checkpoint) {
+  const state = await page.evaluate(() => ({
+    canvasFound: document.querySelector('canvas') !== null,
+    runtimeResources: performance.getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .filter((name) => /\/assets\/DriftwakeGame-[^/]+\.js(?:\?|$)/.test(name)),
+  }));
+  if (state.canvasFound) throw new Error(`title/${checkpoint}: world canvas loaded before player intent`);
+  if (state.runtimeResources.length > 0) {
+    throw new Error(`title/${checkpoint}: world runtime loaded before player intent`);
+  }
+  const screenshot = await page.screenshot();
+  state.kind = 'page';
+  state.frame = summarizeCapturedFrame(screenshot, `title/${checkpoint}`);
+  diagnostics.push({ label: 'title', checkpoint, ...state });
+  console.log(`title page ${checkpoint}: ${JSON.stringify(state)}`);
   return state;
 }
 
@@ -130,6 +154,8 @@ async function openDesktopPage(label, { environmentOffset } = {}) {
 
 async function enterGame(page) {
   await page.getByRole('button', { name: '开始漂流' }).click();
+  await page.getByRole('button', { name: '进入海面' }).waitFor({ timeout: 45_000 });
+  await page.getByRole('button', { name: '进入海面' }).click();
   await page.waitForTimeout(900);
   if (await page.getByRole('button', { name: '继续漂流' }).isVisible().catch(() => false)) {
     await page.getByRole('button', { name: '继续漂流' }).click();
@@ -151,9 +177,9 @@ async function captureTitle() {
     disabled: element.disabled,
   }));
   console.log(`Title command: ${JSON.stringify(buttonStyle)}`);
-  await inspectCanvas(page, 'title', 'before-capture');
+  await inspectTitlePage(page, 'before-capture');
   await page.screenshot({ path: new URL('title-desktop.png', outputDir).pathname });
-  await inspectCanvas(page, 'title', 'after-capture');
+  await inspectTitlePage(page, 'after-capture');
   await context.close();
 }
 

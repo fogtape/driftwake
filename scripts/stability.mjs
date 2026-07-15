@@ -7,6 +7,7 @@ import {
   buildStabilitySchedule,
   isCriticalBrowserMessage,
   resolveChromiumExecutable,
+  resolveStabilityProfile,
   summarizeRgbaPixels,
   summarizeStabilitySamples,
   validateStabilitySummary,
@@ -25,7 +26,27 @@ const baseUrl = process.env.DRIFTWAKE_URL ?? 'http://127.0.0.1:4173';
 const durationSeconds = Number(process.env.STABILITY_SECONDS ?? 1200);
 const sampleSeconds = Number(process.env.STABILITY_SAMPLE_SECONDS ?? 10);
 const contentSeconds = Number(process.env.STABILITY_CONTENT_SECONDS ?? 60);
-const minimumFps = Number(process.env.STABILITY_MIN_FPS ?? 30);
+const optionalNumber = (name) => process.env[name] === undefined ? undefined : Number(process.env[name]);
+const stabilityProfile = resolveStabilityProfile({
+  quality: process.env.STABILITY_QUALITY ?? 'low',
+  viewportWidth: optionalNumber('STABILITY_VIEWPORT_WIDTH'),
+  viewportHeight: optionalNumber('STABILITY_VIEWPORT_HEIGHT'),
+  minimumFps: optionalNumber('STABILITY_MIN_FPS'),
+  minimumRenderScale: optionalNumber('STABILITY_MIN_RENDER_SCALE'),
+});
+const {
+  quality,
+  viewportWidth,
+  viewportHeight,
+  minimumFps,
+  minimumRenderScale,
+} = stabilityProfile;
+const expectedDebrisCount = quality === 'low' ? 18 : 30;
+const softwareRendererFlag = process.env.STABILITY_ALLOW_SOFTWARE_RENDERER;
+if (softwareRendererFlag !== undefined && softwareRendererFlag !== '0' && softwareRendererFlag !== '1') {
+  throw new Error('STABILITY_ALLOW_SOFTWARE_RENDERER must be 0 or 1');
+}
+const allowSoftwareRenderer = softwareRendererFlag === '1';
 const maximumHeapGrowthMb = Number(process.env.STABILITY_MAX_HEAP_GROWTH_MB ?? 32);
 const minimumWeatherKinds = Number(
   process.env.STABILITY_MIN_WEATHER_KINDS ?? (durationSeconds >= 360 ? 4 : 1),
@@ -36,7 +57,6 @@ const minimumDaylightRange = Number(
 if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) throw new Error('STABILITY_SECONDS must be positive');
 if (!Number.isFinite(sampleSeconds) || sampleSeconds <= 0) throw new Error('STABILITY_SAMPLE_SECONDS must be positive');
 if (!Number.isFinite(contentSeconds) || contentSeconds <= 0) throw new Error('STABILITY_CONTENT_SECONDS must be positive');
-if (!Number.isFinite(minimumFps) || minimumFps <= 0) throw new Error('STABILITY_MIN_FPS must be positive');
 if (!Number.isFinite(maximumHeapGrowthMb) || maximumHeapGrowthMb < 0) {
   throw new Error('STABILITY_MAX_HEAP_GROWTH_MB must be non-negative');
 }
@@ -47,12 +67,18 @@ if (!Number.isFinite(minimumDaylightRange) || minimumDaylightRange < 0 || minimu
   throw new Error('STABILITY_MIN_DAYLIGHT_RANGE must be from 0 to 1');
 }
 const stabilityPolicy = {
+  quality,
+  viewportWidth,
+  viewportHeight,
+  expectedDebrisCount,
   sampleSeconds,
   contentSeconds,
   minimumDurationRatio: 0.98,
   minimumSampleCoverage: 0.9,
   minimumContentSamples: 2,
   minimumFps,
+  minimumRenderScale,
+  allowSoftwareRenderer,
   minimumWeatherKinds,
   minimumDaylightRange,
   maximumHeapGrowthBytes: maximumHeapGrowthMb * 1024 * 1024,
@@ -87,8 +113,10 @@ const browser = await chromium.launch({
 });
 
 let context;
+let entryResource = null;
+let runtimeResource = null;
 try {
-  context = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+  context = await browser.newContext({ viewport: { width: viewportWidth, height: viewportHeight }, deviceScaleFactor: 1 });
   const page = await context.newPage();
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
   page.on('console', (message) => {
@@ -97,8 +125,43 @@ try {
   });
 
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
+  const initialResources = await page.evaluate(() => performance.getEntriesByType('resource').map((entry) => entry.name));
+  entryResource = initialResources.find((name) => /\/assets\/index-[^/]+\.js(?:\?|$)|\/src\/main\.tsx(?:\?|$)/.test(name)) ?? null;
+  const eagerRuntime = initialResources.find((name) => /\/DriftwakeGame(?:-[^/?]+)?\.(?:js|ts)(?:\?|$)/.test(name));
+  if (eagerRuntime) throw new Error(`world runtime loaded before player intent: ${eagerRuntime}`);
   await page.locator('.primary-command:not(:disabled)').waitFor({ timeout: 45_000 });
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('dialog', { name: '设置' }).waitFor({ timeout: 5_000 });
+  const qualityButton = page.getByRole('button', {
+    name: quality === 'high' ? '高质量' : '性能',
+    exact: true,
+  });
+  await qualityButton.click();
+  await page.waitForFunction(
+    ({ requestedQuality }) => {
+      const labels = requestedQuality === 'high' ? ['高质量'] : ['性能'];
+      const button = [...document.querySelectorAll('button')]
+        .find((candidate) => labels.includes(candidate.textContent?.trim() ?? ''));
+      return button?.getAttribute('aria-pressed') === 'true';
+    },
+    { requestedQuality: quality },
+  );
+  await page.getByRole('button', { name: '关闭设置' }).click();
   await page.getByRole('button', { name: '开始漂流' }).click();
+  await page.getByRole('button', { name: '进入海面' }).waitFor({ timeout: 45_000 });
+  runtimeResource = await page.evaluate(() => performance.getEntriesByType('resource')
+    .map((entry) => entry.name)
+    .find((name) => /\/DriftwakeGame(?:-[^/?]+)?\.(?:js|ts)(?:\?|$)/.test(name)) ?? null);
+  if (!runtimeResource) throw new Error('world runtime resource evidence is unavailable after initialization');
+  await page.waitForFunction(
+    ({ expectedQuality, expectedCount }) => {
+      const mount = document.querySelector('.game-mount');
+      return mount?.dataset.quality === expectedQuality
+        && Number(mount.dataset.debrisCount) === expectedCount;
+    },
+    { expectedQuality: quality, expectedCount: expectedDebrisCount },
+  );
+  await page.getByRole('button', { name: '进入海面' }).click();
   await page.waitForTimeout(900);
   if (await page.getByRole('button', { name: '继续漂流' }).isVisible().catch(() => false)) {
     await page.getByRole('button', { name: '继续漂流' }).click();
@@ -130,6 +193,8 @@ try {
         usedHeap: heap?.usedJSHeapSize ?? null,
         totalHeap: heap?.totalJSHeapSize ?? null,
         fps: document.querySelector('.fps-readout')?.dataset.fps ?? null,
+        quality: mount?.dataset.quality ?? null,
+        debrisCount: Number.parseInt(mount?.dataset.debrisCount ?? '', 10),
         weather: mount?.dataset.weather ?? null,
         daylight: Number.parseFloat(mount?.dataset.daylight ?? 'NaN'),
         environmentRisk: Number.parseFloat(mount?.dataset.environmentRisk ?? 'NaN'),
@@ -174,6 +239,8 @@ try {
 } finally {
   const summary = {
     url: baseUrl,
+    entryResource,
+    runtimeResource,
     renderer: samples[0]?.renderer ?? null,
     forcedSwiftShader: forceSwiftShader,
     policy: stabilityPolicy,

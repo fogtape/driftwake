@@ -5,7 +5,9 @@ import {
   buildBrowserArgs,
   buildStabilitySchedule,
   isCriticalBrowserMessage,
+  isSoftwareRenderer,
   resolveChromiumExecutable,
+  resolveStabilityProfile,
   summarizeRgbaPixels,
   summarizeStabilitySamples,
   validateStabilitySummary,
@@ -26,6 +28,39 @@ describe('buildBrowserArgs', () => {
     expect(args).toContain('--enable-unsafe-swiftshader');
     expect(args).toContain('--use-gl=angle');
     expect(args).toContain('--use-angle=swiftshader-webgl');
+  });
+});
+
+describe('resolveStabilityProfile', () => {
+  it('defaults to the tracked low-quality 1280x720 at 30 FPS profile', () => {
+    expect(resolveStabilityProfile({})).toEqual({
+      quality: 'low',
+      viewportWidth: 1280,
+      viewportHeight: 720,
+      minimumFps: 30,
+      minimumRenderScale: 1,
+    });
+  });
+
+  it('supports the tracked high-quality 1920x1080 at 60 FPS profile', () => {
+    expect(resolveStabilityProfile({
+      quality: 'high',
+    })).toEqual({
+      quality: 'high',
+      viewportWidth: 1920,
+      viewportHeight: 1080,
+      minimumFps: 60,
+      minimumRenderScale: 1,
+    });
+  });
+
+  it('validates quality, dimensions, and explicit FPS thresholds', () => {
+    expect(() => resolveStabilityProfile({ quality: 'ultra' })).toThrow(/quality/i);
+    expect(() => resolveStabilityProfile({ viewportWidth: 0 })).toThrow(/width/i);
+    expect(() => resolveStabilityProfile({ viewportHeight: Number.NaN })).toThrow(/height/i);
+    expect(() => resolveStabilityProfile({ minimumFps: 0 })).toThrow(/FPS/i);
+    expect(() => resolveStabilityProfile({ minimumRenderScale: 0 })).toThrow(/render scale/i);
+    expect(() => resolveStabilityProfile({ minimumRenderScale: 1.1 })).toThrow(/render scale/i);
   });
 });
 
@@ -177,9 +212,9 @@ describe('assertFrameContent', () => {
 describe('summarizeStabilitySamples', () => {
   it('summarizes finite heap and FPS ranges without inventing thresholds', () => {
     const summary = summarizeStabilitySamples([
-      { elapsedSeconds: 1, contextLost: false, usedHeap: 10, fps: '48', frame: {}, pointerLocked: true, simulationActive: true, weather: 'calm', daylight: 1, environmentRisk: 0.08, renderScale: 1, pixelRatio: 1.5, drawCalls: 18, triangles: 10_000, geometries: 22, textures: 8 },
-      { elapsedSeconds: 11, contextLost: false, usedHeap: 14, fps: '52', pointerLocked: true, simulationActive: true, weather: 'rain', daylight: 0.45, environmentRisk: 0.58, renderScale: 0.8, pixelRatio: 1.2, drawCalls: 24, triangles: 12_000, geometries: 24, textures: 9 },
-      { elapsedSeconds: 21, contextLost: false, usedHeap: 12, fps: '--', frame: {}, pointerLocked: true, simulationActive: true, weather: 'storm', daylight: 0, environmentRisk: 1, renderScale: 0.7, pixelRatio: 1.05, drawCalls: 21, triangles: 11_000, geometries: 23, textures: 9 },
+      { elapsedSeconds: 1, contextLost: false, usedHeap: 10, fps: '48', frame: {}, pointerLocked: true, simulationActive: true, quality: 'low', debrisCount: 18, weather: 'calm', daylight: 1, environmentRisk: 0.08, renderScale: 1, pixelRatio: 1.5, drawCalls: 18, triangles: 10_000, geometries: 22, textures: 8 },
+      { elapsedSeconds: 11, contextLost: false, usedHeap: 14, fps: '52', pointerLocked: true, simulationActive: true, quality: 'low', debrisCount: 18, weather: 'rain', daylight: 0.45, environmentRisk: 0.58, renderScale: 0.8, pixelRatio: 1.2, drawCalls: 24, triangles: 12_000, geometries: 24, textures: 9 },
+      { elapsedSeconds: 21, contextLost: false, usedHeap: 12, fps: '--', frame: {}, pointerLocked: true, simulationActive: true, quality: 'low', debrisCount: 18, weather: 'storm', daylight: 0, environmentRisk: 1, renderScale: 0.7, pixelRatio: 1.05, drawCalls: 21, triangles: 11_000, geometries: 23, textures: 9 },
     ], { requestedSeconds: 20, errors: [] });
 
     expect(summary).toMatchObject({
@@ -198,6 +233,9 @@ describe('summarizeStabilitySamples', () => {
       fpsMin: 48,
       fpsMax: 52,
       weatherKinds: ['calm', 'rain', 'storm'],
+      qualityKinds: ['low'],
+      debrisCountMin: 18,
+      debrisCountMax: 18,
       daylightMin: 0,
       daylightMax: 1,
       environmentRiskMax: 1,
@@ -222,6 +260,9 @@ describe('summarizeStabilitySamples', () => {
     expect(summary.fpsMin).toBeNull();
     expect(summary.fpsMax).toBeNull();
     expect(summary.weatherKinds).toEqual([]);
+    expect(summary.qualityKinds).toEqual([]);
+    expect(summary.debrisCountMin).toBeNull();
+    expect(summary.debrisCountMax).toBeNull();
     expect(summary.daylightMin).toBeNull();
     expect(summary.daylightMax).toBeNull();
     expect(summary.environmentRiskMax).toBeNull();
@@ -246,8 +287,13 @@ describe('validateStabilitySummary', () => {
     pointerLockedThroughout: true,
     simulationActiveThroughout: true,
     contextLost: false,
+    renderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4060, D3D11)',
     heapGrowth: 4 * 1024 * 1024,
     fpsMin: 42,
+    renderScaleMin: 1,
+    qualityKinds: ['low'],
+    debrisCountMin: 18,
+    debrisCountMax: 18,
     weatherKinds: ['calm', 'breeze', 'rain', 'storm'],
     daylightMin: 0,
     daylightMax: 1,
@@ -259,6 +305,10 @@ describe('validateStabilitySummary', () => {
     minimumSampleCoverage: 0.9,
     minimumContentSamples: 2,
     minimumFps: 20,
+    minimumRenderScale: 1,
+    allowSoftwareRenderer: false,
+    quality: 'low',
+    expectedDebrisCount: 18,
     minimumWeatherKinds: 4,
     minimumDaylightRange: 0.9,
     maximumHeapGrowthBytes: 16 * 1024 * 1024,
@@ -277,8 +327,13 @@ describe('validateStabilitySummary', () => {
       pointerLockedThroughout: false,
       simulationActiveThroughout: false,
       contextLost: true,
+      renderer: 'ANGLE (Google, SwiftShader Device (Subzero))',
       heapGrowth: 40 * 1024 * 1024,
       fpsMin: 8,
+      renderScaleMin: 0.7,
+      qualityKinds: ['high'],
+      debrisCountMin: 17,
+      debrisCountMax: 30,
       weatherKinds: ['calm'],
       daylightMin: 0.4,
       daylightMax: 0.5,
@@ -294,19 +349,51 @@ describe('validateStabilitySummary', () => {
       expect.stringMatching(/context was lost/),
       expect.stringMatching(/heap growth/),
       expect.stringMatching(/minimum FPS/),
+      expect.stringMatching(/render scale/),
+      expect.stringMatching(/software renderer/),
+      expect.stringMatching(/quality evidence/),
+      expect.stringMatching(/debris count range/),
       expect.stringMatching(/weather kinds/),
       expect.stringMatching(/daylight range/),
       expect.stringMatching(/browser errors/),
     ]));
   });
 
-  it('fails when FPS or heap evidence is unavailable', () => {
-    const failures = validateStabilitySummary({ ...healthy, fpsMin: null, heapGrowth: null }, policy);
+  it('fails when FPS, heap, render-scale, or renderer evidence is unavailable', () => {
+    const failures = validateStabilitySummary({
+      ...healthy,
+      fpsMin: null,
+      heapGrowth: null,
+      renderScaleMin: null,
+      renderer: null,
+      qualityKinds: [],
+      debrisCountMin: null,
+      debrisCountMax: null,
+    }, policy);
 
     expect(failures).toEqual(expect.arrayContaining([
       expect.stringMatching(/FPS evidence is unavailable/),
       expect.stringMatching(/heap evidence is unavailable/),
+      expect.stringMatching(/render scale evidence is unavailable/),
+      expect.stringMatching(/renderer evidence is unavailable/),
+      expect.stringMatching(/quality evidence unavailable/),
+      expect.stringMatching(/debris-count evidence is unavailable/),
     ]));
+  });
+});
+
+describe('isSoftwareRenderer', () => {
+  it.each([
+    'ANGLE (Google, Vulkan, SwiftShader Device (Subzero))',
+    'llvmpipe (LLVM 17.0.6, 256 bits)',
+    'Microsoft Basic Render Driver',
+    'Software Rasterizer',
+  ])('detects software renderer %s', (renderer) => {
+    expect(isSoftwareRenderer(renderer)).toBe(true);
+  });
+
+  it('keeps a hardware renderer eligible', () => {
+    expect(isSoftwareRenderer('ANGLE (NVIDIA, NVIDIA GeForce RTX 4060, D3D11)')).toBe(false);
   });
 });
 

@@ -137,10 +137,20 @@ export function SettingsPanel({
             <div><strong>画面质量</strong><span>渲染比例、阴影与海面细分</span></div>
           </div>
           <div className="segmented-control" aria-label="画面质量">
-            <button className={quality === 'high' ? 'is-selected' : ''} type="button" onClick={() => onQualityChange('high')}>
+            <button
+              className={quality === 'high' ? 'is-selected' : ''}
+              type="button"
+              aria-pressed={quality === 'high'}
+              onClick={() => onQualityChange('high')}
+            >
               <MonitorCog size={17} /> 高质量
             </button>
-            <button className={quality === 'low' ? 'is-selected' : ''} type="button" onClick={() => onQualityChange('low')}>
+            <button
+              className={quality === 'low' ? 'is-selected' : ''}
+              type="button"
+              aria-pressed={quality === 'low'}
+              onClick={() => onQualityChange('low')}
+            >
               <Gauge size={17} /> 性能
             </button>
           </div>

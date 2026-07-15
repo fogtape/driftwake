@@ -3,6 +3,7 @@ import type { MaterialLibrary } from '../art/Materials';
 import type { EnvironmentSample } from '../environment/environment';
 import { createDebrisModel, type DebrisKind, varyModel } from '../art/ProceduralModels';
 import { createSeededRandom, randomRange, type RandomSource } from '../math/random';
+import { selectActiveDebris } from './debrisQuality';
 import { sampleWaveHeight } from '../math/waves';
 
 export interface DebrisItem {
@@ -11,6 +12,7 @@ export interface DebrisItem {
   bobPhase: number;
   driftSpeed: number;
   spinSpeed: number;
+  active: boolean;
   latched: boolean;
 }
 
@@ -25,11 +27,14 @@ const KIND_SEQUENCE: readonly DebrisKind[] = [
   'cache',
 ];
 
+const LOW_QUALITY_DEBRIS_COUNT = 18;
+const HIGH_QUALITY_DEBRIS_COUNT = 30;
+
 export class DebrisField {
   readonly items: DebrisItem[] = [];
   private readonly random: RandomSource = createSeededRandom(0xd71f7a9);
 
-  constructor(scene: Scene, materials: MaterialLibrary, count = 30) {
+  constructor(scene: Scene, materials: MaterialLibrary, count = HIGH_QUALITY_DEBRIS_COUNT) {
     const prototypes = new Map<DebrisKind, Group>();
     for (const kind of new Set(KIND_SEQUENCE)) {
       prototypes.set(kind, createDebrisModel(kind, materials));
@@ -46,6 +51,7 @@ export class DebrisField {
         bobPhase: randomRange(this.random, 0, Math.PI * 2),
         driftSpeed: randomRange(this.random, 0.52, 0.9),
         spinSpeed: randomRange(this.random, -0.18, 0.18),
+        active: true,
         latched: false,
       };
       this.items.push(item);
@@ -53,9 +59,25 @@ export class DebrisField {
     }
   }
 
+  get activeCount(): number {
+    return this.items.reduce((count, item) => count + (item.active ? 1 : 0), 0);
+  }
+
+  setQuality(highQuality: boolean): void {
+    const activeItems = selectActiveDebris(
+      this.items.map((item) => item.latched),
+      highQuality ? HIGH_QUALITY_DEBRIS_COUNT : LOW_QUALITY_DEBRIS_COUNT,
+    );
+    for (let index = 0; index < this.items.length; index += 1) {
+      const item = this.items[index];
+      item.active = activeItems[index];
+      item.model.visible = item.active;
+    }
+  }
+
   update(time: number, delta: number, environment: EnvironmentSample): void {
     for (const item of this.items) {
-      if (item.latched) continue;
+      if (!item.active || item.latched) continue;
       item.model.position.z += (
         item.driftSpeed * environment.driftScale
         + environment.windDirectionZ * environment.windStrength * 0.16
@@ -78,7 +100,7 @@ export class DebrisField {
     let closest: DebrisItem | null = null;
     let closestDistance = radius;
     for (const item of this.items) {
-      if (item.latched) continue;
+      if (!item.active || item.latched) continue;
       const distance = item.model.position.distanceTo(point);
       if (distance < closestDistance) {
         closest = item;

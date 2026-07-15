@@ -25,6 +25,18 @@ export function setAudioMixChannel(
   return { ...mix, [channel]: Math.min(1, Math.max(0, value)) };
 }
 
+export function shouldMuteAudioForFocus({
+  enabled,
+  windowFocused,
+  documentVisible,
+}: {
+  enabled: boolean;
+  windowFocused: boolean;
+  documentVisible: boolean;
+}): boolean {
+  return enabled && (!windowFocused || !documentVisible);
+}
+
 export function getEffectiveMasterGain({
   enabled,
   focusMuted,

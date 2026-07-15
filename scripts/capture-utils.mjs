@@ -18,6 +18,40 @@ export function buildBrowserArgs({ forceSwiftShader = false } = {}) {
   return args;
 }
 
+export function resolveStabilityProfile({
+  quality = 'low',
+  viewportWidth,
+  viewportHeight,
+  minimumFps,
+  minimumRenderScale = 1,
+} = {}) {
+  if (quality !== 'low' && quality !== 'high') {
+    throw new Error('stability quality must be low or high');
+  }
+  const resolvedViewportWidth = viewportWidth ?? (quality === 'high' ? 1920 : 1280);
+  const resolvedViewportHeight = viewportHeight ?? (quality === 'high' ? 1080 : 720);
+  if (!Number.isInteger(resolvedViewportWidth) || resolvedViewportWidth <= 0) {
+    throw new Error('stability viewport width must be a positive integer');
+  }
+  if (!Number.isInteger(resolvedViewportHeight) || resolvedViewportHeight <= 0) {
+    throw new Error('stability viewport height must be a positive integer');
+  }
+  const resolvedMinimumFps = minimumFps ?? (quality === 'high' ? 60 : 30);
+  if (!Number.isFinite(resolvedMinimumFps) || resolvedMinimumFps <= 0) {
+    throw new Error('stability minimum FPS must be finite and positive');
+  }
+  if (!Number.isFinite(minimumRenderScale) || minimumRenderScale <= 0 || minimumRenderScale > 1) {
+    throw new Error('stability minimum render scale must be greater than 0 and at most 1');
+  }
+  return {
+    quality,
+    viewportWidth: resolvedViewportWidth,
+    viewportHeight: resolvedViewportHeight,
+    minimumFps: resolvedMinimumFps,
+    minimumRenderScale,
+  };
+}
+
 export function buildStabilitySchedule({
   durationSeconds,
   sampleSeconds,
@@ -140,6 +174,9 @@ export function summarizeStabilitySamples(samples, { requestedSeconds, errors })
   const weatherKinds = [...new Set(samples
     .map((sample) => sample.weather)
     .filter((value) => typeof value === 'string' && value.length > 0))];
+  const qualityKinds = [...new Set(samples
+    .map((sample) => sample.quality)
+    .filter((value) => typeof value === 'string' && value.length > 0))];
   const daylightValues = samples
     .map((sample) => Number(sample.daylight))
     .filter((value) => Number.isFinite(value));
@@ -155,6 +192,7 @@ export function summarizeStabilitySamples(samples, { requestedSeconds, errors })
   const triangles = finiteMetric('triangles');
   const geometries = finiteMetric('geometries');
   const textures = finiteMetric('textures');
+  const debrisCounts = finiteMetric('debrisCount');
   const observedSeconds = Number(samples.at(-1)?.elapsedSeconds);
 
   return {
@@ -173,6 +211,7 @@ export function summarizeStabilitySamples(samples, { requestedSeconds, errors })
     fpsMin: fpsValues.length ? Math.min(...fpsValues) : null,
     fpsMax: fpsValues.length ? Math.max(...fpsValues) : null,
     weatherKinds,
+    qualityKinds,
     daylightMin: daylightValues.length ? Math.min(...daylightValues) : null,
     daylightMax: daylightValues.length ? Math.max(...daylightValues) : null,
     environmentRiskMax: environmentRiskValues.length ? Math.max(...environmentRiskValues) : null,
@@ -184,8 +223,15 @@ export function summarizeStabilitySamples(samples, { requestedSeconds, errors })
     trianglesMax: triangles.length ? Math.max(...triangles) : null,
     geometriesMax: geometries.length ? Math.max(...geometries) : null,
     texturesMax: textures.length ? Math.max(...textures) : null,
+    debrisCountMin: debrisCounts.length ? Math.min(...debrisCounts) : null,
+    debrisCountMax: debrisCounts.length ? Math.max(...debrisCounts) : null,
     errors: [...errors],
   };
+}
+
+export function isSoftwareRenderer(renderer) {
+  return typeof renderer === 'string'
+    && /swiftshader|llvmpipe|softpipe|software rasterizer|basic render driver/i.test(renderer);
 }
 
 export function validateStabilitySummary(summary, policy) {
@@ -209,6 +255,25 @@ export function validateStabilitySummary(summary, policy) {
   if (!summary.simulationActiveThroughout) failures.push('gameplay simulation was not active throughout the run');
   if (summary.contextLost) failures.push('WebGL context was lost');
   if (summary.errors?.length) failures.push(`browser errors: ${summary.errors.length}`);
+
+  if (typeof policy.quality === 'string' && policy.quality.length > 0) {
+    const qualityKinds = summary.qualityKinds ?? [];
+    if (qualityKinds.length !== 1 || qualityKinds[0] !== policy.quality) {
+      failures.push(`quality evidence ${qualityKinds.join(',') || 'unavailable'} does not match ${policy.quality}`);
+    }
+  }
+  if (Number.isFinite(policy.expectedDebrisCount)) {
+    if (!Number.isFinite(summary.debrisCountMin) || !Number.isFinite(summary.debrisCountMax)) {
+      failures.push('debris-count evidence is unavailable');
+    } else if (
+      summary.debrisCountMin !== policy.expectedDebrisCount
+      || summary.debrisCountMax !== policy.expectedDebrisCount
+    ) {
+      failures.push(
+        `debris count range ${summary.debrisCountMin}-${summary.debrisCountMax} does not match ${policy.expectedDebrisCount}`,
+      );
+    }
+  }
 
   if (
     Number.isFinite(policy.minimumWeatherKinds)
@@ -236,6 +301,20 @@ export function validateStabilitySummary(summary, policy) {
     failures.push('FPS evidence is unavailable');
   } else if (summary.fpsMin < policy.minimumFps) {
     failures.push(`minimum FPS ${summary.fpsMin} is below ${policy.minimumFps}`);
+  }
+  if (Number.isFinite(policy.minimumRenderScale) && policy.minimumRenderScale > 0) {
+    if (!Number.isFinite(summary.renderScaleMin)) {
+      failures.push('render scale evidence is unavailable');
+    } else if (summary.renderScaleMin + 0.0005 < policy.minimumRenderScale) {
+      failures.push(`minimum render scale ${summary.renderScaleMin} is below ${policy.minimumRenderScale}`);
+    }
+  }
+  if (policy.allowSoftwareRenderer !== true) {
+    if (typeof summary.renderer !== 'string' || summary.renderer.length === 0) {
+      failures.push('renderer evidence is unavailable');
+    } else if (isSoftwareRenderer(summary.renderer)) {
+      failures.push('software renderer is not allowed for this stability profile');
+    }
   }
   return failures;
 }

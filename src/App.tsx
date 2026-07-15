@@ -3,7 +3,7 @@ import { CapabilityScreen } from './components/CapabilityScreen';
 import { Hud } from './components/Hud';
 import { SettingsPanel } from './components/SettingsPanel';
 import { TitleScreen } from './components/TitleScreen';
-import { DriftwakeGame } from './game/DriftwakeGame';
+import type { DriftwakeGame } from './game/DriftwakeGame';
 import type { AudioMixChannel } from './game/audio/audioMix';
 import { useGameStore, type QualityPreset } from './state/gameStore';
 
@@ -17,6 +17,9 @@ function detectUnsupportedDevice(): boolean {
 export function App() {
   const mountRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<DriftwakeGame | null>(null);
+  const initializingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const [loadingGame, setLoadingGame] = useState(false);
   const [unsupported] = useState(detectUnsupportedDevice);
   const phase = useGameStore((state) => state.phase);
   const ready = useGameStore((state) => state.ready);
@@ -39,15 +42,14 @@ export function App() {
   const renderStats = useGameStore((state) => state.renderStats);
 
   useEffect(() => {
-    if (unsupported || !mountRef.current) return;
-    const game = new DriftwakeGame(mountRef.current);
-    gameRef.current = game;
-    void game.initialize();
+    mountedRef.current = true;
     return () => {
-      game.dispose();
+      mountedRef.current = false;
+      initializingRef.current = false;
+      gameRef.current?.dispose();
       gameRef.current = null;
     };
-  }, [unsupported]);
+  }, []);
 
   if (unsupported) return <CapabilityScreen />;
 
@@ -56,9 +58,39 @@ export function App() {
     useGameStore.getState().setSettingsOpen(true);
   };
   const closeSettings = () => useGameStore.getState().setSettingsOpen(false);
-  const begin = () => {
-    useGameStore.getState().setPhase('playing');
-    gameRef.current?.begin();
+  const begin = async () => {
+    const store = useGameStore.getState();
+    if (gameRef.current && store.ready) {
+      store.setPhase('playing');
+      gameRef.current.begin();
+      return;
+    }
+    if (initializingRef.current || !mountRef.current) return;
+
+    initializingRef.current = true;
+    setLoadingGame(true);
+    store.setLoadingLabel('正在唤醒海面');
+    let game: DriftwakeGame | null = null;
+    try {
+      const { DriftwakeGame: GameRuntime } = await import('./game/DriftwakeGame');
+      if (!mountedRef.current || !mountRef.current) return;
+      game = new GameRuntime(mountRef.current);
+      gameRef.current = game;
+      await game.initialize();
+      if (!mountedRef.current || gameRef.current !== game) return;
+      if (!useGameStore.getState().ready) throw new Error('game initialization completed without becoming ready');
+    } catch (error) {
+      console.error('Failed to load Driftwake runtime', error);
+      game?.dispose();
+      if (gameRef.current === game) gameRef.current = null;
+      const failedStore = useGameStore.getState();
+      failedStore.setReady(false);
+      failedStore.setLoadingLabel('加载失败，请重试');
+      failedStore.showNotice('海面加载失败');
+    } finally {
+      initializingRef.current = false;
+      if (mountedRef.current) setLoadingGame(false);
+    }
   };
   const changeAudio = (enabled: boolean) => {
     useGameStore.getState().setAudioEnabled(enabled);
@@ -92,6 +124,7 @@ export function App() {
       <TitleScreen
         visible={phase === 'title'}
         ready={ready}
+        loading={loadingGame}
         loadingLabel={loadingLabel}
         onBegin={begin}
         onSettings={openSettings}

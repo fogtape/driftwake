@@ -3,6 +3,7 @@ import {
   DEFAULT_AUDIO_MIX,
   getEffectiveMasterGain,
   setAudioMixChannel,
+  shouldMuteAudioForFocus,
 } from './audioMix';
 
 describe('audio mix settings', () => {
@@ -20,5 +21,13 @@ describe('audio mix settings', () => {
     expect(getEffectiveMasterGain({ enabled: true, focusMuted: false, masterVolume: 0.75 })).toBeCloseTo(0.585);
     expect(getEffectiveMasterGain({ enabled: false, focusMuted: false, masterVolume: 0.75 })).toBe(0);
     expect(getEffectiveMasterGain({ enabled: true, focusMuted: true, masterVolume: 0.75 })).toBe(0);
+  });
+
+  it('keeps focus mute active until both focus and visibility are restored', () => {
+    expect(shouldMuteAudioForFocus({ enabled: true, windowFocused: true, documentVisible: true })).toBe(false);
+    expect(shouldMuteAudioForFocus({ enabled: true, windowFocused: false, documentVisible: true })).toBe(true);
+    expect(shouldMuteAudioForFocus({ enabled: true, windowFocused: true, documentVisible: false })).toBe(true);
+    expect(shouldMuteAudioForFocus({ enabled: true, windowFocused: false, documentVisible: false })).toBe(true);
+    expect(shouldMuteAudioForFocus({ enabled: false, windowFocused: false, documentVisible: false })).toBe(false);
   });
 });

@@ -29,7 +29,7 @@ import {
 } from './art/Materials';
 import { useGameStore, type QualityPreset } from '../state/gameStore';
 import { AudioSystem } from './systems/AudioSystem';
-import type { AudioMixSnapshot } from './audio/audioMix';
+import { shouldMuteAudioForFocus, type AudioMixSnapshot } from './audio/audioMix';
 import { DebrisField } from './systems/DebrisField';
 import { HookSystem } from './systems/HookSystem';
 import { OceanSystem } from './systems/OceanSystem';
@@ -169,7 +169,6 @@ export class DriftwakeGame {
       store.setLoadingLabel('正在系紧木筏');
       this.materials = createMaterialLibrary(this.textures);
       this.ocean = new OceanSystem(this.textures.foam);
-      this.ocean.setQuality(store.quality === 'high');
       this.raft = new RaftSystem(this.materials);
       this.scene.add(this.ocean.mesh, this.raft.group);
 
@@ -179,16 +178,16 @@ export class DriftwakeGame {
       this.scene.add(this.island);
 
       store.setLoadingLabel('正在放流物资');
-      this.debris = new DebrisField(this.scene, this.materials, store.quality === 'high' ? 30 : 18);
+      this.debris = new DebrisField(this.scene, this.materials);
       this.splashes = new SplashSystem(this.scene);
       this.weather = new WeatherSystem(this.scene);
-      this.weather.setQuality(store.quality === 'high');
+      this.setQuality(useGameStore.getState().quality);
       this.player = new PlayerController(
         this.camera,
         this.raft,
         this.onPlayerModeChange,
       );
-      this.player.setHeadBobEnabled(store.headBobEnabled);
+      this.setHeadBobEnabled(useGameStore.getState().headBobEnabled);
       this.hook = new HookSystem(
         this.renderer,
         this.camera,
@@ -220,7 +219,7 @@ export class DriftwakeGame {
     if (!state.ready) return;
     this.audio.setEnabled(state.audioEnabled);
     this.audio.setMix(state.audioMix);
-    this.setAudioFocusMuted(state.muteOnFocusLoss && (!this.windowFocused || document.visibilityState !== 'visible'));
+    this.setMuteOnFocusLoss(state.muteOnFocusLoss);
     void this.audio.begin();
     void this.renderer.domElement.requestPointerLock();
   }
@@ -239,8 +238,11 @@ export class DriftwakeGame {
   }
 
   setMuteOnFocusLoss(enabled: boolean): void {
-    const shouldMute = enabled && (!this.windowFocused || document.visibilityState !== 'visible');
-    this.setAudioFocusMuted(shouldMute);
+    this.setAudioFocusMuted(shouldMuteAudioForFocus({
+      enabled,
+      windowFocused: this.windowFocused,
+      documentVisible: document.visibilityState === 'visible',
+    }));
   }
 
   private setAudioFocusMuted(focusMuted: boolean): void {
@@ -248,8 +250,13 @@ export class DriftwakeGame {
     this.mount.dataset.audioFocusMuted = String(focusMuted);
   }
 
+  private syncAudioFocusMuted(): void {
+    this.setMuteOnFocusLoss(useGameStore.getState().muteOnFocusLoss);
+  }
+
   setHeadBobEnabled(enabled: boolean): void {
     this.player?.setHeadBobEnabled(enabled);
+    this.mount.dataset.headBobEnabled = String(enabled);
   }
 
   setQuality(quality: QualityPreset): void {
@@ -259,6 +266,9 @@ export class DriftwakeGame {
     this.renderer.shadowMap.enabled = highQuality;
     this.ocean?.setQuality(highQuality);
     this.weather?.setQuality(highQuality);
+    this.debris?.setQuality(highQuality);
+    this.mount.dataset.quality = quality;
+    this.mount.dataset.debrisCount = String(this.debris?.activeCount ?? 0);
     this.applyRenderScale();
   }
 
@@ -314,6 +324,9 @@ export class DriftwakeGame {
     delete this.mount.dataset.daylight;
     delete this.mount.dataset.environmentRisk;
     delete this.mount.dataset.dynamicResolution;
+    delete this.mount.dataset.quality;
+    delete this.mount.dataset.debrisCount;
+    delete this.mount.dataset.headBobEnabled;
     delete this.mount.dataset.audioFocusMuted;
     delete this.mount.dataset.renderScale;
     delete this.mount.dataset.pixelRatio;
@@ -611,14 +624,14 @@ export class DriftwakeGame {
 
   private readonly onWindowBlur = (): void => {
     this.windowFocused = false;
-    if (useGameStore.getState().muteOnFocusLoss) this.setAudioFocusMuted(true);
+    this.syncAudioFocusMuted();
     this.setSimulationActive(false);
     this.pauseInput();
   };
 
   private readonly onWindowFocus = (): void => {
     this.windowFocused = true;
-    this.setAudioFocusMuted(false);
+    this.syncAudioFocusMuted();
     this.clock.start();
     this.fixedStep.resetAccumulator();
     this.fpsElapsed = 0;
@@ -627,13 +640,12 @@ export class DriftwakeGame {
 
   private readonly onVisibilityChange = (): void => {
     this.fixedStep.resetAccumulator();
+    this.syncAudioFocusMuted();
     if (document.visibilityState !== 'visible') {
-      if (useGameStore.getState().muteOnFocusLoss) this.setAudioFocusMuted(true);
       this.setSimulationActive(false);
       this.pauseInput();
       return;
     }
-    this.setAudioFocusMuted(false);
     this.clock.start();
     this.fpsElapsed = 0;
     this.fpsFrames = 0;
