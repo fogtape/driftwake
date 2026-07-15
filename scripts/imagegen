@@ -1,0 +1,51 @@
+#!/bin/sh
+
+set -eu
+
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+PROJECT_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+CONFIG_FILE="$CODEX_HOME/config.toml"
+AUTH_FILE="$CODEX_HOME/auth.json"
+PYTHON="$PROJECT_ROOT/.venv/bin/python"
+IMAGE_GEN="$CODEX_HOME/skills/.system/imagegen/scripts/image_gen.py"
+COMPAT_PATH="$PROJECT_ROOT/scripts/imagegen_compat"
+
+for required in "$CONFIG_FILE" "$AUTH_FILE" "$PYTHON" "$IMAGE_GEN"; do
+  if [ ! -e "$required" ]; then
+    printf 'imagegen configuration is incomplete: missing %s\n' "$required" >&2
+    exit 1
+  fi
+done
+
+eval "$("$PYTHON" - "$CONFIG_FILE" "$AUTH_FILE" <<'PY'
+import json
+import shlex
+import sys
+import tomllib
+from pathlib import Path
+
+config_path = Path(sys.argv[1])
+auth_path = Path(sys.argv[2])
+
+config = tomllib.loads(config_path.read_text(encoding="utf-8"))
+auth = json.loads(auth_path.read_text(encoding="utf-8"))
+
+provider_name = config.get("model_provider")
+providers = config.get("model_providers", {})
+provider = providers.get(provider_name, {})
+base_url = provider.get("base_url")
+api_key = auth.get("OPENAI_API_KEY")
+
+if not isinstance(base_url, str) or not base_url.strip():
+    raise SystemExit("active Codex provider has no base_url")
+if not isinstance(api_key, str) or not api_key.strip():
+    raise SystemExit("Codex auth file has no OPENAI_API_KEY")
+
+print("export OPENAI_BASE_URL=" + shlex.quote(base_url.strip()))
+print("export OPENAI_API_KEY=" + shlex.quote(api_key.strip()))
+PY
+)"
+
+export PYTHONPATH="$COMPAT_PATH${PYTHONPATH:+:$PYTHONPATH}"
+
+exec "$PYTHON" "$IMAGE_GEN" "$@"

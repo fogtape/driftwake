@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.venv/
+tmp/
+output/
+playwright-report/
+test-results/
+artifacts/screenshots/
+*.log
+*.tsbuildinfo
+__pycache__/
+*.pyc
