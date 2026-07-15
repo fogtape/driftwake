@@ -2,6 +2,7 @@
 
 > 工作名：`Driftwake`（暂定）  
 > 项目目录：`raft-survival-web`  
+> 私有仓库：`https://github.com/fogtape/driftwake`  
 > 建档日期：2026-07-15  
 > 当前阶段：M0 前期设计与技术基线  
 > 当前状态：`DOING`
