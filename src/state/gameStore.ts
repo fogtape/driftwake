@@ -16,6 +16,7 @@ import {
 import { craftRecipe, type CraftResult, type RecipeId } from '../game/domain/recipes';
 import { INITIAL_SURVIVAL, advanceSurvival, consumeItem, type SurvivalState } from '../game/domain/survival';
 import type { DeviceType } from '../game/domain/devices';
+import type { IslandPhase } from '../game/domain/island';
 
 export type GamePhase = 'title' | 'playing';
 export type QualityPreset = 'low' | 'high';
@@ -61,6 +62,15 @@ export interface DeviceFeedback {
 
 export type DeviceFeedbackMap = Record<DeviceType, DeviceFeedback>;
 
+export interface IslandFeedback {
+  phase: IslandPhase;
+  distance: number;
+  remaining: number;
+  ashore: boolean;
+  harvested: number;
+  total: number;
+}
+
 export interface PlayerSaveSnapshot {
   inventory: Inventory;
   survival: SurvivalState;
@@ -88,6 +98,7 @@ interface GameState {
   raft: RaftFeedback;
   devices: DeviceFeedbackMap;
   placementDevice: DeviceType | null;
+  island: IslandFeedback;
   interaction: string | null;
   fps: number;
   notice: string | null;
@@ -115,6 +126,7 @@ interface GameState {
   setRaft: (feedback: RaftFeedback) => void;
   setDevices: (feedback: DeviceFeedbackMap) => void;
   setPlacementDevice: (device: DeviceType | null) => void;
+  setIsland: (feedback: IslandFeedback) => void;
   setInteraction: (interaction: string | null) => void;
   setFps: (fps: number) => void;
   showNotice: (notice: string | null) => void;
@@ -168,6 +180,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     grill: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
   },
   placementDevice: null,
+  island: { phase: 'approaching', distance: 80, remaining: 72, ashore: false, harvested: 0, total: 18 },
   interaction: null,
   fps: 0,
   notice: null,
@@ -244,6 +257,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   setRaft: (raft) => set({ raft }),
   setDevices: (devices) => set({ devices }),
   setPlacementDevice: (placementDevice) => set({ placementDevice, interaction: null }),
+  setIsland: (island) => set({ island }),
   setInteraction: (interaction) => set((state) => (state.interaction === interaction ? state : { interaction })),
   setFps: (fps) => set({ fps }),
   showNotice: (notice) => set({ notice }),

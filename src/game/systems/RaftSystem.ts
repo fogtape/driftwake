@@ -129,6 +129,20 @@ export class RaftSystem {
     return this.tiles.has(tileKey(coordinate.x, coordinate.z));
   }
 
+  containsLocalPosition(position: Vector3, margin = 0.04): boolean {
+    for (const tile of this.tiles.values()) {
+      const centerX = tile.x * RAFT_TILE_X;
+      const centerZ = tile.z * RAFT_TILE_Z;
+      if (
+        Math.abs(position.x - centerX) <= RAFT_TILE_X * 0.52 + margin &&
+        Math.abs(position.z - centerZ) <= RAFT_TILE_Z * 0.52 + margin
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   getTile(coordinate: GridCoordinate): RaftTileState | null {
     return this.tiles.get(tileKey(coordinate.x, coordinate.z)) ?? null;
   }

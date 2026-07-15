@@ -23,6 +23,12 @@ describe('inventory domain', () => {
     expect(result.inventory).toEqual({ timber: 2, rope: 1, fiber: 1, hammer: 1 });
   });
 
+  it('crafts the island axe without consuming unrelated supplies', () => {
+    const result = craftRecipe({ timber: 3, stone: 2, rope: 1, scrap: 1, fiber: 4 }, 'axe');
+    expect(result.ok).toBe(true);
+    expect(result.inventory).toEqual({ timber: 1, fiber: 4, axe: 1 });
+  });
+
   it('expands a cache into useful loot instead of a cache counter', () => {
     expect(salvageLoot('cache', 0.2)).toEqual({ timber: 2, polymer: 1, fiber: 2, scrap: 1, emergencyWater: 1 });
   });

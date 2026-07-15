@@ -1,10 +1,25 @@
 import { normalizeInventory, type Inventory, type ToolId } from './items';
 import { INITIAL_SURVIVAL, normalizeSurvival, type SurvivalState } from './survival';
 import { MAX_RAFT_DEVICES, deviceKey, sanitizeSavedDevice, type SavedDeviceState } from './devices';
+import {
+  createDefaultIslandState,
+  islandTransform,
+  isIslandWalkable,
+  sanitizeIslandState,
+  type SavedIslandState,
+} from './island';
 
-export const SAVE_VERSION = 2;
-export const SAVE_KEY = 'driftwake.save.v2';
-export const LEGACY_SAVE_KEYS = ['driftwake.save.v1'] as const;
+export const SAVE_VERSION = 3;
+export const SAVE_KEY = 'driftwake.save.v3';
+export const LEGACY_SAVE_KEYS = ['driftwake.save.v2', 'driftwake.save.v1'] as const;
+
+export type PlayerSurface = 'raft' | 'island';
+
+export interface SavedPlayerNavigation {
+  surface: PlayerSurface;
+  x: number;
+  z: number;
+}
 
 export interface SavedRaftTile {
   x: number;
@@ -20,17 +35,43 @@ export interface DriftwakeSave {
     survival: SurvivalState;
     selectedTool: ToolId;
     playSeconds: number;
+    navigation: SavedPlayerNavigation;
   };
   raft: {
     tiles: SavedRaftTile[];
     devices: SavedDeviceState[];
   };
+  world: {
+    island: SavedIslandState;
+  };
 }
 
-const TOOL_IDS = new Set<ToolId>(['hook', 'hammer', 'spear', 'fishingRod']);
+const TOOL_IDS = new Set<ToolId>(['hook', 'hammer', 'spear', 'fishingRod', 'axe']);
 
 function finiteInteger(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : fallback;
+}
+
+function finiteNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function sanitizeNavigation(value: unknown, island: SavedIslandState): SavedPlayerNavigation {
+  if (!value || typeof value !== 'object') return { surface: 'raft', x: 0, z: 1.08 };
+  const candidate = value as Partial<SavedPlayerNavigation>;
+  const x = finiteNumber(candidate.x);
+  const z = finiteNumber(candidate.z, 1.08);
+  if (candidate.surface === 'island' && island.phase === 'docked') {
+    const transform = islandTransform(island);
+    if (isIslandWalkable(island.seed, x - transform.x, z - transform.z)) {
+      return { surface: 'island', x, z };
+    }
+  }
+  return {
+    surface: 'raft',
+    x: Math.max(-12, Math.min(12, x)),
+    z: Math.max(-12, Math.min(12, z)),
+  };
 }
 
 export function createDefaultRaftTiles(): SavedRaftTile[] {
@@ -46,14 +87,19 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
   const candidate = value as {
     version?: number;
     savedAt?: number;
-    player?: DriftwakeSave['player'];
+    player?: Partial<DriftwakeSave['player']>;
     raft?: { tiles?: SavedRaftTile[]; devices?: SavedDeviceState[] };
+    world?: { island?: SavedIslandState };
   };
-  if ((candidate.version !== 1 && candidate.version !== SAVE_VERSION) || !candidate.player || !candidate.raft) return null;
+  if ((candidate.version !== 1 && candidate.version !== 2 && candidate.version !== SAVE_VERSION) || !candidate.player || !candidate.raft) return null;
+  const island = candidate.version === SAVE_VERSION ? sanitizeIslandState(candidate.world?.island) : createDefaultIslandState();
   const inventory = normalizeInventory(candidate.player.inventory ?? {});
   inventory.hook = 1;
   const selectedCandidate = candidate.player.selectedTool;
-  const selectedTool = TOOL_IDS.has(selectedCandidate) && (inventory[selectedCandidate] ?? 0) > 0 ? selectedCandidate : 'hook';
+  const selectedTool: ToolId =
+    selectedCandidate !== undefined && TOOL_IDS.has(selectedCandidate) && (inventory[selectedCandidate] ?? 0) > 0
+      ? selectedCandidate
+      : 'hook';
   const rawTiles = Array.isArray(candidate.raft.tiles) ? candidate.raft.tiles : [];
   const seen = new Set<string>();
   const tiles = rawTiles
@@ -72,7 +118,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
   const tileKeys = new Set(stableTiles.map((tile) => deviceKey(tile.x, tile.z)));
   const occupied = new Set<string>();
   const deviceIds = new Set<string>();
-  const rawDevices = candidate.version === SAVE_VERSION && Array.isArray(candidate.raft.devices) ? candidate.raft.devices : [];
+  const rawDevices = candidate.version >= 2 && Array.isArray(candidate.raft.devices) ? candidate.raft.devices : [];
   const devices = rawDevices
     .map(sanitizeSavedDevice)
     .filter((device): device is SavedDeviceState => {
@@ -92,8 +138,10 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       survival: normalizeSurvival(candidate.player.survival ?? INITIAL_SURVIVAL),
       selectedTool,
       playSeconds: Math.max(0, finiteInteger(candidate.player.playSeconds)),
+      navigation: sanitizeNavigation(candidate.player.navigation, island),
     },
     raft: { tiles: stableTiles, devices },
+    world: { island },
   };
 }
 

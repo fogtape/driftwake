@@ -306,7 +306,8 @@ export class DeviceSystem {
     this.placementCoordinate = coordinate;
     const centerX = coordinate.x * RAFT_TILE_X;
     const centerZ = coordinate.z * RAFT_TILE_Z;
-    const clearOfPlayer = Math.hypot(this.player.localPosition.x - centerX, this.player.localPosition.z - centerZ) > 0.78;
+    const clearOfPlayer =
+      !this.player.isOnRaft() || Math.hypot(this.player.localPosition.x - centerX, this.player.localPosition.z - centerZ) > 0.78;
     const belowLimit = this.devices.size < MAX_RAFT_DEVICES;
     this.placementValid = belowLimit && this.raft.hasTile(coordinate) && !this.hasDeviceAt(coordinate) && clearOfPlayer;
     this.placementRotation = Math.round(Math.atan2(-this.localDirection.x, -this.localDirection.z) / (Math.PI / 2)) * (Math.PI / 2);

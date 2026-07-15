@@ -55,10 +55,11 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v2');
-    expect(save?.version).toBe(2);
+    expect(SAVE_KEY).toBe('driftwake.save.v3');
+    expect(save?.version).toBe(3);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
+    expect(save?.world.island.phase).toBe('approaching');
   });
 
   it('falls back to a legacy save when the current slot is corrupt', () => {
@@ -93,5 +94,35 @@ describe('save schema', () => {
       },
     });
     expect(save?.raft.devices).toHaveLength(16);
+  });
+
+  it('migrates v2 devices and validates docked island navigation', () => {
+    const save = sanitizeSave({
+      version: 2,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 4 },
+      raft: {
+        tiles: [{ x: 0, z: 0, health: 100 }],
+        devices: [{ id: 'legacy-grill', type: 'grill', x: 0, z: 0, rotation: 0, phase: 'ready', elapsed: 18 }],
+      },
+    });
+    expect(save?.version).toBe(3);
+    expect(save?.raft.devices[0]?.id).toBe('legacy-grill');
+    expect(save?.player.navigation).toEqual({ surface: 'raft', x: 0, z: 1.08 });
+  });
+
+  it('restores a valid island position only while the island is docked', () => {
+    const save = sanitizeSave({
+      version: SAVE_VERSION,
+      player: {
+        inventory: { hook: 1 },
+        survival: {},
+        selectedTool: 'hook',
+        playSeconds: 4,
+        navigation: { surface: 'island', x: 0, z: -7 },
+      },
+      raft: { tiles: [{ x: 0, z: 0, health: 100 }], devices: [] },
+      world: { island: { seed: 9, cycle: 0, phase: 'docked', elapsed: 5, nodes: [] } },
+    });
+    expect(save?.player.navigation).toEqual({ surface: 'island', x: 0, z: -7 });
   });
 });

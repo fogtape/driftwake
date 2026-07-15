@@ -5,7 +5,6 @@ import {
   Color,
   DirectionalLight,
   FogExp2,
-  Group,
   HemisphereLight,
   PerspectiveCamera,
   PCFSoftShadowMap,
@@ -19,7 +18,6 @@ import {
   type Texture,
 } from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
-import { createDistantIsland } from './art/ProceduralModels';
 import {
   createMaterialLibrary,
   disposeMaterialLibrary,
@@ -30,12 +28,14 @@ import {
 import { useGameStore, type AudioMix, type QualityPreset } from '../state/gameStore';
 import { TOOL_ORDER } from './domain/items';
 import { SAVE_VERSION, createDefaultRaftTiles, loadSave, writeSave, type DriftwakeSave } from './domain/save';
+import { createDefaultIslandState } from './domain/island';
 import { AudioSystem } from './systems/AudioSystem';
 import { BuildSystem } from './systems/BuildSystem';
 import { DebrisField } from './systems/DebrisField';
 import { DeviceSystem } from './systems/DeviceSystem';
 import { FishingSystem } from './systems/FishingSystem';
 import { HookSystem } from './systems/HookSystem';
+import { IslandSystem } from './systems/IslandSystem';
 import { OceanSystem } from './systems/OceanSystem';
 import { PhysicsSystem } from './systems/PhysicsSystem';
 import { PlayerController } from './systems/PlayerController';
@@ -43,7 +43,6 @@ import { RaftSystem } from './systems/RaftSystem';
 import { SharkSystem } from './systems/SharkSystem';
 import { SpearSystem } from './systems/SpearSystem';
 import { SplashSystem } from './systems/SplashSystem';
-import { sampleWaveHeight } from './math/waves';
 
 export class DriftwakeGame {
   private readonly scene = new Scene();
@@ -65,7 +64,7 @@ export class DriftwakeGame {
   private shark: SharkSystem | null = null;
   private spear: SpearSystem | null = null;
   private splashes: SplashSystem | null = null;
-  private island: Group | null = null;
+  private island: IslandSystem | null = null;
   private elapsed = 0;
   private fpsElapsed = 0;
   private fpsFrames = 0;
@@ -116,15 +115,33 @@ export class DriftwakeGame {
       this.raft = new RaftSystem(this.materials, save?.raft.tiles ?? createDefaultRaftTiles());
       this.scene.add(this.ocean.mesh, this.raft.group);
 
-      this.island = createDistantIsland(this.materials);
-      this.island.position.set(-18, -0.28, -78);
-      this.island.scale.setScalar(1.55);
-      this.scene.add(this.island);
-
       store.setLoadingLabel('正在放流物资');
       this.debris = new DebrisField(this.scene, this.materials, store.quality === 'high' ? 30 : 18);
       this.splashes = new SplashSystem(this.scene);
-      this.player = new PlayerController(this.camera, this.raft);
+      this.island = new IslandSystem(
+        this.scene,
+        this.camera,
+        this.renderer,
+        this.materials,
+        this.audio,
+        this.splashes,
+        save?.world.island ?? createDefaultIslandState(),
+      );
+      this.player = new PlayerController(
+        this.camera,
+        this.raft,
+        save?.player.navigation,
+        (surface) => this.audio.playFootstep(surface),
+      );
+      this.island.setPlayer(this.player);
+      this.player.setIslandNavigation({
+        sampleGroundHeight: (x, z) => this.island?.sampleGroundHeight(x, z) ?? null,
+        resolveCollision: (position, previous) => this.island?.resolvePlayerCollision(position, previous),
+        onSurfaceChange: (surface) => {
+          this.island?.onPlayerSurfaceChange(surface);
+          this.syncEquipment();
+        },
+      });
       this.hook = new HookSystem(
         this.renderer,
         this.camera,
@@ -280,6 +297,7 @@ export class DriftwakeGame {
     this.fishing?.dispose(this.scene);
     this.spear?.dispose();
     this.shark?.dispose();
+    this.island?.dispose();
     this.splashes?.dispose();
     this.debris?.dispose(this.scene);
     this.ocean?.dispose();
@@ -343,6 +361,7 @@ export class DriftwakeGame {
     this.spear?.update(this.elapsed, simulationDelta);
     if (simulationActive) this.shark?.update(this.elapsed, simulationDelta);
     this.devices?.update(this.elapsed, simulationDelta);
+    this.island?.update(this.elapsed, simulationDelta);
     this.splashes?.update(delta);
     this.audio.update(this.elapsed);
     this.physics.step(simulationDelta);
@@ -359,10 +378,6 @@ export class DriftwakeGame {
     if (this.saveElapsed >= 12) {
       this.saveElapsed = 0;
       this.saveNow();
-    }
-
-    if (this.island) {
-      this.island.position.y = -0.28 + sampleWaveHeight(-18, -78, this.elapsed) * 0.12;
     }
 
     this.fpsElapsed += delta;
@@ -416,16 +431,19 @@ export class DriftwakeGame {
     const inputEnabled =
       state.phase === 'playing' && state.pointerLocked && !state.settingsOpen && state.overlayPanel === null;
     const placingDevice = state.placementDevice !== null;
+    const onRaft = this.player?.isOnRaft() ?? true;
     this.devices?.setPlacementType(state.placementDevice);
-    this.devices?.setInputEnabled(inputEnabled);
-    this.hook?.setEquipped(!placingDevice && state.selectedTool === 'hook');
-    this.hook?.setEnabled(inputEnabled && !placingDevice && state.selectedTool === 'hook');
-    this.build?.setEquipped(!placingDevice && state.selectedTool === 'hammer');
-    this.build?.setInputEnabled(inputEnabled && !placingDevice && state.selectedTool === 'hammer');
-    this.fishing?.setEquipped(!placingDevice && state.selectedTool === 'fishingRod');
-    this.fishing?.setInputEnabled(inputEnabled && !placingDevice && state.selectedTool === 'fishingRod');
-    this.spear?.setEquipped(!placingDevice && state.selectedTool === 'spear');
-    this.spear?.setInputEnabled(inputEnabled && !placingDevice && state.selectedTool === 'spear');
+    this.devices?.setInputEnabled(inputEnabled && onRaft);
+    this.hook?.setEquipped(onRaft && !placingDevice && state.selectedTool === 'hook');
+    this.hook?.setEnabled(inputEnabled && onRaft && !placingDevice && state.selectedTool === 'hook');
+    this.build?.setEquipped(onRaft && !placingDevice && state.selectedTool === 'hammer');
+    this.build?.setInputEnabled(inputEnabled && onRaft && !placingDevice && state.selectedTool === 'hammer');
+    this.fishing?.setEquipped(onRaft && !placingDevice && state.selectedTool === 'fishingRod');
+    this.fishing?.setInputEnabled(inputEnabled && onRaft && !placingDevice && state.selectedTool === 'fishingRod');
+    this.spear?.setEquipped(onRaft && !placingDevice && state.selectedTool === 'spear');
+    this.spear?.setInputEnabled(inputEnabled && onRaft && !placingDevice && state.selectedTool === 'spear');
+    this.island?.setAxeEquipped(!placingDevice && state.selectedTool === 'axe');
+    this.island?.setInputEnabled(inputEnabled);
     this.player?.setEnabled(inputEnabled);
   }
 
@@ -434,8 +452,12 @@ export class DriftwakeGame {
     const save: DriftwakeSave = {
       version: SAVE_VERSION,
       savedAt: Date.now(),
-      player: useGameStore.getState().getPlayerSnapshot(),
+      player: {
+        ...useGameStore.getState().getPlayerSnapshot(),
+        navigation: this.player?.getSavedNavigation() ?? { surface: 'raft', x: 0, z: 1.08 },
+      },
       raft: { tiles: this.raft.getSavedTiles(), devices: this.devices?.getSavedDevices() ?? [] },
+      world: { island: this.island?.getSavedState() ?? createDefaultIslandState() },
     };
     useGameStore.getState().setSaveStatus(writeSave(save) ? 'saved' : 'error');
   }
@@ -457,7 +479,7 @@ export class DriftwakeGame {
       this.audio.playUi();
       return;
     }
-    const digit = /^Digit([1-4])$/.exec(event.code);
+    const digit = /^Digit([1-5])$/.exec(event.code);
     if (digit && state.overlayPanel === null && !state.settingsOpen && state.placementDevice === null) {
       const tool = TOOL_ORDER[Number(digit[1]) - 1];
       if (!state.setSelectedTool(tool)) {

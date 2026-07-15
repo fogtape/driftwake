@@ -3,6 +3,7 @@ import {
   Droplet,
   GlassWater,
   Heart,
+  Mountain,
   MousePointer2,
   PackageOpen,
   Settings,
@@ -14,7 +15,14 @@ import {
   VolumeX,
 } from 'lucide-react';
 import { ITEM_DEFINITIONS, TOOL_ORDER, itemCount, type Inventory, type ToolId } from '../game/domain/items';
-import type { DeviceFeedbackMap, FishingFeedback, RaftFeedback, SharkFeedback } from '../state/gameStore';
+import { ISLAND_APPROACH_SECONDS, ISLAND_DEPART_SECONDS, ISLAND_DOCK_SECONDS } from '../game/domain/island';
+import type {
+  DeviceFeedbackMap,
+  FishingFeedback,
+  IslandFeedback,
+  RaftFeedback,
+  SharkFeedback,
+} from '../state/gameStore';
 import type { DeviceType } from '../game/domain/devices';
 import { ItemIcon } from './ItemIcon';
 
@@ -30,6 +38,7 @@ interface HudProps {
   shark: SharkFeedback;
   raft: RaftFeedback;
   devices: DeviceFeedbackMap;
+  island: IslandFeedback;
   placementDevice: DeviceType | null;
   interaction: string | null;
   notice: string | null;
@@ -46,6 +55,10 @@ interface GaugeProps {
   value: number;
   tone: 'health' | 'thirst' | 'hunger';
   label: string;
+}
+
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
 }
 
 function Gauge({ icon, value, tone, label }: GaugeProps) {
@@ -72,6 +85,7 @@ export function Hud({
   shark,
   raft,
   devices,
+  island,
   placementDevice,
   interaction,
   notice,
@@ -84,11 +98,39 @@ export function Hud({
 }: HudProps) {
   const sharkAlert = shark.mode === 'approaching' || shark.mode === 'attacking';
   const fishingActive = fishing.phase === 'hooked';
-  const placedDeviceTypes = (['purifier', 'grill'] as const).filter((type) => devices[type].placed > 0);
+  const placedDeviceTypes = island.ashore
+    ? []
+    : (['purifier', 'grill'] as const).filter((type) => devices[type].placed > 0);
+  const islandProgress =
+    island.phase === 'approaching'
+      ? 1 - island.remaining / ISLAND_APPROACH_SECONDS
+      : island.phase === 'docked'
+        ? island.ashore
+          ? island.total > 0
+            ? island.harvested / island.total
+            : 0
+          : island.remaining / ISLAND_DOCK_SECONDS
+        : island.remaining / ISLAND_DEPART_SECONDS;
+  const islandMetric =
+    island.phase === 'approaching'
+      ? `${island.distance} m`
+      : island.phase === 'docked'
+        ? island.ashore
+          ? `${island.harvested}/${island.total}`
+          : `${Math.floor(island.remaining / 60)}:${String(island.remaining % 60).padStart(2, '0')}`
+        : '离流';
+  const islandStatus =
+    island.phase === 'approaching'
+      ? '正在接近'
+      : island.phase === 'docked'
+        ? island.ashore
+          ? '岛上搜集'
+          : '浅滩靠稳'
+        : '正在远离';
   return (
     <section className={`hud ${visible ? 'is-visible' : ''}`} aria-hidden={!visible}>
       <div className="resource-strip">
-        {(['timber', 'polymer', 'fiber', 'scrap'] as const).map((itemId) => (
+        {(['timber', 'polymer', 'fiber', 'scrap', 'stone'] as const).map((itemId) => (
           <div className="resource-readout" title={ITEM_DEFINITIONS[itemId].name} key={itemId}>
             <ItemIcon itemId={itemId} size={18} />
             <strong>{itemCount(inventory, itemId)}</strong>
@@ -103,6 +145,19 @@ export function Hud({
         {raft.damagedTiles > 0 ? <ShieldAlert size={17} /> : <ShieldCheck size={17} />}
         <span>{raft.averageIntegrity}%</span>
         <i><b style={{ width: `${raft.averageIntegrity}%` }} /></i>
+      </div>
+
+      <div
+        className={`island-readout island-readout--${island.phase} ${island.ashore ? 'is-ashore' : ''}`}
+        aria-label={`盐冠浅滩 ${islandStatus} ${islandMetric}`}
+      >
+        <Mountain size={19} />
+        <div>
+          <span>盐冠浅滩</span>
+          <strong>{islandStatus}</strong>
+          <i><b style={{ width: `${clampPercent(islandProgress * 100)}%` }} /></i>
+        </div>
+        <em>{islandMetric}</em>
       </div>
 
       <div className="hud-actions">

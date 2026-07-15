@@ -3,6 +3,7 @@ import {
   BoxGeometry,
   BufferGeometry,
   CatmullRomCurve3,
+  Color,
   ConeGeometry,
   CylinderGeometry,
   DodecahedronGeometry,
@@ -18,6 +19,7 @@ import {
   MeshPhysicalMaterial,
   MeshStandardMaterial,
   PointLight,
+  PlaneGeometry,
   Shape,
   SphereGeometry,
   TorusGeometry,
@@ -29,6 +31,12 @@ import {
   Vector3,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import {
+  ISLAND_RADIUS_X,
+  ISLAND_RADIUS_Z,
+  sampleIslandHeight,
+  type HarvestNodeType,
+} from '../domain/island';
 import type { MaterialLibrary } from './Materials';
 
 export type DebrisKind = 'timber' | 'polymer' | 'fiber' | 'cache';
@@ -43,6 +51,17 @@ export interface DeviceModelVisuals {
   drip?: Mesh;
   food?: Group;
   foodMeshes?: Mesh<BufferGeometry, MeshStandardMaterial>[];
+}
+
+export interface IslandModelVisuals {
+  foam: Mesh[];
+  obstacles: Array<{ x: number; z: number; radius: number }>;
+}
+
+export interface HarvestModelVisuals {
+  pivot: Group;
+  stump: Mesh | null;
+  highlight: Mesh;
 }
 
 function shadowed(mesh: Mesh): Mesh {
@@ -170,6 +189,45 @@ export function createFishingRodModel(materials: MaterialLibrary): Group {
   reelHub.rotation.z = Math.PI / 2;
   group.add(reelHub);
   return group;
+}
+
+export function createAxeModel(materials: MaterialLibrary): Group {
+  const axe = new Group();
+  axe.name = 'tide-stone-axe';
+  const handle = shadowed(new Mesh(new CylinderGeometry(0.045, 0.07, 0.92, 9), materials.darkWood));
+  handle.position.y = 0.12;
+  handle.rotation.z = -0.08;
+  axe.add(handle);
+
+  const head = shadowed(new Mesh(new DodecahedronGeometry(0.19, 0), materials.rock));
+  head.scale.set(1.42, 0.8, 0.58);
+  head.position.set(-0.02, 0.58, 0);
+  head.rotation.z = 0.18;
+  axe.add(head);
+
+  const cuttingEdge = shadowed(new Mesh(new ConeGeometry(0.18, 0.32, 4), materials.metal));
+  cuttingEdge.position.set(-0.24, 0.58, 0);
+  cuttingEdge.rotation.z = Math.PI / 2;
+  cuttingEdge.scale.z = 0.42;
+  axe.add(cuttingEdge);
+
+  const binding = new InstancedMesh(new TorusGeometry(0.073, 0.011, 5, 13), materials.wovenFiber, 6);
+  const bindingMatrix = new Matrix4();
+  const bindingPosition = new Vector3();
+  const bindingRotation = new Quaternion();
+  const bindingScale = new Vector3(1, 1, 1);
+  const bindingEuler = new Euler();
+  for (let index = 0; index < 6; index += 1) {
+    bindingPosition.set(0, 0.43 + index * 0.045, 0);
+    bindingRotation.setFromEuler(bindingEuler.set(Math.PI / 2, 0, index * 0.1));
+    bindingMatrix.compose(bindingPosition, bindingRotation, bindingScale);
+    binding.setMatrixAt(index, bindingMatrix);
+  }
+  binding.instanceMatrix.needsUpdate = true;
+  binding.castShadow = true;
+  binding.receiveShadow = true;
+  axe.add(binding);
+  return axe;
 }
 
 export function createFishingBobber(materials: MaterialLibrary): Group {
@@ -789,6 +847,281 @@ export function createDistantIsland(materials: MaterialLibrary): Group {
   beacon.visible = false;
   island.add(beacon);
   return island;
+}
+
+const TERRAIN_SAND = new Color(0xd6bf86);
+const TERRAIN_DRY_GRASS = new Color(0x80915d);
+const TERRAIN_GREEN = new Color(0x5e8053);
+const TERRAIN_STONE = new Color(0x77756b);
+const TERRAIN_SUBMERGED = new Color(0x547d72);
+
+function terrainColor(height: number, x: number, z: number, target: Color): Color {
+  if (height < 0.12) return target.copy(TERRAIN_SAND).multiplyScalar(0.9 + Math.sin(x * 2.7 + z) * 0.025);
+  if (height < 0.62) return target.copy(TERRAIN_SAND).lerp(TERRAIN_DRY_GRASS, MathUtils.smoothstep(height, 0.12, 0.62));
+  if (height < 1.8) return target.copy(TERRAIN_DRY_GRASS).lerp(TERRAIN_GREEN, MathUtils.smoothstep(height, 0.62, 1.5));
+  return target.copy(TERRAIN_GREEN).lerp(TERRAIN_STONE, MathUtils.smoothstep(height, 1.8, 2.75));
+}
+
+export function createExplorableIsland(materials: MaterialLibrary, seed: number): Group {
+  const island = new Group();
+  island.name = 'explorable-saltcrown-island';
+  const segmentsX = 44;
+  const segmentsZ = 46;
+  const width = ISLAND_RADIUS_X * 2.22;
+  const depth = ISLAND_RADIUS_Z * 2.22;
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+  const color = new Color();
+  for (let zIndex = 0; zIndex <= segmentsZ; zIndex += 1) {
+    const z = (zIndex / segmentsZ - 0.5) * depth;
+    for (let xIndex = 0; xIndex <= segmentsX; xIndex += 1) {
+      const x = (xIndex / segmentsX - 0.5) * width;
+      const sampled = sampleIslandHeight(seed, x, z);
+      const radial = Math.sqrt((x / ISLAND_RADIUS_X) ** 2 + (z / ISLAND_RADIUS_Z) ** 2);
+      const height = sampled ?? -0.68 - Math.max(0, radial - 1.08) * 1.8;
+      positions.push(x, height, z);
+      terrainColor(height, x, z, color);
+      if (height < -0.05) color.lerp(TERRAIN_SUBMERGED, MathUtils.clamp((-height - 0.05) * 0.5, 0, 0.42));
+      colors.push(color.r, color.g, color.b);
+    }
+  }
+  for (let zIndex = 0; zIndex < segmentsZ; zIndex += 1) {
+    for (let xIndex = 0; xIndex < segmentsX; xIndex += 1) {
+      const row = segmentsX + 1;
+      const a = zIndex * row + xIndex;
+      const b = a + 1;
+      const c = a + row;
+      const d = c + 1;
+      if ((xIndex + zIndex) % 2 === 0) indices.push(a, c, b, b, c, d);
+      else indices.push(a, c, d, a, d, b);
+    }
+  }
+  const terrainGeometry = new BufferGeometry();
+  terrainGeometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  terrainGeometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  terrainGeometry.setIndex(indices);
+  terrainGeometry.computeVertexNormals();
+  const terrainMaterial = new MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.94,
+    metalness: 0,
+  });
+  const terrain = shadowed(new Mesh(terrainGeometry, terrainMaterial));
+  terrain.name = 'island-heightfield';
+  island.add(terrain);
+
+  const obstacles = [
+    { x: -4.15, z: -1.45, radius: 0.72, scale: [1.05, 0.82, 1.34] },
+    { x: 4.1, z: -1.1, radius: 0.68, scale: [0.92, 1.18, 1.02] },
+    { x: -0.2, z: -3.75, radius: 0.62, scale: [1.18, 0.76, 0.88] },
+    { x: 3.95, z: 2.55, radius: 0.58, scale: [0.88, 0.7, 1.2] },
+    { x: -3.9, z: 2.95, radius: 0.54, scale: [0.82, 0.68, 1.02] },
+  ] as const;
+  const rockGeometry = new DodecahedronGeometry(0.68, 1);
+  const rocks = new InstancedMesh(rockGeometry, materials.rock, obstacles.length);
+  const matrix = new Matrix4();
+  const position = new Vector3();
+  const rotation = new Quaternion();
+  const scale = new Vector3();
+  const euler = new Euler();
+  obstacles.forEach((obstacle, index) => {
+    const height = sampleIslandHeight(seed, obstacle.x, obstacle.z) ?? 0;
+    position.set(obstacle.x, height + obstacle.scale[1] * 0.33, obstacle.z);
+    rotation.setFromEuler(euler.set(index * 0.13, index * 1.17, index * 0.09));
+    scale.set(obstacle.scale[0], obstacle.scale[1], obstacle.scale[2]);
+    matrix.compose(position, rotation, scale);
+    rocks.setMatrixAt(index, matrix);
+  });
+  rocks.instanceMatrix.needsUpdate = true;
+  rocks.castShadow = true;
+  rocks.receiveShadow = true;
+  island.add(rocks);
+
+  const shrubGeometry = new DodecahedronGeometry(0.24, 1);
+  const shrubs = new InstancedMesh(shrubGeometry, materials.foliage, 22);
+  const randomPhase = (seed % 997) * 0.17;
+  let shrubCount = 0;
+  for (let index = 0; index < 34 && shrubCount < 22; index += 1) {
+    const angle = index * 2.399 + randomPhase;
+    const radius = 1.2 + ((index * 1.73) % 1) * 3.6;
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius * 0.86;
+    if (Math.abs(x) < 1.15 && z > 2.3) continue;
+    const height = sampleIslandHeight(seed, x, z);
+    if (height === null || height < 0.3) continue;
+    position.set(x, height + 0.2, z);
+    rotation.setFromEuler(euler.set(0, angle * 1.7, 0));
+    const scalar = 0.72 + (index % 4) * 0.13;
+    scale.set(scalar * 1.2, scalar, scalar);
+    matrix.compose(position, rotation, scale);
+    shrubs.setMatrixAt(shrubCount, matrix);
+    shrubCount += 1;
+  }
+  shrubs.count = shrubCount;
+  shrubs.instanceMatrix.needsUpdate = true;
+  shrubs.castShadow = true;
+  shrubs.receiveShadow = true;
+  island.add(shrubs);
+
+  const foam: Mesh[] = [];
+  const foamMaterials = [0.16, 0.23, 0.31].map(
+    (opacity) => new MeshBasicMaterial({
+      color: 0xe8f5e8,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      side: DoubleSide,
+    }),
+  );
+  const foamGeometry = new PlaneGeometry(1.05, 0.2, 4, 1);
+  for (let index = 0; index < 30; index += 1) {
+    const angle = (index / 30) * Math.PI * 2;
+    const x = Math.cos(angle) * ISLAND_RADIUS_X * 0.94;
+    const z = Math.sin(angle) * ISLAND_RADIUS_Z * 0.94;
+    const strip = new Mesh(foamGeometry, foamMaterials[index % foamMaterials.length]);
+    strip.position.set(x, -0.08 + Math.sin(index * 2.1) * 0.025, z);
+    strip.rotation.set(-Math.PI / 2, 0, -angle + Math.PI / 2);
+    strip.scale.x = 0.72 + (index % 5) * 0.08;
+    strip.userData.phase = index / 30;
+    foam.push(strip);
+    island.add(strip);
+  }
+
+  island.userData.islandVisuals = {
+    foam,
+    obstacles: obstacles.map(({ x, z, radius }) => ({ x, z, radius })),
+  } satisfies IslandModelVisuals;
+  return island;
+}
+
+function createHighlightRing(radius: number): Mesh {
+  const ring = new Mesh(
+    new TorusGeometry(radius, 0.018, 5, 28),
+    new MeshBasicMaterial({ color: 0xefc35c, transparent: true, opacity: 0.72, depthWrite: false }),
+  );
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.035;
+  ring.visible = false;
+  return ring;
+}
+
+export function createHarvestNodeModel(type: HarvestNodeType, materials: MaterialLibrary): Group {
+  const node = new Group();
+  node.name = `island-resource-${type}`;
+  const pivot = new Group();
+  node.add(pivot);
+  let stump: Mesh | null = null;
+  let radius = 0.38;
+  const matrix = new Matrix4();
+  const position = new Vector3();
+  const rotation = new Quaternion();
+  const scale = new Vector3(1, 1, 1);
+  const euler = new Euler();
+  const finishInstances = (mesh: InstancedMesh): InstancedMesh => {
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  };
+
+  if (type === 'palm') {
+    radius = 0.62;
+    const trunkSegments = 4;
+    const trunks = new InstancedMesh(new CylinderGeometry(0.13, 0.18, 0.76, 8), materials.darkWood, trunkSegments);
+    const rings = new InstancedMesh(new TorusGeometry(0.155, 0.012, 5, 12), materials.rope, trunkSegments);
+    for (let index = 0; index < trunkSegments; index += 1) {
+      const taper = 1 - index * 0.07;
+      position.set(Math.sin(index * 0.7) * 0.035, 0.38 + index * 0.7, Math.cos(index * 0.8) * 0.025);
+      rotation.setFromEuler(euler.set(0, 0, -0.025 + index * 0.018));
+      scale.set(taper, 1, taper);
+      matrix.compose(position, rotation, scale);
+      trunks.setMatrixAt(index, matrix);
+      position.y -= 0.22;
+      rotation.setFromEuler(euler.set(Math.PI / 2, 0, index * 0.08));
+      scale.setScalar(taper);
+      matrix.compose(position, rotation, scale);
+      rings.setMatrixAt(index, matrix);
+    }
+    pivot.add(finishInstances(trunks), finishInstances(rings));
+    const leafGeometry = createPalmLeaf(materials.foliage).geometry;
+    const leaves = new InstancedMesh(leafGeometry, materials.foliage, 9);
+    for (let index = 0; index < 9; index += 1) {
+      position.set(0.05, 2.83, 0);
+      rotation.setFromEuler(
+        euler.set(-0.34 - (index % 2) * 0.08, (index / 9) * Math.PI * 2, (index % 3 - 1) * 0.08, 'YXZ'),
+      );
+      scale.setScalar(1.28 + (index % 3) * 0.09);
+      matrix.compose(position, rotation, scale);
+      leaves.setMatrixAt(index, matrix);
+    }
+    pivot.add(finishInstances(leaves));
+    const fruits = new InstancedMesh(new SphereGeometry(0.115, 9, 7), materials.leaf, 3);
+    for (let index = 0; index < 3; index += 1) {
+      const angle = (index / 3) * Math.PI * 2;
+      position.set(Math.cos(angle) * 0.17, 2.63 - index * 0.04, Math.sin(angle) * 0.17);
+      rotation.identity();
+      scale.set(1, 1.2, 1);
+      matrix.compose(position, rotation, scale);
+      fruits.setMatrixAt(index, matrix);
+    }
+    pivot.add(finishInstances(fruits));
+    stump = shadowed(new Mesh(new CylinderGeometry(0.15, 0.2, 0.28, 8), materials.darkWood));
+    stump.position.y = 0.14;
+    stump.visible = false;
+    node.add(stump);
+  } else if (type === 'branch') {
+    const branches = new InstancedMesh(new CylinderGeometry(0.035, 0.055, 0.88, 7), materials.wood[1], 4);
+    for (let index = 0; index < 4; index += 1) {
+      position.set((index - 1.5) * 0.13, 0.11 + (index % 2) * 0.04, (index % 2 - 0.5) * 0.2);
+      rotation.setFromEuler(euler.set(Math.PI / 2 - 0.12, index * 0.6, 0.18 * (index - 1)));
+      scale.set(1, 1 - index * 0.09, 1);
+      matrix.compose(position, rotation, scale);
+      branches.setMatrixAt(index, matrix);
+    }
+    pivot.add(finishInstances(branches));
+  } else if (type === 'stone') {
+    const stones = new InstancedMesh(new DodecahedronGeometry(0.2, 0), materials.rock, 5);
+    for (let index = 0; index < 5; index += 1) {
+      position.set((index % 3 - 1) * 0.2, 0.12 + (index % 2) * 0.08, (Math.floor(index / 3) - 0.35) * 0.24);
+      rotation.setFromEuler(euler.set(index * 0.4, index * 0.9, index * 0.27));
+      scale.setScalar(0.85 + (index % 3) * 0.225);
+      matrix.compose(position, rotation, scale);
+      stones.setMatrixAt(index, matrix);
+    }
+    pivot.add(finishInstances(stones));
+  } else if (type === 'fruit') {
+    radius = 0.34;
+    const fruits = new InstancedMesh(new SphereGeometry(0.16, 10, 8), materials.leaf, 4);
+    for (let index = 0; index < 4; index += 1) {
+      const angle = (index / 4) * Math.PI * 2;
+      position.set(Math.cos(angle) * 0.15, 0.14 + (index % 2) * 0.1, Math.sin(angle) * 0.15);
+      rotation.identity();
+      scale.set(1, 1.28, 1);
+      matrix.compose(position, rotation, scale);
+      fruits.setMatrixAt(index, matrix);
+    }
+    pivot.add(finishInstances(fruits));
+    const leaf = createPalmLeaf(materials.foliage, 0.45);
+    leaf.position.y = 0.29;
+    leaf.rotation.x = -0.5;
+    pivot.add(leaf);
+  } else {
+    radius = 0.42;
+    const leaves = new InstancedMesh(createPalmLeaf(materials.leaf).geometry, materials.leaf, 7);
+    for (let index = 0; index < 7; index += 1) {
+      position.set(0, 0.04, 0);
+      rotation.setFromEuler(euler.set(-0.74, (index / 7) * Math.PI * 2, (index % 2) * 0.12, 'YXZ'));
+      scale.setScalar(0.55 + (index % 3) * 0.08);
+      matrix.compose(position, rotation, scale);
+      leaves.setMatrixAt(index, matrix);
+    }
+    pivot.add(finishInstances(leaves));
+  }
+  const highlight = createHighlightRing(radius);
+  node.add(highlight);
+  node.userData.harvestVisuals = { pivot, stump, highlight } satisfies HarvestModelVisuals;
+  return node;
 }
 
 export function createSplashMaterial(): MeshBasicMaterial {

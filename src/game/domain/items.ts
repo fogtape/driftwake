@@ -46,6 +46,24 @@ export const ITEM_DEFINITIONS = {
     tone: '#c9aa73',
     description: '由长纤维绞成的承力绳，许多工具的关键部件。',
   },
+  stone: {
+    id: 'stone',
+    name: '潮磨石',
+    shortName: '石料',
+    category: 'material',
+    maxStack: 16,
+    tone: '#a5a294',
+    description: '浅滩反复冲刷出的致密石料，可用于压重、研磨和后续工具制作。',
+  },
+  palmSeed: {
+    id: 'palmSeed',
+    name: '盐冠棕榈种',
+    shortName: '棕榈种',
+    category: 'material',
+    maxStack: 10,
+    tone: '#8ea964',
+    description: '包裹着耐盐外壳的种子，是后续筏上种植的基础。',
+  },
   emptyCup: {
     id: 'emptyCup',
     name: '折边聚合杯',
@@ -109,6 +127,15 @@ export const ITEM_DEFINITIONS = {
     tone: '#75b9c3',
     description: '在漂流物稀少时，提供稳定但需要专注的食物来源。',
   },
+  axe: {
+    id: 'axe',
+    name: '潮磨石斧',
+    shortName: '石斧',
+    category: 'tool',
+    maxStack: 1,
+    tone: '#b6b09c',
+    description: '用潮磨石与废铁固定刃口，适合砍取岛上的纤维木。',
+  },
   emergencyWater: {
     id: 'emergencyWater',
     name: '密封淡水',
@@ -135,6 +162,15 @@ export const ITEM_DEFINITIONS = {
     maxStack: 5,
     tone: '#e5b85e',
     description: '高能量压缩口粮，能够恢复 28 点饥饿。',
+  },
+  palmFruit: {
+    id: 'palmFruit',
+    name: '盐冠潮果',
+    shortName: '潮果',
+    category: 'food',
+    maxStack: 8,
+    tone: '#b7cb69',
+    description: '岛上棕榈结出的清甜果实，同时补充少量水分和饥饿。',
   },
   rawFish: {
     id: 'rawFish',
@@ -177,13 +213,13 @@ export const ITEM_DEFINITIONS = {
 >;
 
 export type ItemId = keyof typeof ITEM_DEFINITIONS;
-export type ToolId = Extract<ItemId, 'hook' | 'hammer' | 'spear' | 'fishingRod'>;
+export type ToolId = Extract<ItemId, 'hook' | 'hammer' | 'spear' | 'fishingRod' | 'axe'>;
 export type SalvageKind = 'timber' | 'polymer' | 'fiber' | 'cache';
 export type Inventory = Partial<Record<ItemId, number>>;
 export type ItemBundle = Partial<Record<ItemId, number>>;
 
 export const INVENTORY_SLOT_CAPACITY = 20;
-export const TOOL_ORDER: readonly ToolId[] = ['hook', 'hammer', 'spear', 'fishingRod'];
+export const TOOL_ORDER: readonly ToolId[] = ['hook', 'hammer', 'spear', 'fishingRod', 'axe'];
 export const STARTING_INVENTORY: Inventory = {
   hook: 1,
   emergencyWater: 1,

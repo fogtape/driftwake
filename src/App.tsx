@@ -40,6 +40,7 @@ export function App() {
   const shark = useGameStore((state) => state.shark);
   const raft = useGameStore((state) => state.raft);
   const devices = useGameStore((state) => state.devices);
+  const island = useGameStore((state) => state.island);
   const placementDevice = useGameStore((state) => state.placementDevice);
   const interaction = useGameStore((state) => state.interaction);
   const saveStatus = useGameStore((state) => state.saveStatus);
@@ -153,6 +154,11 @@ export function App() {
   };
   const placeDevice = (deviceType: DeviceType) => {
     const store = useGameStore.getState();
+    if (store.island.ashore) {
+      gameRef.current?.playUi(false);
+      showTransientNotice('返回木筏后才能安置设备');
+      return;
+    }
     store.setOverlayPanel(null);
     store.setPlacementDevice(deviceType);
     gameRef.current?.playUi();
@@ -181,6 +187,7 @@ export function App() {
         shark={shark}
         raft={raft}
         devices={devices}
+        island={island}
         placementDevice={placementDevice}
         interaction={interaction}
         notice={notice}

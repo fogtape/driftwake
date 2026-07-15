@@ -68,6 +68,14 @@ export const RECIPES = {
     cost: { timber: 2, rope: 2, polymer: 1 },
     description: '抛出浮标，观察鱼讯并控制收线张力。',
   },
+  axe: {
+    id: 'axe',
+    name: '潮磨石斧',
+    category: 'tool',
+    output: { axe: 1 },
+    cost: { timber: 2, stone: 2, rope: 1, scrap: 1 },
+    description: '把潮磨石刃固定到回收木柄上，用于砍取岛屿棕榈。',
+  },
 } as const satisfies Record<
   string,
   {

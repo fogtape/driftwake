@@ -301,6 +301,7 @@ button:focus-visible {
 .resource-readout:nth-child(2) svg { color: #66b6bf; }
 .resource-readout:nth-child(3) svg { color: #80ad71; }
 .resource-readout:nth-child(4) svg { color: #e18162; }
+.resource-readout:nth-child(5) svg { color: #aaa89c; }
 .resource-readout strong { min-width: 14px; font-size: 13px; text-align: center; }
 
 .resource-pack-button {
@@ -334,6 +335,42 @@ button:focus-visible {
 }
 
 .raft-readout > svg { color: var(--sun); }
+.island-readout {
+  position: absolute;
+  top: max(105px, calc(env(safe-area-inset-top) + 85px));
+  left: max(20px, env(safe-area-inset-left));
+  display: grid;
+  width: 224px;
+  min-height: 48px;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  color: #dceae6;
+  border-left: 2px solid #7fa783;
+  border-radius: 3px;
+  background: rgba(5, 22, 27, 0.68);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(8px);
+}
+
+.island-readout > svg { color: #91bd78; }
+.island-readout > div { display: grid; min-width: 0; grid-template-columns: 1fr auto; gap: 2px 8px; }
+.island-readout span { color: #91aaa5; font-family: 'Barlow Condensed', sans-serif; font-size: 10px; }
+.island-readout strong { color: #e2ece8; font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 600; }
+.island-readout em { color: #f0d37c; font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-style: normal; font-weight: 600; }
+.island-readout i {
+  display: block;
+  grid-column: 1 / -1;
+  height: 3px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.42);
+}
+.island-readout i b { display: block; height: 100%; background: #82ad76; transition: width 150ms linear; }
+.island-readout--departing { border-left-color: #7fa0a0; }
+.island-readout--departing > svg { color: #8ea6a3; }
+.island-readout.is-ashore { border-left-color: var(--sun); }
+.island-readout.is-ashore i b { background: var(--sun); }
 .raft-readout > i,
 .shark-warning i,
 .fishing-fight__row > i {
@@ -427,7 +464,7 @@ button:focus-visible {
   left: 50%;
   bottom: max(18px, env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: repeat(4, 52px);
+  grid-template-columns: repeat(5, 52px);
   gap: 5px;
   transform: translateX(-50%);
   pointer-events: auto;
@@ -1043,6 +1080,19 @@ button:focus-visible {
   .inventory-slot { width: 62px; height: 62px; }
   .field-pack__tabs { width: 200px; }
   .fishing-fight { right: 18px; width: 184px; }
+}
+
+@media (max-width: 640px) {
+  .resource-strip { top: 12px; left: 12px; height: 40px; }
+  .resource-readout { min-width: 49px; gap: 5px; padding: 0 6px; }
+  .resource-pack-button { width: 40px; }
+  .raft-readout { top: 60px; left: 12px; }
+  .island-readout { top: 94px; left: 12px; width: 210px; }
+  .hud-actions { top: 12px; right: 12px; }
+  .hotbar { grid-template-columns: repeat(5, 44px); gap: 4px; }
+  .hotbar-slot { width: 44px; height: 44px; }
+  .survival-cluster { left: 12px; width: 152px; }
+  .device-rack { right: 12px; width: 170px; }
 }
 
 @media (max-height: 640px) {

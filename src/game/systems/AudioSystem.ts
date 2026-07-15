@@ -1,5 +1,7 @@
 import { createSeededRandom, randomRange } from '../math/random';
 import type { AudioMix } from '../../state/gameStore';
+import type { HarvestNodeType } from '../domain/island';
+import type { PlayerSurface } from '../domain/save';
 
 export class AudioSystem {
   private context: AudioContext | null = null;
@@ -11,12 +13,15 @@ export class AudioSystem {
   private ui: GainNode | null = null;
   private fireLoop: GainNode | null = null;
   private steamLoop: GainNode | null = null;
+  private islandLoop: GainNode | null = null;
   private nextCreakAt = 4;
+  private nextBirdAt = 6;
   private nextReelAt = 0;
   private readonly random = createSeededRandom(0xa0d10);
   private enabled = true;
   private deviceFireActivity = 0;
   private deviceSteamActivity = 0;
+  private islandActivity = 0;
   private mix: AudioMix = {
     master: 0.78,
     music: 0.2,
@@ -49,6 +54,7 @@ export class AudioSystem {
       this.master.connect(this.context.destination);
       this.startAmbientLayers();
       this.startDeviceLayers();
+      this.startIslandLayer();
     }
     if (this.context.state !== 'running') await this.context.resume();
   }
@@ -72,9 +78,15 @@ export class AudioSystem {
   }
 
   update(time: number): void {
-    if (!this.context || time < this.nextCreakAt) return;
-    this.playCreak();
-    this.nextCreakAt = time + randomRange(this.random, 4.8, 10.5);
+    if (!this.context) return;
+    if (time >= this.nextCreakAt) {
+      this.playCreak();
+      this.nextCreakAt = time + randomRange(this.random, 4.8, 10.5);
+    }
+    if (this.islandActivity > 0.18 && time >= this.nextBirdAt) {
+      this.playIslandBird();
+      this.nextBirdAt = time + randomRange(this.random, 5.5, 12.5);
+    }
   }
 
   playUi(): void {
@@ -165,6 +177,74 @@ export class AudioSystem {
     const now = this.context.currentTime;
     this.fireLoop?.gain.setTargetAtTime(this.deviceFireActivity * 0.052, now, 0.18);
     this.steamLoop?.gain.setTargetAtTime(this.deviceSteamActivity * 0.035, now, 0.22);
+  }
+
+  setIslandActivity(activity: number): void {
+    this.islandActivity = Math.max(0, Math.min(1, activity));
+    if (!this.context) return;
+    this.islandLoop?.gain.setTargetAtTime(this.islandActivity * 0.06, this.context.currentTime, 0.45);
+  }
+
+  playFootstep(surface: PlayerSurface): void {
+    if (surface === 'raft') {
+      this.playWoodKnock(0.027, 0.065);
+      this.noiseBurst(0.055, 1100, 0.012, 'bandpass');
+      return;
+    }
+    this.noiseBurst(0.11, 330, 0.035, 'lowpass');
+    this.noiseBurst(0.07, 1680, 0.018, 'bandpass');
+  }
+
+  playAxeSwing(): void {
+    this.noiseBurst(0.17, 1280, 0.072, 'bandpass');
+    this.noiseBurst(0.1, 2850, 0.028, 'highpass');
+  }
+
+  playChop(finalHit: boolean): void {
+    this.playWoodKnock(finalHit ? 0.15 : 0.105, finalHit ? 0.18 : 0.13);
+    this.noiseBurst(finalHit ? 0.19 : 0.11, 1850, finalHit ? 0.065 : 0.042, 'bandpass');
+  }
+
+  playTreeFall(): void {
+    this.noiseBurst(0.72, 260, 0.105, 'lowpass');
+    if (!this.context) return;
+    const timer = window.setTimeout(() => {
+      this.playWoodKnock(0.18, 0.22);
+      this.noiseBurst(0.42, 520, 0.085, 'lowpass');
+      window.clearTimeout(timer);
+    }, 720);
+  }
+
+  playGather(type: HarvestNodeType): void {
+    if (type === 'stone') {
+      this.playWoodKnock(0.035, 0.055);
+      this.noiseBurst(0.08, 980, 0.03, 'bandpass');
+    } else if (type === 'branch') {
+      this.playWoodKnock(0.055, 0.08);
+      this.noiseBurst(0.08, 1650, 0.025, 'bandpass');
+    } else {
+      this.noiseBurst(0.12, 2150, 0.035, 'highpass');
+      this.playCollect();
+    }
+  }
+
+  playIslandArrival(): void {
+    this.noiseBurst(0.78, 520, 0.09, 'lowpass');
+    if (!this.context || !this.ambience) return;
+    const now = this.context.currentTime;
+    [164.81, 220].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      const start = now + index * 0.12;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.025, start + 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.82);
+      oscillator.connect(gain).connect(this.ambience!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.84);
+    });
   }
 
   playDevicePlace(): void {
@@ -340,6 +420,7 @@ export class AudioSystem {
     this.ui = null;
     this.fireLoop = null;
     this.steamLoop = null;
+    this.islandLoop = null;
   }
 
   private startAmbientLayers(): void {
@@ -449,6 +530,55 @@ export class AudioSystem {
     this.steamLoop.gain.value = this.deviceSteamActivity * 0.035;
     steamSource.connect(steamFilter).connect(this.steamLoop).connect(this.effects);
     steamSource.start(0, 1.7);
+  }
+
+  private startIslandLayer(): void {
+    if (!this.context || !this.ambience) return;
+    const duration = 7;
+    const sampleRate = this.context.sampleRate;
+    const buffer = this.context.createBuffer(1, duration * sampleRate, sampleRate);
+    const channel = buffer.getChannelData(0);
+    let smooth = 0;
+    for (let index = 0; index < channel.length; index += 1) {
+      const white = this.random() * 2 - 1;
+      smooth += (white - smooth) * 0.12;
+      const frondPulse = 0.35 + Math.pow(Math.max(0, Math.sin((index / sampleRate) * 0.93)), 3) * 0.65;
+      channel[index] = (white * 0.24 + smooth * 0.76) * frondPulse;
+    }
+    const source = this.context.createBufferSource();
+    const highpass = this.context.createBiquadFilter();
+    const lowpass = this.context.createBiquadFilter();
+    this.islandLoop = this.context.createGain();
+    source.buffer = buffer;
+    source.loop = true;
+    highpass.type = 'highpass';
+    highpass.frequency.value = 720;
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 3800;
+    this.islandLoop.gain.value = this.islandActivity * 0.06;
+    source.connect(highpass).connect(lowpass).connect(this.islandLoop).connect(this.ambience);
+    source.start(0, 2.3);
+  }
+
+  private playIslandBird(): void {
+    if (!this.context || !this.ambience) return;
+    const now = this.context.currentTime;
+    const base = randomRange(this.random, 1280, 1760);
+    for (let index = 0; index < 2; index += 1) {
+      const start = now + index * randomRange(this.random, 0.11, 0.18);
+      const oscillator = this.context.createOscillator();
+      const gain = this.context.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(base * (1 + index * 0.08), start);
+      oscillator.frequency.exponentialRampToValueAtTime(base * (1.34 + index * 0.06), start + 0.075);
+      oscillator.frequency.exponentialRampToValueAtTime(base * 1.08, start + 0.14);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.014 * this.islandActivity, start + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.15);
+      oscillator.connect(gain).connect(this.ambience);
+      oscillator.start(start);
+      oscillator.stop(start + 0.16);
+    }
   }
 
   private playCreak(): void {

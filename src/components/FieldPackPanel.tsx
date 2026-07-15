@@ -40,6 +40,7 @@ const CONSUMABLES = new Set<ItemId>([
   'emergencyWater',
   'freshWaterCup',
   'ration',
+  'palmFruit',
   'rawFish',
   'cookedFish',
   'burntFish',
