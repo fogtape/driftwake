@@ -27,6 +27,7 @@ import {
   sampleIslandHeight,
   type HarvestNodeDefinition,
   type HarvestNodeType,
+  type IslandNavigationInput,
   type SavedHarvestNode,
   type SavedIslandState,
 } from '../domain/island';
@@ -88,6 +89,7 @@ export class IslandSystem {
   private feedbackElapsed = 0;
   private lastPrompt: string | null = null;
   private noticeTimer: number | null = null;
+  private navigationProvider: (() => IslandNavigationInput) | null = null;
 
   constructor(
     private readonly scene: Scene,
@@ -118,6 +120,10 @@ export class IslandSystem {
     this.player = player;
   }
 
+  setNavigationProvider(provider: (() => IslandNavigationInput) | null): void {
+    this.navigationProvider = provider;
+  }
+
   setAxeEquipped(equipped: boolean): void {
     this.axeEquipped = equipped;
     this.axeViewModel.visible = equipped;
@@ -136,7 +142,7 @@ export class IslandSystem {
   }
 
   sampleGroundHeight(worldX: number, worldZ: number): number | null {
-    if (this.state.phase !== 'docked') return null;
+    if (this.state.phase === 'approaching') return null;
     const localX = (worldX - this.island.position.x) / this.island.scale.x;
     const localZ = (worldZ - this.island.position.z) / this.island.scale.z;
     const height = sampleIslandHeight(this.state.seed, localX, localZ);
@@ -145,7 +151,7 @@ export class IslandSystem {
   }
 
   resolvePlayerCollision(position: Vector3, previous: Vector3): void {
-    if (this.state.phase !== 'docked') return;
+    if (this.state.phase === 'approaching') return;
     this.worldToIsland(position, this.localCandidate);
     this.worldToIsland(previous, this.localPrevious);
     if (!this.isBlocked(this.localCandidate.x, this.localCandidate.z)) return;
@@ -171,19 +177,28 @@ export class IslandSystem {
 
   update(time: number, delta: number): void {
     const playerAshore = this.player?.getSurface() === 'island';
-    const playerOnExpedition = this.player ? this.player.getSurface() !== 'raft' : false;
+    const previousPhase = this.state.phase;
+    const previousTransform = islandTransform(this.state);
     if (delta > 0) {
-      const advanced = advanceIslandState(this.state, delta, playerOnExpedition);
+      const advanced = advanceIslandState(
+        this.state,
+        delta,
+        this.navigationProvider?.() ?? { approachRate: 0.55, dockDriftRate: 1, anchored: false },
+      );
       this.state = advanced.state;
       if (advanced.event === 'arrived') {
         this.audio.playIslandArrival();
         this.showNotice('盐冠浅滩已经靠稳');
       } else if (advanced.event === 'departing') {
-        this.showNotice('浅滩正被洋流带离');
+        this.showNotice(playerAshore ? '木筏正在离开浅滩' : '浅滩正被洋流带离');
       } else if (advanced.event === 'renewed') {
         this.rebuildIsland();
         this.showNotice('远处出现新的岛影');
       }
+    }
+    const nextTransform = islandTransform(this.state);
+    if (previousPhase === 'departing' && this.state.phase === 'departing') {
+      this.player?.translateExpedition(nextTransform.x - previousTransform.x, nextTransform.z - previousTransform.z);
     }
     this.applyTransform();
     const transform = islandTransform(this.state);
@@ -194,7 +209,7 @@ export class IslandSystem {
     this.animateIsland(time, delta);
     this.updateAxe(time, delta);
 
-    if (this.inputEnabled && playerAshore && this.state.phase === 'docked') this.updateFocus();
+    if (this.inputEnabled && playerAshore && this.state.phase !== 'approaching') this.updateFocus();
     else {
       this.focused = null;
       this.nodes.forEach((runtime) => (runtime.visuals.highlight.visible = false));
@@ -467,12 +482,12 @@ export class IslandSystem {
 
   private setPrompt(prompt: string): void {
     this.lastPrompt = prompt;
-    useGameStore.getState().setInteraction(prompt);
+    useGameStore.getState().setInteraction(prompt, 'island');
   }
 
   private clearPrompt(): void {
     const store = useGameStore.getState();
-    if (this.lastPrompt && store.interaction === this.lastPrompt) store.setInteraction(null);
+    if (this.lastPrompt && store.interaction === this.lastPrompt) store.setInteraction(null, 'island');
     this.lastPrompt = null;
   }
 

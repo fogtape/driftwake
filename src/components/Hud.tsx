@@ -1,4 +1,6 @@
 import {
+  Anchor,
+  Compass,
   CookingPot,
   Droplet,
   GlassWater,
@@ -6,6 +8,7 @@ import {
   Mountain,
   MousePointer2,
   PackageOpen,
+  Sailboat,
   Settings,
   ShieldAlert,
   ShieldCheck,
@@ -14,19 +17,22 @@ import {
   Volume2,
   VolumeX,
   Waves,
+  Wind,
 } from 'lucide-react';
 import { ITEM_DEFINITIONS, TOOL_ORDER, itemCount, type Inventory, type ToolId } from '../game/domain/items';
 import { ISLAND_APPROACH_SECONDS, ISLAND_DEPART_SECONDS, ISLAND_DOCK_SECONDS } from '../game/domain/island';
+import { cardinalLabel } from '../game/domain/navigation';
 import type {
   DeviceFeedbackMap,
   FishingFeedback,
   IslandFeedback,
+  NavigationFeedback,
   PlayerFeedback,
   RaftFeedback,
   ReefFeedback,
   SharkFeedback,
+  PlacementType,
 } from '../state/gameStore';
-import type { DeviceType } from '../game/domain/devices';
 import { ItemIcon } from './ItemIcon';
 
 interface HudProps {
@@ -42,9 +48,10 @@ interface HudProps {
   shark: SharkFeedback;
   raft: RaftFeedback;
   devices: DeviceFeedbackMap;
+  navigation: NavigationFeedback;
   island: IslandFeedback;
   reef: ReefFeedback;
-  placementDevice: DeviceType | null;
+  placementDevice: PlacementType | null;
   interaction: string | null;
   notice: string | null;
   fps: number;
@@ -91,6 +98,7 @@ export function Hud({
   shark,
   raft,
   devices,
+  navigation,
   island,
   reef,
   placementDevice,
@@ -108,7 +116,7 @@ export function Hud({
   const placedDeviceTypes = island.ashore
     ? []
     : (['purifier', 'grill'] as const).filter((type) => devices[type].placed > 0);
-  const reefExpedition = player.surface === 'water';
+  const reefExpedition = player.surface === 'water' && island.phase === 'docked';
   const resourceItems = reefExpedition
     ? (['sand', 'clay', 'metalOre', 'seaweed', 'scrap'] as const)
     : (['timber', 'polymer', 'fiber', 'scrap', 'stone'] as const);
@@ -119,7 +127,9 @@ export function Hud({
     : island.phase === 'approaching'
       ? 1 - island.remaining / ISLAND_APPROACH_SECONDS
       : island.phase === 'docked'
-        ? island.ashore
+        ? navigation.anchored && !island.ashore
+          ? 1
+          : island.ashore
           ? island.total > 0
             ? island.harvested / island.total
             : 0
@@ -130,8 +140,10 @@ export function Hud({
     : island.phase === 'approaching'
       ? `${island.distance} m`
       : island.phase === 'docked'
-        ? island.ashore
-          ? `${island.harvested}/${island.total}`
+        ? navigation.anchored
+          ? island.ashore
+            ? `${island.harvested}/${island.total}`
+            : '已锚泊'
           : `${Math.floor(island.remaining / 60)}:${String(island.remaining % 60).padStart(2, '0')}`
         : '离流';
   const islandStatus = reefExpedition
@@ -139,9 +151,13 @@ export function Hud({
     : island.phase === 'approaching'
       ? '正在接近'
       : island.phase === 'docked'
-        ? island.ashore
-          ? '岛上搜集'
-          : '浅滩靠稳'
+        ? navigation.anchored
+          ? island.ashore
+            ? '锚泊采集'
+            : '锚泊稳固'
+          : island.ashore
+            ? '木筏离流'
+            : '短暂靠近'
         : '正在远离';
   return (
     <section className={`hud ${visible ? 'is-visible' : ''}`} aria-hidden={!visible}>
@@ -164,7 +180,7 @@ export function Hud({
       </div>
 
       <div
-        className={`island-readout island-readout--${island.phase} ${island.ashore ? 'is-ashore' : ''}`}
+        className={`island-readout island-readout--${island.phase} ${island.ashore ? 'is-ashore' : ''} ${navigation.driftRisk ? 'is-drift-risk' : ''}`}
         aria-label={`盐冠浅滩 ${islandStatus} ${islandMetric}`}
       >
         {reefExpedition ? <Waves size={19} /> : <Mountain size={19} />}
@@ -174,6 +190,24 @@ export function Hud({
           <i><b style={{ width: `${clampPercent(islandProgress * 100)}%` }} /></i>
         </div>
         <em>{islandMetric}</em>
+      </div>
+
+      <div
+        className={`navigation-readout ${navigation.sailDeployed ? 'is-sailing' : ''} ${navigation.anchored ? 'is-anchored' : ''} ${navigation.driftRisk ? 'is-drift-risk' : ''}`}
+        aria-label={`航向${cardinalLabel(navigation.courseAngle)} 风力利用${Math.round(navigation.windCapture * 100)}% 航速${navigation.speedKnots.toFixed(1)}节${navigation.anchored ? ' 已锚泊' : ''}`}
+      >
+        <Compass size={18} style={{ transform: `rotate(${navigation.heading}rad)` }} />
+        <div className="navigation-readout__course">
+          <span>航向</span>
+          <strong>{cardinalLabel(navigation.courseAngle)}</strong>
+        </div>
+        <div className="navigation-readout__wind">
+          <Wind size={16} style={{ transform: `rotate(${navigation.windAngle - navigation.heading}rad)` }} />
+          <i><b style={{ width: `${clampPercent(navigation.windCapture * 100)}%` }} /></i>
+        </div>
+        <em>{navigation.speedKnots.toFixed(1)} kn</em>
+        <Sailboat className={navigation.sailInstalled ? 'is-installed' : ''} size={16} />
+        <Anchor className={navigation.anchorInstalled ? 'is-installed' : ''} size={16} />
       </div>
 
       <div className={`dive-readout ${player.surface === 'water' ? 'is-visible' : ''}`} aria-label={`潜深 ${player.depth.toFixed(1)} 米`}>

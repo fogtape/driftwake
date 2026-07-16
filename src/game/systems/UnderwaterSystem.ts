@@ -170,7 +170,7 @@ export class UnderwaterSystem {
 
   sampleWaterFloorHeight(worldX: number, worldZ: number): number | null {
     const encounter = this.island.getEncounterState();
-    if (encounter.phase !== 'docked') return OPEN_WATER_FLOOR_Y;
+    if (encounter.phase === 'approaching') return OPEN_WATER_FLOOR_Y;
     const localX = (worldX - encounter.x) / encounter.scale;
     const localZ = (worldZ - encounter.z) / encounter.scale;
     const height = sampleReefFloorHeight(encounter.seed, localX, localZ);
@@ -179,7 +179,7 @@ export class UnderwaterSystem {
 
   resolvePlayerCollision(position: Vector3, previous: Vector3): void {
     const encounter = this.island.getEncounterState();
-    if (encounter.phase !== 'docked') return;
+    if (encounter.phase === 'approaching') return;
     this.worldToReef(position, this.localCandidate);
     this.worldToReef(previous, this.localPrevious);
     if (!this.isBlocked(this.localCandidate.x, this.localCandidate.z)) return;
@@ -219,7 +219,7 @@ export class UnderwaterSystem {
     this.updateParticles(time, delta, submerged);
     this.audio.setUnderwaterActivity(submerged ? MathUtils.clamp(0.45 + this.player.getDepth() * 0.13, 0, 1) : 0);
 
-    if (this.inputEnabled && inWater && encounter.phase === 'docked') this.updateFocus();
+    if (this.inputEnabled && inWater && encounter.phase !== 'approaching') this.updateFocus();
     else {
       this.focused = null;
       this.nodes.forEach((runtime) => (runtime.visuals.highlight.visible = false));
@@ -514,12 +514,12 @@ export class UnderwaterSystem {
 
   private setPrompt(prompt: string): void {
     this.lastPrompt = prompt;
-    useGameStore.getState().setInteraction(prompt);
+    useGameStore.getState().setInteraction(prompt, 'underwater');
   }
 
   private clearPrompt(): void {
     const store = useGameStore.getState();
-    if (this.lastPrompt && store.interaction === this.lastPrompt) store.setInteraction(null);
+    if (this.lastPrompt && store.interaction === this.lastPrompt) store.setInteraction(null, 'underwater');
     this.lastPrompt = null;
   }
 

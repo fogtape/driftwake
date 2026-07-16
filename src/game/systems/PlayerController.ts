@@ -140,11 +140,10 @@ export class PlayerController {
       const headBob = movementActive ? Math.sin(this.moveCycle) * 0.014 : 0;
       const ground = this.islandNavigation?.sampleGroundHeight(this.islandPosition.x, this.islandPosition.z);
       if (ground === null || ground === undefined) {
-        this.returnToRaftFallback();
-        this.localPosition.y = CAMERA_HEIGHT + headBob;
-        this.raft.localPointToWorld(this.localPosition, this.worldPosition);
-        this.camera.position.copy(this.worldPosition);
-        this.camera.quaternion.copy(this.raft.group.quaternion).multiply(this.lookQuaternion);
+        this.waterPosition.set(this.islandPosition.x, WATER_SURFACE_Y, this.islandPosition.z);
+        this.waterVelocity.set(0, 0, 0);
+        this.setSurface('water');
+        this.renderOnWater(false);
       } else {
         this.islandPosition.y = ground;
         this.camera.position.set(this.islandPosition.x, this.islandPosition.y + CAMERA_HEIGHT + headBob, this.islandPosition.z);
@@ -222,6 +221,19 @@ export class PlayerController {
 
   getForward(target = new Vector3()): Vector3 {
     return this.camera.getWorldDirection(target);
+  }
+
+  translateExpedition(deltaX: number, deltaZ: number): void {
+    if (!Number.isFinite(deltaX) || !Number.isFinite(deltaZ) || this.surface === 'raft') return;
+    if (this.surface === 'island') {
+      this.islandPosition.x += deltaX;
+      this.islandPosition.z += deltaZ;
+    } else {
+      this.waterPosition.x += deltaX;
+      this.waterPosition.z += deltaZ;
+    }
+    this.camera.position.x += deltaX;
+    this.camera.position.z += deltaZ;
   }
 
   dispose(): void {
@@ -313,8 +325,9 @@ export class PlayerController {
       this.islandNavigation?.sampleWaterFloorHeight?.(this.waterPosition.x, this.waterPosition.z) ?? OPEN_WATER_FLOOR_Y;
     this.waterPosition.y = MathUtils.clamp(this.waterPosition.y, floor + WATER_FLOOR_CLEARANCE, WATER_SURFACE_Y);
     const swimBob = moving ? Math.sin(this.moveCycle) * 0.018 : Math.sin(this.shakeTime * 1.35) * 0.008;
+    const surfaceLift = 0.25 * (1 - MathUtils.smoothstep(this.getDepth(), 0.06, 0.34));
     this.camera.position.copy(this.waterPosition);
-    this.camera.position.y += swimBob;
+    this.camera.position.y += swimBob + surfaceLift;
     this.camera.quaternion.copy(this.lookQuaternion);
   }
 
@@ -340,6 +353,13 @@ export class PlayerController {
 
   private setSurface(surface: PlayerSurface): void {
     if (surface === this.surface) return;
+    const wasOnRaft = this.surface === 'raft';
+    const enteringRaft = surface === 'raft';
+    if (wasOnRaft && !enteringRaft) {
+      this.lookEuler.y = MathUtils.euclideanModulo(this.lookEuler.y + this.raft.getHeading() + Math.PI, Math.PI * 2) - Math.PI;
+    } else if (!wasOnRaft && enteringRaft) {
+      this.lookEuler.y = MathUtils.euclideanModulo(this.lookEuler.y - this.raft.getHeading() + Math.PI, Math.PI * 2) - Math.PI;
+    }
     this.surface = surface;
     this.stepDistance = 0;
     this.islandNavigation?.onSurfaceChange?.(surface);

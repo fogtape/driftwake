@@ -37,23 +37,46 @@ describe('island encounter', () => {
     expect(stone).toMatchObject({ maxHealth: 1, requiresAxe: false, output: { stone: 2 } });
   });
 
-  it('approaches, waits for an ashore player, departs, and renews', () => {
+  it('uses sail drive to approach, an anchor to hold, then departs and renews', () => {
     let state = createDefaultIslandState(99);
     const start = islandTransform(state);
     expect(start.z).toBeLessThan(-80);
-    let result = advanceIslandState(state, ISLAND_APPROACH_SECONDS, false);
+    let result = advanceIslandState(state, ISLAND_APPROACH_SECONDS, {
+      approachRate: 1,
+      dockDriftRate: 1,
+      anchored: false,
+    });
     expect(result.event).toBe('arrived');
     state = result.state;
     expect(islandTransform(state)).toMatchObject({ x: 0, z: -7 });
-    state = advanceIslandState(state, ISLAND_DOCK_SECONDS, true).state;
+    state = advanceIslandState(state, ISLAND_DOCK_SECONDS, {
+      approachRate: 1,
+      dockDriftRate: 1,
+      anchored: true,
+    }).state;
     expect(state.phase).toBe('docked');
-    result = advanceIslandState(state, 1, false);
+    expect(state.elapsed).toBe(0);
+    result = advanceIslandState(state, ISLAND_DOCK_SECONDS, {
+      approachRate: 1,
+      dockDriftRate: 1,
+      anchored: false,
+    });
     expect(result.event).toBe('departing');
-    result = advanceIslandState(result.state, ISLAND_DEPART_SECONDS, false);
+    result = advanceIslandState(result.state, ISLAND_DEPART_SECONDS);
     expect(result.event).toBe('renewed');
     expect(result.state.phase).toBe('approaching');
     expect(result.state.seed).not.toBe(99);
     expect(result.state.cycle).toBe(1);
+  });
+
+  it('accelerates an unanchored departure while the sail remains deployed', () => {
+    const docked = { ...createDefaultIslandState(7), phase: 'docked' as const, elapsed: 0 };
+    const result = advanceIslandState(docked, ISLAND_DOCK_SECONDS / 1.65, {
+      approachRate: 1,
+      dockDriftRate: 1.65,
+      anchored: false,
+    });
+    expect(result.event).toBe('departing');
   });
 
   it('sanitizes node health against the generated layout', () => {

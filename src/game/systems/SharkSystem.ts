@@ -284,7 +284,7 @@ export class SharkSystem {
     this.setMode('retreating');
     this.targetTile = null;
     this.targetingPlayer = false;
-    useGameStore.getState().setInteraction(null);
+    useGameStore.getState().setInteraction(null, 'shark');
   }
 
   private updateRetreat(time: number, delta: number): void {
@@ -345,7 +345,7 @@ export class SharkSystem {
 
   private updateSpearInteraction(message: string): void {
     const store = useGameStore.getState();
-    if (store.selectedTool === 'spear') store.setInteraction(message);
-    else if (store.interaction?.startsWith('鲨鱼')) store.setInteraction(null);
+    if (store.selectedTool === 'spear') store.setInteraction(message, 'shark');
+    else if (store.interaction?.startsWith('鲨鱼')) store.setInteraction(null, 'shark');
   }
 }

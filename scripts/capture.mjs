@@ -17,7 +17,7 @@ const chromiumPath = process.env.CHROMIUM_PATH ?? '/data/data/com.termux/files/u
 const outputDir = new URL('../artifacts/screenshots/', import.meta.url);
 
 const seededSave = {
-  version: 4,
+  version: 5,
   savedAt: 1,
   player: {
     inventory: {
@@ -41,6 +41,8 @@ const seededSave = {
       freshWaterCup: 1,
       purifierKit: 1,
       grillKit: 1,
+      sailKit: 1,
+      anchorKit: 1,
     },
     survival: { health: 92, thirst: 67, hunger: 61, oxygen: 100 },
     selectedTool: 'hook',
@@ -57,6 +59,15 @@ const seededSave = {
       { id: 'capture-purifier', type: 'purifier', x: -1, z: 0, rotation: 0, phase: 'ready', elapsed: 18 },
       { id: 'capture-grill', type: 'grill', x: 1, z: 0, rotation: Math.PI, phase: 'working', elapsed: 8 },
     ],
+    navigation: {
+      windClock: 41,
+      courseAngle: -Math.PI / 8,
+      heading: -Math.PI / 8,
+      devices: [
+        { id: 'capture-sail', type: 'sail', x: 0, z: -1, rotation: 0, deployed: true },
+        { id: 'capture-anchor', type: 'anchor', x: -1, z: 1, rotation: Math.PI / 2, deployed: true },
+      ],
+    },
   },
   world: {
     island: {
@@ -95,9 +106,49 @@ const underwaterSeededSave = {
   ...seededSave,
   player: {
     ...seededSave.player,
-    inventory: { ...seededSave.player.inventory, purifierKit: 0, grillKit: 0 },
+    inventory: {
+      ...seededSave.player.inventory,
+      purifierKit: 0,
+      grillKit: 0,
+      sailKit: 0,
+      anchorKit: 0,
+    },
     selectedTool: 'hook',
     navigation: { surface: 'water', x: -3.117, y: -2.3, z: 4.7 },
+  },
+};
+
+const anchorInteractionSave = {
+  ...seededSave,
+  raft: {
+    ...seededSave.raft,
+    devices: seededSave.raft.devices.filter((device) => device.x !== 0 || device.z !== -1),
+    navigation: {
+      ...seededSave.raft.navigation,
+      devices: [
+        { id: 'interaction-sail', type: 'sail', x: 1, z: -1, rotation: 0, deployed: false },
+        { id: 'interaction-anchor', type: 'anchor', x: 0, z: -1, rotation: 0, deployed: true },
+      ],
+    },
+  },
+};
+
+const driftRiskSave = {
+  ...islandSeededSave,
+  player: {
+    ...islandSeededSave.player,
+    navigation: { surface: 'island', x: 0, z: -7 },
+  },
+  raft: {
+    ...islandSeededSave.raft,
+    navigation: {
+      ...islandSeededSave.raft.navigation,
+      devices: islandSeededSave.raft.navigation.devices.map((device) => ({ ...device, deployed: false })),
+    },
+  },
+  world: {
+    ...islandSeededSave.world,
+    island: { ...islandSeededSave.world.island, elapsed: 77.85 },
   },
 };
 
@@ -179,8 +230,8 @@ async function openDesktopPage(label, options = {}) {
   });
   if (options.seedSave) {
     await context.addInitScript((save) => {
-      localStorage.setItem('driftwake.save.v4', JSON.stringify(save));
-    }, options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
+      localStorage.setItem('driftwake.save.v5', JSON.stringify(save));
+    }, options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
   }
   const page = await context.newPage();
   monitorPage(page, label);
@@ -348,6 +399,14 @@ async function captureIslandInteraction() {
     await page.waitForTimeout(90);
     prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
   }
+  if (!prompt.includes('拾取风干枝料')) {
+    await page.waitForFunction(
+      () => document.querySelector('.interaction-prompt')?.textContent?.includes('拾取风干枝料'),
+      null,
+      { timeout: 20_000 },
+    ).catch(() => undefined);
+    prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  }
   console.log(`Island interaction prompt: ${prompt}`);
   if (!prompt.includes('拾取风干枝料')) {
     await page.screenshot({ path: new URL('island-interaction-diagnostic.png', outputDir).pathname });
@@ -394,7 +453,7 @@ async function captureUnderwaterInteraction() {
 async function captureNarrow() {
   const context = await browser.newContext({ viewport: { width: 640, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript((save) => {
-    localStorage.setItem('driftwake.save.v4', JSON.stringify(save));
+    localStorage.setItem('driftwake.save.v5', JSON.stringify(save));
   }, seededSave);
   const page = await context.newPage();
   monitorPage(page, 'narrow');
@@ -402,6 +461,36 @@ async function captureNarrow() {
   await page.waitForSelector('.primary-command:not(:disabled)', { timeout: 45_000 });
   await page.getByRole('button', { name: '开始漂流' }).click();
   await page.waitForTimeout(900);
+  const narrowBoxes = await page.evaluate(() => {
+    const box = (selector) => {
+      const element = document.querySelector(selector);
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+    };
+    return {
+      navigation: box('.navigation-readout'),
+      hotbar: box('.hotbar'),
+      devices: box('.device-rack.is-visible'),
+      survival: box('.survival-cluster'),
+      island: box('.island-readout'),
+      actions: box('.hud-actions'),
+    };
+  });
+  const overlaps = (a, b) => Boolean(a && b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top);
+  for (const [first, second] of [
+    ['navigation', 'hotbar'],
+    ['navigation', 'devices'],
+    ['navigation', 'survival'],
+    ['devices', 'hotbar'],
+    ['devices', 'island'],
+    ['devices', 'actions'],
+  ]) {
+    if (overlaps(narrowBoxes[first], narrowBoxes[second])) {
+      throw new Error(`Narrow HUD overlap: ${first} intersects ${second}; ${JSON.stringify(narrowBoxes)}`);
+    }
+  }
+  console.log(`Narrow HUD boxes: ${JSON.stringify(narrowBoxes)}`);
   await inspectCanvasPixels(page, 'narrow');
   await page.screenshot({ path: new URL('game-narrow.png', outputDir).pathname });
   await context.close();
@@ -410,7 +499,7 @@ async function captureNarrow() {
 async function captureUnderwaterNarrow() {
   const context = await browser.newContext({ viewport: { width: 640, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript((save) => {
-    localStorage.setItem('driftwake.save.v4', JSON.stringify(save));
+    localStorage.setItem('driftwake.save.v5', JSON.stringify(save));
   }, underwaterSeededSave);
   const page = await context.newPage();
   monitorPage(page, 'underwater-narrow');
@@ -420,6 +509,86 @@ async function captureUnderwaterNarrow() {
   await page.waitForTimeout(1200);
   await inspectCanvasPixels(page, 'underwater-narrow');
   await page.screenshot({ path: new URL('underwater-narrow.png', outputDir).pathname });
+  await context.close();
+}
+
+async function captureNavigation() {
+  const { context, page } = await openDesktopPage('navigation', { seedSave: true });
+  await page.locator('.primary-command').click();
+  await page.waitForTimeout(900);
+  await page.locator('.interaction-prompt').filter({ hasText: '收起拾风帆' }).waitFor({ timeout: 8_000 });
+  const courseBefore = await page.locator('.navigation-readout').getAttribute('aria-label');
+  await page.keyboard.press('KeyR');
+  await page.waitForFunction(
+    (before) => document.querySelector('.navigation-readout')?.getAttribute('aria-label') !== before,
+    courseBefore,
+    { timeout: 4_000 },
+  );
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => !document.querySelector('.navigation-readout')?.classList.contains('is-sailing'));
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => document.querySelector('.navigation-readout')?.classList.contains('is-sailing'));
+  await inspectCanvasPixels(page, 'navigation');
+  await page.screenshot({ path: new URL('navigation-desktop.png', outputDir).pathname });
+  await context.close();
+}
+
+async function captureNavigationInteraction() {
+  const { context, page } = await openDesktopPage('navigation-interaction', { seedSave: true, anchorStart: true });
+  await page.locator('.primary-command').click();
+  await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
+  await page.waitForTimeout(350);
+  let prompt = '';
+  for (let step = 0; step < 18 && !prompt.includes('起锚恢复航行'); step += 1) {
+    await page.evaluate(() => {
+      const movement = new MouseEvent('mousemove');
+      Object.defineProperties(movement, {
+        movementX: { value: 0 },
+        movementY: { value: 18 },
+      });
+      document.dispatchEvent(movement);
+    });
+    await page.waitForTimeout(80);
+    prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  }
+  console.log(`Navigation interaction prompt: ${prompt}`);
+  if (!prompt.includes('起锚恢复航行')) {
+    await page.screenshot({ path: new URL('navigation-interaction-diagnostic.png', outputDir).pathname });
+    throw new Error(`Expected raised-anchor prompt, received: ${prompt}`);
+  }
+  await page.keyboard.press('KeyE');
+  await page.locator('.interaction-prompt').filter({ hasText: '抛下潮石锚' }).waitFor({ timeout: 4_000 });
+  if (await page.locator('.navigation-readout').evaluate((element) => element.classList.contains('is-anchored'))) {
+    throw new Error('Anchor HUD remained active after raising the anchor');
+  }
+  await page.keyboard.press('KeyE');
+  await page.locator('.interaction-prompt').filter({ hasText: '起锚恢复航行' }).waitFor({ timeout: 4_000 });
+  await inspectCanvasPixels(page, 'navigation-interaction');
+  await page.screenshot({ path: new URL('navigation-interaction-desktop.png', outputDir).pathname });
+  await context.close();
+}
+
+async function captureDriftRisk() {
+  const { context, page } = await openDesktopPage('drift-risk', { seedSave: true, driftRiskStart: true });
+  await page.locator('.primary-command').click();
+  await page.locator('.island-readout.is-drift-risk').waitFor({ timeout: 8_000 });
+  await page.locator('.island-readout--departing.is-ashore').waitFor({ timeout: 20_000 });
+  await page.evaluate(() => {
+    const movement = new MouseEvent('mousemove');
+    Object.defineProperties(movement, {
+      movementX: { value: -1780 },
+      movementY: { value: 120 },
+    });
+    document.dispatchEvent(movement);
+  });
+  await page.waitForTimeout(900);
+  if (await page.locator('.dive-readout').evaluate((element) => element.classList.contains('is-visible'))) {
+    throw new Error('Player fell through the moving island instead of remaining in its expedition frame');
+  }
+  const status = (await page.locator('.island-readout strong').textContent())?.trim() ?? '';
+  if (status !== '正在远离') throw new Error(`Expected island departure status, received: ${status}`);
+  await inspectCanvasPixels(page, 'drift-risk');
+  await page.screenshot({ path: new URL('drift-risk-desktop.png', outputDir).pathname });
   await context.close();
 }
 
@@ -467,6 +636,9 @@ try {
   if (captureOnly === 'all' || captureOnly === 'underwater-interaction') await captureUnderwaterInteraction();
   if (captureOnly === 'all' || captureOnly === 'narrow') await captureNarrow();
   if (captureOnly === 'all' || captureOnly === 'underwater-narrow') await captureUnderwaterNarrow();
+  if (captureOnly === 'all' || captureOnly === 'navigation') await captureNavigation();
+  if (captureOnly === 'all' || captureOnly === 'navigation-interaction') await captureNavigationInteraction();
+  if (captureOnly === 'all' || captureOnly === 'drift-risk') await captureDriftRisk();
   if (captureOnly === 'all' || captureOnly === 'mobile') await captureMobile();
 } finally {
   await browser.close();

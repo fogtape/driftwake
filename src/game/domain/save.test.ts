@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SAVE_KEY, SAVE_VERSION, createDefaultRaftTiles, loadSave, sanitizeSave } from './save';
+import { createDefaultNavigationState } from './navigation';
+import { islandTransform, sanitizeIslandState } from './island';
 
 describe('save schema', () => {
   it('sanitizes inventory, selected tools, stats and duplicate raft tiles', () => {
@@ -55,12 +57,13 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v4');
-    expect(save?.version).toBe(4);
+    expect(SAVE_KEY).toBe('driftwake.save.v5');
+    expect(save?.version).toBe(5);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
     expect(save?.world.island.phase).toBe('approaching');
     expect(save?.world.underwater.nodes).toHaveLength(18);
+    expect(save?.raft.navigation.devices).toEqual([]);
   });
 
   it('falls back to a legacy save when the current slot is corrupt', () => {
@@ -111,7 +114,7 @@ describe('save schema', () => {
     expect(save?.player.navigation).toEqual({ surface: 'raft', x: 0, z: 1.08 });
   });
 
-  it('restores a valid island position only while the island is docked', () => {
+  it('restores a valid island position while the expedition island still exists', () => {
     const save = sanitizeSave({
       version: SAVE_VERSION,
       player: {
@@ -125,6 +128,22 @@ describe('save schema', () => {
       world: { island: { seed: 9, cycle: 0, phase: 'docked', elapsed: 5, nodes: [] } },
     });
     expect(save?.player.navigation).toEqual({ surface: 'island', x: 0, z: -7 });
+
+    const departingIsland = sanitizeIslandState({ seed: 9, cycle: 0, phase: 'departing', elapsed: 5, nodes: [] });
+    const transform = islandTransform(departingIsland);
+    const departing = sanitizeSave({
+      version: SAVE_VERSION,
+      player: {
+        inventory: { hook: 1 },
+        survival: {},
+        selectedTool: 'hook',
+        playSeconds: 5,
+        navigation: { surface: 'island', x: transform.x, z: transform.z },
+      },
+      raft: { tiles: [{ x: 0, z: 0, health: 100 }], devices: [] },
+      world: { island: departingIsland },
+    });
+    expect(departing?.player.navigation.surface).toBe('island');
   });
 
   it('restores a bounded underwater position on the matching docked reef', () => {
@@ -143,5 +162,48 @@ describe('save schema', () => {
     expect(save?.player.navigation.surface).toBe('water');
     expect(save?.player.navigation.y).toBeGreaterThan(-6);
     expect(save?.player.survival.oxygen).toBe(73);
+  });
+
+  it('restores navigation equipment, rejects occupied tiles, and retracts deep-water anchors', () => {
+    const save = sanitizeSave({
+      version: SAVE_VERSION,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 8 },
+      raft: {
+        tiles: [
+          { x: 0, z: 0, health: 100 },
+          { x: 1, z: 0, health: 100 },
+          { x: -1, z: 0, health: 100 },
+        ],
+        devices: [{ id: 'grill', type: 'grill', x: -1, z: 0, rotation: 0, phase: 'idle', elapsed: 0 }],
+        navigation: {
+          windClock: 22,
+          courseAngle: 0.5,
+          heading: 0.25,
+          devices: [
+            { id: 'sail', type: 'sail', x: 0, z: 0, rotation: 0, deployed: true },
+            { id: 'anchor', type: 'anchor', x: 1, z: 0, rotation: 0, deployed: true },
+          ],
+        },
+      },
+      world: { island: { seed: 9, cycle: 0, phase: 'approaching', elapsed: 5, nodes: [] } },
+    });
+    expect(save?.raft.navigation.devices).toHaveLength(2);
+    expect(save?.raft.navigation.devices.find((device) => device.type === 'anchor')?.deployed).toBe(false);
+    expect(save?.raft.navigation.devices.find((device) => device.type === 'sail')?.deployed).toBe(true);
+  });
+
+  it('migrates v4 reef progress and grants a fresh unanchored docking window', () => {
+    const save = sanitizeSave({
+      version: 4,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 8 },
+      raft: { tiles: [{ x: 0, z: 0, health: 100 }], devices: [] },
+      world: {
+        island: { seed: 9, cycle: 0, phase: 'docked', elapsed: 77, nodes: [] },
+        underwater: { islandSeed: 9, islandCycle: 0, nodes: [{ id: 'sand-0', health: 0 }] },
+      },
+    });
+    expect(save?.world.island.elapsed).toBe(18);
+    expect(save?.raft.navigation).toEqual(createDefaultNavigationState());
+    expect(save?.world.underwater.nodes.find((node) => node.id === 'sand-0')?.health).toBe(0);
   });
 });

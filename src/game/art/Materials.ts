@@ -25,6 +25,9 @@ export interface AssetTextures {
   reefSeabed: Texture;
   reefSeabedNormal: Texture;
   reefSeabedRoughness: Texture;
+  sailCloth: Texture;
+  sailClothNormal: Texture;
+  sailClothRoughness: Texture;
 }
 
 export interface MaterialLibrary {
@@ -50,6 +53,7 @@ export interface MaterialLibrary {
   clay: MeshStandardMaterial;
   reefFish: MeshStandardMaterial;
   reefCaustic: MeshBasicMaterial;
+  sailCloth: MeshStandardMaterial;
 }
 
 export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetTextures> {
@@ -66,6 +70,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     reefSeabed,
     reefSeabedNormal,
     reefSeabedRoughness,
+    sailCloth,
+    sailClothNormal,
+    sailClothRoughness,
   ] = await Promise.all([
     loader.loadAsync('/assets/textures/weathered-cedar.webp'),
     loader.loadAsync('/assets/textures/ocean-foam-mask.png'),
@@ -78,6 +85,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/reef-seabed.webp'),
     loader.loadAsync('/assets/textures/reef-seabed-normal.webp'),
     loader.loadAsync('/assets/textures/reef-seabed-roughness.webp'),
+    loader.loadAsync('/assets/textures/sail-cloth.webp'),
+    loader.loadAsync('/assets/textures/sail-cloth-normal.webp'),
+    loader.loadAsync('/assets/textures/sail-cloth-roughness.webp'),
   ]);
 
   const anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -120,6 +130,15 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   reefSeabedNormal.colorSpace = NoColorSpace;
   reefSeabedRoughness.colorSpace = NoColorSpace;
 
+  for (const texture of [sailCloth, sailClothNormal, sailClothRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.anisotropy = anisotropy;
+  }
+  sailCloth.colorSpace = SRGBColorSpace;
+  sailClothNormal.colorSpace = NoColorSpace;
+  sailClothRoughness.colorSpace = NoColorSpace;
+
   return {
     wood,
     foam,
@@ -132,6 +151,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     reefSeabed,
     reefSeabedNormal,
     reefSeabedRoughness,
+    sailCloth,
+    sailClothNormal,
+    sailClothRoughness,
   };
 }
 
@@ -211,6 +233,16 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       depthWrite: false,
       side: DoubleSide,
       blending: AdditiveBlending,
+    }),
+    sailCloth: new MeshStandardMaterial({
+      color: 0xe7dcc2,
+      map: textures.sailCloth,
+      normalMap: textures.sailClothNormal,
+      normalScale: new Vector2(0.62, 0.62),
+      roughnessMap: textures.sailClothRoughness,
+      roughness: 0.96,
+      metalness: 0,
+      side: DoubleSide,
     }),
   };
 }

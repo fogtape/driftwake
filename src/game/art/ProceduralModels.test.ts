@@ -13,6 +13,7 @@ import {
   createSpearModel,
 } from './ProceduralModels';
 import { createReefModel, createReefNodeModel } from './UnderwaterModels';
+import { createAnchorModel, createSailModel } from './NavigationModels';
 
 function createTestMaterials(): MaterialLibrary {
   const material = () => new MeshStandardMaterial();
@@ -39,6 +40,7 @@ function createTestMaterials(): MaterialLibrary {
     clay: material(),
     reefFish: material(),
     reefCaustic: new MeshBasicMaterial(),
+    sailCloth: material(),
   };
 }
 
@@ -148,5 +150,20 @@ describe('procedural model assets', () => {
     expect(reef.userData.reefVisuals.fishSchools).toHaveLength(3);
     expect(nodes.map(renderedPartCount).every((count) => count >= 7)).toBe(true);
     expect(nodes.every((node) => node.userData.reefNodeVisuals.highlight)).toBe(true);
+  }, 15_000);
+
+  it('builds detailed navigation equipment with deformable cloth and an anchor rig', () => {
+    const materials = createTestMaterials();
+    const sail = createSailModel(materials);
+    const anchor = createAnchorModel(materials);
+    const sailStats = meshStats(sail);
+    const anchorStats = meshStats(anchor);
+    const sailSize = new Box3().setFromObject(sail).getSize(new Vector3());
+    expect(sailStats.meshes).toBeGreaterThanOrEqual(12);
+    expect(sailStats.vertices).toBeGreaterThan(900);
+    expect(sailSize.y).toBeGreaterThan(3.3);
+    expect(sail.userData.navigationVisuals.clothBase.length).toBeGreaterThan(250);
+    expect(anchorStats.meshes).toBeGreaterThanOrEqual(15);
+    expect(anchor.userData.navigationVisuals.rope).toBeDefined();
   }, 15_000);
 });

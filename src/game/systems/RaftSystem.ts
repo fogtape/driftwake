@@ -61,6 +61,7 @@ export class RaftSystem {
   private readonly damagedColor = new Color(0xc7745d);
   private readonly tempColor = new Color();
   private revision = 0;
+  private heading = 0;
 
   constructor(materials: MaterialLibrary, savedTiles: readonly SavedRaftTile[]) {
     this.group.name = 'player-raft';
@@ -98,12 +99,21 @@ export class RaftSystem {
     return this.revision;
   }
 
+  setHeading(heading: number): void {
+    if (!Number.isFinite(heading)) return;
+    this.heading = heading;
+  }
+
+  getHeading(): number {
+    return this.heading;
+  }
+
   update(time: number, delta: number): void {
     const wave = sampleWave(this.group.position.x, this.group.position.z, time);
     const targetY = wave.height + 0.08;
     this.group.position.y = MathUtils.damp(this.group.position.y, targetY, 5.8, delta);
 
-    this.targetEuler.set(wave.slopeZ * 0.33, 0, -wave.slopeX * 0.32, 'YXZ');
+    this.targetEuler.set(wave.slopeZ * 0.33, this.heading, -wave.slopeX * 0.32, 'YXZ');
     this.targetQuaternion.setFromEuler(this.targetEuler);
     this.group.quaternion.slerp(this.targetQuaternion, 1 - Math.exp(-delta * 3.4));
     this.group.updateMatrixWorld();

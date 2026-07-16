@@ -9,6 +9,8 @@ describe('game store item use', () => {
       inventory,
       inventorySlots: usedInventorySlots(inventory),
       survival: { health: 70, thirst: 20, hunger: 60, oxygen: 100 },
+      interaction: null,
+      interactionOwner: null,
     });
   });
 
@@ -26,5 +28,18 @@ describe('game store item use', () => {
     expect(useGameStore.getState().survival.oxygen).toBeCloseTo(94.9);
     useGameStore.getState().damagePlayer(18);
     expect(useGameStore.getState().survival.health).toBe(52);
+  });
+
+  it('prevents an inactive system from clearing another system interaction', () => {
+    const store = useGameStore.getState();
+    store.setInteraction('拾取风干枝料', 'island');
+    expect(useGameStore.getState()).toMatchObject({ interaction: '拾取风干枝料', interactionOwner: 'island' });
+    store.setInteraction(null, 'navigation');
+    expect(useGameStore.getState().interaction).toBe('拾取风干枝料');
+    store.setInteraction(null, 'island');
+    expect(useGameStore.getState()).toMatchObject({ interaction: null, interactionOwner: null });
+    store.setInteraction('菜单操作', 'global');
+    store.setInteraction(null);
+    expect(useGameStore.getState().interaction).toBeNull();
   });
 });

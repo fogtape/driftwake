@@ -28,10 +28,19 @@ function createTestMaterials(): MaterialLibrary {
     clay: material(),
     reefFish: material(),
     reefCaustic: new MeshBasicMaterial(),
+    sailCloth: material(),
   };
 }
 
 describe('RaftSystem topology', () => {
+  it('retains an explicit navigation heading independently of wave motion', () => {
+    const raft = new RaftSystem(createTestMaterials(), [{ x: 0, z: 0, health: 100 }]);
+    raft.setHeading(Math.PI / 3);
+    raft.update(2, 1 / 60);
+    expect(raft.getHeading()).toBeCloseTo(Math.PI / 3);
+    expect(Number.isFinite(raft.group.quaternion.y)).toBe(true);
+  });
+
   it('only accepts empty cardinally adjacent foundation cells', () => {
     const raft = new RaftSystem(createTestMaterials(), [{ x: 0, z: 0, health: 100 }]);
     expect(raft.canAddTile({ x: 1, z: 0 })).toBe(true);

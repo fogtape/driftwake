@@ -1,7 +1,7 @@
 # 原创资产清单
 
 > 更新日期：2026-07-16
-> 状态：第五轮水下礁区美术与交互基线，发布前仍需做最终授权、DCC 替换与相似性复核
+> 状态：第六轮航行设备美术与交互基线，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -124,9 +124,33 @@ Create an original seamless tileable PBR base-color albedo texture for a stylize
 
 原始候选四边差为 x=23.85/y=27.50，内容质量通过但未直接入库。第一次“强制零差值”处理虽然数值为零，却在 2x2 预览出现十字对称带，因此被拒绝；采用版改为半幅环移，把自然连续区域移到四边，只在中央旧接缝使用不规则羽化。normal 强度 1.08，roughness 范围 174-238。
 
+### TEX-006：拼补拾风帆材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `sail-cloth.webp`、`sail-cloth-normal.webp`、`sail-cloth-roughness.webp` |
+| 模型 | `gpt-image-2` |
+| 请求质量 | `high` |
+| 请求尺寸 | `2048x2048` |
+| 实际输出 | 1254x1254 PNG；采用版统一为 1024x1024 WebP |
+| 处理方式 | `scripts/prepare_imagegen_sail.py` 正方形裁切、色彩/对比约束、亮度门禁与 PBR 图派生 |
+| 用途 | 拾风帆双面可变形帆布、桅顶风标 |
+| 检查 | 正交平面材质；无透视、文字、标志、大洞和强烘焙光影；亮度均值 165.8、标准差 21.0 |
+
+最终提示词：
+
+```text
+Use case: stylized-concept
+Asset type: production material source for an original first-person ocean survival game sail
+Primary request: A square, orthographic, evenly lit close-up swatch of hand-sewn off-white sailcloth made from layered reclaimed canvas and palm fiber. Dense visible woven fibers, salt bleaching, subtle teal-gray water stains, sun-faded warm ochre edges, small hand-stitched repairs and restrained rust marks. Mature stylized realism, physically plausible fabric, rich fine texture, quiet handcrafted character, no scene perspective.
+Constraints: Texture only, edge-to-edge material coverage, uniform scale and illumination, no mast, no ropes, no horizon, no objects, no people, no symbols, no logo, no letters, no text, no watermark, no large holes, no dramatic shadows, no directional spotlight, no recognizable copyrighted design.
+```
+
+该帆面采用一次完整 UV，不要求强制平铺。处理脚本保留原图非重复的补丁与缝线布局，只压缩尺寸并派生法线/粗糙度；这样能避免平铺修复破坏手工修补叙事。源 PNG 保留在忽略版本控制的 `output/imagegen/`，运行时只引用审定后的三张 WebP。
+
 ## 本轮 Imagegen 尝试
 
-调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider，模型 `gpt-image-2`，质量 `high`。本轮 2048x2048 PNG 海床请求在 38.1 秒完成并通过人工内容检查；没有在仓库保存 provider URL 或 API Key，也没有切换低阶模型。先前鲨皮与编织纤维请求的超时记录继续保留，它们仍使用确定性程序版本。
+调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider，模型 `gpt-image-2`，质量 `high`。本轮 2048x2048 PNG 帆布请求在 47.2 秒完成并通过人工内容检查；上一轮海床请求为 38.1 秒。没有在仓库保存 provider URL 或 API Key，也没有切换低阶模型。先前鲨皮与编织纤维请求的超时记录继续保留，它们仍使用确定性程序版本。
 
 鲨皮最终请求提示词：
 
@@ -162,7 +186,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 ## 代码原生模型与动画
 
-本轮岛屿与礁区需要确定性地响应地形高度、三维游动、资源生命、采集动画和跨版本存档，因此继续以代码原生形体与实时动画建立统一可玩的近最终基线。重复珊瑚枝、岩石、海草与鱼群按材质实例化；没有因软件截图后端较慢而降低运行时贴图质量。
+本轮航帆与锚需要确定性响应风向、帆向、部署状态、筏格位置、损毁和跨版本存档，因此继续以代码原生形体与实时动画建立统一可玩的近最终基线。帆布使用独立 AI PBR 材质；没有因软件截图后端较慢而降低运行时贴图质量。
 
 | ID | 资产 | 位置 | 当前状态 |
 | --- | --- | --- | --- |
@@ -181,6 +205,8 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | MOD-013 | 潮磨石斧：回收木柄、石质斧头、金属刃口和六圈编织绑带 | `src/game/art/ProceduralModels.ts` | 已进入第一视角挥砍和三击树木循环 |
 | MOD-014 | 盐冠礁床：3403+ 顶点下沉地形、44 岩簇、18 珊瑚簇、34 海草和 3 组鱼群 | `src/game/art/UnderwaterModels.ts` | 珊瑚/海草/鱼群按材质实例化，AI 海床 PBR 材质与动态焦散已接通 |
 | MOD-015 | 水下资源组：细砂、黏土、盐壳金属矿和长叶海草 | `src/game/art/UnderwaterModels.ts` | 四套独立轮廓，支持高亮、三段钩击、收割、抖动和消散 |
+| MOD-016 | 拾风帆：3.4 米桅杆、桅脚、三道绑扎、双侧受力绳、横桁、分段帆面和风标 | `src/game/art/NavigationModels.ts` | 12+ 网格、900+ 顶点，AI 帆布 PBR 双面渲染，筏格附着 |
+| MOD-017 | 潮石锚：木质底座、双立柱、绞盘鼓、轮缘、曲柄、四圈绳卷、垂绳、石坠和双锚爪 | `src/game/art/NavigationModels.ts` | 15+ 网格，自动朝筏外，支持水下部署和筏格损毁 |
 | ANI-001 | 木筏三轴波浪升沉 | `src/game/systems/RaftSystem.ts` | 已实现 |
 | ANI-002 | 第一人称移动、镜头与木筏局部坐标 | `src/game/systems/PlayerController.ts` | 已实现基础版 |
 | ANI-003 | 钩具蓄力、抛射、旋转、拖回与收起 | `src/game/systems/HookSystem.ts` | 已实现基础闭环 |
@@ -192,12 +218,14 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | ANI-009 | 石斧挥动、命中帧、棕榈受击抖动、倒伏和树桩切换 | `src/game/systems/IslandSystem.ts` | 三击状态与收获、粒子、音效同步 |
 | ANI-010 | 木筏/岛屿/水域三表面移动、三维游动、上浮/下潜、登筏与上岸 | `src/game/systems/PlayerController.ts` | 水域位置与潜深可保存，地形和礁石碰撞已接通 |
 | ANI-011 | 水下钩具挥击、矿点分段生命、海草摇曳、鱼群巡游和鲨鱼追击/扑咬 | `src/game/systems/UnderwaterSystem.ts`、`SharkSystem.ts` | 音效、粒子、UI、生命伤害和击退同步 |
+| ANI-012 | 展帆/收帆、帆面逐顶点鼓动、桅顶风标、八向调帆、筏体转向、锚绳伸缩、绞盘旋转和锚爪摆动 | `src/game/systems/NavigationSystem.ts` | 风效、航速、部署状态、UI 和音频同步 |
 | VFX-001 | 入水粒子 | `src/game/systems/SplashSystem.ts` | 已实现 |
 | VFX-002 | 木屑、修补、拆除、武器和咬击冲击粒子 | `src/game/systems/SplashSystem.ts` | 颜色与数量按事件区分 |
 | VFX-003 | 五层加色火焰、动态点光、五块余烬和八层烟雾 | `src/game/art/ProceduralModels.ts` | 火势与设备阶段联动，焦鱼阶段转为深色烟 |
 | VFX-004 | 净水蒸汽、海水退位、杯中水位和循环滴水 | `src/game/systems/DeviceSystem.ts` | 蒸馏进度实时驱动，不使用位图序列 |
 | VFX-005 | 岸线泡沫脉动、资源高亮、木屑/石屑/叶片分类冲击 | `src/game/systems/IslandSystem.ts` | 跟随岛屿阶段、焦点和采集事件驱动 |
 | VFX-006 | 水下雾色/曝光过渡、双面海面、滚动焦散、气泡、悬浮物和矿屑 | `src/game/systems/UnderwaterSystem.ts`、`DriftwakeGame.ts` | 随潜深和玩家表面驱动；水下关闭不符合物理的硬阴影 pass |
+| VFX-007 | 航行设备放置冲击、脉动交互环、帆面风压形变、风标和水下锚爪 | `src/game/systems/NavigationSystem.ts` | 随帆向、风力利用与部署插值实时驱动 |
 
 ## 程序音频分层
 
@@ -215,6 +243,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | SFX-DEVICE | 放置木/铁冲击、点火、完成提示、焦糊反馈、持续火焰噪声和蒸汽高通层 | `src/game/systems/AudioSystem.ts` |
 | SFX-ISLAND | 木筏/沙地脚步、石斧破风、入木、倒树、枝料/石料/植被拾取 | `src/game/systems/AudioSystem.ts` |
 | SFX-REEF | 入水/游动、钩刃擦水、细砂/黏土/金属分层撞击和海草收割 | `src/game/systems/AudioSystem.ts` |
+| SFX-NAV | 帆布受风持续带通层、展收帆摩擦、调帆绳索、锚链坠落和绞盘回收 | `src/game/systems/AudioSystem.ts` |
 | CREATURE | 鲨鱼低频预兆、扑咬冲击与武器命中 | `src/game/systems/AudioSystem.ts` |
 | UI | 短促确认、拒绝和工具切换 | `src/game/systems/AudioSystem.ts` |
 
@@ -224,9 +253,9 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 - 用 Blender 或等效 DCC 建立可蒙皮的最终双手、工具、鲨鱼和生活设备资产，当前代码模型是原创近最终形体基线而非最终蒙皮资产；
 - 为木材补充经过人工修整的 normal、roughness 与 AO；鲨皮和编织纤维已使用独立派生图；
-- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005 已采用高质量输出；
+- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005/TEX-006 已采用高质量输出；
 - 建立同一角色比例与材质语言下的模型规范；
 - 为岛屿补充手绘沙地/草地/岩面材质组、草丛层级和更丰富的岸线小物，保持现有确定性地形与碰撞接口；
-- 为珊瑚、海草、鱼群和水下钩具建立最终 DCC 模型、蒙皮与顶点动画，保留当前实例化布局和领域接口；
+- 为珊瑚、海草、鱼群、水下钩具、拾风帆与潮石锚建立最终 DCC 模型、蒙皮与顶点动画，保留当前布局和领域接口；
 - 录制或生成多样本海浪、绳索、木结构、金属、火焰、蒸汽、烹饪和鲨鱼音效，保留当前程序音频作动态底层；
 - 为所有最终资产建立来源、版本、修改记录和发布授权结论。

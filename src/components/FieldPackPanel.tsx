@@ -19,8 +19,7 @@ import {
   type ItemId,
 } from '../game/domain/items';
 import { RECIPES, missingForRecipe, type CraftResult, type RecipeId } from '../game/domain/recipes';
-import type { DeviceType } from '../game/domain/devices';
-import type { OverlayPanel, RaftFeedback } from '../state/gameStore';
+import type { OverlayPanel, PlacementType, RaftFeedback } from '../state/gameStore';
 import { ItemIcon } from './ItemIcon';
 
 interface FieldPackPanelProps {
@@ -32,7 +31,7 @@ interface FieldPackPanelProps {
   onPanelChange: (panel: Exclude<OverlayPanel, null>) => void;
   onCraft: (recipeId: RecipeId) => CraftResult;
   onUse: (itemId: ItemId) => boolean;
-  onPlace: (deviceType: DeviceType) => void;
+  onPlace: (deviceType: PlacementType) => void;
   onClose: () => void;
 }
 
@@ -45,9 +44,11 @@ const CONSUMABLES = new Set<ItemId>([
   'cookedFish',
   'burntFish',
 ]);
-const PLACEABLES: Partial<Record<ItemId, DeviceType>> = {
+const PLACEABLES: Partial<Record<ItemId, PlacementType>> = {
   purifierKit: 'purifier',
   grillKit: 'grill',
+  sailKit: 'sail',
+  anchorKit: 'anchor',
 };
 
 function categoryLabel(category: (typeof ITEM_DEFINITIONS)[ItemId]['category']): string {

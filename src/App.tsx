@@ -8,8 +8,7 @@ import type { DriftwakeGame } from './game/DriftwakeGame';
 import { ITEM_DEFINITIONS, type ItemId, type ToolId } from './game/domain/items';
 import { RECIPES, type RecipeId } from './game/domain/recipes';
 import { loadPreferences, writePreferences } from './game/domain/preferences';
-import type { DeviceType } from './game/domain/devices';
-import { useGameStore, type AudioMix, type OverlayPanel, type QualityPreset } from './state/gameStore';
+import { useGameStore, type AudioMix, type OverlayPanel, type PlacementType, type QualityPreset } from './state/gameStore';
 
 function detectUnsupportedDevice(): boolean {
   const narrow = window.innerWidth < 720;
@@ -41,6 +40,7 @@ export function App() {
   const shark = useGameStore((state) => state.shark);
   const raft = useGameStore((state) => state.raft);
   const devices = useGameStore((state) => state.devices);
+  const navigation = useGameStore((state) => state.navigation);
   const island = useGameStore((state) => state.island);
   const reef = useGameStore((state) => state.reef);
   const placementDevice = useGameStore((state) => state.placementDevice);
@@ -154,7 +154,7 @@ export function App() {
     }
     return used;
   };
-  const placeDevice = (deviceType: DeviceType) => {
+  const placeDevice = (deviceType: PlacementType) => {
     const store = useGameStore.getState();
     if (store.island.ashore) {
       gameRef.current?.playUi(false);
@@ -191,6 +191,7 @@ export function App() {
         shark={shark}
         raft={raft}
         devices={devices}
+        navigation={navigation}
         island={island}
         reef={reef}
         placementDevice={placementDevice}

@@ -17,6 +17,7 @@ export class AudioSystem {
   private steamLoop: GainNode | null = null;
   private islandLoop: GainNode | null = null;
   private underwaterLoop: GainNode | null = null;
+  private sailLoop: GainNode | null = null;
   private nextCreakAt = 4;
   private nextBirdAt = 6;
   private nextReelAt = 0;
@@ -26,6 +27,7 @@ export class AudioSystem {
   private deviceSteamActivity = 0;
   private islandActivity = 0;
   private underwaterActivity = 0;
+  private sailActivity = 0;
   private mix: AudioMix = {
     master: 0.78,
     music: 0.2,
@@ -65,6 +67,7 @@ export class AudioSystem {
       this.startDeviceLayers();
       this.startIslandLayer();
       this.startUnderwaterLayer();
+      this.startNavigationLayer();
     }
     if (this.context.state !== 'running') await this.context.resume();
   }
@@ -202,6 +205,46 @@ export class AudioSystem {
     this.underwaterLoop?.gain.setTargetAtTime(this.underwaterActivity * 0.085, now, 0.28);
     this.worldFilter?.frequency.setTargetAtTime(18000 - this.underwaterActivity * 16950, now, 0.16);
     if (this.worldFilter) this.worldFilter.Q.setTargetAtTime(0.2 + this.underwaterActivity * 0.72, now, 0.16);
+  }
+
+  setSailActivity(activity: number): void {
+    this.sailActivity = Math.max(0, Math.min(1, activity));
+    if (!this.context) return;
+    this.sailLoop?.gain.setTargetAtTime(this.sailActivity * 0.07, this.context.currentTime, 0.35);
+  }
+
+  playSailToggle(deployed: boolean): void {
+    this.noiseBurst(deployed ? 0.64 : 0.46, deployed ? 1850 : 1320, deployed ? 0.085 : 0.07, 'bandpass');
+    this.noiseBurst(0.18, 3600, 0.035, 'highpass');
+    this.playWoodKnock(0.045, 0.065);
+    if (!this.context) return;
+    const timer = window.setTimeout(() => {
+      this.noiseBurst(0.12, deployed ? 2400 : 980, 0.045, 'bandpass');
+      window.clearTimeout(timer);
+    }, deployed ? 170 : 110);
+  }
+
+  playSailTrim(): void {
+    this.noiseBurst(0.16, 2350, 0.055, 'bandpass');
+    this.noiseBurst(0.09, 820, 0.032, 'lowpass');
+    this.playWoodKnock(0.026, 0.045);
+  }
+
+  playAnchor(deployed: boolean): void {
+    this.noiseBurst(deployed ? 0.82 : 0.62, deployed ? 410 : 620, deployed ? 0.13 : 0.09, 'lowpass');
+    this.noiseBurst(0.46, 1680, 0.07, 'bandpass');
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(deployed ? 92 : 68, now);
+    oscillator.frequency.exponentialRampToValueAtTime(deployed ? 48 : 124, now + 0.42);
+    gain.gain.setValueAtTime(0.055, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.46);
+    oscillator.connect(gain).connect(this.effects);
+    oscillator.start(now);
+    oscillator.stop(now + 0.47);
   }
 
   playFootstep(surface: PlayerSurface): void {
@@ -509,6 +552,7 @@ export class AudioSystem {
     this.steamLoop = null;
     this.islandLoop = null;
     this.underwaterLoop = null;
+    this.sailLoop = null;
   }
 
   private startAmbientLayers(): void {
@@ -556,6 +600,33 @@ export class AudioSystem {
     lfo.connect(lfoGain).connect(windGain.gain);
     lfo.start();
     this.startMusicLayer();
+  }
+
+  private startNavigationLayer(): void {
+    if (!this.context || !this.effects) return;
+    const duration = 4;
+    const sampleRate = this.context.sampleRate;
+    const buffer = this.context.createBuffer(1, duration * sampleRate, sampleRate);
+    const channel = buffer.getChannelData(0);
+    let brown = 0;
+    for (let index = 0; index < channel.length; index += 1) {
+      const white = this.random() * 2 - 1;
+      brown = (brown + white * 0.035) / 1.035;
+      const fabricPulse = 0.55 + Math.sin((index / sampleRate) * Math.PI * 0.84) * 0.28;
+      const snap = this.random() > 0.9988 ? white * 0.42 : 0;
+      channel[index] = (brown * 1.6 + white * 0.08 + snap) * fabricPulse;
+    }
+    const source = this.context.createBufferSource();
+    const filter = this.context.createBiquadFilter();
+    this.sailLoop = this.context.createGain();
+    source.buffer = buffer;
+    source.loop = true;
+    filter.type = 'bandpass';
+    filter.frequency.value = 1640;
+    filter.Q.value = 0.55;
+    this.sailLoop.gain.value = this.sailActivity * 0.07;
+    source.connect(filter).connect(this.sailLoop).connect(this.effects);
+    source.start(0, 0.7);
   }
 
   private startMusicLayer(): void {

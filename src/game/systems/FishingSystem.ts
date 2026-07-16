@@ -137,7 +137,7 @@ export class FishingSystem {
     this.fish.visible = false;
     this.audio.playFishingCast();
     useGameStore.getState().setFishing({ phase: 'casting', tension: 0, progress: 0 });
-    useGameStore.getState().setInteraction('浮标飞行中');
+    useGameStore.getState().setInteraction('浮标飞行中', 'fishing');
   }
 
   private updateCast(time: number): void {
@@ -153,7 +153,7 @@ export class FishingSystem {
     this.splashes.spawn(this.bobber.position);
     this.audio.playSplash();
     useGameStore.getState().setFishing({ phase: 'waiting' });
-    useGameStore.getState().setInteraction('水面平静');
+    useGameStore.getState().setInteraction('水面平静', 'fishing');
   }
 
   private updateWaiting(time: number): void {
@@ -166,7 +166,7 @@ export class FishingSystem {
     this.audio.playNibble();
     this.splashes.spawn(this.bobber.position);
     useGameStore.getState().setFishing({ phase: 'nibble' });
-    useGameStore.getState().setInteraction('鱼讯');
+    useGameStore.getState().setInteraction('鱼讯', 'fishing');
   }
 
   private updateNibble(time: number): void {
@@ -183,7 +183,7 @@ export class FishingSystem {
     this.reeling = true;
     this.fish.visible = true;
     useGameStore.getState().setFishing({ phase: 'hooked', tension: this.tension, progress: this.progress });
-    useGameStore.getState().setInteraction('鱼线受力');
+    useGameStore.getState().setInteraction('鱼线受力', 'fishing');
   }
 
   private updateFight(time: number, delta: number): void {
@@ -229,7 +229,7 @@ export class FishingSystem {
     const accepted = useGameStore.getState().addItemBundle({ rawFish: 1 });
     this.showNotice(accepted.rawFish ? '+1 银脊鱼' : '背包已满，鱼滑回海里');
     useGameStore.getState().setFishing({ phase: 'caught', tension: 0, progress: 1 });
-    useGameStore.getState().setInteraction(null);
+    useGameStore.getState().setInteraction(null, 'fishing');
   }
 
   private updateCatch(): void {
@@ -249,7 +249,7 @@ export class FishingSystem {
     this.bobber.visible = false;
     this.line.visible = false;
     useGameStore.getState().setFishing({ phase, tension: 0, progress: 0 });
-    useGameStore.getState().setInteraction(null);
+    useGameStore.getState().setInteraction(null, 'fishing');
     if (notice) this.showNotice(notice);
   }
 
@@ -263,7 +263,7 @@ export class FishingSystem {
     this.fish.visible = false;
     this.line.visible = false;
     useGameStore.getState().setFishing({ phase: 'idle', tension: 0, progress: 0 });
-    useGameStore.getState().setInteraction(null);
+    useGameStore.getState().setInteraction(null, 'fishing');
   }
 
   private updateLine(): void {

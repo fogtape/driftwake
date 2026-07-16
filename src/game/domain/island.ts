@@ -6,7 +6,7 @@ export type IslandEvent = 'none' | 'arrived' | 'departing' | 'renewed';
 export type HarvestNodeType = 'palm' | 'branch' | 'stone' | 'fruit' | 'fiber';
 
 export const ISLAND_APPROACH_SECONDS = 72;
-export const ISLAND_DOCK_SECONDS = 240;
+export const ISLAND_DOCK_SECONDS = 78;
 export const ISLAND_DEPART_SECONDS = 24;
 export const ISLAND_RADIUS_X = 6.2;
 export const ISLAND_RADIUS_Z = 6.35;
@@ -40,6 +40,18 @@ export interface IslandTransform {
   z: number;
   scale: number;
 }
+
+export interface IslandNavigationInput {
+  approachRate: number;
+  dockDriftRate: number;
+  anchored: boolean;
+}
+
+const DEFAULT_NAVIGATION: IslandNavigationInput = {
+  approachRate: 0.55,
+  dockDriftRate: 1,
+  anchored: false,
+};
 
 const NODE_LAYOUT: ReadonlyArray<{ type: HarvestNodeType; x: number; z: number }> = [
   { type: 'palm', x: -2.8, z: -1.3 },
@@ -135,20 +147,21 @@ function nextSeed(seed: number, cycle: number): number {
 export function advanceIslandState(
   current: SavedIslandState,
   seconds: number,
-  playerOnIsland: boolean,
+  navigation: IslandNavigationInput = DEFAULT_NAVIGATION,
 ): { state: SavedIslandState; event: IslandEvent } {
   const elapsedStep = Math.max(0, Math.min(Number.isFinite(seconds) ? seconds : 0, 300));
   if (elapsedStep <= 0) return { state: current, event: 'none' };
   if (current.phase === 'approaching') {
-    const elapsed = current.elapsed + elapsedStep;
+    const approachRate = Math.max(0, Math.min(2.5, navigation.approachRate));
+    const elapsed = current.elapsed + elapsedStep * approachRate;
     if (elapsed < ISLAND_APPROACH_SECONDS) return { state: { ...current, elapsed }, event: 'none' };
     return { state: { ...current, phase: 'docked', elapsed: 0 }, event: 'arrived' };
   }
   if (current.phase === 'docked') {
-    const elapsed = Math.min(ISLAND_DOCK_SECONDS, current.elapsed + elapsedStep);
-    if (elapsed < ISLAND_DOCK_SECONDS || playerOnIsland) {
-      return { state: { ...current, elapsed }, event: 'none' };
-    }
+    if (navigation.anchored) return { state: current, event: 'none' };
+    const dockDriftRate = Math.max(0.2, Math.min(2.5, navigation.dockDriftRate));
+    const elapsed = Math.min(ISLAND_DOCK_SECONDS, current.elapsed + elapsedStep * dockDriftRate);
+    if (elapsed < ISLAND_DOCK_SECONDS) return { state: { ...current, elapsed }, event: 'none' };
     return { state: { ...current, phase: 'departing', elapsed: 0 }, event: 'departing' };
   }
   const elapsed = current.elapsed + elapsedStep;

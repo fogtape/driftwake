@@ -16,10 +16,15 @@ import {
   sanitizeUnderwaterState,
   type SavedUnderwaterState,
 } from './underwater';
+import {
+  createDefaultNavigationState,
+  sanitizeNavigationState,
+  type SavedNavigationState,
+} from './navigation';
 
-export const SAVE_VERSION = 4;
-export const SAVE_KEY = 'driftwake.save.v4';
-export const LEGACY_SAVE_KEYS = ['driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
+export const SAVE_VERSION = 5;
+export const SAVE_KEY = 'driftwake.save.v5';
+export const LEGACY_SAVE_KEYS = ['driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
 
 export type PlayerSurface = 'raft' | 'island' | 'water';
 
@@ -49,6 +54,7 @@ export interface DriftwakeSave {
   raft: {
     tiles: SavedRaftTile[];
     devices: SavedDeviceState[];
+    navigation: SavedNavigationState;
   };
   world: {
     island: SavedIslandState;
@@ -71,13 +77,13 @@ function sanitizeNavigation(value: unknown, island: SavedIslandState): SavedPlay
   const candidate = value as Partial<SavedPlayerNavigation>;
   const x = finiteNumber(candidate.x);
   const z = finiteNumber(candidate.z, 1.08);
-  if (candidate.surface === 'island' && island.phase === 'docked') {
+  if (candidate.surface === 'island' && island.phase !== 'approaching') {
     const transform = islandTransform(island);
     if (isIslandWalkable(island.seed, x - transform.x, z - transform.z)) {
       return { surface: 'island', x, z };
     }
   }
-  if (candidate.surface === 'water' && island.phase === 'docked') {
+  if (candidate.surface === 'water' && island.phase !== 'approaching') {
     const transform = islandTransform(island);
     const localX = x - transform.x;
     const localZ = z - transform.z;
@@ -112,17 +118,20 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
     version?: number;
     savedAt?: number;
     player?: Partial<DriftwakeSave['player']>;
-    raft?: { tiles?: SavedRaftTile[]; devices?: SavedDeviceState[] };
+    raft?: { tiles?: SavedRaftTile[]; devices?: SavedDeviceState[]; navigation?: SavedNavigationState };
     world?: { island?: SavedIslandState; underwater?: SavedUnderwaterState };
   };
   if (
-    (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3 && candidate.version !== SAVE_VERSION) ||
+    (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3 && candidate.version !== 4 && candidate.version !== SAVE_VERSION) ||
     !candidate.player ||
     !candidate.raft
   ) return null;
-  const island = candidate.version >= 3 ? sanitizeIslandState(candidate.world?.island) : createDefaultIslandState();
+  let island = candidate.version >= 3 ? sanitizeIslandState(candidate.world?.island) : createDefaultIslandState();
+  if (candidate.version < SAVE_VERSION && island.phase === 'docked') {
+    island = { ...island, elapsed: Math.min(18, island.elapsed) };
+  }
   const underwater =
-    candidate.version === SAVE_VERSION
+    candidate.version >= 4
       ? sanitizeUnderwaterState(candidate.world?.underwater, island.seed, island.cycle)
       : createDefaultUnderwaterState(island.seed, island.cycle);
   const inventory = normalizeInventory(candidate.player.inventory ?? {});
@@ -161,6 +170,21 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       deviceIds.add(device.id);
       return true;
     });
+  const rawNavigation =
+    candidate.version === SAVE_VERSION
+      ? sanitizeNavigationState(candidate.raft.navigation)
+      : createDefaultNavigationState();
+  const navigation = {
+    ...rawNavigation,
+    devices: rawNavigation.devices.filter((device) => {
+      if (Math.abs(device.x) > 12 || Math.abs(device.z) > 12) return false;
+      const key = deviceKey(device.x, device.z);
+      if (!tileKeys.has(key) || occupied.has(key)) return false;
+      occupied.add(key);
+      if (device.type === 'anchor' && island.phase !== 'docked') device.deployed = false;
+      return true;
+    }),
+  };
 
   return {
     version: SAVE_VERSION,
@@ -172,7 +196,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       playSeconds: Math.max(0, finiteInteger(candidate.player.playSeconds)),
       navigation: sanitizeNavigation(candidate.player.navigation, island),
     },
-    raft: { tiles: stableTiles, devices },
+    raft: { tiles: stableTiles, devices, navigation },
     world: { island, underwater },
   };
 }

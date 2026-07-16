@@ -106,7 +106,7 @@ export class BuildSystem {
     this.inputEnabled = enabled;
     if (!enabled) {
       this.preview.visible = false;
-      useGameStore.getState().setInteraction(null);
+      useGameStore.getState().setInteraction(null, 'build');
     }
   }
 
@@ -196,17 +196,17 @@ export class BuildSystem {
     });
     if (!changedTarget) return;
     if (mode === 'repair') {
-      useGameStore.getState().setInteraction(affordable ? '修补受损筏格 · 1 漂木' : '缺少修补材料');
+      useGameStore.getState().setInteraction(affordable ? '修补受损筏格 · 1 漂木' : '缺少修补材料', 'build');
     } else if (mode === 'build') {
       if (affordable) {
-        useGameStore.getState().setInteraction('扩建基础筏格 · 2 漂木  1 聚合片');
+        useGameStore.getState().setInteraction('扩建基础筏格 · 2 漂木  1 聚合片', 'build');
       } else {
         const inventory = useGameStore.getState().inventory;
         const missing = (Object.entries(FOUNDATION_COST) as [keyof typeof FOUNDATION_COST, number][])
           .filter(([id, amount]) => (inventory[id] ?? 0) < amount)
           .map(([id]) => ITEM_DEFINITIONS[id].shortName)
           .join('、');
-        useGameStore.getState().setInteraction(`缺少 ${missing}`);
+        useGameStore.getState().setInteraction(`缺少 ${missing}`, 'build');
       }
     } else {
       const inventory = useGameStore.getState().inventory;
@@ -214,7 +214,7 @@ export class BuildSystem {
         .filter(([id, amount]) => (inventory[id] ?? 0) < amount)
         .map(([id]) => ITEM_DEFINITIONS[id].shortName)
         .join('、');
-      useGameStore.getState().setInteraction(missing ? `缺少 ${missing}` : '此处无法连接结构');
+      useGameStore.getState().setInteraction(missing ? `缺少 ${missing}` : '此处无法连接结构', 'build');
     }
   }
 
@@ -223,7 +223,7 @@ export class BuildSystem {
     this.mode = 'hidden';
     this.targetCoordinate = null;
     this.hoveredTileCoordinate = null;
-    useGameStore.getState().setInteraction(null);
+    useGameStore.getState().setInteraction(null, 'build');
   }
 
   private performBuild(): void {

@@ -17,6 +17,7 @@ import { craftRecipe, type CraftResult, type RecipeId } from '../game/domain/rec
 import { INITIAL_SURVIVAL, advanceSurvival, consumeItem, type SurvivalState } from '../game/domain/survival';
 import type { DeviceType } from '../game/domain/devices';
 import type { IslandPhase } from '../game/domain/island';
+import type { NavigationDeviceType } from '../game/domain/navigation';
 import type { PlayerSurface } from '../game/domain/save';
 
 export type GamePhase = 'title' | 'playing';
@@ -24,6 +25,8 @@ export type QualityPreset = 'low' | 'high';
 export type OverlayPanel = 'pack' | 'crafting' | null;
 export type FishingPhase = 'idle' | 'casting' | 'waiting' | 'nibble' | 'hooked' | 'caught' | 'lost';
 export type SharkMode = 'distant' | 'circling' | 'approaching' | 'attacking' | 'retreating';
+export type PlacementType = DeviceType | NavigationDeviceType;
+export type InteractionOwner = 'build' | 'device' | 'fishing' | 'island' | 'navigation' | 'shark' | 'underwater' | 'global';
 
 export interface AudioMix {
   master: number;
@@ -84,6 +87,20 @@ export interface ReefFeedback {
   total: number;
 }
 
+export interface NavigationFeedback {
+  windAngle: number;
+  courseAngle: number;
+  heading: number;
+  windCapture: number;
+  courseAlignment: number;
+  speedKnots: number;
+  sailInstalled: boolean;
+  sailDeployed: boolean;
+  anchorInstalled: boolean;
+  anchored: boolean;
+  driftRisk: boolean;
+}
+
 export interface PlayerSaveSnapshot {
   inventory: Inventory;
   survival: SurvivalState;
@@ -111,10 +128,12 @@ interface GameState {
   shark: SharkFeedback;
   raft: RaftFeedback;
   devices: DeviceFeedbackMap;
-  placementDevice: DeviceType | null;
+  navigation: NavigationFeedback;
+  placementDevice: PlacementType | null;
   island: IslandFeedback;
   reef: ReefFeedback;
   interaction: string | null;
+  interactionOwner: InteractionOwner | null;
   fps: number;
   notice: string | null;
   playSeconds: number;
@@ -142,10 +161,11 @@ interface GameState {
   setShark: (feedback: Partial<SharkFeedback>) => void;
   setRaft: (feedback: RaftFeedback) => void;
   setDevices: (feedback: DeviceFeedbackMap) => void;
-  setPlacementDevice: (device: DeviceType | null) => void;
+  setNavigation: (feedback: NavigationFeedback) => void;
+  setPlacementDevice: (device: PlacementType | null) => void;
   setIsland: (feedback: IslandFeedback) => void;
   setReef: (feedback: ReefFeedback) => void;
-  setInteraction: (interaction: string | null) => void;
+  setInteraction: (interaction: string | null, owner?: InteractionOwner) => void;
   setFps: (fps: number) => void;
   showNotice: (notice: string | null) => void;
   advancePlayTime: (seconds: number) => void;
@@ -164,6 +184,22 @@ function defaultShark(): SharkFeedback {
 
 function defaultPlayer(): PlayerFeedback {
   return { surface: 'raft', depth: 0, submerged: false };
+}
+
+function defaultNavigation(): NavigationFeedback {
+  return {
+    windAngle: 0.92,
+    courseAngle: 0,
+    heading: 0,
+    windCapture: 0,
+    courseAlignment: 1,
+    speedKnots: 0.42,
+    sailInstalled: false,
+    sailDeployed: false,
+    anchorInstalled: false,
+    anchored: false,
+    driftRisk: false,
+  };
 }
 
 function clampAudioMix(current: AudioMix, patch: Partial<AudioMix>): AudioMix {
@@ -202,10 +238,12 @@ export const useGameStore = create<GameState>((set, get) => ({
     purifier: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
     grill: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
   },
+  navigation: defaultNavigation(),
   placementDevice: null,
   island: { phase: 'approaching', distance: 80, remaining: 72, ashore: false, harvested: 0, total: 18 },
   reef: { harvested: 0, total: 18 },
   interaction: null,
+  interactionOwner: null,
   fps: 0,
   notice: null,
   playSeconds: 0,
@@ -221,7 +259,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   setQuality: (quality) => set({ quality }),
   setSelectedTool: (selectedTool) => {
     if (itemCount(get().inventory, selectedTool) <= 0) return false;
-    set({ selectedTool, interaction: null });
+    set({ selectedTool, interaction: null, interactionOwner: null });
     return true;
   },
   setHookCharge: (hookCharge) =>
@@ -297,10 +335,21 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
   setRaft: (raft) => set({ raft }),
   setDevices: (devices) => set({ devices }),
-  setPlacementDevice: (placementDevice) => set({ placementDevice, interaction: null }),
+  setNavigation: (navigation) => set({ navigation }),
+  setPlacementDevice: (placementDevice) => set({ placementDevice, interaction: null, interactionOwner: null }),
   setIsland: (island) => set({ island }),
   setReef: (reef) => set({ reef }),
-  setInteraction: (interaction) => set((state) => (state.interaction === interaction ? state : { interaction })),
+  setInteraction: (interaction, owner) =>
+    set((state) => {
+      if (interaction === null) {
+        if (owner && state.interactionOwner !== owner) return state;
+        if (state.interaction === null && state.interactionOwner === null) return state;
+        return { interaction: null, interactionOwner: null };
+      }
+      const interactionOwner = owner ?? 'global';
+      if (state.interaction === interaction && state.interactionOwner === interactionOwner) return state;
+      return { interaction, interactionOwner };
+    }),
   setFps: (fps) => set({ fps }),
   showNotice: (notice) => set({ notice }),
   advancePlayTime: (seconds) => set((state) => ({ playSeconds: state.playSeconds + Math.max(0, seconds) })),
@@ -315,7 +364,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       fishing: defaultFishing(),
       shark: defaultShark(),
       player: defaultPlayer(),
+      navigation: defaultNavigation(),
       placementDevice: null,
+      interaction: null,
+      interactionOwner: null,
     }),
   getPlayerSnapshot: () => {
     const state = get();

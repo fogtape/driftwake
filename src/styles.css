@@ -384,6 +384,53 @@ button:focus-visible {
 .island-readout--departing > svg { color: #8ea6a3; }
 .island-readout.is-ashore { border-left-color: var(--sun); }
 .island-readout.is-ashore i b { background: var(--sun); }
+.island-readout.is-drift-risk {
+  border-left-color: var(--coral);
+  animation: drift-alert 1.35s ease-in-out infinite;
+}
+.island-readout.is-drift-risk > svg,
+.island-readout.is-drift-risk em { color: #ff9a80; }
+.island-readout.is-drift-risk i b { background: var(--coral); }
+
+.navigation-readout {
+  position: absolute;
+  top: max(20px, env(safe-area-inset-top));
+  left: 50%;
+  display: grid;
+  width: 306px;
+  height: 42px;
+  grid-template-columns: 20px 42px minmax(68px, 1fr) 48px 18px 18px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  color: #cbdad6;
+  border-top: 1px solid rgba(224, 239, 234, 0.2);
+  border-bottom: 1px solid rgba(224, 239, 234, 0.2);
+  background: rgba(5, 22, 27, 0.68);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.16);
+  transform: translateX(-50%);
+  backdrop-filter: blur(8px);
+}
+.navigation-readout > svg:first-child { color: #d7e6e1; transition: transform 180ms ease; }
+.navigation-readout__course { display: grid; min-width: 0; gap: 1px; }
+.navigation-readout__course span { color: #829b98; font-family: 'Barlow Condensed', sans-serif; font-size: 9px; }
+.navigation-readout__course strong { color: #eef5f2; font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 600; }
+.navigation-readout__wind { display: grid; min-width: 0; grid-template-columns: 18px 1fr; align-items: center; gap: 5px; }
+.navigation-readout__wind > svg { color: #6fc5ca; transition: transform 220ms ease; }
+.navigation-readout__wind i { display: block; height: 3px; overflow: hidden; background: rgba(0, 0, 0, 0.42); }
+.navigation-readout__wind i b { display: block; height: 100%; background: #69bbc0; transition: width 160ms linear; }
+.navigation-readout em { color: #d9c878; font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-style: normal; text-align: right; }
+.navigation-readout > svg:nth-last-child(-n + 2) { color: #6f8381; opacity: 0.42; }
+.navigation-readout > svg.is-installed { color: #c8d8d3; opacity: 0.86; }
+.navigation-readout.is-sailing > svg:nth-last-child(2) { color: var(--sun); opacity: 1; }
+.navigation-readout.is-anchored { border-bottom-color: rgba(114, 212, 179, 0.72); }
+.navigation-readout.is-anchored > svg:last-child { color: #72d4b3; opacity: 1; }
+.navigation-readout.is-drift-risk { border-bottom-color: var(--coral); }
+
+@keyframes drift-alert {
+  0%, 100% { background-color: rgba(5, 22, 27, 0.68); }
+  50% { background-color: rgba(62, 27, 25, 0.78); }
+}
 .dive-readout {
   position: absolute;
   top: max(162px, calc(env(safe-area-inset-top) + 142px));
@@ -617,7 +664,7 @@ button:focus-visible {
 
 .shark-warning {
   position: absolute;
-  top: max(20px, env(safe-area-inset-top));
+  top: max(72px, calc(env(safe-area-inset-top) + 52px));
   left: 50%;
   display: flex;
   min-width: 250px;
@@ -1119,6 +1166,13 @@ button:focus-visible {
   .fishing-fight { right: 18px; width: 184px; }
 }
 
+@media (max-width: 1100px) {
+  .navigation-readout {
+    top: auto;
+    bottom: max(82px, calc(env(safe-area-inset-bottom) + 72px));
+  }
+}
+
 @media (max-width: 640px) {
   .resource-strip { top: 12px; left: 12px; height: 40px; }
   .resource-readout { min-width: 49px; gap: 5px; padding: 0 6px; }
@@ -1126,6 +1180,13 @@ button:focus-visible {
   .raft-readout { top: 60px; left: 12px; }
   .island-readout { top: 94px; left: 12px; width: 210px; }
   .dive-readout { top: 150px; left: 12px; }
+  .navigation-readout {
+    width: 248px;
+    height: 38px;
+    grid-template-columns: 18px 38px minmax(58px, 1fr) 43px 16px 16px;
+    gap: 5px;
+    padding: 0 8px;
+  }
   .hud-actions { top: 12px; right: 12px; }
   .shark-warning {
     top: 60px;
@@ -1138,7 +1199,7 @@ button:focus-visible {
   .hotbar { grid-template-columns: repeat(5, 44px); gap: 4px; }
   .hotbar-slot { width: 44px; height: 44px; }
   .survival-cluster { left: 12px; width: 152px; }
-  .device-rack { right: 12px; width: 170px; }
+  .device-rack { top: 116px; right: 12px; bottom: auto; width: 170px; }
 }
 
 @media (max-height: 640px) {

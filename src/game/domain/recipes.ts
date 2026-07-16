@@ -44,6 +44,22 @@ export const RECIPES = {
     cost: { timber: 3, scrap: 2, rope: 1 },
     description: '把鱼烤熟后及时收取，放置过久会焦黑。',
   },
+  sailKit: {
+    id: 'sailKit',
+    name: '拾风帆',
+    category: 'survival',
+    output: { sailKit: 1 },
+    cost: { timber: 6, fiber: 4, rope: 2, scrap: 1 },
+    description: '展开后选择航向，借稳定风带加快岛屿接近。',
+  },
+  anchorKit: {
+    id: 'anchorKit',
+    name: '潮石锚',
+    category: 'survival',
+    output: { anchorKit: 1 },
+    cost: { timber: 4, stone: 4, rope: 2, scrap: 1 },
+    description: '靠近浅滩后抓牢海床，阻止无人看守的木筏继续漂离。',
+  },
   hammer: {
     id: 'hammer',
     name: '建造锤',

@@ -87,6 +87,7 @@ export class DeviceSystem {
     private readonly audio: AudioSystem,
     private readonly splashes: SplashSystem,
     savedDevices: readonly SavedDeviceState[],
+    private readonly hasExternalOccupant: (coordinate: GridCoordinate) => boolean = () => false,
   ) {
     this.previewMaterials = {
       purifier: new MeshStandardMaterial({
@@ -309,7 +310,12 @@ export class DeviceSystem {
     const clearOfPlayer =
       !this.player.isOnRaft() || Math.hypot(this.player.localPosition.x - centerX, this.player.localPosition.z - centerZ) > 0.78;
     const belowLimit = this.devices.size < MAX_RAFT_DEVICES;
-    this.placementValid = belowLimit && this.raft.hasTile(coordinate) && !this.hasDeviceAt(coordinate) && clearOfPlayer;
+    this.placementValid =
+      belowLimit &&
+      this.raft.hasTile(coordinate) &&
+      !this.hasDeviceAt(coordinate) &&
+      !this.hasExternalOccupant(coordinate) &&
+      clearOfPlayer;
     this.placementRotation = Math.round(Math.atan2(-this.localDirection.x, -this.localDirection.z) / (Math.PI / 2)) * (Math.PI / 2);
     preview.visible = true;
     preview.position.set(centerX, 0.09, centerZ);
@@ -322,7 +328,7 @@ export class DeviceSystem {
     if (this.placementValid) this.setPrompt(`安置${definition.name}`);
     else if (!belowLimit) this.setPrompt('筏上设备数量已达上限');
     else if (!this.raft.hasTile(coordinate)) this.setPrompt('设备必须固定在完整筏格上');
-    else if (this.hasDeviceAt(coordinate)) this.setPrompt('这个筏格已有设备');
+    else if (this.hasDeviceAt(coordinate) || this.hasExternalOccupant(coordinate)) this.setPrompt('这个筏格已有设备');
     else this.setPrompt('离开当前筏格后再安置');
   }
 
@@ -555,12 +561,12 @@ export class DeviceSystem {
 
   private setPrompt(prompt: string): void {
     this.lastPrompt = prompt;
-    useGameStore.getState().setInteraction(prompt);
+    useGameStore.getState().setInteraction(prompt, 'device');
   }
 
   private clearPrompt(): void {
     const store = useGameStore.getState();
-    if (this.lastPrompt && store.interaction === this.lastPrompt) store.setInteraction(null);
+    if (this.lastPrompt && store.interaction === this.lastPrompt) store.setInteraction(null, 'device');
     this.lastPrompt = null;
   }
 
