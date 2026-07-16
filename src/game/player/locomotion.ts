@@ -20,11 +20,6 @@ export interface PlayerVerticalEnvironment {
   waterY: number;
 }
 
-export interface HorizontalPosition {
-  x: number;
-  z: number;
-}
-
 export const GRAVITY = 9.81;
 export const JUMP_SPEED = 4.6;
 export const SWIM_SURFACE_OFFSET = 0.42;
@@ -54,26 +49,6 @@ export function isInClimbBand(localX: number, localZ: number, halfExtent: number
     && absoluteZ <= outerLimit
     && edgeDistance >= halfExtent - CLIMB_INNER_BAND
     && edgeDistance <= outerLimit;
-}
-
-export function pushOutsideRaftFootprint(
-  position: HorizontalPosition,
-  halfExtent: number,
-  clearance: number,
-): boolean {
-  const limit = Math.max(0, halfExtent + clearance);
-  const absoluteX = Math.abs(position.x);
-  const absoluteZ = Math.abs(position.z);
-  if (absoluteX > limit || absoluteZ > limit) return false;
-
-  const distanceToXEdge = limit - absoluteX;
-  const distanceToZEdge = limit - absoluteZ;
-  if (distanceToXEdge < distanceToZEdge) {
-    position.x = (position.x < 0 ? -1 : 1) * limit;
-  } else {
-    position.z = (position.z < 0 ? -1 : 1) * limit;
-  }
-  return true;
 }
 
 export function stepPlayerVertical(

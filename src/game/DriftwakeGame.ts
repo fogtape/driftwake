@@ -121,6 +121,8 @@ export class DriftwakeGame {
   private qualityPreset: QualityPreset = 'high';
   private dynamicResolutionState: DynamicResolutionState = createDynamicResolutionState();
   private appliedPixelRatio = -1;
+  private presentedRaftCollisionCount = 0;
+  private playerDiagnosticsElapsed = 0;
   private simulationActive = false;
   private windowFocused = document.hasFocus();
   private initialized = false;
@@ -143,6 +145,7 @@ export class DriftwakeGame {
     this.mount.style.setProperty('--underwater-mix', '0');
     this.mount.dataset.playerMode = 'raft';
     this.mount.dataset.simulationActive = 'false';
+    this.mount.dataset.raftCollisionCount = '0';
     const initialSettings = useGameStore.getState();
     this.audio.setMix(initialSettings.audioMix);
     this.setQuality(initialSettings.quality);
@@ -185,6 +188,7 @@ export class DriftwakeGame {
       this.player = new PlayerController(
         this.camera,
         this.raft,
+        this.physics,
         this.onPlayerModeChange,
       );
       this.setHeadBobEnabled(useGameStore.getState().headBobEnabled);
@@ -199,7 +203,7 @@ export class DriftwakeGame {
       );
 
       store.setLoadingLabel('正在建立物理世界');
-      await this.physics.initialize();
+      await this.physics.initialize(this.raft.halfExtent);
       if (this.disposed) return;
 
       this.clock.start();
@@ -320,6 +324,11 @@ export class DriftwakeGame {
     this.mount.style.removeProperty('--underwater-mix');
     delete this.mount.dataset.playerMode;
     delete this.mount.dataset.simulationActive;
+    delete this.mount.dataset.raftCollisionCount;
+    delete this.mount.dataset.playerHeadY;
+    delete this.mount.dataset.playerSubmersion;
+    delete this.mount.dataset.playerRaftX;
+    delete this.mount.dataset.playerRaftZ;
     delete this.mount.dataset.weather;
     delete this.mount.dataset.daylight;
     delete this.mount.dataset.environmentRisk;
@@ -370,13 +379,28 @@ export class DriftwakeGame {
     this.elapsed = simulationSeconds;
     sampleEnvironment(simulationSeconds + this.environmentTimeOffset, this.environment);
     this.raft?.update(simulationSeconds, stepSeconds, this.environment.waveScale);
+    if (this.raft) {
+      this.physics.syncRaftPose(this.raft.group.position, this.raft.group.quaternion);
+    }
+    this.physics.step(stepSeconds);
     this.player?.update(simulationSeconds, stepSeconds, this.environment);
+    if (this.physics.collisionCount !== this.presentedRaftCollisionCount) {
+      this.presentedRaftCollisionCount = this.physics.collisionCount;
+      this.mount.dataset.raftCollisionCount = String(this.presentedRaftCollisionCount);
+    }
+    this.playerDiagnosticsElapsed += stepSeconds;
+    if (this.player && this.playerDiagnosticsElapsed >= 0.25) {
+      this.playerDiagnosticsElapsed = 0;
+      this.mount.dataset.playerHeadY = this.player.headY.toFixed(3);
+      this.mount.dataset.playerSubmersion = this.player.submersionDepth.toFixed(3);
+      this.mount.dataset.playerRaftX = this.player.raftLocalX.toFixed(3);
+      this.mount.dataset.playerRaftZ = this.player.raftLocalZ.toFixed(3);
+    }
     this.debris?.update(simulationSeconds, stepSeconds, this.environment);
     this.hook?.update(simulationSeconds, stepSeconds, this.environment.waveScale);
     this.splashes?.update(stepSeconds);
     this.audio.setEnvironment(this.environment);
     this.audio.update(simulationSeconds);
-    this.physics.step(stepSeconds);
   };
 
   private readonly update = (): void => {

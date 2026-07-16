@@ -206,13 +206,13 @@
 
 - `DONE` 海面、天空、雾、太阳、水下过渡、四阶段天气、720 秒昼夜、基础风向及风险表现已接通；纯逻辑测试与 `storm-night-desktop.png` 覆盖夜间风暴边界；
 - `DONE` 固定 60 Hz 时间步、积压上限、暂停/失焦/Pointer Lock/设置/可见性/WebGL Context 门禁已接通并有纯逻辑测试；
-- `DOING` 木筏升沉、倾斜、水平局部坐标和玩家附着已实现基础版；复杂碰撞和目标 GPU 手感仍待验证；
+- `DOING` 木筏升沉、倾斜、水平局部坐标和玩家附着已实现；Rapier 移动甲板 collider 与游泳 capsule 已接入固定步，表面筏侧、筏底上浮、深潜穿行和边缘攀回有自动化闭环；仅目标 GPU 下的抖动、眩晕和输入手感仍待实机验证；
 - `DONE` 第一人称移动、跳跃、离筏、落水、游泳、下潜、游回、攀回及镜头起伏开关已形成可重复浏览器闭环；
 - `DONE` M1 音频基线已覆盖海浪、风、雨、木结构、交互、UI、音乐和水下低通；主音量/音乐/环境/音效/UI 五组混音、失焦静音正反例和程序化音高/音量变化均已验收；后续生物专属层随对应里程碑实现；
 - `DONE` 高/低画质、动态分辨率、FPS/渲染比例/draw calls/三角面/几何/纹理/Heap 指标及稳定性阈值已接通；菜单首屏与世界运行时已拆为独立 chunk，首屏无 Canvas，首次点击后才加载世界；
 - `BLOCKED` 目标设备性能：当前环境仅有 SwiftShader，不能替代中端独显上的低画质 1280x720 30 FPS 与默认画质 1920x1080 60 FPS 验收。
 
-验收：连续运行 20 分钟无明显漂移、穿透、黑屏、内存持续增长或不可接受眩晕；软件渲染 soak 与目标 GPU 性能必须分别记录。绑定 `index-laC9A5u8.js / DriftwakeGame-CH094ExI.js` 的当前最终 bundle 已完成 1200 秒 SwiftShader 功能 soak且 `failures=[]`；目标 GPU 单独 `BLOCKED`。
+验收：连续运行 20 分钟无明显漂移、穿透、黑屏、内存持续增长或不可接受眩晕；软件渲染 soak 与目标 GPU 性能必须分别记录。当前 `index-MVj7tltI.js / DriftwakeGame-DboG4VER.js` bundle 已完成 1200 秒 SwiftShader 功能 soak且 `failures=[]`；目标 GPU 单独 `BLOCKED`。
 
 ### M2：漂流物、钩具与拾取 — `TODO`（已有未验收切片）
 
@@ -310,8 +310,8 @@
 | --- | --- | --- | --- | --- |
 | SYS-001 | 渲染与资源管线 | DONE | M0 | `npm run build`、`npm run capture` 通过；菜单入口与世界 runtime 分 chunk，标题页断言无 Canvas/无世界资源；原创资产清单与像素内容门禁已建立 |
 | SYS-002 | 海洋与天气 | DONE | M1 | `environment.test.ts` 与 `waves.test.ts` 覆盖采样；海面、四阶段天气、风向、雨、720 秒昼夜、音景联动及夜间风暴截图已接通 |
-| SYS-003 | 玩家与镜头 | DONE | M1 | `locomotion.test.ts` 覆盖三态垂直运动；Playwright 可重复完成离筏、下潜、游回和攀回，镜头起伏可关闭 |
-| SYS-004 | 木筏运动坐标 | DOING | M1 | 3x3 木筏按统一波浪函数升沉和倾斜；`RaftHorizontalFrame` 隔离俯仰/横滚对水平判定的污染；复杂碰撞与目标 GPU 手感待验收 |
+| SYS-003 | 玩家与镜头 | DONE | M1 | `locomotion.test.ts` 覆盖三态垂直运动；`npm run test:collision` 可重复完成离筏、表面阻挡、深潜穿筏底和边缘攀回，镜头起伏可关闭 |
+| SYS-004 | 木筏运动坐标 | DOING | M1 | 3x3 木筏按统一波浪函数升沉/倾斜；`RaftHorizontalFrame` 隔离水平判定；Rapier kinematic 甲板 collider、玩家 capsule 与四类碰撞边界测试已接通；目标 GPU 手感仍 `BLOCKED` |
 | SYS-005 | 漂流物生成 | TODO | M2 | 四类程序模型与固定种子对象池已有切片，等待 M2 继续验收 |
 | SYS-006 | 钩具与绳索 | TODO | M2 | 蓄力到收获闭环已有切片，等待 M2 继续手感、战利品与耐久验收 |
 | SYS-007 | 物品与背包 | TODO | M3 | 待补 |
@@ -341,7 +341,7 @@
 1. 固定 60 Hz 时间步、帧积压上限和模拟时间真值；
 2. phase、Pointer Lock、设置、可见性、窗口焦点与 WebGL Context 的统一模拟门禁；
 3. `raft / airborne / swimming` 三态，以及跳跃、离筏、落水、游泳、下潜、游回和攀回；
-4. 木筏水平参考系与筏底占用推出，修复波浪姿态污染和水下相机穿模；
+4. 木筏水平参考系，以及随升沉/倾斜同步的 Rapier kinematic 甲板 collider 和玩家 capsule；用真实 sweep 替代不区分深度的水平矩形推出；
 5. 水下颜色、雾、曝光、CSS 叠层、水花和音频低通；
 6. 四阶段天气、720 秒昼夜、风向/风险 HUD、雨粒子、波幅/漂流/雾/曝光/音景联动；
 7. 海浪、风、雨、木结构、交互、UI、音乐八类 M1 音频层，五组独立混音、失焦静音与高频动作参数变化；
@@ -349,37 +349,39 @@
 9. 跨 Linux/Termux Chromium 探测、Canvas PNG 内容门禁、空白帧故障注入、环境覆盖阈值和时间戳长稳证据；
 10. 自动化覆盖标题、游戏、夜间风暴、钩具蓄力、下潜/攀回、短视口设置和 390x844 移动能力页；
 11. 水中操作提示、镜头起伏开关、可滚动设置面板，以及更清晰的钩具蓄力反馈；
-12. 菜单首屏与世界运行时分 chunk，双阶段用户手势进入，并以延迟纹理请求验证加载期画质/head-bob 设置不会被旧快照覆盖。
+12. 菜单首屏与世界运行时分 chunk，双阶段用户手势进入，并以延迟纹理请求验证加载期画质/head-bob 设置不会被旧快照覆盖；
+13. `npm run test:collision` 状态驱动回归，固定验证离筏、水面筏侧阻挡、0.72 m 下潜、穿过筏底到另一侧和边缘攀回，且 Pointer Lock/模拟/WebGL 全程健康。
 
 ### 9.1 验收快照
 
 已验证：
 
-- `npm test`：11 个测试文件、88 项测试通过；
-- `npm run build`：生产构建通过；`npm audit --omit=dev --audit-level=high` 为 0 个漏洞；首屏入口 `index-laC9A5u8.js` 为 217.44 KB（gzip 69.37 KB），`DriftwakeGame-CH094ExI.js` 世界 chunk 为 2.826 MB，仅在首次点击后加载；
+- `npm test`：12 个测试文件、92 项测试通过；
+- `npm run build`：生产构建通过；`npm audit --omit=dev --audit-level=high` 为 0 个漏洞；首屏入口 `index-MVj7tltI.js` 为 217.44 KB（gzip 69.37 KB），`DriftwakeGame-DboG4VER.js` 世界 chunk 为 2.829 MB，仅在首次点击后加载；
 - `npm run capture`：截图集现有 7 个工件（6 个桌面场景 + 1 个移动能力页）；标题页在首次点击前确认无 Canvas 且 `runtimeResources=[]`，并有 2 个整页 PNG 内容门禁；其余 5 个桌面游戏场景各在截图前后检查 Canvas，共 10 个 Canvas 检查点，均非空、非单色且 Context 健康；移动页另有布局边界与整页 PNG 内容门禁；
 - `DRIFTWAKE_FORCE_BLANK_FRAME=1`：空白帧故障注入因亮度范围不足按预期以退出码 1 红灯；
 - 浏览器流程：动态分辨率在 SwiftShader 下从 100% 降至 55%，关闭后恢复 100%；五组音量滑块实时更新；失焦静音开启/关闭两条边界均通过；延迟木纹请求 1.5 秒后在初始化中切换低画质与关闭 head-bob，最终 runtime 保持 `low/18/false` 且 Pointer Lock/模拟 active；
+- `npm run test:collision`：离筏后局部 Z=3.120、碰撞计数 0；水面回游在 Z=2.378 被移动甲板 collider 阻挡且计数增至 5；下潜深度达到 0.720 m 后穿过筏底至另一侧 Z=-2.837，最终攀回 `mode=raft`；Pointer Lock/模拟全程 active、Context Lost=false、浏览器错误为空；
 - WebGL 故障注入：`WEBGL_lose_context` 后 Context Lost=true、Pointer Lock 释放、模拟停止；恢复后保持暂停并显示恢复提示，点击继续可重新锁定并恢复 active；
 - 设置面板在 1280x577 视口内高 535px、内容高 820px，可滚动，无水平溢出或滑块重叠，sticky 标题和末端画质项均可达；
 - 天气改造前的行动基线 bundle 已完成一次 1206 秒 SwiftShader soak：无 Context Lost、无浏览器错误、Heap 增长约 3.8 MB；
 - 上一运行时 bundle 的 1200 秒 SwiftShader soak 已通过：121 个状态样本、21 个画面样本、Pointer Lock/模拟全程有效、Context Lost=false、Heap 增长 -6,347,282 bytes、FPS 4-7、四种天气、昼夜范围 0-1、`errors=[]`、`failures=[]`；长稳证据保留于 `stability-2026-07-15T17-18-25-070Z.json`，`latest.json` 按设计已指向后续短 smoke；
 - 新增目标 GPU profile：低画质自动选择 1280x720/30 FPS 与 18 件 active 漂流物，高质量自动选择 1920x1080/60 FPS 与 30 件 active 漂流物；通过公开设置 UI 的 `aria-pressed`、入场 runtime dataset，以及每个稳定性样本的 `qualityKinds/debrisCountMin/debrisCountMax` 验证档位/预算全程不漂移；目标 profile 默认要求渲染比例全程保持 100% 且拒绝 SwiftShader/llvmpipe 等软件 renderer；两项误绿故障注入在最新脚本上同时按预期红灯；显式允许软件 renderer 并放宽至 55% 后，两档 SwiftShader 功能 smoke 均通过；
-- 当前最终 bundle 的 1200 秒 SwiftShader soak 以退出码 0 通过：`entryResource=index-laC9A5u8.js`、`runtimeResource=DriftwakeGame-CH094ExI.js`、121 个状态样本、21 个画面样本、Pointer Lock/模拟全程有效、Context Lost=false、Heap 增长 -4,646,700 bytes、FPS 4-8、四种天气、昼夜范围 0-1、`qualityKinds=[low]`、漂流物全程 18、draw calls 最大 70、三角面最大 50,054、`errors=[]`、`failures=[]`；证据：`artifacts/stability/stability-2026-07-15T22-21-10-905Z.json`；
-- 独立审查 `BLOCKED`：首批两项 600 秒超时无摘要，拆分后的四项全部因子代理额度不足返回 HTTP 403；最终单项聚焦重试在完成 11 次 API 调用后再次于 600 秒超时，仍无摘要。所有尝试均无可引用审查正文，不能视为通过。主会话已按 fail-closed 流程执行新增行安全扫描、类型/构建/测试、完整差异审阅，并修复原生分辨率误绿、软件 renderer 误绿、焦点/可见性竞态提前解除静音、运行时切换低画质未降低漂流物预算、3D 世界/Rapier 随菜单首屏急切加载，以及初始化旧 store 快照覆盖加载期设置六项 P1；
+- 当前碰撞版最终 bundle 的 1200 秒 SwiftShader soak 以退出码 0 通过：`entryResource=index-MVj7tltI.js`、`runtimeResource=DriftwakeGame-DboG4VER.js`、121 个状态样本、21 个画面样本、Pointer Lock/模拟全程有效、Context Lost=false、Heap 增长 -4,522,318 bytes、FPS 4-8、四种天气、昼夜范围 0-1、`qualityKinds=[low]`、漂流物全程 18、draw calls 最大 70、三角面最大 50,054、`errors=[]`、`failures=[]`；证据：`artifacts/stability/stability-2026-07-16T00-49-50-838Z.json`；
+- 独立审查 `BLOCKED`：首批两项 600 秒超时无摘要，拆分后的四项全部因子代理额度不足返回 HTTP 403；最终单项聚焦重试在完成 11 次 API 调用后再次于 600 秒超时，仍无摘要；本次碰撞增量又发起一次只读 JSON 审查，截至交付前仍未收到有效正文。所有尝试均无可引用审查结论，不能视为通过。主会话已按 fail-closed 流程执行新增行安全扫描、类型/构建/测试、完整差异审阅，并修复原生分辨率误绿、软件 renderer 误绿、焦点/可见性竞态提前解除静音、运行时切换低画质未降低漂流物预算、3D 世界/Rapier 随菜单首屏急切加载，以及初始化旧 store 快照覆盖加载期设置六项 P1；
 
 尚未通过：
 
 - 目标设备性能：低画质 1280x720 稳定 30 FPS、默认画质 1920x1080 稳定 60 FPS 尚无真实独显证据；
-- 木筏复杂碰撞与目标 GPU 下的抖动、眩晕和输入手感仍需实机验收；
-- 世界 chunk 仍约 2.826 MB，但已从 217.44 KB 菜单首屏拆出并在玩家首次点击后加载；后续岛屿/生物/建造资产仍需按对应里程碑继续分段；Rapier `0.19.3` 初始化警告对应尚未关闭的上游 [dimforge/rapier#811](https://github.com/dimforge/rapier/issues/811)；
+- 目标 GPU 下木筏升沉/倾斜时的抖动、眩晕和输入手感仍需实机验收；本地 Rapier 筏侧/筏底穿透边界已由单元与浏览器回归闭环；
+- 世界 chunk 仍约 2.829 MB，但已从 217.44 KB 菜单首屏拆出并在玩家首次点击后加载；后续岛屿/生物/建造资产仍需按对应里程碑继续分段；Rapier `0.19.3` 初始化警告对应尚未关闭的上游 [dimforge/rapier#811](https://github.com/dimforge/rapier/issues/811)；
 - M2 的近距离拾取、世界掉落、箱桶战利品、工具耐久与恢复尚未实现；
 - M3 及之后的背包、合成、生存、建造、战斗、岛屿、研究、存档等主体系统仍未开始。
 
 接续顺序：
 
 1. 将本次 M1 软件侧检查点以中文追加提交推送到功能分支；该推送不表示本期完成或 M1 `DONE`；
-2. 在带中端独显的 Chrome/Edge 环境执行低画质 1280x720/30 FPS 与高质量 1920x1080/60 FPS 原生比例门禁，并补木筏复杂碰撞、抖动和眩晕验收；
+2. 在带中端独显的 Chrome/Edge 环境执行低画质 1280x720/30 FPS 与高质量 1920x1080/60 FPS 原生比例门禁，并补木筏抖动、眩晕和输入手感实机验收；
 3. 子代理额度恢复后重跑独立上下文审查；在拿到正文前保持 `BLOCKED`，不伪造 APPROVED；
 4. 只有 M1 剩余门禁闭环后，才按 M2 顺序实现近距拾取、世界掉落、箱桶战利品与工具耐久。
 
@@ -398,6 +400,7 @@
 | 2026-07-15 | SwiftShader 长稳与目标独显性能分开记账 | 软件渲染可证明功能、Heap 和 Context 稳定，但不能证明 30/60 FPS 产品目标 | ACCEPTED |
 | 2026-07-15 | M1 检查点后先补 M2 资源交互，不提前进入背包或建造 | 追踪文档显示本期仍有多半系统未实现，需按依赖顺序推进 | ACCEPTED |
 | 2026-07-16 | 菜单首屏不创建 Canvas 或加载 Three.js/Rapier 世界 runtime；玩家首次点击后初始化，第二次用户手势进入 | 降低首屏成本，同时保留 Pointer Lock 的真实用户激活边界 | ACCEPTED |
+| 2026-07-16 | 行动状态机继续负责跳跃/游泳/攀回语义，Rapier 只对随木筏姿态同步的甲板和玩家 capsule 执行 sweep | 避免双重重力与两套状态真值，同时用真实移动几何封闭筏侧和筏底穿透 | ACCEPTED |
 
 ## 11. 风险登记
 
@@ -443,8 +446,9 @@
 - 实现动态分辨率控制器、实际 DPR 与渲染比例切换，以及 draw calls/三角面/几何/纹理/Heap 证据采集；
 - 修复短时稳定性调度，长稳改为时间戳文件与 `latest.json` 双写，并加入天气种类与昼夜范围门禁；
 - 完成主音量、音乐、环境、音效、UI 五组混音、失焦静音策略和高频动作参数变化；
-- 全量测试达到 11 个文件、88 项用例；生产构建、七场景 capture 和空白帧故障注入通过；
-- 上一运行时 bundle 的 1200 秒 SwiftShader soak 已通过全部门禁；随后补齐画质按钮语义、低/高两档目标 GPU profile、原生渲染比例、硬件 renderer、全程画质/漂流物预算和 bundle 资源门禁，修复焦点/可见性竞态、低画质漂流物预算、加载期旧设置快照，并把 3D 世界从菜单首屏拆为点击后加载 chunk；最终 `index-laC9A5u8.js / DriftwakeGame-CH094ExI.js` bundle 的 1200 秒 soak 以退出码 0、`errors=[]`、`failures=[]` 通过。
+- 全量测试达到 12 个文件、92 项用例；生产构建、七场景 capture 和空白帧故障注入通过；
+- 上一运行时 bundle 的 1200 秒 SwiftShader soak 已通过全部门禁；随后补齐画质按钮语义、低/高两档目标 GPU profile、原生渲染比例、硬件 renderer、全程画质/漂流物预算和 bundle 资源门禁，修复焦点/可见性竞态、低画质漂流物预算、加载期旧设置快照，并把 3D 世界从菜单首屏拆为点击后加载 chunk；最终 `index-laC9A5u8.js / DriftwakeGame-CH094ExI.js` bundle 的 1200 秒 soak 以退出码 0、`errors=[]`、`failures=[]` 通过；
+- 用与 3x3 木筏真实半径一致、随升沉/倾斜同步的 Rapier kinematic 甲板 collider 和玩家 capsule 替换不区分深度的水平矩形推出；新增五项物理边界测试及 `npm run test:collision` 状态驱动浏览器闭环；`index-MVj7tltI.js / DriftwakeGame-DboG4VER.js` 碰撞版 bundle 的 1200 秒 soak 以退出码 0、`errors=[]`、`failures=[]` 通过。
 
 ### 2026-07-15
 

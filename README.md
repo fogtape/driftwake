@@ -6,8 +6,8 @@
 
 - 原创标题主视觉、木材纹理与定向海面泡沫遮罩；
 - Three.js 程序化海面、天空、远景岛、四阶段天气、720 秒昼夜与风向/风险变化；
-- 带波浪升沉的 3x3 木筏、固定 60 Hz 模拟和第一人称键鼠移动；
-- 跳跃、离筏、落水、游泳、下潜、游回木筏和攀回闭环；
+- 带波浪升沉的 3x3 木筏、固定 60 Hz 模拟、同步升沉/倾斜的 Rapier 移动甲板 collider 和第一人称键鼠移动；
+- 跳跃、离筏、落水、游泳、表面防穿筏侧、下潜穿过筏底、游回木筏和边缘攀回闭环；
 - 木料、聚合片、纤维和补给箱漂流物；
 - 蓄力抛钩、飞行、绳索、入水、命中、拖回和收获流程；
 - 海浪、风、雨、木筏结构、抛钩、落水、收获、UI、音乐和水下低通音景；主音量/音乐/环境/音效/UI 五组独立控制；
@@ -42,9 +42,12 @@ npm run dev
 ```sh
 npm test
 npm run build
+npm run test:collision
 npm run capture
 npm run test:stability
 ```
+
+`npm run test:collision` 使用状态条件而不是固定墙钟等待，验证玩家离筏后在水面被移动甲板 collider 阻挡、下潜后从筏底抵达另一侧，并从边缘攀回；可通过 `DRIFTWAKE_URL`、`CHROMIUM_PATH` 和 `PLAYWRIGHT_HEADFUL` 调整运行环境。
 
 `npm run capture` 默认连接 `http://127.0.0.1:4173`，可通过 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH` 和 `CAPTURE_HEIGHT` 调整。标题场景会确认玩家首次点击前没有 Canvas，并检查整页 PNG 内容；进入世界后再验证 Canvas/Context、合成 PNG 的非空画面指标，以及游戏、夜间风暴、钩具蓄力、水下行动、短视口音频/画质设置和移动能力页流程。设置 `DRIFTWAKE_FORCE_BLANK_FRAME=1 CAPTURE_ONLY=title` 可验证整页空白帧门禁会按预期红灯。
 

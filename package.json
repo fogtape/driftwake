@@ -9,6 +9,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:collision": "node scripts/collision-regression.mjs",
     "test:stability": "node scripts/stability.mjs",
     "capture": "node scripts/capture.mjs"
   },

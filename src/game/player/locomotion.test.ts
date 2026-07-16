@@ -5,7 +5,6 @@ import {
   SWIM_SURFACE_OFFSET,
   isInClimbBand,
   isWithinRaftBounds,
-  pushOutsideRaftFootprint,
   stepPlayerVertical,
   type PlayerVerticalEnvironment,
   type PlayerVerticalInput,
@@ -34,20 +33,6 @@ describe('raft bounds', () => {
   it('distinguishes a supported deck point from a point beyond the walkable edge', () => {
     expect(isWithinRaftBounds(1.7, -1.7, 2.08, 0.24)).toBe(true);
     expect(isWithinRaftBounds(1.9, 0, 2.08, 0.24)).toBe(false);
-  });
-
-  it('pushes an underwater camera out through the nearest raft edge', () => {
-    const nearPositiveZ = { x: 0.1, z: 1.9 };
-    const nearNegativeX = { x: -1.95, z: 0.2 };
-
-    expect(pushOutsideRaftFootprint(nearPositiveZ, 2.08, 0.38)).toBe(true);
-    expect(nearPositiveZ.z).toBeCloseTo(2.46);
-    expect(nearPositiveZ.x).toBe(0.1);
-
-    expect(pushOutsideRaftFootprint(nearNegativeX, 2.08, 0.38)).toBe(true);
-    expect(nearNegativeX.x).toBeCloseTo(-2.46);
-    expect(nearNegativeX.z).toBe(0.2);
-    expect(pushOutsideRaftFootprint({ x: 3.2, z: 0 }, 2.08, 0.38)).toBe(false);
   });
 
   it('limits climbing to a band around the perimeter instead of the raft centre or open sea', () => {

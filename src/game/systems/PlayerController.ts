@@ -5,13 +5,13 @@ import { RaftHorizontalFrame } from '../player/RaftHorizontalFrame';
 import {
   isInClimbBand,
   isWithinRaftBounds,
-  pushOutsideRaftFootprint,
   stepPlayerVertical,
   type PlayerLocomotionMode,
   type PlayerVerticalEnvironment,
   type PlayerVerticalInput,
   type PlayerVerticalState,
 } from '../player/locomotion';
+import type { PhysicsSystem } from './PhysicsSystem';
 import type { RaftSystem } from './RaftSystem';
 
 const CAMERA_HEIGHT = 1.54;
@@ -20,7 +20,6 @@ const AIR_CONTROL_SPEED = 2.15;
 const SWIM_SPEED = 1.65;
 const RAFT_SUPPORT_INSET = 0.2;
 const RAFT_CLIMB_INSET = 0.38;
-const UNDER_RAFT_CLEARANCE = 0.38;
 const CLIMB_VERTICAL_REACH = 1.65;
 
 export class PlayerController {
@@ -30,6 +29,7 @@ export class PlayerController {
   private readonly lookQuaternion = new Quaternion();
   private readonly raftHorizontalFrame = new RaftHorizontalFrame();
   private readonly worldPosition = new Vector3();
+  private readonly previousWorldPosition = new Vector3();
   private readonly cameraPosition = new Vector3();
   private readonly raftLocalProbe = new Vector3();
   private readonly deckProbeLocal = new Vector3();
@@ -60,6 +60,7 @@ export class PlayerController {
   constructor(
     private readonly camera: PerspectiveCamera,
     private readonly raft: RaftSystem,
+    private readonly physics: PhysicsSystem,
     private readonly onModeChange: (mode: PlayerLocomotionMode) => void = () => undefined,
   ) {
     window.addEventListener('keydown', this.onKeyDown);
@@ -69,6 +70,22 @@ export class PlayerController {
 
   get mode(): PlayerLocomotionMode {
     return this.verticalState.mode;
+  }
+
+  get headY(): number {
+    return this.worldPosition.y;
+  }
+
+  get submersionDepth(): number {
+    return this.verticalEnvironment.waterY - this.worldPosition.y;
+  }
+
+  get raftLocalX(): number {
+    return this.raftLocalProbe.x;
+  }
+
+  get raftLocalZ(): number {
+    return this.raftLocalProbe.z;
   }
 
   setEnabled(enabled: boolean): void {
@@ -86,6 +103,7 @@ export class PlayerController {
   }
 
   update(time: number, delta: number, environment: EnvironmentSample): void {
+    this.previousWorldPosition.copy(this.worldPosition);
     let inputX = 0;
     let inputZ = 0;
     if (this.enabled) {
@@ -139,21 +157,6 @@ export class PlayerController {
       this.raft.group.position,
       this.raftLocalProbe,
     );
-    if (
-      this.verticalState.mode === 'swimming'
-      && pushOutsideRaftFootprint(
-        this.raftLocalProbe,
-        this.raft.halfExtent,
-        UNDER_RAFT_CLEARANCE,
-      )
-    ) {
-      this.raftHorizontalFrame.localToWorld(
-        this.raftLocalProbe,
-        this.raft.group.position,
-        this.worldPosition.y,
-        this.worldPosition,
-      );
-    }
     this.deckProbeLocal.set(this.raftLocalProbe.x, CAMERA_HEIGHT, this.raftLocalProbe.z);
     this.raft.localPointToWorld(this.deckProbeLocal, this.deckHeadWorld);
 
@@ -209,6 +212,19 @@ export class PlayerController {
       this.verticalState.headY = this.worldPosition.y;
     } else {
       this.worldPosition.y = this.verticalState.headY;
+      if (this.verticalState.mode === 'swimming') {
+        this.physics.resolveSwimmingMovement(
+          this.previousWorldPosition,
+          this.worldPosition,
+          this.worldPosition,
+        );
+        this.verticalState.headY = this.worldPosition.y;
+        this.raftHorizontalFrame.worldToLocal(
+          this.worldPosition,
+          this.raft.group.position,
+          this.raftLocalProbe,
+        );
+      }
     }
 
     this.lookQuaternion.setFromEuler(this.lookEuler);
