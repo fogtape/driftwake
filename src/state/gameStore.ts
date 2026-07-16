@@ -25,8 +25,8 @@ export type QualityPreset = 'low' | 'high';
 export type OverlayPanel = 'pack' | 'crafting' | null;
 export type FishingPhase = 'idle' | 'casting' | 'waiting' | 'nibble' | 'hooked' | 'caught' | 'lost';
 export type SharkMode = 'distant' | 'circling' | 'approaching' | 'attacking' | 'retreating';
-export type PlacementType = DeviceType | NavigationDeviceType;
-export type InteractionOwner = 'build' | 'device' | 'fishing' | 'island' | 'navigation' | 'shark' | 'underwater' | 'global';
+export type PlacementType = DeviceType | NavigationDeviceType | 'planter';
+export type InteractionOwner = 'build' | 'device' | 'fishing' | 'island' | 'navigation' | 'planting' | 'shark' | 'underwater' | 'global';
 
 export interface AudioMix {
   master: number;
@@ -101,6 +101,18 @@ export interface NavigationFeedback {
   driftRisk: boolean;
 }
 
+export interface PlantingFeedback {
+  placed: number;
+  growing: number;
+  dry: number;
+  mature: number;
+  withered: number;
+  progress: number;
+  water: number;
+  birdActive: boolean;
+  birdThreat: number;
+}
+
 export interface PlayerSaveSnapshot {
   inventory: Inventory;
   survival: SurvivalState;
@@ -129,6 +141,7 @@ interface GameState {
   raft: RaftFeedback;
   devices: DeviceFeedbackMap;
   navigation: NavigationFeedback;
+  planting: PlantingFeedback;
   placementDevice: PlacementType | null;
   island: IslandFeedback;
   reef: ReefFeedback;
@@ -162,6 +175,7 @@ interface GameState {
   setRaft: (feedback: RaftFeedback) => void;
   setDevices: (feedback: DeviceFeedbackMap) => void;
   setNavigation: (feedback: NavigationFeedback) => void;
+  setPlanting: (feedback: PlantingFeedback) => void;
   setPlacementDevice: (device: PlacementType | null) => void;
   setIsland: (feedback: IslandFeedback) => void;
   setReef: (feedback: ReefFeedback) => void;
@@ -202,6 +216,20 @@ function defaultNavigation(): NavigationFeedback {
   };
 }
 
+function defaultPlanting(): PlantingFeedback {
+  return {
+    placed: 0,
+    growing: 0,
+    dry: 0,
+    mature: 0,
+    withered: 0,
+    progress: 0,
+    water: 0,
+    birdActive: false,
+    birdThreat: 0,
+  };
+}
+
 function clampAudioMix(current: AudioMix, patch: Partial<AudioMix>): AudioMix {
   const merged = { ...current, ...patch };
   const clamp = (value: number) => Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
@@ -239,6 +267,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     grill: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
   },
   navigation: defaultNavigation(),
+  planting: defaultPlanting(),
   placementDevice: null,
   island: { phase: 'approaching', distance: 80, remaining: 72, ashore: false, harvested: 0, total: 18 },
   reef: { harvested: 0, total: 18 },
@@ -336,6 +365,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   setRaft: (raft) => set({ raft }),
   setDevices: (devices) => set({ devices }),
   setNavigation: (navigation) => set({ navigation }),
+  setPlanting: (planting) => set({ planting }),
   setPlacementDevice: (placementDevice) => set({ placementDevice, interaction: null, interactionOwner: null }),
   setIsland: (island) => set({ island }),
   setReef: (reef) => set({ reef }),
@@ -365,6 +395,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       shark: defaultShark(),
       player: defaultPlayer(),
       navigation: defaultNavigation(),
+      planting: defaultPlanting(),
       placementDevice: null,
       interaction: null,
       interactionOwner: null,

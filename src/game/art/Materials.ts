@@ -28,6 +28,9 @@ export interface AssetTextures {
   sailCloth: Texture;
   sailClothNormal: Texture;
   sailClothRoughness: Texture;
+  planterSoil: Texture;
+  planterSoilNormal: Texture;
+  planterSoilRoughness: Texture;
 }
 
 export interface MaterialLibrary {
@@ -54,6 +57,14 @@ export interface MaterialLibrary {
   reefFish: MeshStandardMaterial;
   reefCaustic: MeshBasicMaterial;
   sailCloth: MeshStandardMaterial;
+  planterSoil: MeshStandardMaterial;
+  cropLeaf: MeshStandardMaterial;
+  cropDry: MeshStandardMaterial;
+  cropFruit: MeshStandardMaterial;
+  birdFeather: MeshStandardMaterial;
+  birdWing: MeshStandardMaterial;
+  birdBeak: MeshStandardMaterial;
+  birdEye: MeshStandardMaterial;
 }
 
 export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetTextures> {
@@ -73,6 +84,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     sailCloth,
     sailClothNormal,
     sailClothRoughness,
+    planterSoil,
+    planterSoilNormal,
+    planterSoilRoughness,
   ] = await Promise.all([
     loader.loadAsync('/assets/textures/weathered-cedar.webp'),
     loader.loadAsync('/assets/textures/ocean-foam-mask.png'),
@@ -88,6 +102,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/sail-cloth.webp'),
     loader.loadAsync('/assets/textures/sail-cloth-normal.webp'),
     loader.loadAsync('/assets/textures/sail-cloth-roughness.webp'),
+    loader.loadAsync('/assets/textures/planter-soil.webp'),
+    loader.loadAsync('/assets/textures/planter-soil-normal.webp'),
+    loader.loadAsync('/assets/textures/planter-soil-roughness.webp'),
   ]);
 
   const anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -139,6 +156,16 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   sailClothNormal.colorSpace = NoColorSpace;
   sailClothRoughness.colorSpace = NoColorSpace;
 
+  for (const texture of [planterSoil, planterSoilNormal, planterSoilRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(1.35, 1.1);
+    texture.anisotropy = anisotropy;
+  }
+  planterSoil.colorSpace = SRGBColorSpace;
+  planterSoilNormal.colorSpace = NoColorSpace;
+  planterSoilRoughness.colorSpace = NoColorSpace;
+
   return {
     wood,
     foam,
@@ -154,6 +181,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     sailCloth,
     sailClothNormal,
     sailClothRoughness,
+    planterSoil,
+    planterSoilNormal,
+    planterSoilRoughness,
   };
 }
 
@@ -244,6 +274,22 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       metalness: 0,
       side: DoubleSide,
     }),
+    planterSoil: new MeshStandardMaterial({
+      color: 0xb6aa8d,
+      map: textures.planterSoil,
+      normalMap: textures.planterSoilNormal,
+      normalScale: new Vector2(0.48, 0.48),
+      roughnessMap: textures.planterSoilRoughness,
+      roughness: 1,
+      metalness: 0,
+    }),
+    cropLeaf: new MeshStandardMaterial({ color: 0x5f8c54, roughness: 0.86, side: DoubleSide }),
+    cropDry: new MeshStandardMaterial({ color: 0x9b7750, roughness: 0.98, side: DoubleSide }),
+    cropFruit: new MeshStandardMaterial({ color: 0xb6c65f, roughness: 0.76, flatShading: true }),
+    birdFeather: new MeshStandardMaterial({ color: 0xb8c4bc, roughness: 0.82, flatShading: true }),
+    birdWing: new MeshStandardMaterial({ color: 0x536f70, roughness: 0.88, side: DoubleSide, flatShading: true }),
+    birdBeak: new MeshStandardMaterial({ color: 0xd39a55, roughness: 0.78, flatShading: true }),
+    birdEye: new MeshStandardMaterial({ color: 0x111716, roughness: 0.24 }),
   };
 }
 

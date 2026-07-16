@@ -14,6 +14,7 @@ import {
 } from './ProceduralModels';
 import { createReefModel, createReefNodeModel } from './UnderwaterModels';
 import { createAnchorModel, createSailModel } from './NavigationModels';
+import { createPlanterModel, createSaltwingBirdModel } from './PlantingModels';
 
 function createTestMaterials(): MaterialLibrary {
   const material = () => new MeshStandardMaterial();
@@ -41,6 +42,14 @@ function createTestMaterials(): MaterialLibrary {
     reefFish: material(),
     reefCaustic: new MeshBasicMaterial(),
     sailCloth: material(),
+    planterSoil: material(),
+    cropLeaf: material(),
+    cropDry: material(),
+    cropFruit: material(),
+    birdFeather: material(),
+    birdWing: material(),
+    birdBeak: material(),
+    birdEye: material(),
   };
 }
 
@@ -165,5 +174,24 @@ describe('procedural model assets', () => {
     expect(sail.userData.navigationVisuals.clothBase.length).toBeGreaterThan(250);
     expect(anchorStats.meshes).toBeGreaterThanOrEqual(15);
     expect(anchor.userData.navigationVisuals.rope).toBeDefined();
+  }, 15_000);
+
+  it('builds a staged crop planter and an articulated crop-thief bird', () => {
+    const materials = createTestMaterials();
+    const planter = createPlanterModel(materials);
+    const bird = createSaltwingBirdModel(materials);
+    const planterStats = meshStats(planter);
+    const birdStats = meshStats(bird);
+    const planterSize = new Box3().setFromObject(planter).getSize(new Vector3());
+    const birdSize = new Box3().setFromObject(bird).getSize(new Vector3());
+    expect(planterStats.meshes).toBeGreaterThanOrEqual(42);
+    expect(planter.userData.planterVisuals.leafPivots).toHaveLength(9);
+    expect(planter.userData.planterVisuals.fruits).toHaveLength(3);
+    expect(planterSize.x).toBeGreaterThan(1);
+    expect(birdStats.meshes).toBeGreaterThanOrEqual(28);
+    expect(birdStats.vertices).toBeGreaterThan(700);
+    expect(birdSize.x).toBeGreaterThan(1);
+    expect(bird.userData.birdVisuals.leftWing).toBeDefined();
+    expect(bird.userData.birdVisuals.feet).toBeDefined();
   }, 15_000);
 });

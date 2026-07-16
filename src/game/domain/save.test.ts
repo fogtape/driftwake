@@ -57,13 +57,14 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v5');
-    expect(save?.version).toBe(5);
+    expect(SAVE_KEY).toBe('driftwake.save.v6');
+    expect(save?.version).toBe(6);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
     expect(save?.world.island.phase).toBe('approaching');
     expect(save?.world.underwater.nodes).toHaveLength(18);
     expect(save?.raft.navigation.devices).toEqual([]);
+    expect(save?.raft.planting.planters).toEqual([]);
   });
 
   it('falls back to a legacy save when the current slot is corrupt', () => {
@@ -205,5 +206,45 @@ describe('save schema', () => {
     expect(save?.world.island.elapsed).toBe(18);
     expect(save?.raft.navigation).toEqual(createDefaultNavigationState());
     expect(save?.world.underwater.nodes.find((node) => node.id === 'sand-0')?.health).toBe(0);
+  });
+
+  it('migrates v5 navigation and sanitizes v6 planter occupancy', () => {
+    const v5 = sanitizeSave({
+      version: 5,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 9 },
+      raft: {
+        tiles: [{ x: 0, z: 0, health: 100 }],
+        devices: [],
+        navigation: {
+          windClock: 8,
+          courseAngle: 1.2,
+          heading: 0.8,
+          devices: [{ id: 'legacy-sail', type: 'sail', x: 0, z: 0, rotation: 0, deployed: true }],
+        },
+      },
+    });
+    expect(v5?.raft.navigation.devices[0]?.id).toBe('legacy-sail');
+    expect(v5?.raft.planting.planters).toEqual([]);
+
+    const v6 = sanitizeSave({
+      version: 6,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 10 },
+      raft: {
+        tiles: [{ x: 0, z: 0, health: 100 }, { x: 1, z: 0, health: 100 }],
+        devices: [{ id: 'grill', type: 'grill', x: 0, z: 0, rotation: 0, phase: 'idle', elapsed: 0 }],
+        navigation: createDefaultNavigationState(),
+        planting: {
+          birdClock: 14,
+          birdVisit: 3,
+          planters: [
+            { id: 'blocked', x: 0, z: 0, rotation: 0, phase: 'mature', growth: 1 },
+            { id: 'crop', x: 1, z: 0, rotation: 0, phase: 'growing', growth: 0.4, water: 0.6 },
+          ],
+        },
+      },
+    });
+    expect(v6?.raft.planting.planters).toHaveLength(1);
+    expect(v6?.raft.planting.planters[0]).toMatchObject({ id: 'crop', growth: 0.4, water: 0.6 });
+    expect(v6?.raft.planting.birdVisit).toBe(3);
   });
 });

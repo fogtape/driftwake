@@ -17,7 +17,7 @@ const chromiumPath = process.env.CHROMIUM_PATH ?? '/data/data/com.termux/files/u
 const outputDir = new URL('../artifacts/screenshots/', import.meta.url);
 
 const seededSave = {
-  version: 5,
+  version: 6,
   savedAt: 1,
   player: {
     inventory: {
@@ -43,6 +43,7 @@ const seededSave = {
       grillKit: 1,
       sailKit: 1,
       anchorKit: 1,
+      planterKit: 1,
     },
     survival: { health: 92, thirst: 67, hunger: 61, oxygen: 100 },
     selectedTool: 'hook',
@@ -66,6 +67,23 @@ const seededSave = {
       devices: [
         { id: 'capture-sail', type: 'sail', x: 0, z: -1, rotation: 0, deployed: true },
         { id: 'capture-anchor', type: 'anchor', x: -1, z: 1, rotation: Math.PI / 2, deployed: true },
+      ],
+    },
+    planting: {
+      birdClock: 8,
+      birdVisit: 0,
+      planters: [
+        {
+          id: 'capture-planter',
+          x: 1,
+          z: 1,
+          rotation: -Math.PI / 2,
+          phase: 'growing',
+          growth: 0.72,
+          water: 0.44,
+          drySeconds: 0,
+          birdDamage: 0,
+        },
       ],
     },
   },
@@ -112,6 +130,7 @@ const underwaterSeededSave = {
       grillKit: 0,
       sailKit: 0,
       anchorKit: 0,
+      planterKit: 0,
     },
     selectedTool: 'hook',
     navigation: { surface: 'water', x: -3.117, y: -2.3, z: 4.7 },
@@ -149,6 +168,86 @@ const driftRiskSave = {
   world: {
     ...islandSeededSave.world,
     island: { ...islandSeededSave.world.island, elapsed: 77.85 },
+  },
+};
+
+const plantingPlacementSave = {
+  ...seededSave,
+  player: {
+    ...seededSave.player,
+    inventory: {
+      hook: 1,
+      hammer: 1,
+      palmSeed: 2,
+      freshWaterCup: 1,
+      planterKit: 1,
+    },
+  },
+  raft: {
+    ...seededSave.raft,
+    navigation: {
+      ...seededSave.raft.navigation,
+      devices: [
+        { id: 'planting-sail', type: 'sail', x: -1, z: -1, rotation: 0, deployed: false },
+        { id: 'planting-anchor', type: 'anchor', x: -1, z: 1, rotation: Math.PI / 2, deployed: true },
+      ],
+    },
+    planting: {
+      birdClock: 0,
+      birdVisit: 0,
+      planters: [],
+    },
+  },
+};
+
+const plantingInteractionSave = {
+  ...plantingPlacementSave,
+  raft: {
+    ...plantingPlacementSave.raft,
+    planting: {
+      birdClock: 0,
+      birdVisit: 0,
+      planters: [
+        {
+          id: 'interaction-planter',
+          x: 1,
+          z: -1,
+          rotation: 0,
+          phase: 'empty',
+          growth: 0,
+          water: 0,
+          drySeconds: 0,
+          birdDamage: 0,
+        },
+      ],
+    },
+  },
+};
+
+const plantingBirdSave = {
+  ...plantingInteractionSave,
+  raft: {
+    ...plantingInteractionSave.raft,
+    planting: {
+      birdClock: 32.8,
+      birdVisit: 0,
+      birdPhase: 'feeding',
+      birdElapsed: 0,
+      birdTargetId: 'bird-planter',
+      planters: [
+        {
+          id: 'bird-planter',
+          x: 1,
+          z: -1,
+          rotation: 0,
+          phase: 'mature',
+          growth: 1,
+          water: 0,
+          drySeconds: 0,
+          birdDamage: 0,
+        },
+      ],
+    },
   },
 };
 
@@ -230,8 +329,8 @@ async function openDesktopPage(label, options = {}) {
   });
   if (options.seedSave) {
     await context.addInitScript((save) => {
-      localStorage.setItem('driftwake.save.v5', JSON.stringify(save));
-    }, options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
+      localStorage.setItem('driftwake.save.v6', JSON.stringify(save));
+    }, options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
   }
   const page = await context.newPage();
   monitorPage(page, label);
@@ -373,6 +472,114 @@ async function captureDevices() {
   await context.close();
 }
 
+async function aimDownToPrompt(page, expected, steps = 50) {
+  let prompt = '';
+  for (let step = 0; step < steps && !prompt.includes(expected); step += 1) {
+    await page.evaluate(() => {
+      const movement = new MouseEvent('mousemove');
+      Object.defineProperties(movement, {
+        movementX: { value: 0 },
+        movementY: { value: 8 },
+      });
+      document.dispatchEvent(movement);
+    });
+    await page.waitForTimeout(75);
+    prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  }
+  if (!prompt.includes(expected)) {
+    await page.waitForFunction(
+      (label) => document.querySelector('.interaction-prompt')?.textContent?.includes(label),
+      expected,
+      { timeout: 4_000 },
+    ).catch(() => undefined);
+    prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  }
+  return prompt;
+}
+
+async function capturePlantingPlacement() {
+  const { context, page } = await openDesktopPage('planting-placement', { seedSave: true, plantingPlacementStart: true });
+  await page.locator('.primary-command').click();
+  await page.keyboard.press('KeyI');
+  await page.getByRole('dialog', { name: '野外背包' }).waitFor();
+  await page.getByRole('button', { name: /潮生作物盆套件/ }).click();
+  await page.getByRole('button', { name: '安置到木筏' }).click();
+  const placementPrompt = await aimDownToPrompt(page, '安置潮生作物盆');
+  if (!placementPrompt.includes('安置潮生作物盆')) {
+    await page.screenshot({ path: new URL('planting-placement-diagnostic.png', outputDir).pathname });
+    throw new Error(`Expected planter placement prompt, received: ${placementPrompt}`);
+  }
+  await page.mouse.click(desktopWidth / 2, desktopHeight / 2);
+  await page.waitForFunction(() => document.querySelector('.loot-notice')?.textContent?.includes('作物盆已固定'), null, { timeout: 4_000 });
+  await page.locator('.device-status--planter').waitFor({ timeout: 4_000 });
+  await inspectCanvasPixels(page, 'planting-placement');
+  await page.screenshot({ path: new URL('planting-placement-desktop.png', outputDir).pathname });
+  await context.close();
+}
+
+async function capturePlantingInteraction() {
+  const { context, page } = await openDesktopPage('planting-interaction', { seedSave: true, plantingStart: true });
+  await page.locator('.primary-command').click();
+  await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
+  let prompt = await aimDownToPrompt(page, '埋入盐冠棕榈种');
+  if (!prompt.includes('埋入盐冠棕榈种')) {
+    await page.waitForFunction(
+      () => document.querySelector('.interaction-prompt')?.textContent?.includes('埋入盐冠棕榈种'),
+      null,
+      { timeout: 4_000 },
+    ).catch(() => undefined);
+    prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  }
+  if (!prompt.includes('埋入盐冠棕榈种')) {
+    await page.screenshot({ path: new URL('planting-interaction-diagnostic.png', outputDir).pathname });
+    throw new Error(`Expected planting prompt, received: ${prompt}`);
+  }
+  await page.keyboard.press('KeyE');
+  await page.locator('.interaction-prompt').filter({ hasText: '浇入一杯蒸馏淡水' }).waitFor({ timeout: 4_000 });
+  await page.keyboard.press('KeyE');
+  await page.locator('.interaction-prompt').filter({ hasText: '生长' }).waitFor({ timeout: 4_000 });
+  await page.waitForFunction(
+    () => document.querySelector('.device-status--planter')?.classList.contains('device-status--working'),
+    null,
+    { timeout: 4_000 },
+  ).catch(async (error) => {
+    const planterStatus = await page.locator('.device-status--planter').evaluate((element) => ({
+      className: element.className,
+      text: element.textContent?.trim() ?? '',
+    })).catch(() => ({ className: 'missing', text: '' }));
+    throw new Error(`Planter HUD did not enter working state: ${JSON.stringify(planterStatus)}`, { cause: error });
+  });
+  const emptyCupButton = page.getByRole('button', { name: /折边聚合杯/ });
+  await page.keyboard.press('KeyI');
+  await emptyCupButton.waitFor({ timeout: 4_000 });
+  await page.keyboard.press('KeyI');
+  await page.getByRole('button', { name: '继续漂流' }).click();
+  await inspectCanvasPixels(page, 'planting-interaction');
+  await page.screenshot({ path: new URL('planting-interaction-desktop.png', outputDir).pathname });
+  await context.close();
+}
+
+async function capturePlantingBird() {
+  const { context, page } = await openDesktopPage('planting-bird', { seedSave: true, plantingBirdStart: true });
+  await page.locator('.primary-command').click();
+  await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
+  const birdPrompt = await aimDownToPrompt(page, '驱赶盐翼盗鸟');
+  if (!birdPrompt.includes('驱赶盐翼盗鸟')) throw new Error(`Expected bird deterrence prompt, received: ${birdPrompt}`);
+  await page.locator('.crop-warning.is-visible').waitFor({ timeout: 8_000 });
+  await page.locator('.interaction-prompt').filter({ hasText: '驱赶盐翼盗鸟' }).waitFor({ timeout: 14_000 }).catch(async (error) => {
+    await page.screenshot({ path: new URL('planting-bird-diagnostic.png', outputDir).pathname });
+    const prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+    const warning = await page.locator('.crop-warning').getAttribute('class');
+    throw new Error(`Bird interaction prompt missing: prompt=${prompt}; warning=${warning}`, { cause: error });
+  });
+  await inspectCanvasPixels(page, 'planting-bird');
+  await page.screenshot({ path: new URL('planting-bird-desktop.png', outputDir).pathname });
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => document.querySelector('.loot-notice')?.textContent?.includes('被惊飞'), null, { timeout: 4_000 });
+  await page.waitForFunction(() => !document.querySelector('.crop-warning')?.classList.contains('is-visible'), null, { timeout: 4_000 });
+  await context.close();
+}
+
 async function captureIsland() {
   const { context, page } = await openDesktopPage('island', { seedSave: true, islandStart: true });
   await page.getByRole('button', { name: '开始漂流' }).click();
@@ -453,7 +660,7 @@ async function captureUnderwaterInteraction() {
 async function captureNarrow() {
   const context = await browser.newContext({ viewport: { width: 640, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript((save) => {
-    localStorage.setItem('driftwake.save.v5', JSON.stringify(save));
+    localStorage.setItem('driftwake.save.v6', JSON.stringify(save));
   }, seededSave);
   const page = await context.newPage();
   monitorPage(page, 'narrow');
@@ -499,7 +706,7 @@ async function captureNarrow() {
 async function captureUnderwaterNarrow() {
   const context = await browser.newContext({ viewport: { width: 640, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript((save) => {
-    localStorage.setItem('driftwake.save.v5', JSON.stringify(save));
+    localStorage.setItem('driftwake.save.v6', JSON.stringify(save));
   }, underwaterSeededSave);
   const page = await context.newPage();
   monitorPage(page, 'underwater-narrow');
@@ -630,6 +837,9 @@ try {
   if (captureOnly === 'all' || captureOnly === 'crafting') await captureCrafting();
   if (captureOnly === 'all' || captureOnly === 'settings') await captureSettings();
   if (captureOnly === 'all' || captureOnly === 'devices') await captureDevices();
+  if (captureOnly === 'all' || captureOnly === 'planting-placement') await capturePlantingPlacement();
+  if (captureOnly === 'all' || captureOnly === 'planting-interaction') await capturePlantingInteraction();
+  if (captureOnly === 'all' || captureOnly === 'planting-bird') await capturePlantingBird();
   if (captureOnly === 'all' || captureOnly === 'island') await captureIsland();
   if (captureOnly === 'all' || captureOnly === 'island-interaction') await captureIslandInteraction();
   if (captureOnly === 'all' || captureOnly === 'underwater') await captureUnderwater();

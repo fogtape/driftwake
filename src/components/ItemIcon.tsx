@@ -45,6 +45,7 @@ const ICONS: Record<ItemId, React.ComponentType<LucideProps>> = {
   grillKit: CookingPot,
   sailKit: Sailboat,
   anchorKit: Anchor,
+  planterKit: Sprout,
   hook: Anchor,
   hammer: Hammer,
   spear: Sword,

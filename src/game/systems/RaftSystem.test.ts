@@ -29,6 +29,14 @@ function createTestMaterials(): MaterialLibrary {
     reefFish: material(),
     reefCaustic: new MeshBasicMaterial(),
     sailCloth: material(),
+    planterSoil: material(),
+    cropLeaf: material(),
+    cropDry: material(),
+    cropFruit: material(),
+    birdFeather: material(),
+    birdWing: material(),
+    birdBeak: material(),
+    birdEye: material(),
   };
 }
 

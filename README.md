@@ -1,16 +1,18 @@
 # Driftwake
 
-原创桌面网页 3D 海上生存游戏。当前版本为 `0.6.0` 高质量纵向切片，不以基础 Demo 为完成标准。
+原创桌面网页 3D 海上生存游戏。当前版本为 `0.7.0` 高质量纵向切片，不以基础 Demo 为完成标准。
 
 ## 当前内容
 
 - Three.js 程序化海面、天空、雾、昼光、随波木筏和可接近的高度场岛屿；
 - 第一人称移动、蓄力抛钩、绳索、水花、漂流物命中和补给箱战利品；
-- 数据驱动的 28 类物品、20 格堆叠背包、10 项便携配方、消耗品和固定步长生存状态；
+- 数据驱动的 29 类物品、20 格堆叠背包、11 项便携配方、消耗品和固定步长生存状态；
 - 可寻址木筏筏格、邻接建造、幽灵预览、材料校验、修补、拆除与连通性保护；
 - 浮标抛投、鱼讯窗口、张力/收线对抗、断线、鱼体挣扎和收获；
 - 可放置的潮汐净水器与折铁烤架，包含杯具回收、木材燃料、蒸馏、烤制、收取和过烧；
 - 设备附着筏格、玩家碰撞、拆解返还、随筏格落海、状态 HUD 和独立火焰/蒸汽/食物动画；
+- 可制作的潮生作物盆，包含共享筏格占位、播种、两阶段浇水、缺水停长、枯萎清理、成熟收获和杯具返还；
+- 原创盐翼盗鸟会盘旋、俯冲并啄食作物，玩家可在世界中驱赶；鸟害按停留时间削减果实但保留种子循环；
 - 原创程序鲨鱼模型、巡游、预兆、选边、咬筏、结构损伤、木矛命中和驱离；
 - 岛屿远景接近、靠岸、无切场登岛、地形坡度与障碍碰撞、返筏后离流和下一岛重生；
 - 18 个确定性岛屿资源节点、石斧三击砍伐、树木受击/倒伏/树桩、枝料/石料/潮果/纤维拾取和满包保护；
@@ -21,12 +23,12 @@
 - 可制作并占用筏格的拾风帆与潮石锚，包含边缘放置、筏格损毁、拆除返还、玩家碰撞和完整存档；
 - 动态风向、八方帆向、木筏航向、风力利用与航速；正确帆向加快接近，未收帆会加快离流；
 - 未锚泊浅滩仅短暂停留，玩家离筏后显示离流预警；离流阶段不会被传送回筏，错过追筏窗口后会被留在海中；
-- v5 版本化自动存档，保存三表面导航、氧气、岛屿/礁区节点、逐格筏体、生活设备、帆锚和风向状态，并迁移 v1/v2/v3/v4；
-- 六总线程序音频混音，以及水下低通/环境层、帆布受风、绳索调帆、锚链绞盘、礁区动作、鲨鱼扑咬和既有岛屿声音；
+- v6 版本化自动存档，保存三表面导航、氧气、岛礁节点、逐格筏体、生活/航行/种植设备、作物与鸟害阶段，并迁移 v1-v5；
+- 六总线程序音频混音，以及水下低通、帆布受风、锚链绞盘、种植/浇水/收获、鸟类警报、礁区动作、鲨鱼扑咬和岛屿声音；
 - 标题、HUD、背包、制作、设置、能力提示和 Playwright 截图回归流程；
-- 原创标题美术、木材、泡沫、鲨皮、编织纤维、AI 辅助海床与拼补帆布材质，以及独立 normal/roughness 图。
+- 原创标题美术、木材、泡沫、鲨皮、编织纤维、AI 辅助海床、拼补帆布与培养土材质，以及独立 normal/roughness 图。
 
-当前仍不是完整游戏。种植、研究、熔炼、更多生态资源、死亡恢复和最终蒙皮资产仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
+当前仍不是完整游戏。研究、熔炼、更多生态资源、天气农业、死亡恢复和最终蒙皮资产仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
 
 ## 运行
 
@@ -45,7 +47,7 @@ npm run build
 npm run capture
 ```
 
-截图脚本默认连接 `http://127.0.0.1:4173`，支持 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH`、`CAPTURE_HEIGHT` 和 `CAPTURE_ONLY`。目标包括 `title`、`game`、`hook`、`pack`、`crafting`、`devices`、`island`、`island-interaction`、`underwater`、`underwater-interaction`、`navigation`、`navigation-interaction`、`drift-risk`、`underwater-narrow`、`narrow`、`settings` 和 `mobile`。3D 截图使用分布式 WebGL 像素门禁，拒绝黑屏、白屏、HUD 相交和丢失的上下文。
+截图脚本默认连接 `http://127.0.0.1:4173`，支持 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH`、`CAPTURE_HEIGHT` 和 `CAPTURE_ONLY`。目标包括 `title`、`game`、`hook`、`pack`、`crafting`、`devices`、`planting-placement`、`planting-interaction`、`planting-bird`、`island`、`island-interaction`、`underwater`、`underwater-interaction`、`navigation`、`navigation-interaction`、`drift-risk`、`underwater-narrow`、`narrow`、`settings` 和 `mobile`。3D 截图使用分布式 WebGL 像素门禁，拒绝黑屏、白屏、HUD 相交和丢失的上下文。
 
 Termux Chromium 149 的纯 headless 后端会在任意 WebGL draw call 后首次 readback 时丢失上下文。脚本在 Termux 下会自动启动临时 Xvfb 并走 headful GLES 路径，完成后自动清理；真实 GPU 下的 20 分钟稳定性和性能仍需单独验收。
 
@@ -63,6 +65,7 @@ scripts/imagegen generate --prompt "..." --quality high --out output/imagegen/ex
 python scripts/generate_procedural_materials.py --out-dir public/assets/textures --size 1024
 python scripts/derive_material_maps.py --input albedo.webp --normal normal.webp --roughness roughness.webp
 python scripts/prepare_imagegen_sail.py --input output/imagegen/sail.png --albedo sail.webp --normal sail-normal.webp --roughness sail-roughness.webp
+python scripts/prepare_imagegen_soil.py --input output/imagegen/soil.png --albedo soil.webp --normal soil-normal.webp --roughness soil-roughness.webp
 ```
 
 完整来源、最终提示词、采用/拒绝结论和模型清单见 [原创资产清单](docs/ASSET_MANIFEST.md)。

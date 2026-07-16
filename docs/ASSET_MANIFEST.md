@@ -1,7 +1,7 @@
 # 原创资产清单
 
 > 更新日期：2026-07-16
-> 状态：第六轮航行设备美术与交互基线，发布前仍需做最终授权、DCC 替换与相似性复核
+> 状态：第七轮种植与鸟类美术交互基线，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -148,9 +148,30 @@ Constraints: Texture only, edge-to-edge material coverage, uniform scale and ill
 
 该帆面采用一次完整 UV，不要求强制平铺。处理脚本保留原图非重复的补丁与缝线布局，只压缩尺寸并派生法线/粗糙度；这样能避免平铺修复破坏手工修补叙事。源 PNG 保留在忽略版本控制的 `output/imagegen/`，运行时只引用审定后的三张 WebP。
 
+### TEX-007：潮生培养土材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `planter-soil.webp`、`planter-soil-normal.webp`、`planter-soil-roughness.webp` |
+| 模型 | `gpt-image-2` |
+| 请求质量 | `high` |
+| 请求尺寸 | `2048x2048` |
+| 实际输出 | 1254x1254 PNG；采用版统一为 1024x1024 WebP |
+| 处理方式 | `scripts/prepare_imagegen_soil.py` 去饱和、对比约束、0.32 px 预滤波、半幅环移、中央不规则羽化与 PBR 图派生 |
+| 用途 | 潮生作物盆培养土、浇水后的低透明湿润层底材 |
+| 检查 | 正交平面；无植物、容器、工具、文字和烘焙光影；亮度均值 50.7、标准差 33.7；接缝 x=18.13/1.15x、y=19.79/1.15x |
+
+最终提示词：
+
+```text
+Use case: stylized-concept. Asset type: seamless tileable PBR base-color material for an original raft garden planter. Primary request: original hand-mixed tropical survival growing medium made from dark mineral compost, shredded coconut coir, pale shell grit, tiny charcoal fragments and sparse weathered leaf fibers. Scene/backdrop: texture sheet only. Style/medium: premium stylized-realistic game material, tactile hand-authored PBR albedo with crisp controlled micro-detail and believable organic variation. Composition/framing: exact orthographic top-down square, uniform texel density, seamless wrap on all four edges, no central focal object. Lighting/mood: flat neutral albedo with absolutely no baked directional light, highlights, cast shadows or ambient occlusion. Color palette: deep neutral umber and charcoal balanced with muted coconut tan, chalk shell specks and tiny desaturated moss-green fibers; restrained, not monochrome brown. Constraints: fully original, edge-to-edge soil coverage, no plants, sprouts, seeds, insects, tools, containers, hands, footprints, text, symbols, logos, watermark, frame or border. Avoid: wet glossy mud, gravel-only surface, large unique stones, dramatic contrast, photographic scan framing, perspective preview, material ball, repeated checker pattern or recognizable copyrighted design.
+```
+
+原始高频壳屑让通用处理流程的纵向接缝差达到 24.05，超过既定 24 门禁 0.05；没有放宽门禁。专用脚本先做亚像素预滤波和轻度去饱和，再执行同一环移羽化流程，最终横纵绝对差与相对内部差全部通过。源 PNG 保留在忽略版本控制的 `output/imagegen/`。
+
 ## 本轮 Imagegen 尝试
 
-调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider，模型 `gpt-image-2`，质量 `high`。本轮 2048x2048 PNG 帆布请求在 47.2 秒完成并通过人工内容检查；上一轮海床请求为 38.1 秒。没有在仓库保存 provider URL 或 API Key，也没有切换低阶模型。先前鲨皮与编织纤维请求的超时记录继续保留，它们仍使用确定性程序版本。
+调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider，模型 `gpt-image-2`，质量 `high`。本轮 2048x2048 PNG 培养土请求在 93.6 秒完成并通过人工内容检查；前两轮帆布和海床分别为 47.2/38.1 秒。没有在仓库保存 provider URL 或 API Key，也没有切换低阶模型。先前鲨皮与编织纤维请求的超时记录继续保留，它们仍使用确定性程序版本。
 
 鲨皮最终请求提示词：
 
@@ -186,7 +207,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 ## 代码原生模型与动画
 
-本轮航帆与锚需要确定性响应风向、帆向、部署状态、筏格位置、损毁和跨版本存档，因此继续以代码原生形体与实时动画建立统一可玩的近最终基线。帆布使用独立 AI PBR 材质；没有因软件截图后端较慢而降低运行时贴图质量。
+本轮作物盆、分阶段作物和盐翼盗鸟需要确定性响应供水、生长、枯萎、鸟害、筏格位置和跨版本存档，因此继续以代码原生形体与实时动画建立统一可玩的近最终基线。培养土使用独立 AI PBR 材质；没有因软件截图后端较慢而降低运行时贴图质量。
 
 | ID | 资产 | 位置 | 当前状态 |
 | --- | --- | --- | --- |
@@ -207,6 +228,8 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | MOD-015 | 水下资源组：细砂、黏土、盐壳金属矿和长叶海草 | `src/game/art/UnderwaterModels.ts` | 四套独立轮廓，支持高亮、三段钩击、收割、抖动和消散 |
 | MOD-016 | 拾风帆：3.4 米桅杆、桅脚、三道绑扎、双侧受力绳、横桁、分段帆面和风标 | `src/game/art/NavigationModels.ts` | 12+ 网格、900+ 顶点，AI 帆布 PBR 双面渲染，筏格附着 |
 | MOD-017 | 潮石锚：木质底座、双立柱、绞盘鼓、轮缘、曲柄、四圈绳卷、垂绳、石坠和双锚爪 | `src/game/art/NavigationModels.ts` | 15+ 网格，自动朝筏外，支持水下部署和筏格损毁 |
+| MOD-018 | 潮生作物盆：风化木板、绑绳、角铁、排水口、PBR 培养土、湿润层、4 茎节、9 叶片枢轴、3 果实和种子标记 | `src/game/art/PlantingModels.ts` | 42+ 网格，生长、供水、枯萎和收获分别驱动，不使用整体静态缩放 |
+| MOD-019 | 盐翼盗鸟：躯干、胸羽、头颈、喙、双眼眉羽、14 主翼羽、3 尾羽、双腿和 6 趾 | `src/game/art/PlantingModels.ts` | 28+ 网格、700+ 顶点，支持盘旋、俯冲、啄食和惊飞姿态 |
 | ANI-001 | 木筏三轴波浪升沉 | `src/game/systems/RaftSystem.ts` | 已实现 |
 | ANI-002 | 第一人称移动、镜头与木筏局部坐标 | `src/game/systems/PlayerController.ts` | 已实现基础版 |
 | ANI-003 | 钩具蓄力、抛射、旋转、拖回与收起 | `src/game/systems/HookSystem.ts` | 已实现基础闭环 |
@@ -219,6 +242,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | ANI-010 | 木筏/岛屿/水域三表面移动、三维游动、上浮/下潜、登筏与上岸 | `src/game/systems/PlayerController.ts` | 水域位置与潜深可保存，地形和礁石碰撞已接通 |
 | ANI-011 | 水下钩具挥击、矿点分段生命、海草摇曳、鱼群巡游和鲨鱼追击/扑咬 | `src/game/systems/UnderwaterSystem.ts`、`SharkSystem.ts` | 音效、粒子、UI、生命伤害和击退同步 |
 | ANI-012 | 展帆/收帆、帆面逐顶点鼓动、桅顶风标、八向调帆、筏体转向、锚绳伸缩、绞盘旋转和锚爪摆动 | `src/game/systems/NavigationSystem.ts` | 风效、航速、部署状态、UI 和音频同步 |
+| ANI-013 | 作物叶片分段萌发/风摆/枯萎下垂、果实减产，以及盐翼盗鸟翼/尾/头颈/抓爪状态动画 | `src/game/systems/PlantingSystem.ts` | 与供水、生长、鸟害和 v6 攻击中恢复同步 |
 | VFX-001 | 入水粒子 | `src/game/systems/SplashSystem.ts` | 已实现 |
 | VFX-002 | 木屑、修补、拆除、武器和咬击冲击粒子 | `src/game/systems/SplashSystem.ts` | 颜色与数量按事件区分 |
 | VFX-003 | 五层加色火焰、动态点光、五块余烬和八层烟雾 | `src/game/art/ProceduralModels.ts` | 火势与设备阶段联动，焦鱼阶段转为深色烟 |
@@ -226,6 +250,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | VFX-005 | 岸线泡沫脉动、资源高亮、木屑/石屑/叶片分类冲击 | `src/game/systems/IslandSystem.ts` | 跟随岛屿阶段、焦点和采集事件驱动 |
 | VFX-006 | 水下雾色/曝光过渡、双面海面、滚动焦散、气泡、悬浮物和矿屑 | `src/game/systems/UnderwaterSystem.ts`、`DriftwakeGame.ts` | 随潜深和玩家表面驱动；水下关闭不符合物理的硬阴影 pass |
 | VFX-007 | 航行设备放置冲击、脉动交互环、帆面风压形变、风标和水下锚爪 | `src/game/systems/NavigationSystem.ts` | 随帆向、风力利用与部署插值实时驱动 |
+| VFX-008 | 作物盆放置冲击、湿土覆盖、种子标记、生长叶冠、枯萎材质、果实节点和交互高亮 | `src/game/systems/PlantingSystem.ts` | 随作物领域状态实时驱动 |
 
 ## 程序音频分层
 
@@ -244,7 +269,8 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | SFX-ISLAND | 木筏/沙地脚步、石斧破风、入木、倒树、枝料/石料/植被拾取 | `src/game/systems/AudioSystem.ts` |
 | SFX-REEF | 入水/游动、钩刃擦水、细砂/黏土/金属分层撞击和海草收割 | `src/game/systems/AudioSystem.ts` |
 | SFX-NAV | 帆布受风持续带通层、展收帆摩擦、调帆绳索、锚链坠落和绞盘回收 | `src/game/systems/AudioSystem.ts` |
-| CREATURE | 鲨鱼低频预兆、扑咬冲击与武器命中 | `src/game/systems/AudioSystem.ts` |
+| SFX-PLANT | 土壤落种、倒水低通/水滴音、成熟三音提示、干裂叶响和收获层 | `src/game/systems/AudioSystem.ts` |
+| CREATURE | 鲨鱼低频预兆、扑咬冲击与武器命中；盐翼盗鸟警报、啄食和惊飞 | `src/game/systems/AudioSystem.ts` |
 | UI | 短促确认、拒绝和工具切换 | `src/game/systems/AudioSystem.ts` |
 
 设置界面分别控制 `master`、`music`、`ambience`、`effects`、`creatures` 和 `ui` 六个增益总线，偏好写入独立版本化配置。
@@ -253,9 +279,9 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 - 用 Blender 或等效 DCC 建立可蒙皮的最终双手、工具、鲨鱼和生活设备资产，当前代码模型是原创近最终形体基线而非最终蒙皮资产；
 - 为木材补充经过人工修整的 normal、roughness 与 AO；鲨皮和编织纤维已使用独立派生图；
-- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005/TEX-006 已采用高质量输出；
+- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005/TEX-006/TEX-007 已采用高质量输出；
 - 建立同一角色比例与材质语言下的模型规范；
 - 为岛屿补充手绘沙地/草地/岩面材质组、草丛层级和更丰富的岸线小物，保持现有确定性地形与碰撞接口；
-- 为珊瑚、海草、鱼群、水下钩具、拾风帆与潮石锚建立最终 DCC 模型、蒙皮与顶点动画，保留当前布局和领域接口；
+- 为珊瑚、海草、鱼群、水下钩具、拾风帆、潮石锚、作物和盐翼盗鸟建立最终 DCC 模型、蒙皮与顶点动画，保留当前布局和领域接口；
 - 录制或生成多样本海浪、绳索、木结构、金属、火焰、蒸汽、烹饪和鲨鱼音效，保留当前程序音频作动态底层；
 - 为所有最终资产建立来源、版本、修改记录和发布授权结论。

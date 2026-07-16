@@ -534,7 +534,13 @@ export class IslandSystem {
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    if (event.code !== 'KeyE' || event.repeat || !this.inputEnabled || this.player?.getSurface() !== 'island') return;
+    if (
+      event.code !== 'KeyE' ||
+      event.repeat ||
+      !this.inputEnabled ||
+      this.player?.getSurface() !== 'island' ||
+      useGameStore.getState().interactionOwner !== 'island'
+    ) return;
     if (this.focused && !this.focused.definition.requiresAxe) this.gather(this.focused);
   };
 }

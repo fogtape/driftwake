@@ -21,10 +21,15 @@ import {
   sanitizeNavigationState,
   type SavedNavigationState,
 } from './navigation';
+import {
+  createDefaultPlantingState,
+  sanitizePlantingState,
+  type SavedPlantingState,
+} from './planting';
 
-export const SAVE_VERSION = 5;
-export const SAVE_KEY = 'driftwake.save.v5';
-export const LEGACY_SAVE_KEYS = ['driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
+export const SAVE_VERSION = 6;
+export const SAVE_KEY = 'driftwake.save.v6';
+export const LEGACY_SAVE_KEYS = ['driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
 
 export type PlayerSurface = 'raft' | 'island' | 'water';
 
@@ -55,6 +60,7 @@ export interface DriftwakeSave {
     tiles: SavedRaftTile[];
     devices: SavedDeviceState[];
     navigation: SavedNavigationState;
+    planting: SavedPlantingState;
   };
   world: {
     island: SavedIslandState;
@@ -118,16 +124,16 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
     version?: number;
     savedAt?: number;
     player?: Partial<DriftwakeSave['player']>;
-    raft?: { tiles?: SavedRaftTile[]; devices?: SavedDeviceState[]; navigation?: SavedNavigationState };
+    raft?: { tiles?: SavedRaftTile[]; devices?: SavedDeviceState[]; navigation?: SavedNavigationState; planting?: SavedPlantingState };
     world?: { island?: SavedIslandState; underwater?: SavedUnderwaterState };
   };
   if (
-    (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3 && candidate.version !== 4 && candidate.version !== SAVE_VERSION) ||
+    (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3 && candidate.version !== 4 && candidate.version !== 5 && candidate.version !== SAVE_VERSION) ||
     !candidate.player ||
     !candidate.raft
   ) return null;
   let island = candidate.version >= 3 ? sanitizeIslandState(candidate.world?.island) : createDefaultIslandState();
-  if (candidate.version < SAVE_VERSION && island.phase === 'docked') {
+  if (candidate.version < 5 && island.phase === 'docked') {
     island = { ...island, elapsed: Math.min(18, island.elapsed) };
   }
   const underwater =
@@ -171,7 +177,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       return true;
     });
   const rawNavigation =
-    candidate.version === SAVE_VERSION
+    candidate.version >= 5
       ? sanitizeNavigationState(candidate.raft.navigation)
       : createDefaultNavigationState();
   const navigation = {
@@ -185,6 +191,25 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       return true;
     }),
   };
+  const rawPlanting = candidate.version >= 6
+    ? sanitizePlantingState(candidate.raft.planting)
+    : createDefaultPlantingState();
+  const plantingPlanters = rawPlanting.planters.filter((planter) => {
+    const key = deviceKey(planter.x, planter.z);
+    if (!tileKeys.has(key) || occupied.has(key)) return false;
+    occupied.add(key);
+    return true;
+  });
+  const plantingBirdTargetValid = rawPlanting.birdTargetId !== null && plantingPlanters.some(
+    (planter) => planter.id === rawPlanting.birdTargetId,
+  );
+  const planting = {
+    ...rawPlanting,
+    planters: plantingPlanters,
+    birdPhase: plantingBirdTargetValid ? rawPlanting.birdPhase : 'absent' as const,
+    birdElapsed: plantingBirdTargetValid ? rawPlanting.birdElapsed : 0,
+    birdTargetId: plantingBirdTargetValid ? rawPlanting.birdTargetId : null,
+  };
 
   return {
     version: SAVE_VERSION,
@@ -196,7 +221,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       playSeconds: Math.max(0, finiteInteger(candidate.player.playSeconds)),
       navigation: sanitizeNavigation(candidate.player.navigation, island),
     },
-    raft: { tiles: stableTiles, devices, navigation },
+    raft: { tiles: stableTiles, devices, navigation, planting },
     world: { island, underwater },
   };
 }

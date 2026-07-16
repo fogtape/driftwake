@@ -589,7 +589,13 @@ export class DeviceSystem {
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    if (event.code !== 'KeyE' || event.repeat || !this.inputEnabled || this.placementType) return;
+    if (
+      event.code !== 'KeyE' ||
+      event.repeat ||
+      !this.inputEnabled ||
+      this.placementType ||
+      useGameStore.getState().interactionOwner !== 'device'
+    ) return;
     this.interact();
   };
 }

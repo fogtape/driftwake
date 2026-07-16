@@ -636,7 +636,7 @@ export class NavigationSystem {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.repeat || !this.inputEnabled || this.placementType) return;
-    if (event.code === 'KeyE' && this.focused) {
+    if (event.code === 'KeyE' && this.focused && useGameStore.getState().interactionOwner === 'navigation') {
       this.interact();
       return;
     }

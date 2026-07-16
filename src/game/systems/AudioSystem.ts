@@ -420,6 +420,97 @@ export class AudioSystem {
     this.noiseBurst(0.38, 720, 0.12, 'lowpass');
   }
 
+  playPlantSeed(): void {
+    this.noiseBurst(0.16, 420, 0.07, 'lowpass');
+    this.noiseBurst(0.11, 1850, 0.045, 'bandpass');
+    this.playWoodKnock(0.025, 0.04);
+  }
+
+  playPlantWater(): void {
+    this.noiseBurst(0.42, 860, 0.18, 'lowpass');
+    this.noiseBurst(0.16, 2380, 0.11, 'bandpass');
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(310, now);
+    oscillator.frequency.exponentialRampToValueAtTime(118, now + 0.28);
+    gain.gain.setValueAtTime(0.026, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+    oscillator.connect(gain).connect(this.effects);
+    oscillator.start(now);
+    oscillator.stop(now + 0.31);
+  }
+
+  playPlantReady(): void {
+    this.noiseBurst(0.18, 2600, 0.08, 'highpass');
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    [392, 523.25, 659.25].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + index * 0.075;
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.028, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.2);
+      oscillator.connect(gain).connect(this.effects!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.21);
+    });
+  }
+
+  playPlantWither(): void {
+    this.noiseBurst(0.24, 1180, 0.12, 'bandpass');
+    this.noiseBurst(0.1, 3100, 0.065, 'highpass');
+  }
+
+  playPlantHarvest(): void {
+    this.noiseBurst(0.2, 2200, 0.055, 'highpass');
+    this.noiseBurst(0.14, 620, 0.06, 'lowpass');
+    this.playCollect();
+  }
+
+  playCropBirdWarning(): void {
+    if (!this.context || !this.creatures) return;
+    const now = this.context.currentTime;
+    [1480, 1920, 1650].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + index * 0.09;
+      oscillator.type = index === 1 ? 'triangle' : 'sine';
+      oscillator.frequency.setValueAtTime(frequency, start);
+      oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.72, start + 0.08);
+      gain.gain.setValueAtTime(0.048, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.11);
+      oscillator.connect(gain).connect(this.creatures!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.12);
+    });
+  }
+
+  playCropBirdPeck(): void {
+    this.noiseBurstTo(0.075, 1780, 0.024, 'bandpass', this.creatures);
+    this.playWoodKnock(0.018, 0.024);
+  }
+
+  playCropBirdScare(): void {
+    this.noiseBurstTo(0.32, 1750, 0.1, 'bandpass', this.creatures);
+    if (!this.context || !this.creatures) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(1760, now);
+    oscillator.frequency.exponentialRampToValueAtTime(740, now + 0.22);
+    gain.gain.setValueAtTime(0.05, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+    oscillator.connect(gain).connect(this.creatures);
+    oscillator.start(now);
+    oscillator.stop(now + 0.25);
+  }
+
   playDenied(): void {
     if (!this.context || !this.ui) return;
     const now = this.context.currentTime;

@@ -1,5 +1,6 @@
 import {
   Anchor,
+  Bird,
   Compass,
   CookingPot,
   Droplet,
@@ -12,6 +13,7 @@ import {
   Settings,
   ShieldAlert,
   ShieldCheck,
+  Sprout,
   TriangleAlert,
   Utensils,
   Volume2,
@@ -27,6 +29,7 @@ import type {
   FishingFeedback,
   IslandFeedback,
   NavigationFeedback,
+  PlantingFeedback,
   PlayerFeedback,
   RaftFeedback,
   ReefFeedback,
@@ -49,6 +52,7 @@ interface HudProps {
   raft: RaftFeedback;
   devices: DeviceFeedbackMap;
   navigation: NavigationFeedback;
+  planting: PlantingFeedback;
   island: IslandFeedback;
   reef: ReefFeedback;
   placementDevice: PlacementType | null;
@@ -99,6 +103,7 @@ export function Hud({
   raft,
   devices,
   navigation,
+  planting,
   island,
   reef,
   placementDevice,
@@ -116,6 +121,7 @@ export function Hud({
   const placedDeviceTypes = island.ashore
     ? []
     : (['purifier', 'grill'] as const).filter((type) => devices[type].placed > 0);
+  const planterVisible = !island.ashore && planting.placed > 0;
   const reefExpedition = player.surface === 'water' && island.phase === 'docked';
   const resourceItems = reefExpedition
     ? (['sand', 'clay', 'metalOre', 'seaweed', 'scrap'] as const)
@@ -234,6 +240,14 @@ export function Hud({
         </div>
       </div>
 
+      <div className={`crop-warning ${planting.birdActive ? 'is-visible' : ''} ${sharkAlert ? 'has-shark-alert' : ''}`} aria-live="polite">
+        <Bird size={18} />
+        <div>
+          <span>{planting.birdThreat > 0.8 ? '盐翼盗鸟正在啄食作物' : '盐翼盗鸟正在逼近'}</span>
+          <i><b style={{ width: `${Math.round(planting.birdThreat * 100)}%` }} /></i>
+        </div>
+      </div>
+
       <div className="survival-cluster">
         <Gauge icon={<Heart size={18} fill="currentColor" />} value={survival.health} tone="health" label="生命" />
         <Gauge icon={<Droplet size={18} fill="currentColor" />} value={survival.thirst} tone="thirst" label="口渴" />
@@ -281,7 +295,10 @@ export function Hud({
         </div>
       </div>
 
-      <div className={`device-rack ${placedDeviceTypes.length > 0 ? 'is-visible' : ''}`} aria-label="筏上设备状态">
+      <div
+        className={`device-rack ${placedDeviceTypes.length > 0 || planterVisible ? 'is-visible' : ''} ${sharkAlert || planting.birdActive ? 'has-threat' : ''} ${sharkAlert && planting.birdActive ? 'has-two-threats' : ''}`}
+        aria-label="筏上设备状态"
+      >
         {placedDeviceTypes.map((type) => {
           const status = devices[type];
           const label =
@@ -298,6 +315,40 @@ export function Hud({
             </div>
           );
         })}
+        {planterVisible && (() => {
+          const phase = planting.birdActive
+            ? 'threatened'
+            : planting.withered > 0
+              ? 'withered'
+              : planting.dry > 0
+                ? 'dry'
+                : planting.mature > 0
+                  ? 'ready'
+                  : planting.growing > 0
+                    ? 'working'
+                    : 'idle';
+          const label = planting.birdActive
+            ? '受袭'
+            : planting.withered > 0
+              ? '枯萎'
+              : planting.dry > 0
+                ? '缺水'
+                : planting.mature > 0
+                  ? '可收获'
+                  : planting.growing > 0
+                    ? '生长中'
+                    : '待播种';
+          return (
+            <div className={`device-status device-status--planter device-status--${phase}`}>
+              <Sprout size={18} />
+              <div>
+                <span>作物盆</span>
+                <i><b style={{ width: `${planting.progress * 100}%` }} /></i>
+              </div>
+              <strong>{label}</strong>
+            </div>
+          );
+        })()}
       </div>
 
       <div className={`interaction-prompt ${interaction ? 'is-visible' : ''} ${placementDevice ? 'is-placement' : ''}`}>{interaction}</div>

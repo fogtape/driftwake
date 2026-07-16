@@ -566,7 +566,13 @@ export class UnderwaterSystem {
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    if (event.code !== 'KeyE' || event.repeat || !this.inputEnabled || this.player.getSurface() !== 'water') return;
+    if (
+      event.code !== 'KeyE' ||
+      event.repeat ||
+      !this.inputEnabled ||
+      this.player.getSurface() !== 'water' ||
+      useGameStore.getState().interactionOwner !== 'underwater'
+    ) return;
     if (this.focused && !this.focused.definition.requiresHook) this.gatherSeaweed(this.focused);
   };
 }

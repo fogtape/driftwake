@@ -49,6 +49,7 @@ const PLACEABLES: Partial<Record<ItemId, PlacementType>> = {
   grillKit: 'grill',
   sailKit: 'sail',
   anchorKit: 'anchor',
+  planterKit: 'planter',
 };
 
 function categoryLabel(category: (typeof ITEM_DEFINITIONS)[ItemId]['category']): string {

@@ -41,6 +41,7 @@ export function App() {
   const raft = useGameStore((state) => state.raft);
   const devices = useGameStore((state) => state.devices);
   const navigation = useGameStore((state) => state.navigation);
+  const planting = useGameStore((state) => state.planting);
   const island = useGameStore((state) => state.island);
   const reef = useGameStore((state) => state.reef);
   const placementDevice = useGameStore((state) => state.placementDevice);
@@ -192,6 +193,7 @@ export function App() {
         raft={raft}
         devices={devices}
         navigation={navigation}
+        planting={planting}
         island={island}
         reef={reef}
         placementDevice={placementDevice}

@@ -145,6 +145,15 @@ export const ITEM_DEFINITIONS = {
     tone: '#a87862',
     description: '石坠、锈铁锚爪和手摇绞盘组成的固定锚，能在浅滩抓牢海床。',
   },
+  planterKit: {
+    id: 'planterKit',
+    name: '潮生作物盆套件',
+    shortName: '作物盆',
+    category: 'placeable',
+    maxStack: 4,
+    tone: '#86aa68',
+    description: '以漂木、椰糠和排水铁件拼成的耐盐种植槽，可在木筏上培育盐冠棕榈。',
+  },
   hook: {
     id: 'hook',
     name: '打捞钩',

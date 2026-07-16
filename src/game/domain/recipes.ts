@@ -60,6 +60,14 @@ export const RECIPES = {
     cost: { timber: 4, stone: 4, rope: 2, scrap: 1 },
     description: '靠近浅滩后抓牢海床，阻止无人看守的木筏继续漂离。',
   },
+  planterKit: {
+    id: 'planterKit',
+    name: '潮生作物盆',
+    category: 'survival',
+    output: { planterKit: 1 },
+    cost: { timber: 4, fiber: 3, rope: 1, stone: 2 },
+    description: '搭建带排水层的培养槽，播种后需要持续供应蒸馏淡水。',
+  },
   hammer: {
     id: 'hammer',
     name: '建造锤',
