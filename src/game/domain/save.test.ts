@@ -32,7 +32,7 @@ describe('save schema', () => {
   });
 
   it('rejects unsupported versions and provides a stable starting raft', () => {
-    expect(sanitizeSave({ version: 10 })).toBeNull();
+    expect(sanitizeSave({ version: 11 })).toBeNull();
     expect(createDefaultRaftTiles()).toHaveLength(9);
   });
 
@@ -57,8 +57,8 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v9');
-    expect(save?.version).toBe(9);
+    expect(SAVE_KEY).toBe('driftwake.save.v10');
+    expect(save?.version).toBe(10);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
     expect(save?.world.island.phase).toBe('approaching');
@@ -349,5 +349,50 @@ describe('save schema', () => {
     expect(locker?.storage).toEqual({ timber: 40, polymer: 40, fiber: 40, scrap: 12, rope: 10 });
     expect(save?.raft.navigation).toMatchObject({ anchorStrain: 0.76 });
     expect(save?.raft.navigation.devices[0]).toMatchObject({ type: 'anchor', reinforced: true, deployed: true });
+  });
+
+  it('restores v10 world coordinates, receiver power and a valid separated signal array', () => {
+    const save = sanitizeSave({
+      version: 10,
+      player: { inventory: { hook: 1, brineCell: 2 }, survival: {}, selectedTool: 'hook', playSeconds: 28 },
+      raft: {
+        tiles: [
+          { x: 0, z: 0, health: 100 },
+          { x: 1, z: 0, health: 100 },
+          { x: 2, z: 0, health: 100 },
+        ],
+        devices: [],
+        navigation: {
+          ...createDefaultNavigationState(),
+          worldX: 123.5,
+          worldZ: -88.25,
+          receiverOn: true,
+          receiverCharge: 999,
+          routeMode: 'signal',
+          activeSignal: 'ironChoir',
+          signalOriginX: 100,
+          signalOriginZ: -50,
+          discoveredSignals: ['tideRelay', 'ironChoir', 'not-real'],
+          visitedSignals: ['tideRelay', 'not-real'],
+          devices: [
+            { id: 'receiver', type: 'receiver', x: 0, z: 0, rotation: 0 },
+            { id: 'helm', type: 'helm', x: 1, z: 0, rotation: 0 },
+            { id: 'antenna', type: 'antenna', x: 2, z: 0, rotation: 0 },
+          ],
+        },
+      },
+    });
+    expect(save?.version).toBe(10);
+    expect(save?.raft.navigation).toMatchObject({
+      worldX: 123.5,
+      worldZ: -88.25,
+      receiverOn: true,
+      receiverCharge: 360,
+      routeMode: 'signal',
+      activeSignal: 'ironChoir',
+      discoveredSignals: ['tideRelay', 'ironChoir'],
+      visitedSignals: ['tideRelay'],
+    });
+    expect(save?.raft.navigation.devices).toHaveLength(3);
   });
 });

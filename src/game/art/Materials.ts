@@ -43,6 +43,12 @@ export interface AssetTextures {
   sealedCanvas: Texture;
   sealedCanvasNormal: Texture;
   sealedCanvasRoughness: Texture;
+  signalLaminate: Texture;
+  signalLaminateNormal: Texture;
+  signalLaminateRoughness: Texture;
+  phosphorGlass: Texture;
+  phosphorGlassNormal: Texture;
+  phosphorGlassRoughness: Texture;
   stormClouds: Texture;
 }
 
@@ -75,6 +81,8 @@ export interface MaterialLibrary {
   navigationAlloy: MeshStandardMaterial;
   saltglassCollector: MeshStandardMaterial;
   sealedCanvas: MeshStandardMaterial;
+  signalLaminate: MeshStandardMaterial;
+  phosphorGlass: MeshStandardMaterial;
   cropLeaf: MeshStandardMaterial;
   cropDry: MeshStandardMaterial;
   cropFruit: MeshStandardMaterial;
@@ -116,6 +124,12 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     sealedCanvas,
     sealedCanvasNormal,
     sealedCanvasRoughness,
+    signalLaminate,
+    signalLaminateNormal,
+    signalLaminateRoughness,
+    phosphorGlass,
+    phosphorGlassNormal,
+    phosphorGlassRoughness,
     stormClouds,
   ] = await Promise.all([
     loader.loadAsync('/assets/textures/weathered-cedar.webp'),
@@ -147,6 +161,12 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/sealed-canvas.webp'),
     loader.loadAsync('/assets/textures/sealed-canvas-normal.webp'),
     loader.loadAsync('/assets/textures/sealed-canvas-roughness.webp'),
+    loader.loadAsync('/assets/textures/signal-laminate.webp'),
+    loader.loadAsync('/assets/textures/signal-laminate-normal.webp'),
+    loader.loadAsync('/assets/textures/signal-laminate-roughness.webp'),
+    loader.loadAsync('/assets/textures/phosphor-glass.webp'),
+    loader.loadAsync('/assets/textures/phosphor-glass-normal.webp'),
+    loader.loadAsync('/assets/textures/phosphor-glass-roughness.webp'),
     loader.loadAsync('/assets/textures/storm-clouds.webp'),
   ]);
 
@@ -249,6 +269,26 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   sealedCanvasNormal.colorSpace = NoColorSpace;
   sealedCanvasRoughness.colorSpace = NoColorSpace;
 
+  for (const texture of [signalLaminate, signalLaminateNormal, signalLaminateRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(1.4, 1.2);
+    texture.anisotropy = anisotropy;
+  }
+  signalLaminate.colorSpace = SRGBColorSpace;
+  signalLaminateNormal.colorSpace = NoColorSpace;
+  signalLaminateRoughness.colorSpace = NoColorSpace;
+
+  for (const texture of [phosphorGlass, phosphorGlassNormal, phosphorGlassRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(1.05, 1.05);
+    texture.anisotropy = anisotropy;
+  }
+  phosphorGlass.colorSpace = SRGBColorSpace;
+  phosphorGlassNormal.colorSpace = NoColorSpace;
+  phosphorGlassRoughness.colorSpace = NoColorSpace;
+
   stormClouds.colorSpace = SRGBColorSpace;
   stormClouds.wrapS = RepeatWrapping;
   stormClouds.wrapT = RepeatWrapping;
@@ -285,6 +325,12 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     sealedCanvas,
     sealedCanvasNormal,
     sealedCanvasRoughness,
+    signalLaminate,
+    signalLaminateNormal,
+    signalLaminateRoughness,
+    phosphorGlass,
+    phosphorGlassNormal,
+    phosphorGlassRoughness,
     stormClouds,
   };
 }
@@ -421,6 +467,27 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       roughness: 0.98,
       metalness: 0,
       side: DoubleSide,
+    }),
+    signalLaminate: new MeshStandardMaterial({
+      color: 0xd8e0d4,
+      map: textures.signalLaminate,
+      normalMap: textures.signalLaminateNormal,
+      normalScale: new Vector2(0.64, 0.64),
+      roughnessMap: textures.signalLaminateRoughness,
+      roughness: 0.78,
+      metalness: 0.18,
+    }),
+    phosphorGlass: new MeshStandardMaterial({
+      color: 0xa7cbc2,
+      map: textures.phosphorGlass,
+      normalMap: textures.phosphorGlassNormal,
+      normalScale: new Vector2(0.26, 0.26),
+      roughnessMap: textures.phosphorGlassRoughness,
+      roughness: 0.34,
+      metalness: 0.08,
+      emissive: 0x071b19,
+      emissiveMap: textures.phosphorGlass,
+      emissiveIntensity: 0.18,
     }),
     cropLeaf: new MeshStandardMaterial({ color: 0x5f8c54, roughness: 0.86, side: DoubleSide }),
     cropDry: new MeshStandardMaterial({ color: 0x9b7750, roughness: 0.98, side: DoubleSide }),

@@ -17,7 +17,7 @@ const chromiumPath = process.env.CHROMIUM_PATH ?? '/data/data/com.termux/files/u
 const outputDir = new URL('../artifacts/screenshots/', import.meta.url);
 
 const seededSave = {
-  version: 9,
+  version: 10,
   savedAt: 1,
   player: {
     inventory: {
@@ -404,7 +404,7 @@ const narrowProgressionSave = {
 
 const advancedDeviceSave = {
   ...seededSave,
-  version: 9,
+  version: 10,
   player: {
     ...seededSave.player,
     inventory: {
@@ -506,6 +506,74 @@ const advancedStorageSave = {
   },
 };
 
+const signalNetworkSave = {
+  ...seededSave,
+  version: 10,
+  player: {
+    ...seededSave.player,
+    inventory: {
+      hook: 1,
+      hammer: 1,
+      spear: 1,
+      timber: 18,
+      polymer: 12,
+      rope: 6,
+      scrap: 8,
+      metalIngot: 4,
+      glassPane: 3,
+      signalBoard: 2,
+      brineCell: 2,
+    },
+    navigation: { surface: 'raft', x: 0, z: 1.28 },
+  },
+  raft: {
+    tiles: Array.from({ length: 35 }, (_, index) => ({
+      x: (index % 7) - 3,
+      z: Math.floor(index / 7) - 2,
+      health: 100,
+    })),
+    devices: [],
+    navigation: {
+      windClock: 58,
+      weatherClock: 58,
+      courseAngle: 0,
+      heading: 0,
+      routeMode: 'signal',
+      sailStrain: 0,
+      anchorStrain: 0,
+      worldX: 72,
+      worldZ: -114,
+      receiverOn: true,
+      receiverCharge: 248,
+      activeSignal: 'tideRelay',
+      signalOriginX: 0,
+      signalOriginZ: 0,
+      discoveredSignals: ['tideRelay', 'ironChoir'],
+      visitedSignals: [],
+      devices: [
+        { id: 'signal-receiver', type: 'receiver', x: 0, z: 0, rotation: 0, deployed: false, reinforced: false },
+        { id: 'signal-antenna', type: 'antenna', x: -2, z: 0, rotation: Math.PI / 2, deployed: false, reinforced: false },
+        { id: 'signal-sail', type: 'sail', x: 2, z: -2, rotation: 0, deployed: true, reinforced: false },
+        { id: 'signal-helm', type: 'helm', x: 2, z: 2, rotation: 0, deployed: false, reinforced: false },
+      ],
+    },
+    planting: { birdClock: 0, birdVisit: 0, planters: [] },
+    progression: {
+      researched: ['timber', 'rope', 'scrap', 'dryBrick', 'metalIngot', 'glassPane', 'hinge', 'signalBoard'],
+      learned: ['smelterKit', 'hinge', 'signalBoard', 'brineCell', 'receiverKit', 'antennaKit'],
+      devices: [],
+    },
+  },
+  world: {
+    ...seededSave.world,
+    island: {
+      ...seededSave.world.island,
+      phase: 'approaching',
+      elapsed: 20,
+    },
+  },
+};
+
 await mkdir(outputDir, { recursive: true });
 
 async function startVirtualDisplay() {
@@ -584,8 +652,8 @@ async function openDesktopPage(label, options = {}) {
   });
   if (options.seedSave) {
     await context.addInitScript((save) => {
-      localStorage.setItem('driftwake.save.v9', JSON.stringify(save));
-    }, options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
+      localStorage.setItem('driftwake.save.v10', JSON.stringify(save));
+    }, options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
   }
   const page = await context.newPage();
   monitorPage(page, label);
@@ -800,6 +868,89 @@ async function captureAdvancedDevices() {
   await context.close();
 }
 
+async function captureSignalNetwork() {
+  const { context, page } = await openDesktopPage('signal-network', { seedSave: true, signalStart: true });
+  await page.getByRole('button', { name: '开始漂流' }).click();
+  await page.locator('.signal-readout.is-visible.is-online').waitFor({ timeout: 30_000 });
+  await page.waitForFunction(() => Boolean(document.pointerLockElement), null, { timeout: 5_000 });
+  await page.evaluate(() => {
+    const movement = new MouseEvent('mousemove');
+    Object.defineProperties(movement, {
+      movementX: { value: 0 },
+      movementY: { value: 70 },
+    });
+    document.dispatchEvent(movement);
+  });
+  await page.waitForTimeout(900);
+  await inspectCanvasPixels(page, 'signal-network');
+  if (process.env.CAPTURE_FAST !== '1') {
+    await page.screenshot({ path: new URL('signal-network-desktop.png', outputDir).pathname, timeout: 90_000 });
+  }
+
+  if (!await page.evaluate(() => Boolean(document.pointerLockElement))) {
+    await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
+    await page.waitForFunction(() => Boolean(document.pointerLockElement), null, { timeout: 5_000 });
+  }
+  let prompt = await aimDownToPrompt(page, '关闭潮听接收台', 46);
+  if (!prompt.includes('关闭潮听接收台')) prompt = await aimAroundToPrompt(page, '关闭潮听接收台');
+  if (!prompt.includes('关闭潮听接收台')) {
+    if (process.env.CAPTURE_FAST !== '1') {
+      await page.screenshot({ path: new URL('signal-network-focus-diagnostic.png', outputDir).pathname, timeout: 90_000 });
+    }
+    throw new Error(`Signal receiver focus missing: ${prompt}`);
+  }
+  await page.keyboard.press('KeyR');
+  await page.waitForFunction(() => document.querySelector('.signal-readout')?.textContent?.includes('41.82'), null, { timeout: 5_000 });
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => !document.querySelector('.signal-readout')?.classList.contains('is-online'), null, { timeout: 5_000 });
+  await page.keyboard.press('KeyE');
+  await page.locator('.signal-readout.is-online').waitFor({ timeout: 5_000 });
+
+  await page.evaluate(() => {
+    const movement = new MouseEvent('mousemove');
+    Object.defineProperties(movement, {
+      movementX: { value: -650 },
+      movementY: { value: 0 },
+    });
+    document.dispatchEvent(movement);
+  });
+  await page.waitForTimeout(500);
+  await inspectCanvasPixels(page, 'signal-array');
+  if (process.env.CAPTURE_FAST !== '1') {
+    await page.screenshot({ path: new URL('signal-array-desktop.png', outputDir).pathname, timeout: 90_000 });
+  }
+
+  await page.setViewportSize({ width: 640, height: 720 });
+  await page.waitForTimeout(300);
+  const boxes = await page.evaluate(() => {
+    const box = (selector) => {
+      const element = document.querySelector(selector);
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+    };
+    return {
+      signal: box('.signal-readout.is-visible'),
+      island: box('.island-readout'),
+      navigation: box('.navigation-readout'),
+      weather: box('.weather-warning.is-visible'),
+      devices: box('.device-rack.is-visible'),
+      hotbar: box('.hotbar'),
+      bodyWidth: document.body.scrollWidth,
+      viewportWidth: window.innerWidth,
+    };
+  });
+  const overlaps = (a, b) => Boolean(a && b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top);
+  for (const [first, second] of [['signal', 'island'], ['signal', 'navigation'], ['signal', 'weather'], ['signal', 'devices'], ['signal', 'hotbar']]) {
+    if (overlaps(boxes[first], boxes[second])) throw new Error(`Signal HUD overlap: ${first} intersects ${second}; ${JSON.stringify(boxes)}`);
+  }
+  if (boxes.bodyWidth > boxes.viewportWidth + 2) throw new Error(`Signal HUD narrow overflow: ${JSON.stringify(boxes)}`);
+  console.log(`Signal network prompt: ${prompt}; narrow boxes: ${JSON.stringify(boxes)}`);
+  await inspectCanvasPixels(page, 'signal-network-narrow');
+  await page.screenshot({ path: new URL('signal-network-narrow.png', outputDir).pathname, timeout: 90_000 });
+  await context.close();
+}
+
 async function aimDownToPrompt(page, expected, steps = 50) {
   let prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
   for (let step = 0; step < steps && !prompt.includes(expected); step += 1) {
@@ -980,7 +1131,7 @@ async function captureProgressionPlacement() {
       notice: document.querySelector('.loot-notice')?.textContent?.trim() ?? '',
       prompt: document.querySelector('.interaction-prompt')?.textContent?.trim() ?? '',
       progressionHud: document.querySelector('.device-status--progression')?.textContent?.trim() ?? '',
-      save: localStorage.getItem('driftwake.save.v9'),
+      save: localStorage.getItem('driftwake.save.v10'),
     }));
     await page.screenshot({ path: new URL('progression-placement-diagnostic.png', outputDir).pathname });
     throw new Error(`Research table placement did not complete: ${JSON.stringify(state).slice(0, 1600)}`, { cause: error });
@@ -1149,7 +1300,7 @@ async function captureUnderwaterInteraction() {
 async function captureNarrow() {
   const context = await browser.newContext({ viewport: { width: 640, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript((save) => {
-    localStorage.setItem('driftwake.save.v9', JSON.stringify(save));
+    localStorage.setItem('driftwake.save.v10', JSON.stringify(save));
   }, narrowProgressionSave);
   const page = await context.newPage();
   monitorPage(page, 'narrow');
@@ -1199,7 +1350,7 @@ async function captureNarrow() {
 async function captureUnderwaterNarrow() {
   const context = await browser.newContext({ viewport: { width: 640, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript((save) => {
-    localStorage.setItem('driftwake.save.v9', JSON.stringify(save));
+    localStorage.setItem('driftwake.save.v10', JSON.stringify(save));
   }, underwaterSeededSave);
   const page = await context.newPage();
   monitorPage(page, 'underwater-narrow');
@@ -1340,7 +1491,7 @@ async function captureNavigationStorm() {
   await page.locator('.primary-command').click();
   await page.waitForTimeout(450);
   const initialStormState = await page.evaluate(() => {
-    const savedNavigation = JSON.parse(localStorage.getItem('driftwake.save.v9') ?? 'null')?.raft?.navigation ?? null;
+    const savedNavigation = JSON.parse(localStorage.getItem('driftwake.save.v10') ?? 'null')?.raft?.navigation ?? null;
     return {
       warningClass: document.querySelector('.weather-warning')?.className ?? 'missing',
       warningText: document.querySelector('.weather-warning')?.textContent?.trim() ?? '',
@@ -1453,6 +1604,7 @@ try {
   if (captureOnly === 'all' || captureOnly === 'settings') await captureSettings();
   if (captureOnly === 'all' || captureOnly === 'devices') await captureDevices();
   if (captureOnly === 'all' || captureOnly === 'advanced') await captureAdvancedDevices();
+  if (captureOnly === 'all' || captureOnly === 'signal') await captureSignalNetwork();
   if (captureOnly === 'all' || captureOnly === 'planting-placement') await capturePlantingPlacement();
   if (captureOnly === 'all' || captureOnly === 'planting-interaction') await capturePlantingInteraction();
   if (captureOnly === 'all' || captureOnly === 'planting-bird') await capturePlantingBird();

@@ -18,6 +18,7 @@ export class AudioSystem {
   private islandLoop: GainNode | null = null;
   private underwaterLoop: GainNode | null = null;
   private sailLoop: GainNode | null = null;
+  private receiverLoop: GainNode | null = null;
   private stormLoop: GainNode | null = null;
   private nextCreakAt = 4;
   private nextBirdAt = 6;
@@ -30,6 +31,7 @@ export class AudioSystem {
   private islandActivity = 0;
   private underwaterActivity = 0;
   private sailActivity = 0;
+  private receiverActivity = 0;
   private stormActivity = 0;
   private mix: AudioMix = {
     master: 0.78,
@@ -227,6 +229,12 @@ export class AudioSystem {
     this.sailLoop?.gain.setTargetAtTime(this.sailActivity * 0.07, this.context.currentTime, 0.35);
   }
 
+  setReceiverActivity(activity: number): void {
+    this.receiverActivity = Math.max(0, Math.min(1, activity));
+    if (!this.context) return;
+    this.receiverLoop?.gain.setTargetAtTime(this.receiverActivity * 0.026, this.context.currentTime, 0.22);
+  }
+
   setStormActivity(activity: number): void {
     this.stormActivity = Math.max(0, Math.min(1, activity));
     if (!this.context) return;
@@ -311,6 +319,118 @@ export class AudioSystem {
       oscillator.connect(gain).connect(this.effects!);
       oscillator.start(start);
       oscillator.stop(start + 0.15);
+    });
+  }
+
+  playReceiverCell(): void {
+    this.playWoodKnock(0.035, 0.055);
+    this.noiseBurst(0.1, 820, 0.036, 'bandpass');
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    [74, 112].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + index * 0.055;
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(frequency, start);
+      oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.35, start + 0.16);
+      gain.gain.setValueAtTime(0.038 - index * 0.008, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+      oscillator.connect(gain).connect(this.effects!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.19);
+    });
+  }
+
+  playReceiverPower(enabled: boolean): void {
+    this.noiseBurst(0.08, enabled ? 2200 : 980, 0.034, 'bandpass');
+    this.noiseBurst(0.025, 5200, 0.018, 'highpass');
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = enabled ? 'sine' : 'triangle';
+    oscillator.frequency.setValueAtTime(enabled ? 146 : 218, now);
+    oscillator.frequency.exponentialRampToValueAtTime(enabled ? 438 : 82, now + 0.24);
+    gain.gain.setValueAtTime(0.035, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
+    oscillator.connect(gain).connect(this.effects);
+    oscillator.start(now);
+    oscillator.stop(now + 0.27);
+  }
+
+  playReceiverTune(): void {
+    this.noiseBurst(0.16, 2650, 0.035, 'bandpass');
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const filter = this.context.createBiquadFilter();
+    const gain = this.context.createGain();
+    oscillator.type = 'sawtooth';
+    oscillator.frequency.setValueAtTime(240, now);
+    oscillator.frequency.exponentialRampToValueAtTime(960, now + 0.1);
+    oscillator.frequency.exponentialRampToValueAtTime(520, now + 0.22);
+    filter.type = 'bandpass';
+    filter.frequency.value = 1180;
+    filter.Q.value = 2.4;
+    gain.gain.setValueAtTime(0.018, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+    oscillator.connect(filter).connect(gain).connect(this.effects);
+    oscillator.start(now);
+    oscillator.stop(now + 0.25);
+  }
+
+  playSignalPing(strength: number): void {
+    const level = Math.max(0.08, Math.min(1, strength));
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    [0, 0.055].forEach((offset, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = (index ? 928 : 696) + level * 120;
+      gain.gain.setValueAtTime((0.009 + level * 0.021) / (index + 1), now + offset);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.12);
+      oscillator.connect(gain).connect(this.effects!);
+      oscillator.start(now + offset);
+      oscillator.stop(now + offset + 0.13);
+    });
+  }
+
+  playSignalArrival(): void {
+    this.noiseBurst(0.38, 3200, 0.045, 'bandpass');
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    [293.66, 440, 659.25, 880].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + index * 0.085;
+      oscillator.type = index % 2 ? 'triangle' : 'sine';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.038, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.32);
+      oscillator.connect(gain).connect(this.effects!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.33);
+    });
+  }
+
+  playArrayDiagnostic(success: boolean): void {
+    this.noiseBurst(0.06, success ? 3100 : 720, 0.022, 'bandpass');
+    if (!this.context || !this.ui) return;
+    const now = this.context.currentTime;
+    const frequencies = success ? [523.25, 783.99] : [196, 146.83];
+    frequencies.forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + index * 0.07;
+      oscillator.type = success ? 'sine' : 'square';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(success ? 0.022 : 0.014, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
+      oscillator.connect(gain).connect(this.ui!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.13);
     });
   }
 
@@ -875,6 +995,7 @@ export class AudioSystem {
     this.islandLoop = null;
     this.underwaterLoop = null;
     this.sailLoop = null;
+    this.receiverLoop = null;
     this.stormLoop = null;
   }
 
@@ -950,6 +1071,22 @@ export class AudioSystem {
     this.sailLoop.gain.value = this.sailActivity * 0.07;
     source.connect(filter).connect(this.sailLoop).connect(this.effects);
     source.start(0, 0.7);
+
+    const receiverSource = this.context.createBufferSource();
+    const receiverFilter = this.context.createBiquadFilter();
+    const receiverNotch = this.context.createBiquadFilter();
+    this.receiverLoop = this.context.createGain();
+    receiverSource.buffer = buffer;
+    receiverSource.loop = true;
+    receiverFilter.type = 'bandpass';
+    receiverFilter.frequency.value = 2460;
+    receiverFilter.Q.value = 1.6;
+    receiverNotch.type = 'notch';
+    receiverNotch.frequency.value = 1120;
+    receiverNotch.Q.value = 2.1;
+    this.receiverLoop.gain.value = this.receiverActivity * 0.026;
+    receiverSource.connect(receiverFilter).connect(receiverNotch).connect(this.receiverLoop).connect(this.effects);
+    receiverSource.start(0, 2.2);
   }
 
   private startStormLayer(): void {

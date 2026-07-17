@@ -264,7 +264,7 @@ export function createHelmModel(materials: MaterialLibrary): Group {
   helm.add(gimbal);
 
   const routePins: Mesh[] = [];
-  [-0.19, 0, 0.19].forEach((x, index) => {
+  [-0.24, -0.08, 0.08, 0.24].forEach((x, index) => {
     const pin = new Mesh(new SphereGeometry(0.026, 8, 6), materials.navigationAlloy.clone());
     pin.position.set(x, 0.76, 0.205);
     pin.userData.routeIndex = index;

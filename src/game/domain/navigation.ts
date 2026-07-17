@@ -1,8 +1,30 @@
 import type { ItemId } from './items';
 
-export type NavigationDeviceType = 'sail' | 'anchor' | 'helm';
-export type NavigationRouteMode = 'manual' | 'island' | 'shelter';
+export type NavigationDeviceType = 'sail' | 'anchor' | 'helm' | 'receiver' | 'antenna';
+export type NavigationRouteMode = 'manual' | 'island' | 'shelter' | 'signal';
 export type NavigationWeatherPhase = 'calm' | 'building' | 'storm' | 'clearing';
+export type SignalArrayStatus = 'ready' | 'missing-receiver' | 'missing-antenna' | 'too-close' | 'too-far';
+export type SignalTargetId = 'tideRelay' | 'ironChoir' | 'stormNeedle';
+
+export interface SignalTargetDefinition {
+  id: SignalTargetId;
+  name: string;
+  frequency: string;
+  offsetX: number;
+  offsetZ: number;
+}
+
+export const SIGNAL_TARGET_ORDER: readonly SignalTargetId[] = ['tideRelay', 'ironChoir', 'stormNeedle'];
+export const SIGNAL_TARGETS: Record<SignalTargetId, SignalTargetDefinition> = {
+  tideRelay: { id: 'tideRelay', name: '潮痕中继站', frequency: '73.14', offsetX: 72, offsetZ: -138 },
+  ironChoir: { id: 'ironChoir', name: '铁歌漂流阵', frequency: '41.82', offsetX: -236, offsetZ: -326 },
+  stormNeedle: { id: 'stormNeedle', name: '风针观测标', frequency: '89.06', offsetX: 382, offsetZ: -74 },
+};
+
+export const RECEIVER_CELL_SECONDS = 360;
+export const SIGNAL_ARRAY_MIN_TILES = 2;
+export const SIGNAL_ARRAY_MAX_TILES = 6;
+export const SIGNAL_REACH_METERS = 18;
 
 export interface SavedNavigationDevice {
   id: string;
@@ -22,7 +44,30 @@ export interface SavedNavigationState {
   routeMode: NavigationRouteMode;
   sailStrain: number;
   anchorStrain: number;
+  worldX: number;
+  worldZ: number;
+  receiverOn: boolean;
+  receiverCharge: number;
+  activeSignal: SignalTargetId;
+  signalOriginX: number | null;
+  signalOriginZ: number | null;
+  discoveredSignals: SignalTargetId[];
+  visitedSignals: SignalTargetId[];
   devices: SavedNavigationDevice[];
+}
+
+export interface SignalTelemetry {
+  arrayStatus: SignalArrayStatus;
+  online: boolean;
+  targetId: SignalTargetId | null;
+  targetName: string | null;
+  frequency: string | null;
+  distance: number | null;
+  bearing: number | null;
+  targetX: number | null;
+  targetZ: number | null;
+  discovered: number;
+  visited: number;
 }
 
 export interface NavigationMetrics {
@@ -57,13 +102,15 @@ export interface NavigationWeather {
 export interface NavigationDeviceDefinition {
   type: NavigationDeviceType;
   name: string;
-  kitItem: Extract<ItemId, 'sailKit' | 'anchorKit' | 'helmKit'>;
+  kitItem: Extract<ItemId, 'sailKit' | 'anchorKit' | 'helmKit' | 'receiverKit' | 'antennaKit'>;
 }
 
 export const NAVIGATION_DEVICE_DEFINITIONS: Record<NavigationDeviceType, NavigationDeviceDefinition> = {
   sail: { type: 'sail', name: '拾风帆', kitItem: 'sailKit' },
   anchor: { type: 'anchor', name: '潮石锚', kitItem: 'anchorKit' },
   helm: { type: 'helm', name: '定潮舵台', kitItem: 'helmKit' },
+  receiver: { type: 'receiver', name: '潮听接收台', kitItem: 'receiverKit' },
+  antenna: { type: 'antenna', name: '双桅定向阵列', kitItem: 'antennaKit' },
 };
 
 export const BASE_CURRENT_APPROACH_RATE = 0.55;
@@ -74,7 +121,8 @@ export const WEATHER_BUILD_START = 92;
 export const WEATHER_STORM_START = 122;
 export const WEATHER_CLEAR_START = 174;
 
-const ROUTE_MODES: readonly NavigationRouteMode[] = ['manual', 'island', 'shelter'];
+const ROUTE_MODES: readonly NavigationRouteMode[] = ['manual', 'island', 'shelter', 'signal'];
+const SIGNAL_TARGET_SET = new Set<string>(SIGNAL_TARGET_ORDER);
 
 export function normalizeAngle(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -136,6 +184,84 @@ export function cardinalLabel(angle: number): string {
   return labels[index];
 }
 
+export function isSignalTargetId(value: unknown): value is SignalTargetId {
+  return typeof value === 'string' && SIGNAL_TARGET_SET.has(value);
+}
+
+export function signalArrayStatus(state: Pick<SavedNavigationState, 'devices'>): SignalArrayStatus {
+  const receiver = state.devices.find((device) => device.type === 'receiver');
+  if (!receiver) return 'missing-receiver';
+  const antenna = state.devices.find((device) => device.type === 'antenna');
+  if (!antenna) return 'missing-antenna';
+  const distance = Math.hypot(receiver.x - antenna.x, receiver.z - antenna.z);
+  if (distance < SIGNAL_ARRAY_MIN_TILES) return 'too-close';
+  if (distance > SIGNAL_ARRAY_MAX_TILES) return 'too-far';
+  return 'ready';
+}
+
+function signalWorldPosition(
+  state: Pick<SavedNavigationState, 'signalOriginX' | 'signalOriginZ'>,
+  targetId: SignalTargetId,
+): { x: number; z: number } | null {
+  if (state.signalOriginX === null || state.signalOriginZ === null) return null;
+  const target = SIGNAL_TARGETS[targetId];
+  return { x: state.signalOriginX + target.offsetX, z: state.signalOriginZ + target.offsetZ };
+}
+
+export function signalTelemetry(state: SavedNavigationState): SignalTelemetry {
+  const arrayStatus = signalArrayStatus(state);
+  const targetId = state.discoveredSignals.includes(state.activeSignal) ? state.activeSignal : null;
+  const position = targetId ? signalWorldPosition(state, targetId) : null;
+  const target = targetId ? SIGNAL_TARGETS[targetId] : null;
+  const deltaX = position ? position.x - state.worldX : 0;
+  const deltaZ = position ? position.z - state.worldZ : 0;
+  return {
+    arrayStatus,
+    online: state.receiverOn && state.receiverCharge > 0 && arrayStatus === 'ready',
+    targetId,
+    targetName: target?.name ?? null,
+    frequency: target?.frequency ?? null,
+    distance: position ? Math.hypot(deltaX, deltaZ) : null,
+    bearing: position ? bearingTo(deltaX, deltaZ) : null,
+    targetX: position?.x ?? null,
+    targetZ: position?.z ?? null,
+    discovered: state.discoveredSignals.length,
+    visited: state.visitedSignals.length,
+  };
+}
+
+function initializeSignalOrigin(state: SavedNavigationState): SavedNavigationState {
+  if (state.signalOriginX !== null && state.signalOriginZ !== null && state.discoveredSignals.length > 0) return state;
+  return {
+    ...state,
+    activeSignal: 'tideRelay',
+    signalOriginX: state.worldX,
+    signalOriginZ: state.worldZ,
+    discoveredSignals: state.discoveredSignals.length > 0 ? state.discoveredSignals : ['tideRelay'],
+  };
+}
+
+export function installReceiverCell(state: SavedNavigationState): SavedNavigationState {
+  if (!state.devices.some((device) => device.type === 'receiver') || state.receiverCharge > 0) return state;
+  return { ...initializeSignalOrigin(state), receiverCharge: RECEIVER_CELL_SECONDS };
+}
+
+export function toggleReceiverPower(state: SavedNavigationState): SavedNavigationState {
+  if (state.receiverOn) {
+    return { ...state, receiverOn: false, routeMode: state.routeMode === 'signal' ? 'manual' : state.routeMode };
+  }
+  if (state.receiverCharge <= 0 || signalArrayStatus(state) !== 'ready') return state;
+  return { ...initializeSignalOrigin(state), receiverOn: true };
+}
+
+export function cycleSignalTarget(state: SavedNavigationState, reverse = false): SavedNavigationState {
+  if (state.discoveredSignals.length < 2) return state;
+  const index = Math.max(0, state.discoveredSignals.indexOf(state.activeSignal));
+  const direction = reverse ? -1 : 1;
+  const next = (index + direction + state.discoveredSignals.length) % state.discoveredSignals.length;
+  return { ...state, activeSignal: state.discoveredSignals[next] };
+}
+
 export function createDefaultNavigationState(): SavedNavigationState {
   return {
     windClock: 0,
@@ -145,6 +271,15 @@ export function createDefaultNavigationState(): SavedNavigationState {
     routeMode: 'manual',
     sailStrain: 0,
     anchorStrain: 0,
+    worldX: 0,
+    worldZ: 0,
+    receiverOn: false,
+    receiverCharge: 0,
+    activeSignal: 'tideRelay',
+    signalOriginX: null,
+    signalOriginZ: null,
+    discoveredSignals: [],
+    visitedSignals: [],
     devices: [],
   };
 }
@@ -170,7 +305,13 @@ export function createNavigationDevice(
 export function sanitizeNavigationDevice(value: unknown): SavedNavigationDevice | null {
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Partial<SavedNavigationDevice>;
-  if (candidate.type !== 'sail' && candidate.type !== 'anchor' && candidate.type !== 'helm') return null;
+  if (
+    candidate.type !== 'sail' &&
+    candidate.type !== 'anchor' &&
+    candidate.type !== 'helm' &&
+    candidate.type !== 'receiver' &&
+    candidate.type !== 'antenna'
+  ) return null;
   const x = typeof candidate.x === 'number' && Number.isFinite(candidate.x) ? Math.round(candidate.x) : 0;
   const z = typeof candidate.z === 'number' && Number.isFinite(candidate.z) ? Math.round(candidate.z) : 0;
   const fallbackId = `${candidate.type}-${x}-${z}`;
@@ -180,8 +321,8 @@ export function sanitizeNavigationDevice(value: unknown): SavedNavigationDevice 
     x,
     z,
     rotation: normalizeQuarterTurn(candidate.rotation ?? 0),
-    deployed: candidate.type !== 'helm' && candidate.deployed === true,
-    reinforced: candidate.type !== 'helm' && candidate.reinforced === true,
+    deployed: (candidate.type === 'sail' || candidate.type === 'anchor') && candidate.deployed === true,
+    reinforced: (candidate.type === 'sail' || candidate.type === 'anchor') && candidate.reinforced === true,
   };
 }
 
@@ -194,7 +335,7 @@ export function sanitizeNavigationState(value: unknown): SavedNavigationState {
   const ids = new Set<string>();
   for (const rawDevice of Array.isArray(candidate.devices) ? candidate.devices : []) {
     const device = sanitizeNavigationDevice(rawDevice);
-    if (!device || types.has(device.type) || ids.has(device.id) || devices.length >= 3) continue;
+    if (!device || types.has(device.type) || ids.has(device.id) || devices.length >= 5) continue;
     types.add(device.type);
     ids.add(device.id);
     devices.push(device);
@@ -202,7 +343,30 @@ export function sanitizeNavigationState(value: unknown): SavedNavigationState {
   const requestedRoute = ROUTE_MODES.includes(candidate.routeMode as NavigationRouteMode)
     ? candidate.routeMode as NavigationRouteMode
     : 'manual';
-  return {
+  const finiteWorld = (value: unknown): number =>
+    typeof value === 'number' && Number.isFinite(value) ? Math.max(-1_000_000, Math.min(1_000_000, value)) : 0;
+  const worldX = finiteWorld(candidate.worldX);
+  const worldZ = finiteWorld(candidate.worldZ);
+  const originX = typeof candidate.signalOriginX === 'number' && Number.isFinite(candidate.signalOriginX)
+    ? finiteWorld(candidate.signalOriginX)
+    : null;
+  const originZ = typeof candidate.signalOriginZ === 'number' && Number.isFinite(candidate.signalOriginZ)
+    ? finiteWorld(candidate.signalOriginZ)
+    : null;
+  const hasOrigin = originX !== null && originZ !== null;
+  const discoveredSignals = Array.isArray(candidate.discoveredSignals)
+    ? [...new Set(candidate.discoveredSignals.filter(isSignalTargetId))]
+    : [];
+  const visitedSignals = Array.isArray(candidate.visitedSignals)
+    ? [...new Set(candidate.visitedSignals.filter(isSignalTargetId))].filter((id) => discoveredSignals.includes(id))
+    : [];
+  const activeSignal = isSignalTargetId(candidate.activeSignal) && discoveredSignals.includes(candidate.activeSignal)
+    ? candidate.activeSignal
+    : discoveredSignals[0] ?? 'tideRelay';
+  const receiverCharge = typeof candidate.receiverCharge === 'number' && Number.isFinite(candidate.receiverCharge)
+    ? Math.max(0, Math.min(RECEIVER_CELL_SECONDS, candidate.receiverCharge))
+    : 0;
+  const provisional: SavedNavigationState = {
     windClock:
       typeof candidate.windClock === 'number' && Number.isFinite(candidate.windClock)
         ? Math.max(0, Math.min(86400, candidate.windClock))
@@ -222,7 +386,22 @@ export function sanitizeNavigationState(value: unknown): SavedNavigationState {
       typeof candidate.anchorStrain === 'number' && Number.isFinite(candidate.anchorStrain)
         ? Math.max(0, Math.min(1, candidate.anchorStrain))
         : 0,
+    worldX,
+    worldZ,
+    receiverOn: false,
+    receiverCharge,
+    activeSignal,
+    signalOriginX: hasOrigin ? originX : null,
+    signalOriginZ: hasOrigin ? originZ : null,
+    discoveredSignals,
+    visitedSignals,
     devices,
+  };
+  const receiverOn = candidate.receiverOn === true && receiverCharge > 0 && signalArrayStatus(provisional) === 'ready';
+  return {
+    ...provisional,
+    routeMode: provisional.routeMode === 'signal' && !receiverOn ? 'manual' : provisional.routeMode,
+    receiverOn,
   };
 }
 
@@ -230,7 +409,7 @@ export function navigationRouteCourse(
   state: SavedNavigationState,
   targetBearing = 0,
 ): number {
-  if (state.routeMode === 'island') return normalizeAngle(targetBearing);
+  if (state.routeMode === 'island' || state.routeMode === 'signal') return normalizeAngle(targetBearing);
   if (state.routeMode === 'shelter') {
     const wind = windAngleAt(state.windClock);
     return normalizeAngle(wind + shortestAngle(wind, targetBearing) * 0.42);
@@ -238,9 +417,10 @@ export function navigationRouteCourse(
   return normalizeAngle(state.courseAngle);
 }
 
-export function cycleNavigationRoute(mode: NavigationRouteMode): NavigationRouteMode {
-  const index = ROUTE_MODES.indexOf(mode);
-  return ROUTE_MODES[(index + 1) % ROUTE_MODES.length];
+export function cycleNavigationRoute(mode: NavigationRouteMode, signalAvailable = false): NavigationRouteMode {
+  const modes = signalAvailable ? ROUTE_MODES : ROUTE_MODES.filter((candidate) => candidate !== 'signal');
+  const index = modes.indexOf(mode);
+  return modes[(Math.max(0, index) + 1) % modes.length];
 }
 
 export function reinforceNavigationSail(state: SavedNavigationState): SavedNavigationState {
@@ -268,47 +448,83 @@ export function advanceNavigationState(
 ): SavedNavigationState {
   const delta = Math.max(0, Math.min(Number.isFinite(seconds) ? seconds : 0, 5));
   if (delta <= 0) return state;
-  const sailDeployed = state.devices.some((device) => device.type === 'sail' && device.deployed);
-  const sailReinforced = state.devices.some((device) => device.type === 'sail' && device.reinforced);
-  const anchor = state.devices.find((device) => device.type === 'anchor');
-  const helmInstalled = state.devices.some((device) => device.type === 'helm');
-  const weather = navigationWeatherAt(state.weatherClock);
-  const effectiveCourse = navigationRouteCourse(state, targetBearing);
+  const arrayReady = signalArrayStatus(state) === 'ready';
+  const receiverCharge = Math.max(0, state.receiverCharge - (state.receiverOn && arrayReady ? delta : 0));
+  const receiverOn = state.receiverOn && arrayReady && receiverCharge > 0;
+  const workingState: SavedNavigationState = {
+    ...state,
+    receiverCharge,
+    receiverOn,
+    routeMode: state.routeMode === 'signal' && !receiverOn ? 'manual' : state.routeMode,
+  };
+  const sailDeployed = workingState.devices.some((device) => device.type === 'sail' && device.deployed);
+  const sailReinforced = workingState.devices.some((device) => device.type === 'sail' && device.reinforced);
+  const anchor = workingState.devices.find((device) => device.type === 'anchor');
+  const helmInstalled = workingState.devices.some((device) => device.type === 'helm');
+  const weather = navigationWeatherAt(workingState.weatherClock);
+  const effectiveCourse = navigationRouteCourse(workingState, targetBearing);
   const maxTurn = (helmInstalled ? 0.46 : sailDeployed ? 0.3 : 0.055) * delta;
-  const turn = Math.max(-maxTurn, Math.min(maxTurn, shortestAngle(state.heading, effectiveCourse)));
-  const routeStability = state.routeMode === 'shelter' ? 0.42 : 1;
+  const turn = Math.max(-maxTurn, Math.min(maxTurn, shortestAngle(workingState.heading, effectiveCourse)));
+  const routeStability = workingState.routeMode === 'shelter' ? 0.42 : 1;
   const helmStability = helmInstalled ? 0.28 : 1;
   const rigStability = sailReinforced ? 0.48 : 1;
   const stormDrift = weather.gust * weather.intensity * 0.19 * routeStability * helmStability * rigStability * delta;
   const strainGain = sailDeployed
-    ? weather.intensity * delta * (sailReinforced ? 0.004 : 0.026) * (state.routeMode === 'shelter' ? 0.48 : 1)
+    ? weather.intensity * delta * (sailReinforced ? 0.004 : 0.026) * (workingState.routeMode === 'shelter' ? 0.48 : 1)
     : 0;
   const recovery = sailDeployed ? 0 : delta * 0.018;
-  let sailStrain = Math.max(0, Math.min(1, state.sailStrain + strainGain - recovery));
+  let sailStrain = Math.max(0, Math.min(1, workingState.sailStrain + strainGain - recovery));
   const anchorLoadGain = anchor?.deployed && !anchor.reinforced
     ? weather.intensity * (0.48 + Math.abs(weather.gust) * 0.72) * delta * 0.034
     : 0;
   const anchorRecovery = anchorLoadGain > 0 ? 0 : delta * (anchor?.reinforced ? 0.09 : 0.034);
-  let anchorStrain = Math.max(0, Math.min(1, state.anchorStrain + anchorLoadGain - anchorRecovery));
-  let devices = state.devices;
+  let anchorStrain = Math.max(0, Math.min(1, workingState.anchorStrain + anchorLoadGain - anchorRecovery));
+  let devices = workingState.devices;
   if (sailDeployed && !sailReinforced && sailStrain >= 1) {
-    devices = state.devices.map((device) => device.type === 'sail' ? { ...device, deployed: false } : device);
+    devices = workingState.devices.map((device) => device.type === 'sail' ? { ...device, deployed: false } : device);
     sailStrain = 0.74;
   }
   if (anchor?.deployed && !anchor.reinforced && anchorStrain >= 1) {
     devices = devices.map((device) => device.type === 'anchor' ? { ...device, deployed: false } : device);
     anchorStrain = 0.7;
   }
-  return {
-    ...state,
-    windClock: state.windClock + delta,
-    weatherClock: state.weatherClock + delta,
+  const heading = normalizeAngle(workingState.heading + turn + stormDrift);
+  let next: SavedNavigationState = {
+    ...workingState,
+    windClock: workingState.windClock + delta,
+    weatherClock: workingState.weatherClock + delta,
     courseAngle: effectiveCourse,
-    heading: normalizeAngle(state.heading + turn + stormDrift),
+    heading,
     sailStrain,
     anchorStrain,
     devices,
   };
+  const movement = navigationMetrics(next, targetBearing).speedKnots * 0.514444 * delta;
+  next = {
+    ...next,
+    worldX: next.worldX + Math.sin(heading) * movement,
+    worldZ: next.worldZ - Math.cos(heading) * movement,
+  };
+  const telemetry = signalTelemetry(next);
+  if (
+    telemetry.online &&
+    telemetry.targetId &&
+    telemetry.distance !== null &&
+    telemetry.distance <= SIGNAL_REACH_METERS &&
+    !next.visitedSignals.includes(telemetry.targetId)
+  ) {
+    const visitedSignals = [...next.visitedSignals, telemetry.targetId];
+    const targetIndex = SIGNAL_TARGET_ORDER.indexOf(telemetry.targetId);
+    const unlocked = SIGNAL_TARGET_ORDER[targetIndex + 1];
+    next = {
+      ...next,
+      visitedSignals,
+      discoveredSignals: unlocked && !next.discoveredSignals.includes(unlocked)
+        ? [...next.discoveredSignals, unlocked]
+        : next.discoveredSignals,
+    };
+  }
+  return next;
 }
 
 export function navigationMetrics(state: SavedNavigationState, targetBearing = 0): NavigationMetrics {

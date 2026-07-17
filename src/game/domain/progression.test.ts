@@ -28,6 +28,22 @@ describe('research progression', () => {
     expect(addResearchSample(knowledge, 'timber')).toBe(knowledge);
   });
 
+  it('chains signal electronics through a crafted board sample before receiver equipment', () => {
+    let knowledge = createDefaultProgressionState();
+    for (const sample of ['scrap', 'metalIngot', 'glassPane'] as const) {
+      knowledge = { ...knowledge, ...addResearchSample(knowledge, sample) };
+    }
+    expect(canLearnProject(knowledge, 'signalBoard')).toBe(true);
+    knowledge = { ...knowledge, ...learnProject(knowledge, 'signalBoard') };
+    expect(canLearnProject(knowledge, 'receiverKit')).toBe(false);
+    knowledge = { ...knowledge, ...addResearchSample(knowledge, 'signalBoard') };
+    knowledge = { ...knowledge, ...addResearchSample(knowledge, 'timber') };
+    knowledge = { ...knowledge, ...addResearchSample(knowledge, 'rope') };
+    expect(canLearnProject(knowledge, 'receiverKit')).toBe(true);
+    expect(canLearnProject(knowledge, 'antennaKit')).toBe(true);
+    expect(canLearnProject(knowledge, 'brineCell')).toBe(true);
+  });
+
   it('dries separately timed bricks without advancing newly added bricks', () => {
     let rack = createProgressionDevice('dryingBricks', 0, 0, 0, 'rack');
     rack = advanceProgressionDevice(rack, BRICK_DRY_SECONDS - 2).device;

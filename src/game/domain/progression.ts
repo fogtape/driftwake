@@ -9,7 +9,7 @@ export const MAX_PROGRESSION_DEVICES = 6;
 export type ProgressionDeviceType = 'researchBench' | 'dryingBricks' | 'smelter';
 export type ProgressionPhase = 'idle' | 'working' | 'ready';
 
-export const RESEARCH_SAMPLE_IDS = ['timber', 'rope', 'scrap', 'dryBrick', 'metalIngot', 'glassPane', 'hinge'] as const satisfies readonly ItemId[];
+export const RESEARCH_SAMPLE_IDS = ['timber', 'rope', 'scrap', 'dryBrick', 'metalIngot', 'glassPane', 'hinge', 'signalBoard'] as const satisfies readonly ItemId[];
 export type ResearchSampleId = (typeof RESEARCH_SAMPLE_IDS)[number];
 
 export const RESEARCH_PROJECTS = {
@@ -62,6 +62,26 @@ export const RESEARCH_PROJECTS = {
     name: '深锚锁链棘轮',
     description: '锁链与防回滑棘轮分散风暴冲击，避免锚索在峰值载荷中自行松脱。',
     requirements: ['rope', 'metalIngot', 'hinge'],
+  },
+  signalBoard: {
+    name: '潮听信号板',
+    description: '玻璃介质与潮铸导轨形成稳定谐振，让微弱窄带脉冲从海面噪声中浮现。',
+    requirements: ['scrap', 'metalIngot', 'glassPane'],
+  },
+  brineCell: {
+    name: '盐差电池',
+    description: '密封盐水与异种金属电极形成可更换的低压电源，适合长时间扫描。',
+    requirements: ['scrap', 'metalIngot', 'signalBoard'],
+  },
+  receiverKit: {
+    name: '潮听接收台',
+    description: '参考线圈、扫描屏与调谐鼓轮共同测出命名信号的相对方位和距离。',
+    requirements: ['timber', 'glassPane', 'signalBoard'],
+  },
+  antennaKit: {
+    name: '双桅定向阵列',
+    description: '分离布置的双桅与接收台参考线圈形成相位差，足以判断远海信号方向。',
+    requirements: ['rope', 'metalIngot', 'signalBoard'],
   },
 } as const satisfies Record<
   string,

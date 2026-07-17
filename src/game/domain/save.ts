@@ -32,9 +32,9 @@ import {
   type SavedProgressionState,
 } from './progression';
 
-export const SAVE_VERSION = 9;
-export const SAVE_KEY = 'driftwake.save.v9';
-export const LEGACY_SAVE_KEYS = ['driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
+export const SAVE_VERSION = 10;
+export const SAVE_KEY = 'driftwake.save.v10';
+export const LEGACY_SAVE_KEYS = ['driftwake.save.v9', 'driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
 
 export type PlayerSurface = 'raft' | 'island' | 'water';
 
@@ -140,7 +140,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
     world?: { island?: SavedIslandState; underwater?: SavedUnderwaterState };
   };
   if (
-    (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3 && candidate.version !== 4 && candidate.version !== 5 && candidate.version !== 6 && candidate.version !== 7 && candidate.version !== 8 && candidate.version !== SAVE_VERSION) ||
+    (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3 && candidate.version !== 4 && candidate.version !== 5 && candidate.version !== 6 && candidate.version !== 7 && candidate.version !== 8 && candidate.version !== 9 && candidate.version !== SAVE_VERSION) ||
     !candidate.player ||
     !candidate.raft
   ) return null;

@@ -17,7 +17,7 @@ import { craftRecipe, type CraftResult, type RecipeId } from '../game/domain/rec
 import { INITIAL_SURVIVAL, advanceSurvival, consumeItem, type SurvivalState } from '../game/domain/survival';
 import type { DeviceType } from '../game/domain/devices';
 import type { IslandPhase } from '../game/domain/island';
-import type { NavigationDeviceType, NavigationRouteMode, NavigationWeatherPhase } from '../game/domain/navigation';
+import type { NavigationDeviceType, NavigationRouteMode, NavigationWeatherPhase, SignalArrayStatus } from '../game/domain/navigation';
 import type { PlayerSurface } from '../game/domain/save';
 import {
   addResearchSample,
@@ -127,6 +127,19 @@ export interface NavigationFeedback {
   stormIntensity: number;
   gust: number;
   driftRisk: boolean;
+  receiverInstalled: boolean;
+  antennaInstalled: boolean;
+  signalArrayStatus: SignalArrayStatus;
+  receiverOn: boolean;
+  receiverCharge: number;
+  activeSignalName: string | null;
+  activeSignalFrequency: string | null;
+  signalDistance: number | null;
+  signalBearing: number | null;
+  discoveredSignals: number;
+  visitedSignals: number;
+  worldX: number;
+  worldZ: number;
 }
 
 export interface PlantingFeedback {
@@ -271,6 +284,19 @@ function defaultNavigation(): NavigationFeedback {
     stormIntensity: 0,
     gust: 0,
     driftRisk: false,
+    receiverInstalled: false,
+    antennaInstalled: false,
+    signalArrayStatus: 'missing-receiver',
+    receiverOn: false,
+    receiverCharge: 0,
+    activeSignalName: null,
+    activeSignalFrequency: null,
+    signalDistance: null,
+    signalBearing: null,
+    discoveredSignals: 0,
+    visitedSignals: 0,
+    worldX: 0,
+    worldZ: 0,
   };
 }
 

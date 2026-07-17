@@ -80,6 +80,8 @@ const PLACEABLES: Partial<Record<ItemId, PlacementType>> = {
   researchBenchKit: 'researchBench',
   smelterKit: 'smelter',
   wetBrick: 'dryingBricks',
+  receiverKit: 'receiver',
+  antennaKit: 'antenna',
 };
 
 function categoryLabel(category: (typeof ITEM_DEFINITIONS)[ItemId]['category']): string {

@@ -217,6 +217,7 @@ export class DriftwakeGame {
       this.navigation = new NavigationSystem(
         this.renderer,
         this.camera,
+        this.scene,
         this.materials,
         this.raft,
         this.player,
@@ -592,7 +593,11 @@ export class DriftwakeGame {
       ? state.placementDevice as DeviceType
       : null;
     const navigationPlacement =
-      state.placementDevice === 'sail' || state.placementDevice === 'anchor' || state.placementDevice === 'helm'
+      state.placementDevice === 'sail' ||
+      state.placementDevice === 'anchor' ||
+      state.placementDevice === 'helm' ||
+      state.placementDevice === 'receiver' ||
+      state.placementDevice === 'antenna'
         ? state.placementDevice
         : null;
     const plantingPlacement = state.placementDevice === 'planter' ? 'planter' : null;

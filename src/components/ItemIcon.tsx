@@ -3,8 +3,10 @@ import {
   Anvil,
   Axe,
   BrickWall,
+  BatteryCharging,
   CircleDashed,
   Cog,
+  CircuitBoard,
   CookingPot,
   CupSoda,
   Droplet,
@@ -17,6 +19,7 @@ import {
   Leaf,
   Layers3,
   Microscope,
+  RadioTower,
   ShipWheel,
   Package,
   Pickaxe,
@@ -29,6 +32,7 @@ import {
   Sword,
   TreePine,
   Waves,
+  Antenna,
   type LucideProps,
 } from 'lucide-react';
 import type { ItemId } from '../game/domain/items';
@@ -78,6 +82,10 @@ const ICONS: Record<ItemId, React.ComponentType<LucideProps>> = {
   rawFish: Fish,
   cookedFish: Flame,
   burntFish: FlameKindling,
+  signalBoard: CircuitBoard,
+  brineCell: BatteryCharging,
+  receiverKit: RadioTower,
+  antennaKit: Antenna,
 };
 
 interface ItemIconProps extends LucideProps {

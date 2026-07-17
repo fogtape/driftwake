@@ -34,6 +34,8 @@ function createTestMaterials(): MaterialLibrary {
     navigationAlloy: material(),
     saltglassCollector: material(),
     sealedCanvas: material(),
+    signalLaminate: material(),
+    phosphorGlass: material(),
     cropLeaf: material(),
     cropDry: material(),
     cropFruit: material(),

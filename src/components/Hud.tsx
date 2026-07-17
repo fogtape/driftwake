@@ -10,7 +10,9 @@ import {
   Heart,
   Mountain,
   MousePointer2,
+  Navigation,
   PackageOpen,
+  RadioTower,
   Sailboat,
   ShipWheel,
   Settings,
@@ -136,7 +138,28 @@ export function Hud({
   const stormAlert = player.surface !== 'water' && (
     navigation.stormIntensity > 0.58 || navigation.sailStrain > 0.62 || navigation.anchorStrain > 0.62
   );
-  const routeLabel = navigation.routeMode === 'manual' ? '自由航向' : navigation.routeMode === 'island' ? '追踪浅滩' : '顺风避险';
+  const routeLabel = navigation.routeMode === 'manual'
+    ? '自由航向'
+    : navigation.routeMode === 'island'
+      ? '追踪浅滩'
+      : navigation.routeMode === 'shelter'
+        ? '顺风避险'
+        : '追踪信号';
+  const signalVisible = player.surface === 'raft' && (navigation.receiverInstalled || navigation.antennaInstalled);
+  const signalCharge = clampPercent(navigation.receiverCharge / 3.6);
+  const signalStatus = navigation.receiverOn && navigation.activeSignalName
+    ? navigation.activeSignalName
+    : navigation.signalArrayStatus === 'missing-receiver'
+      ? '等待接收台'
+      : navigation.signalArrayStatus === 'missing-antenna'
+        ? '等待定向阵列'
+        : navigation.signalArrayStatus === 'too-close'
+          ? '相位串扰'
+          : navigation.signalArrayStatus === 'too-far'
+            ? '馈线损耗'
+            : navigation.receiverCharge <= 0
+              ? '电池耗尽'
+              : '阵列待机';
   const weatherLabel = navigation.anchorStrain > 0.78 && navigation.anchored
     ? '锚机接近回滑载荷'
     : navigation.sailStrain > 0.78
@@ -242,7 +265,27 @@ export function Hud({
         <Anchor className={`${navigation.anchorInstalled ? 'is-installed' : ''} ${navigation.anchorReinforced ? 'is-reinforced' : ''}`} size={16} />
       </div>
 
-      <div className={`weather-warning ${stormAlert ? 'is-visible' : ''}`} aria-live="polite">
+      <div
+        className={`signal-readout ${signalVisible ? 'is-visible' : ''} ${navigation.receiverOn ? 'is-online' : ''} ${navigation.signalArrayStatus !== 'ready' ? 'is-fault' : ''}`}
+        aria-label={`${signalStatus}${navigation.activeSignalFrequency ? ` 频率${navigation.activeSignalFrequency}` : ''}${navigation.signalDistance !== null ? ` 距离${Math.round(navigation.signalDistance)}米` : ''} 电量${Math.round(signalCharge)}%`}
+      >
+        <RadioTower size={19} />
+        <div>
+          <span>{navigation.activeSignalFrequency ? `${navigation.activeSignalFrequency} MHz` : '潮听链路'}</span>
+          <strong>{signalStatus}</strong>
+          <i><b style={{ width: `${signalCharge}%` }} /></i>
+        </div>
+        <em>
+          {navigation.signalBearing !== null && (
+            <Navigation size={13} style={{ transform: `rotate(${navigation.signalBearing - navigation.heading}rad)` }} />
+          )}
+          {navigation.receiverOn && navigation.signalDistance !== null
+            ? `${Math.round(navigation.signalDistance)} m`
+            : `${navigation.visitedSignals}/${Math.max(1, navigation.discoveredSignals)}`}
+        </em>
+      </div>
+
+      <div className={`weather-warning ${stormAlert ? 'is-visible' : ''} ${signalVisible ? 'has-signal' : ''}`} aria-live="polite">
         <CloudLightning size={18} />
         <div>
           <span>{weatherLabel}</span>

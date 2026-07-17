@@ -17,6 +17,7 @@ import { createAnchorModel, createHelmModel, createSailModel } from './Navigatio
 import { createPlanterModel, createSaltwingBirdModel } from './PlantingModels';
 import { createDryingRackModel, createResearchBenchModel, createSmelterModel } from './ProgressionModels';
 import { createLockerModel, createSolarPurifierModel, createTripleGrillModel } from './AdvancedDeviceModels';
+import { createAntennaModel, createReceiverModel, createSignalBeaconModel } from './SignalModels';
 
 function createTestMaterials(): MaterialLibrary {
   const material = () => new MeshStandardMaterial();
@@ -49,6 +50,8 @@ function createTestMaterials(): MaterialLibrary {
     navigationAlloy: material(),
     saltglassCollector: material(),
     sealedCanvas: material(),
+    signalLaminate: material(),
+    phosphorGlass: material(),
     cropLeaf: material(),
     cropDry: material(),
     cropFruit: material(),
@@ -206,9 +209,25 @@ describe('procedural model assets', () => {
     const sail = createSailModel(materials);
     expect(meshStats(helm).meshes).toBeGreaterThanOrEqual(55);
     expect(helm.userData.navigationVisuals.wheel).toBeDefined();
-    expect(helm.userData.navigationVisuals.routePins).toHaveLength(3);
+    expect(helm.userData.navigationVisuals.routePins).toHaveLength(4);
     expect(helm.userData.navigationVisuals.gears).toHaveLength(3);
     expect(renderedPartCount(sail.userData.navigationVisuals.reinforcement)).toBeGreaterThanOrEqual(8);
+  }, 15_000);
+
+  it('builds dense original signal hardware with stateful scan and relay parts', () => {
+    const materials = createTestMaterials();
+    const receiver = createReceiverModel(materials);
+    const antenna = createAntennaModel(materials);
+    const beacon = createSignalBeaconModel(materials);
+    expect(meshStats(receiver).meshes).toBeGreaterThanOrEqual(90);
+    expect(meshStats(antenna).meshes).toBeGreaterThanOrEqual(50);
+    expect(meshStats(beacon).meshes).toBeGreaterThanOrEqual(25);
+    expect(receiver.userData.navigationVisuals.chargeBars).toHaveLength(6);
+    expect(receiver.userData.navigationVisuals.blips).toHaveLength(3);
+    expect(antenna.userData.navigationVisuals.mastPivots).toHaveLength(2);
+    expect(antenna.userData.navigationVisuals.signalRings).toHaveLength(3);
+    expect(beacon.userData.signalBeaconVisuals.pulseRings).toHaveLength(4);
+    expect(new Box3().setFromObject(antenna).getSize(new Vector3()).y).toBeGreaterThan(1.9);
   }, 15_000);
 
   it('builds a staged crop planter and an articulated crop-thief bird', () => {

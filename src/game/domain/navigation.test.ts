@@ -7,13 +7,18 @@ import {
   createDefaultNavigationState,
   createNavigationDevice,
   cycleNavigationRoute,
+  cycleSignalTarget,
+  installReceiverCell,
   navigationWeatherAt,
   navigationMetrics,
   normalizeAngle,
   reinforceNavigationSail,
   reinforceNavigationAnchor,
   sanitizeNavigationState,
+  signalArrayStatus,
+  signalTelemetry,
   shortestAngle,
+  toggleReceiverPower,
 } from './navigation';
 
 describe('raft navigation', () => {
@@ -132,5 +137,71 @@ describe('raft navigation', () => {
     const held = advanceNavigationState(reinforced, 3, 0);
     expect(held.devices[0]).toMatchObject({ deployed: true, reinforced: true });
     expect(held.anchorStrain).toBeLessThan(reinforced.anchorStrain);
+  });
+
+  it('requires a separated receiver array before loading and powering a signal scan', () => {
+    const missing = createDefaultNavigationState();
+    expect(signalArrayStatus(missing)).toBe('missing-receiver');
+    const tooClose = {
+      ...missing,
+      devices: [
+        createNavigationDevice('receiver', 0, 0, 0, 'receiver'),
+        createNavigationDevice('antenna', 1, 0, 0, 'antenna'),
+      ],
+    };
+    expect(signalArrayStatus(tooClose)).toBe('too-close');
+    expect(toggleReceiverPower(tooClose)).toBe(tooClose);
+
+    const ready = {
+      ...tooClose,
+      devices: [tooClose.devices[0], { ...tooClose.devices[1], x: 2 }],
+    };
+    const loaded = installReceiverCell(ready);
+    expect(loaded).toMatchObject({ receiverCharge: 360, activeSignal: 'tideRelay', discoveredSignals: ['tideRelay'] });
+    expect(signalArrayStatus(loaded)).toBe('ready');
+    expect(toggleReceiverPower(loaded).receiverOn).toBe(true);
+  });
+
+  it('drains receiver power, records persistent world travel and unlocks chained signals on arrival', () => {
+    const powered = toggleReceiverPower(installReceiverCell({
+      ...createDefaultNavigationState(),
+      devices: [
+        createNavigationDevice('receiver', 0, 0, 0, 'receiver'),
+        createNavigationDevice('antenna', 2, 0, 0, 'antenna'),
+      ],
+    }));
+    const nearTarget = { ...powered, worldX: 72, worldZ: -138 };
+    const advanced = advanceNavigationState(nearTarget, 2, 0);
+    expect(advanced.receiverCharge).toBeCloseTo(358);
+    expect(advanced.worldZ).toBeLessThan(nearTarget.worldZ);
+    expect(advanced.visitedSignals).toEqual(['tideRelay']);
+    expect(advanced.discoveredSignals).toEqual(['tideRelay', 'ironChoir']);
+    expect(signalTelemetry(advanced)).toMatchObject({ online: true, targetName: '潮痕中继站' });
+    expect(cycleSignalTarget(advanced).activeSignal).toBe('ironChoir');
+    expect(cycleNavigationRoute('shelter', true)).toBe('signal');
+  });
+
+  it('sanitizes forged signal state and drops signal steering when the array is invalid', () => {
+    const state = sanitizeNavigationState({
+      worldX: Infinity,
+      worldZ: -42,
+      receiverOn: true,
+      receiverCharge: 999,
+      routeMode: 'signal',
+      activeSignal: 'not-real',
+      discoveredSignals: ['tideRelay', 'not-real', 'tideRelay'],
+      visitedSignals: ['ironChoir', 'tideRelay'],
+      devices: [createNavigationDevice('helm', 0, 0, 0, 'helm')],
+    });
+    expect(state).toMatchObject({
+      worldX: 0,
+      worldZ: -42,
+      receiverOn: false,
+      receiverCharge: 360,
+      routeMode: 'manual',
+      activeSignal: 'tideRelay',
+      discoveredSignals: ['tideRelay'],
+      visitedSignals: ['tideRelay'],
+    });
   });
 });
