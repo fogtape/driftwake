@@ -13,7 +13,7 @@ import {
   createSpearModel,
 } from './ProceduralModels';
 import { createReefModel, createReefNodeModel } from './UnderwaterModels';
-import { createAnchorModel, createSailModel } from './NavigationModels';
+import { createAnchorModel, createHelmModel, createSailModel } from './NavigationModels';
 import { createPlanterModel, createSaltwingBirdModel } from './PlantingModels';
 import { createDryingRackModel, createResearchBenchModel, createSmelterModel } from './ProgressionModels';
 
@@ -45,6 +45,7 @@ function createTestMaterials(): MaterialLibrary {
     sailCloth: material(),
     planterSoil: material(),
     refractoryClay: material(),
+    navigationAlloy: material(),
     cropLeaf: material(),
     cropDry: material(),
     cropFruit: material(),
@@ -178,6 +179,17 @@ describe('procedural model assets', () => {
     expect(sail.userData.navigationVisuals.clothBase.length).toBeGreaterThan(250);
     expect(anchorStats.meshes).toBeGreaterThanOrEqual(15);
     expect(anchor.userData.navigationVisuals.rope).toBeDefined();
+  }, 15_000);
+
+  it('builds a layered helm and visible sail reinforcement hardware', () => {
+    const materials = createTestMaterials();
+    const helm = createHelmModel(materials);
+    const sail = createSailModel(materials);
+    expect(meshStats(helm).meshes).toBeGreaterThanOrEqual(55);
+    expect(helm.userData.navigationVisuals.wheel).toBeDefined();
+    expect(helm.userData.navigationVisuals.routePins).toHaveLength(3);
+    expect(helm.userData.navigationVisuals.gears).toHaveLength(3);
+    expect(renderedPartCount(sail.userData.navigationVisuals.reinforcement)).toBeGreaterThanOrEqual(8);
   }, 15_000);
 
   it('builds a staged crop planter and an articulated crop-thief bird', () => {

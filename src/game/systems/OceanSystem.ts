@@ -23,6 +23,7 @@ export class OceanSystem {
         uSkyColor: { value: new Color('#91cad2') },
         uFogColor: { value: new Color('#a9cfd2') },
         uUnderwater: { value: 0 },
+        uStorm: { value: 0 },
       },
     });
 
@@ -46,6 +47,10 @@ export class OceanSystem {
 
   setUnderwater(blend: number): void {
     this.material.uniforms.uUnderwater.value = Math.max(0, Math.min(1, blend));
+  }
+
+  setStorm(blend: number): void {
+    this.material.uniforms.uStorm.value = Math.max(0, Math.min(1, blend));
   }
 
   dispose(): void {

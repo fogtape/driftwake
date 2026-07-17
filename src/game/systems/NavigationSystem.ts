@@ -14,8 +14,10 @@ import {
 } from 'three';
 import {
   createAnchorModel,
+  createHelmModel,
   createSailModel,
   type AnchorModelVisuals,
+  type HelmModelVisuals,
   type NavigationModelVisuals,
   type SailModelVisuals,
 } from '../art/NavigationModels';
@@ -27,15 +29,18 @@ import {
   bearingTo,
   cardinalLabel,
   createNavigationDevice,
+  cycleNavigationRoute,
   navigationMetrics,
   normalizeAngle,
+  reinforceNavigationSail,
   shortestAngle,
+  type NavigationRouteMode,
   type NavigationDeviceType,
   type NavigationMetrics,
   type SavedNavigationDevice,
   type SavedNavigationState,
 } from '../domain/navigation';
-import { ITEM_DEFINITIONS, itemCount } from '../domain/items';
+import { ITEM_DEFINITIONS, addItems, itemCount, type ItemBundle } from '../domain/items';
 import { useGameStore } from '../../state/gameStore';
 import type { AudioSystem } from './AudioSystem';
 import type { IslandSystem } from './IslandSystem';
@@ -52,6 +57,12 @@ interface NavigationRuntime {
 
 const VALID_COLOR = new Color(0x72d4b3);
 const INVALID_COLOR = new Color(0xe26f55);
+
+const ROUTE_LABELS: Record<NavigationRouteMode, string> = {
+  manual: '自由航向',
+  island: '追踪浅滩',
+  shelter: '顺风避险',
+};
 
 function sameCoordinate(a: GridCoordinate | null, b: GridCoordinate | null): boolean {
   return Boolean(a && b && a.x === b.x && a.z === b.z);
@@ -101,12 +112,14 @@ export class NavigationSystem {
     this.previewMaterials = {
       sail: this.createPreviewMaterial(),
       anchor: this.createPreviewMaterial(),
+      helm: this.createPreviewMaterial(),
     };
     this.previews = {
       sail: this.createPreview('sail'),
       anchor: this.createPreview('anchor'),
+      helm: this.createPreview('helm'),
     };
-    this.raft.group.add(this.previews.sail, this.previews.anchor);
+    this.raft.group.add(this.previews.sail, this.previews.anchor, this.previews.helm);
     this.state.devices.forEach((device) => this.addRuntime(device));
     this.syncStateDevices();
     this.metrics = this.calculateMetrics();
@@ -125,6 +138,7 @@ export class NavigationSystem {
     this.placementValid = false;
     this.previews.sail.visible = false;
     this.previews.anchor.visible = false;
+    this.previews.helm.visible = false;
     this.clearPrompt();
   }
 
@@ -134,6 +148,7 @@ export class NavigationSystem {
     this.focused = null;
     this.previews.sail.visible = false;
     this.previews.anchor.visible = false;
+    this.previews.helm.visible = false;
     this.runtimes.forEach((runtime) => (runtime.visuals.highlight.visible = false));
     this.clearPrompt();
   }
@@ -143,7 +158,18 @@ export class NavigationSystem {
       this.lastRaftRevision = this.raft.currentRevision;
       this.removeOrphanedDevices();
     }
-    if (delta > 0) this.state = advanceNavigationState(this.currentState(), delta);
+    if (delta > 0) {
+      const current = this.currentState();
+      const sailWasDeployed = current.devices.some((device) => device.type === 'sail' && device.deployed);
+      const advanced = advanceNavigationState(current, delta, this.targetBearing());
+      const sailIsDeployed = advanced.devices.some((device) => device.type === 'sail' && device.deployed);
+      this.state = advanced;
+      this.applyAdvancedDevices(advanced.devices);
+      if (sailWasDeployed && !sailIsDeployed && advanced.sailStrain >= 0.7) {
+        this.audio.playSailOverload();
+        this.showNotice('阵风载荷过高，拾风帆已自动泄压收紧');
+      }
+    }
     this.metrics = this.calculateMetrics();
     this.raft.setHeading(this.state.heading);
     this.runtimes.forEach((runtime) => this.updateRuntime(runtime, time, delta));
@@ -169,13 +195,24 @@ export class NavigationSystem {
     };
   }
 
+  getWeather(): Pick<NavigationMetrics, 'weatherPhase' | 'stormIntensity' | 'gust'> {
+    this.metrics = this.calculateMetrics();
+    return {
+      weatherPhase: this.metrics.weatherPhase,
+      stormIntensity: this.metrics.stormIntensity,
+      gust: this.metrics.gust,
+    };
+  }
+
   getSavedState(): SavedNavigationState {
     const current = this.currentState();
     return {
       ...current,
       windClock: Number(current.windClock.toFixed(3)),
+      weatherClock: Number(current.weatherClock.toFixed(3)),
       courseAngle: Number(current.courseAngle.toFixed(5)),
       heading: Number(current.heading.toFixed(5)),
+      sailStrain: Number(current.sailStrain.toFixed(4)),
       devices: current.devices.map((device) => ({ ...device })),
     };
   }
@@ -192,12 +229,18 @@ export class NavigationSystem {
     );
     if (!runtime) return false;
     const kit = NAVIGATION_DEVICE_DEFINITIONS[runtime.state.type].kitItem;
-    const accepted = useGameStore.getState().addItemBundle({ [kit]: 1 });
-    if (itemCount(accepted, kit) < 1) {
+    const refund: ItemBundle = {
+      [kit]: 1,
+      ...(runtime.state.type === 'sail' && runtime.state.reinforced ? { stormRigKit: 1 } : {}),
+    };
+    const store = useGameStore.getState();
+    const preview = addItems(store.inventory, refund);
+    if (Object.keys(preview.rejected).length > 0) {
       this.audio.playDenied();
       this.showNotice('背包没有空间收回航行设备');
       return false;
     }
+    store.addItemBundle(refund);
     if (runtime.state.deployed) {
       runtime.state.deployed = false;
       if (runtime.state.type === 'anchor') this.audio.playAnchor(false);
@@ -213,7 +256,7 @@ export class NavigationSystem {
     for (const runtime of this.runtimes.values()) {
       const centerX = runtime.state.x * RAFT_TILE_X;
       const centerZ = runtime.state.z * RAFT_TILE_Z;
-      const radius = runtime.state.type === 'sail' ? 0.38 : 0.48;
+      const radius = runtime.state.type === 'sail' ? 0.38 : runtime.state.type === 'helm' ? 0.54 : 0.48;
       if (Math.hypot(position.x - centerX, position.z - centerZ) >= radius) continue;
       position.x = previous.x;
       position.z = previous.z;
@@ -229,11 +272,13 @@ export class NavigationSystem {
     this.clearPrompt();
     this.audio.setSailActivity(0);
     for (const runtime of [...this.runtimes.values()]) this.removeRuntime(runtime);
-    this.raft.group.remove(this.previews.sail, this.previews.anchor);
+    this.raft.group.remove(this.previews.sail, this.previews.anchor, this.previews.helm);
     this.disposeGroup(this.previews.sail);
     this.disposeGroup(this.previews.anchor);
+    this.disposeGroup(this.previews.helm);
     this.previewMaterials.sail.dispose();
     this.previewMaterials.anchor.dispose();
+    this.previewMaterials.helm.dispose();
   }
 
   private currentState(): SavedNavigationState {
@@ -243,6 +288,11 @@ export class NavigationSystem {
   private calculateMetrics(): NavigationMetrics {
     const encounter = this.island.getEncounterState();
     return navigationMetrics(this.currentState(), bearingTo(encounter.x, encounter.z));
+  }
+
+  private targetBearing(): number {
+    const encounter = this.island.getEncounterState();
+    return bearingTo(encounter.x, encounter.z);
   }
 
   private createPreviewMaterial(): MeshStandardMaterial {
@@ -256,7 +306,9 @@ export class NavigationSystem {
   }
 
   private createModel(type: NavigationDeviceType): Group {
-    return type === 'sail' ? createSailModel(this.materials) : createAnchorModel(this.materials);
+    if (type === 'sail') return createSailModel(this.materials);
+    if (type === 'anchor') return createAnchorModel(this.materials);
+    return createHelmModel(this.materials);
   }
 
   private createPreview(type: NavigationDeviceType): Group {
@@ -292,9 +344,17 @@ export class NavigationSystem {
     return runtime;
   }
 
+  private applyAdvancedDevices(devices: SavedNavigationDevice[]): void {
+    for (const device of devices) {
+      const runtime = this.runtimes.get(device.type);
+      if (runtime) runtime.state = { ...device };
+    }
+  }
+
   private removeRuntime(runtime: NavigationRuntime): void {
     this.raft.group.remove(runtime.model);
     this.runtimes.delete(runtime.state.type);
+    if (runtime.state.type === 'helm') this.state = { ...this.state, routeMode: 'manual' };
     if (this.focused === runtime) {
       this.focused = null;
       this.clearPrompt();
@@ -308,8 +368,10 @@ export class NavigationSystem {
     runtime.deployVisual = MathUtils.damp(runtime.deployVisual, targetDeploy, runtime.state.type === 'sail' ? 3.4 : 2.6, delta);
     if (runtime.visuals.kind === 'sail') {
       this.updateSailVisuals(runtime, runtime.visuals, time);
-    } else {
+    } else if (runtime.visuals.kind === 'anchor') {
       this.updateAnchorVisuals(runtime, runtime.visuals, time, previousDeploy);
+    } else {
+      this.updateHelmVisuals(runtime.visuals, time, delta);
     }
     if (runtime.visuals.highlight.visible) {
       const pulse = 0.96 + Math.sin(time * 4.5) * 0.045;
@@ -322,7 +384,8 @@ export class NavigationSystem {
       this.state.heading + runtime.state.rotation,
       this.state.courseAngle,
     );
-    const windStrength = 0.35 + this.metrics.windCapture * 0.65;
+    const windStrength = 0.35 + this.metrics.windCapture * 0.65 + this.metrics.stormIntensity * 0.42;
+    const strain = this.state.sailStrain;
     const position = visuals.cloth.geometry.getAttribute('position') as BufferAttribute;
     const values = position.array as Float32Array;
     for (let index = 0; index < values.length; index += 3) {
@@ -339,7 +402,8 @@ export class NavigationSystem {
           0.075 *
           windStrength *
           runtime.deployVisual +
-        Math.sin(baseY * 16 + time * 1.4) * 0.018 * (1 - runtime.deployVisual);
+        Math.sin(baseY * 16 + time * 1.4) * 0.018 * (1 - runtime.deployVisual) +
+        Math.sin(time * 8.6 + baseY * 7.2) * Math.sin(widthRatio * Math.PI) * strain * 0.024;
     }
     position.needsUpdate = true;
     visuals.cloth.geometry.computeVertexNormals();
@@ -347,8 +411,30 @@ export class NavigationSystem {
       this.state.heading + runtime.state.rotation,
       this.metrics.windAngle,
     );
-    visuals.streamer.rotation.z = Math.sin(time * 6.2) * 0.13;
-    visuals.streamer.position.z = Math.sin(time * 4.7) * 0.025;
+    visuals.streamer.rotation.z = Math.sin(time * (6.2 + this.metrics.stormIntensity * 4.4)) * (0.13 + this.metrics.stormIntensity * 0.12);
+    visuals.streamer.position.z = Math.sin(time * 4.7) * (0.025 + this.metrics.stormIntensity * 0.02);
+    visuals.reinforcement.visible = runtime.state.reinforced;
+    visuals.reinforcement.scale.x = MathUtils.lerp(0.07, 1, runtime.deployVisual);
+  }
+
+  private updateHelmVisuals(visuals: HelmModelVisuals, time: number, delta: number): void {
+    const correction = shortestAngle(this.state.heading, this.metrics.effectiveCourse);
+    const wheelTarget = -correction * 1.8 - this.metrics.gust * this.metrics.stormIntensity * 0.34;
+    visuals.wheel.rotation.z = MathUtils.damp(visuals.wheel.rotation.z, wheelTarget, 5.2, delta);
+    visuals.compassNeedle.rotation.y = -this.state.heading;
+    visuals.gimbal.rotation.x = Math.sin(time * 1.35) * 0.022 * this.metrics.stormIntensity;
+    visuals.gimbal.rotation.z = Math.cos(time * 1.12) * 0.018 * this.metrics.stormIntensity;
+    visuals.gears.forEach((gear, index) => {
+      gear.rotation.z += delta * (index % 2 ? -1 : 1) * (0.22 + Math.abs(correction) * 1.8);
+    });
+    const activeRoute = this.metrics.routeMode === 'manual' ? 0 : this.metrics.routeMode === 'island' ? 1 : 2;
+    visuals.routePins.forEach((pin, index) => {
+      if (!(pin.material instanceof MeshStandardMaterial)) return;
+      const active = index === activeRoute;
+      pin.scale.setScalar(active ? 1.3 + Math.sin(time * 3.6) * 0.08 : 0.86);
+      pin.material.emissive.setHex(active ? 0x2c7669 : 0x000000);
+      pin.material.emissiveIntensity = active ? 0.8 : 0;
+    });
   }
 
   private updateAnchorVisuals(
@@ -428,14 +514,14 @@ export class NavigationSystem {
       runtime.visuals.highlight.visible = false;
       this.localCenter.set(
         runtime.state.x * RAFT_TILE_X,
-        runtime.state.type === 'sail' ? 1.52 : 0.82,
+        runtime.state.type === 'sail' ? 1.52 : runtime.state.type === 'helm' ? 0.88 : 0.82,
         runtime.state.z * RAFT_TILE_Z,
       );
       this.toCenter.copy(this.localCenter).sub(this.localOrigin);
       const along = this.toCenter.dot(this.localDirection);
       if (along <= 0 || along > 3.7 || along >= bestAlong) continue;
       this.closest.copy(this.localDirection).multiplyScalar(along).add(this.localOrigin);
-      const radius = runtime.state.type === 'sail' ? 0.7 : 0.86;
+      const radius = runtime.state.type === 'sail' ? 0.7 : runtime.state.type === 'helm' ? 0.76 : 0.86;
       if (this.closest.distanceToSquared(this.localCenter) > radius * radius) continue;
       best = runtime;
       bestAlong = along;
@@ -451,10 +537,14 @@ export class NavigationSystem {
 
   private interactionLabel(runtime: NavigationRuntime): string {
     if (runtime.state.type === 'sail') {
+      if (!runtime.state.reinforced && itemCount(useGameStore.getState().inventory, 'stormRigKit') > 0) {
+        return '为拾风帆加装横风抗扭索具';
+      }
       return runtime.state.deployed
         ? `收起拾风帆 · 航向${cardinalLabel(this.state.courseAngle)}`
         : `展开拾风帆 · 航向${cardinalLabel(this.state.courseAngle)}`;
     }
+    if (runtime.state.type === 'helm') return `切换航线 · ${ROUTE_LABELS[this.state.routeMode]}`;
     if (runtime.state.deployed) return '起锚恢复航行';
     return this.island.getEncounterState().phase === 'docked' ? '抛下潮石锚' : '海床太深，无法锚泊';
   }
@@ -462,6 +552,31 @@ export class NavigationSystem {
   private interact(): void {
     const runtime = this.focused;
     if (!runtime) return;
+    if (runtime.state.type === 'sail' && !runtime.state.reinforced && itemCount(useGameStore.getState().inventory, 'stormRigKit') > 0) {
+      const store = useGameStore.getState();
+      if (!store.spendItems({ stormRigKit: 1 })) {
+        this.audio.playDenied();
+        return;
+      }
+      const reinforced = reinforceNavigationSail(this.currentState());
+      this.state = reinforced;
+      this.applyAdvancedDevices(reinforced.devices);
+      this.audio.playSailReinforce();
+      this.showNotice('抗风横撑与双股受力索已锁紧');
+      this.metrics = this.calculateMetrics();
+      this.publishFeedback();
+      this.setPrompt(this.interactionLabel(runtime));
+      return;
+    }
+    if (runtime.state.type === 'helm') {
+      this.state = { ...this.state, routeMode: cycleNavigationRoute(this.state.routeMode) };
+      this.metrics = this.calculateMetrics();
+      this.audio.playHelmRoute();
+      this.publishFeedback();
+      this.showNotice(`航线切换为${ROUTE_LABELS[this.state.routeMode]}`);
+      this.setPrompt(this.interactionLabel(runtime));
+      return;
+    }
     if (runtime.state.type === 'anchor' && !runtime.state.deployed && this.island.getEncounterState().phase !== 'docked') {
       this.audio.playDenied();
       this.showNotice('靠近浅滩后才能抓牢海床');
@@ -483,15 +598,17 @@ export class NavigationSystem {
 
   private adjustCourse(reverse: boolean): void {
     const sail = this.runtimes.get('sail');
-    if (!sail || this.focused !== sail) return;
+    const helm = this.runtimes.get('helm');
+    if ((!sail || this.focused !== sail) && (!helm || this.focused !== helm)) return;
     this.state = {
       ...this.state,
+      routeMode: 'manual',
       courseAngle: normalizeAngle(this.state.courseAngle + COURSE_STEP * (reverse ? -1 : 1)),
     };
     this.audio.playSailTrim();
     this.metrics = this.calculateMetrics();
     this.publishFeedback();
-    this.setPrompt(this.interactionLabel(sail));
+    this.setPrompt(this.interactionLabel(this.focused!));
     this.showNotice(`航向调整至${cardinalLabel(this.state.courseAngle)}`);
   }
 
@@ -522,7 +639,7 @@ export class NavigationSystem {
     this.syncStateDevices();
     this.raft.gridToLocal(coordinate, this.worldHit);
     this.raft.localPointToWorld(this.worldHit, this.worldHit);
-    this.splashes.spawnImpact(this.worldHit, type === 'sail' ? 0xd9cda8 : 0x8f5742, 24);
+    this.splashes.spawnImpact(this.worldHit, type === 'sail' ? 0xd9cda8 : type === 'helm' ? 0x78aaa1 : 0x8f5742, 24);
     this.audio.playDevicePlace();
     this.showNotice(`${NAVIGATION_DEVICE_DEFINITIONS[type].name}已固定`);
     store.setPlacementDevice(null);
@@ -550,9 +667,10 @@ export class NavigationSystem {
     const driftRisk = encounter.phase === 'docked' && !this.metrics.anchored && playerAway;
     const sail = this.runtimes.get('sail');
     const anchor = this.runtimes.get('anchor');
+    const helm = this.runtimes.get('helm');
     useGameStore.getState().setNavigation({
       windAngle: this.metrics.windAngle,
-      courseAngle: this.state.courseAngle,
+      courseAngle: this.metrics.effectiveCourse,
       heading: this.state.heading,
       windCapture: this.metrics.windCapture,
       courseAlignment: this.metrics.courseAlignment,
@@ -561,6 +679,13 @@ export class NavigationSystem {
       sailDeployed: sail?.state.deployed ?? false,
       anchorInstalled: Boolean(anchor),
       anchored: anchor?.state.deployed ?? false,
+      helmInstalled: Boolean(helm),
+      sailReinforced: sail?.state.reinforced ?? false,
+      sailStrain: this.metrics.sailStrain,
+      routeMode: this.metrics.routeMode,
+      weatherPhase: this.metrics.weatherPhase,
+      stormIntensity: this.metrics.stormIntensity,
+      gust: this.metrics.gust,
       driftRisk,
     });
   }
@@ -611,7 +736,12 @@ export class NavigationSystem {
       object.geometry.dispose();
       const materials = Array.isArray(object.material) ? object.material : [object.material];
       materials.forEach((material) => {
-        if (!this.isSharedMaterial(material) && material !== this.previewMaterials.sail && material !== this.previewMaterials.anchor) {
+        if (
+          !this.isSharedMaterial(material) &&
+          material !== this.previewMaterials.sail &&
+          material !== this.previewMaterials.anchor &&
+          material !== this.previewMaterials.helm
+        ) {
           material.dispose();
         }
       });
@@ -640,6 +770,8 @@ export class NavigationSystem {
       this.interact();
       return;
     }
-    if (event.code === 'KeyR' && this.focused?.state.type === 'sail') this.adjustCourse(event.shiftKey);
+    if (event.code === 'KeyR' && (this.focused?.state.type === 'sail' || this.focused?.state.type === 'helm')) {
+      this.adjustCourse(event.shiftKey);
+    }
   };
 }

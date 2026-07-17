@@ -34,6 +34,10 @@ export interface AssetTextures {
   refractoryClay: Texture;
   refractoryClayNormal: Texture;
   refractoryClayRoughness: Texture;
+  navigationAlloy: Texture;
+  navigationAlloyNormal: Texture;
+  navigationAlloyRoughness: Texture;
+  stormClouds: Texture;
 }
 
 export interface MaterialLibrary {
@@ -62,6 +66,7 @@ export interface MaterialLibrary {
   sailCloth: MeshStandardMaterial;
   planterSoil: MeshStandardMaterial;
   refractoryClay: MeshStandardMaterial;
+  navigationAlloy: MeshStandardMaterial;
   cropLeaf: MeshStandardMaterial;
   cropDry: MeshStandardMaterial;
   cropFruit: MeshStandardMaterial;
@@ -94,6 +99,10 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     refractoryClay,
     refractoryClayNormal,
     refractoryClayRoughness,
+    navigationAlloy,
+    navigationAlloyNormal,
+    navigationAlloyRoughness,
+    stormClouds,
   ] = await Promise.all([
     loader.loadAsync('/assets/textures/weathered-cedar.webp'),
     loader.loadAsync('/assets/textures/ocean-foam-mask.png'),
@@ -115,6 +124,10 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/refractory-clay.webp'),
     loader.loadAsync('/assets/textures/refractory-clay-normal.webp'),
     loader.loadAsync('/assets/textures/refractory-clay-roughness.webp'),
+    loader.loadAsync('/assets/textures/navigation-alloy.webp'),
+    loader.loadAsync('/assets/textures/navigation-alloy-normal.webp'),
+    loader.loadAsync('/assets/textures/navigation-alloy-roughness.webp'),
+    loader.loadAsync('/assets/textures/storm-clouds.webp'),
   ]);
 
   const anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -186,6 +199,22 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   refractoryClayNormal.colorSpace = NoColorSpace;
   refractoryClayRoughness.colorSpace = NoColorSpace;
 
+  for (const texture of [navigationAlloy, navigationAlloyNormal, navigationAlloyRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(1.7, 1.45);
+    texture.anisotropy = anisotropy;
+  }
+  navigationAlloy.colorSpace = SRGBColorSpace;
+  navigationAlloyNormal.colorSpace = NoColorSpace;
+  navigationAlloyRoughness.colorSpace = NoColorSpace;
+
+  stormClouds.colorSpace = SRGBColorSpace;
+  stormClouds.wrapS = RepeatWrapping;
+  stormClouds.wrapT = RepeatWrapping;
+  stormClouds.repeat.set(2, 1);
+  stormClouds.anisotropy = anisotropy;
+
   return {
     wood,
     foam,
@@ -207,6 +236,10 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     refractoryClay,
     refractoryClayNormal,
     refractoryClayRoughness,
+    navigationAlloy,
+    navigationAlloyNormal,
+    navigationAlloyRoughness,
+    stormClouds,
   };
 }
 
@@ -314,6 +347,15 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       roughnessMap: textures.refractoryClayRoughness,
       roughness: 0.94,
       metalness: 0,
+    }),
+    navigationAlloy: new MeshStandardMaterial({
+      color: 0xc5b486,
+      map: textures.navigationAlloy,
+      normalMap: textures.navigationAlloyNormal,
+      normalScale: new Vector2(0.46, 0.46),
+      roughnessMap: textures.navigationAlloyRoughness,
+      roughness: 0.66,
+      metalness: 0.76,
     }),
     cropLeaf: new MeshStandardMaterial({ color: 0x5f8c54, roughness: 0.86, side: DoubleSide }),
     cropDry: new MeshStandardMaterial({ color: 0x9b7750, roughness: 0.98, side: DoubleSide }),

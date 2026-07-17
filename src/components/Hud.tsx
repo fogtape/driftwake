@@ -3,6 +3,7 @@ import {
   Anvil,
   Bird,
   Compass,
+  CloudLightning,
   CookingPot,
   Droplet,
   GlassWater,
@@ -11,6 +12,7 @@ import {
   MousePointer2,
   PackageOpen,
   Sailboat,
+  ShipWheel,
   Settings,
   ShieldAlert,
   ShieldCheck,
@@ -130,6 +132,15 @@ export function Hud({
     progression.researchBenches > 0 || progression.dryingRacks > 0 || progression.smelters > 0
   );
   const reefExpedition = player.surface === 'water' && island.phase === 'docked';
+  const stormAlert = player.surface !== 'water' && (navigation.stormIntensity > 0.58 || navigation.sailStrain > 0.62);
+  const routeLabel = navigation.routeMode === 'manual' ? '自由航向' : navigation.routeMode === 'island' ? '追踪浅滩' : '顺风避险';
+  const weatherLabel = navigation.sailStrain > 0.78
+    ? '帆具接近过载'
+    : navigation.weatherPhase === 'storm'
+      ? '强风暴横穿航线'
+      : navigation.weatherPhase === 'building'
+        ? '积云正在压近'
+        : '风暴正在远离';
   const resourceItems = reefExpedition
     ? (['sand', 'clay', 'metalOre', 'seaweed', 'scrap'] as const)
     : (['timber', 'polymer', 'fiber', 'scrap', 'stone'] as const);
@@ -206,21 +217,32 @@ export function Hud({
       </div>
 
       <div
-        className={`navigation-readout ${navigation.sailDeployed ? 'is-sailing' : ''} ${navigation.anchored ? 'is-anchored' : ''} ${navigation.driftRisk ? 'is-drift-risk' : ''}`}
-        aria-label={`航向${cardinalLabel(navigation.courseAngle)} 风力利用${Math.round(navigation.windCapture * 100)}% 航速${navigation.speedKnots.toFixed(1)}节${navigation.anchored ? ' 已锚泊' : ''}`}
+        className={`navigation-readout ${navigation.sailDeployed ? 'is-sailing' : ''} ${navigation.sailReinforced ? 'is-reinforced' : ''} ${navigation.anchored ? 'is-anchored' : ''} ${navigation.stormIntensity > 0.3 ? 'is-storm' : ''} ${navigation.driftRisk ? 'is-drift-risk' : ''}`}
+        aria-label={`${routeLabel} 航向${cardinalLabel(navigation.courseAngle)} 风力利用${Math.round(navigation.windCapture * 100)}% 航速${navigation.speedKnots.toFixed(1)}节${navigation.helmInstalled ? ' 已安装舵台' : ''}${navigation.sailReinforced ? ' 帆具已强化' : ''}${navigation.anchored ? ' 已锚泊' : ''}`}
       >
         <Compass size={18} style={{ transform: `rotate(${navigation.heading}rad)` }} />
         <div className="navigation-readout__course">
-          <span>航向</span>
+          <span>{routeLabel}</span>
           <strong>{cardinalLabel(navigation.courseAngle)}</strong>
         </div>
         <div className="navigation-readout__wind">
-          <Wind size={16} style={{ transform: `rotate(${navigation.windAngle - navigation.heading}rad)` }} />
+          {navigation.stormIntensity > 0.3
+            ? <CloudLightning size={16} />
+            : <Wind size={16} style={{ transform: `rotate(${navigation.windAngle - navigation.heading}rad)` }} />}
           <i><b style={{ width: `${clampPercent(navigation.windCapture * 100)}%` }} /></i>
         </div>
         <em>{navigation.speedKnots.toFixed(1)} kn</em>
         <Sailboat className={navigation.sailInstalled ? 'is-installed' : ''} size={16} />
+        <ShipWheel className={navigation.helmInstalled ? 'is-installed' : ''} size={16} />
         <Anchor className={navigation.anchorInstalled ? 'is-installed' : ''} size={16} />
+      </div>
+
+      <div className={`weather-warning ${stormAlert ? 'is-visible' : ''}`} aria-live="polite">
+        <CloudLightning size={18} />
+        <div>
+          <span>{weatherLabel}</span>
+          <i><b style={{ width: `${Math.round(Math.max(navigation.stormIntensity, navigation.sailStrain) * 100)}%` }} /></i>
+        </div>
       </div>
 
       <div className={`dive-readout ${player.surface === 'water' ? 'is-visible' : ''}`} aria-label={`潜深 ${player.depth.toFixed(1)} 米`}>
@@ -239,7 +261,7 @@ export function Hud({
         </button>
       </div>
 
-      <div className={`shark-warning ${sharkAlert ? 'is-visible' : ''}`} aria-live="polite">
+      <div className={`shark-warning ${stormAlert ? 'has-weather-alert' : ''} ${sharkAlert ? 'is-visible' : ''}`} aria-live="polite">
         <TriangleAlert size={18} />
         <div>
           <span>{shark.target === 'player' ? (shark.mode === 'attacking' ? '深潮鲨正在扑咬' : '深潮鲨锁定了你') : shark.mode === 'attacking' ? '结构遭到撕咬' : '深潮鲨正在逼近'}</span>
@@ -247,7 +269,7 @@ export function Hud({
         </div>
       </div>
 
-      <div className={`crop-warning ${planting.birdActive ? 'is-visible' : ''} ${sharkAlert ? 'has-shark-alert' : ''}`} aria-live="polite">
+      <div className={`crop-warning ${planting.birdActive ? 'is-visible' : ''} ${stormAlert ? 'has-weather-alert' : ''} ${sharkAlert ? 'has-shark-alert' : ''} ${stormAlert && sharkAlert ? 'has-weather-and-shark' : ''}`} aria-live="polite">
         <Bird size={18} />
         <div>
           <span>{planting.birdThreat > 0.8 ? '盐翼盗鸟正在啄食作物' : '盐翼盗鸟正在逼近'}</span>

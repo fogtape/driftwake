@@ -32,9 +32,9 @@ import {
   type SavedProgressionState,
 } from './progression';
 
-export const SAVE_VERSION = 7;
-export const SAVE_KEY = 'driftwake.save.v7';
-export const LEGACY_SAVE_KEYS = ['driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
+export const SAVE_VERSION = 8;
+export const SAVE_KEY = 'driftwake.save.v8';
+export const LEGACY_SAVE_KEYS = ['driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
 
 export type PlayerSurface = 'raft' | 'island' | 'water';
 
@@ -140,7 +140,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
     world?: { island?: SavedIslandState; underwater?: SavedUnderwaterState };
   };
   if (
-    (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3 && candidate.version !== 4 && candidate.version !== 5 && candidate.version !== 6 && candidate.version !== SAVE_VERSION) ||
+    (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3 && candidate.version !== 4 && candidate.version !== 5 && candidate.version !== 6 && candidate.version !== 7 && candidate.version !== SAVE_VERSION) ||
     !candidate.player ||
     !candidate.raft
   ) return null;
@@ -192,16 +192,18 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
     candidate.version >= 5
       ? sanitizeNavigationState(candidate.raft.navigation)
       : createDefaultNavigationState();
-  const navigation = {
-    ...rawNavigation,
-    devices: rawNavigation.devices.filter((device) => {
+  const navigationDevices = rawNavigation.devices.filter((device) => {
       if (Math.abs(device.x) > 12 || Math.abs(device.z) > 12) return false;
       const key = deviceKey(device.x, device.z);
       if (!tileKeys.has(key) || occupied.has(key)) return false;
       occupied.add(key);
       if (device.type === 'anchor' && island.phase !== 'docked') device.deployed = false;
       return true;
-    }),
+    });
+  const navigation = {
+    ...rawNavigation,
+    routeMode: navigationDevices.some((device) => device.type === 'helm') ? rawNavigation.routeMode : 'manual' as const,
+    devices: navigationDevices,
   };
   const rawPlanting = candidate.version >= 6
     ? sanitizePlantingState(candidate.raft.planting)

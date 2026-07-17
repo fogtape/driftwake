@@ -57,8 +57,8 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v7');
-    expect(save?.version).toBe(7);
+    expect(SAVE_KEY).toBe('driftwake.save.v8');
+    expect(save?.version).toBe(8);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
     expect(save?.world.island.phase).toBe('approaching');
@@ -271,5 +271,40 @@ describe('save schema', () => {
     expect(save?.raft.progression.learned).toEqual(['smelterKit']);
     expect(save?.raft.progression.devices).toHaveLength(1);
     expect(save?.raft.progression.devices[0]).toMatchObject({ id: 'forge', phase: 'working', elapsed: 22 });
+    expect(save?.raft.navigation).toEqual(createDefaultNavigationState());
+  });
+
+  it('restores v8 helm, reinforced sail, route and storm state', () => {
+    const save = sanitizeSave({
+      version: 8,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 20 },
+      raft: {
+        tiles: [
+          { x: 0, z: 0, health: 100 },
+          { x: 1, z: 0, health: 100 },
+          { x: -1, z: 0, health: 100 },
+        ],
+        navigation: {
+          windClock: 140,
+          weatherClock: 145,
+          courseAngle: 0.4,
+          heading: 0.2,
+          routeMode: 'island',
+          sailStrain: 0.38,
+          devices: [
+            { id: 'sail', type: 'sail', x: 0, z: 0, rotation: 0, deployed: true, reinforced: true },
+            { id: 'helm', type: 'helm', x: 1, z: 0, rotation: 0, deployed: false },
+            { id: 'anchor', type: 'anchor', x: -1, z: 0, rotation: 0, deployed: false },
+          ],
+        },
+      },
+    });
+    expect(save?.raft.navigation).toMatchObject({
+      weatherClock: 145,
+      routeMode: 'island',
+      sailStrain: 0.38,
+    });
+    expect(save?.raft.navigation.devices).toHaveLength(3);
+    expect(save?.raft.navigation.devices.find((device) => device.type === 'sail')).toMatchObject({ reinforced: true });
   });
 });

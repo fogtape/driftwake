@@ -67,6 +67,7 @@ const PLACEABLES: Partial<Record<ItemId, PlacementType>> = {
   grillKit: 'grill',
   sailKit: 'sail',
   anchorKit: 'anchor',
+  helmKit: 'helm',
   planterKit: 'planter',
   researchBenchKit: 'researchBench',
   smelterKit: 'smelter',

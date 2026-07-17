@@ -23,6 +23,7 @@ export interface SailModelVisuals {
   clothBase: Float32Array;
   streamer: Mesh<PlaneGeometry>;
   streamerPivot: Group;
+  reinforcement: Group;
   highlight: Mesh;
 }
 
@@ -34,7 +35,17 @@ export interface AnchorModelVisuals {
   highlight: Mesh;
 }
 
-export type NavigationModelVisuals = SailModelVisuals | AnchorModelVisuals;
+export interface HelmModelVisuals {
+  kind: 'helm';
+  wheel: Group;
+  compassNeedle: Group;
+  gimbal: Group;
+  routePins: Mesh[];
+  gears: Group[];
+  highlight: Mesh;
+}
+
+export type NavigationModelVisuals = SailModelVisuals | AnchorModelVisuals | HelmModelVisuals;
 
 function shadowed<T extends Mesh>(mesh: T): T {
   mesh.castShadow = true;
@@ -153,6 +164,25 @@ export function createSailModel(materials: MaterialLibrary): Group {
   streamerPivot.add(streamer);
   sail.add(streamerPivot);
 
+  const reinforcement = new Group();
+  reinforcement.name = 'storm-rig-reinforcement';
+  for (const [y, length] of [[1.31, 1.12], [1.95, 0.78]] as const) {
+    const batten = shadowed(new Mesh(new CylinderGeometry(0.018, 0.024, length, 7), materials.navigationAlloy));
+    batten.rotation.z = Math.PI / 2;
+    batten.position.set(length * 0.5 + 0.07, y, 0.055);
+    reinforcement.add(batten);
+    for (const x of [0.09, length]) {
+      const clamp = shadowed(new Mesh(new TorusGeometry(0.035, 0.009, 5, 14), materials.navigationAlloy));
+      clamp.position.set(x, y, 0.06);
+      clamp.rotation.y = Math.PI / 2;
+      reinforcement.add(clamp);
+    }
+  }
+  addRigging(reinforcement, materials, [new Vector3(0.08, 2.98, 0.055), new Vector3(0.7, 1.88, 0.09), new Vector3(1.57, 0.7, 0.055)]);
+  addRigging(reinforcement, materials, [new Vector3(0.08, 0.72, 0.06), new Vector3(0.56, 1.52, 0.1), new Vector3(0.42, 2.5, 0.06)]);
+  reinforcement.visible = false;
+  pivot.add(reinforcement);
+
   const highlight = createHighlight(0.34);
   sail.add(highlight);
   sail.userData.navigationVisuals = {
@@ -162,9 +192,122 @@ export function createSailModel(materials: MaterialLibrary): Group {
     clothBase,
     streamer,
     streamerPivot,
+    reinforcement,
     highlight,
   } satisfies SailModelVisuals;
   return sail;
+}
+
+export function createHelmModel(materials: MaterialLibrary): Group {
+  const helm = new Group();
+  helm.name = 'tide-lock-navigation-helm';
+
+  const base = shadowed(new Mesh(new BoxGeometry(0.92, 0.12, 0.68), materials.wood[1]));
+  base.position.y = 0.08;
+  helm.add(base);
+  for (const x of [-0.36, 0.36]) {
+    const foot = shadowed(new Mesh(new CylinderGeometry(0.07, 0.09, 0.56, 8), materials.darkWood));
+    foot.position.set(x, 0.37, 0.08);
+    foot.rotation.z = x * 0.06;
+    helm.add(foot);
+    const brace = shadowed(new Mesh(new CylinderGeometry(0.024, 0.024, 0.58, 7), materials.navigationAlloy));
+    brace.position.set(x * 0.52, 0.37, -0.16);
+    brace.rotation.z = x > 0 ? -0.68 : 0.68;
+    helm.add(brace);
+  }
+
+  const console = shadowed(new Mesh(new BoxGeometry(0.76, 0.42, 0.43), materials.darkWood));
+  console.position.set(0, 0.7, -0.05);
+  console.rotation.x = -0.16;
+  helm.add(console);
+  const face = shadowed(new Mesh(new BoxGeometry(0.68, 0.29, 0.045), materials.navigationAlloy));
+  face.position.set(0, 0.76, 0.17);
+  face.rotation.x = -0.16;
+  helm.add(face);
+
+  const wheel = new Group();
+  wheel.name = 'helm-wheel';
+  wheel.position.set(0, 1.08, 0.31);
+  const rim = shadowed(new Mesh(new TorusGeometry(0.38, 0.034, 8, 36), materials.navigationAlloy));
+  wheel.add(rim);
+  for (let spoke = 0; spoke < 8; spoke += 1) {
+    const angle = spoke / 8 * Math.PI * 2;
+    const bar = shadowed(new Mesh(new CylinderGeometry(0.017, 0.024, 0.67, 7), materials.navigationAlloy));
+    bar.rotation.z = angle + Math.PI / 2;
+    const handle = shadowed(new Mesh(new CylinderGeometry(0.025, 0.035, 0.16, 8), materials.darkWood));
+    handle.position.set(Math.cos(angle) * 0.45, Math.sin(angle) * 0.45, 0);
+    handle.rotation.z = angle + Math.PI / 2;
+    wheel.add(bar, handle);
+  }
+  const hub = shadowed(new Mesh(new CylinderGeometry(0.095, 0.095, 0.18, 12), materials.navigationAlloy));
+  hub.rotation.x = Math.PI / 2;
+  wheel.add(hub);
+  helm.add(wheel);
+
+  const gimbal = new Group();
+  gimbal.name = 'helm-compass-gimbal';
+  gimbal.position.set(0, 0.87, -0.12);
+  const outerRing = shadowed(new Mesh(new TorusGeometry(0.19, 0.018, 7, 30), materials.navigationAlloy));
+  outerRing.rotation.x = Math.PI / 2;
+  const innerRing = shadowed(new Mesh(new TorusGeometry(0.14, 0.013, 7, 28), materials.metal));
+  innerRing.rotation.x = Math.PI / 2;
+  gimbal.add(outerRing, innerRing);
+  const compassNeedle = new Group();
+  const needle = shadowed(new Mesh(new BoxGeometry(0.025, 0.018, 0.22), materials.rustMetal));
+  needle.position.z = -0.045;
+  const needleTip = shadowed(new Mesh(new ConeGeometry(0.035, 0.1, 6), materials.navigationAlloy));
+  needleTip.position.z = -0.17;
+  needleTip.rotation.x = -Math.PI / 2;
+  compassNeedle.add(needle, needleTip);
+  gimbal.add(compassNeedle);
+  helm.add(gimbal);
+
+  const routePins: Mesh[] = [];
+  [-0.19, 0, 0.19].forEach((x, index) => {
+    const pin = new Mesh(new SphereGeometry(0.026, 8, 6), materials.navigationAlloy.clone());
+    pin.position.set(x, 0.76, 0.205);
+    pin.userData.routeIndex = index;
+    routePins.push(pin);
+    helm.add(pin);
+  });
+
+  const gears: Group[] = [];
+  for (const [x, radius, teeth] of [[-0.23, 0.095, 10], [0.04, 0.13, 12], [0.27, 0.075, 8]] as const) {
+    const gear = new Group();
+    gear.position.set(x, 0.49, 0.18);
+    const gearCore = shadowed(new Mesh(new CylinderGeometry(radius, radius, 0.04, teeth), materials.navigationAlloy));
+    gearCore.rotation.x = Math.PI / 2;
+    gear.add(gearCore);
+    for (let tooth = 0; tooth < teeth; tooth += 1) {
+      const angle = tooth / teeth * Math.PI * 2;
+      const block = shadowed(new Mesh(new BoxGeometry(0.025, 0.045, 0.04), materials.navigationAlloy));
+      block.position.set(Math.cos(angle) * (radius + 0.012), Math.sin(angle) * (radius + 0.012), 0);
+      block.rotation.z = angle;
+      gear.add(block);
+    }
+    gears.push(gear);
+    helm.add(gear);
+  }
+
+  for (const x of [-0.34, 0.34]) {
+    const tillerLine = shadowed(new Mesh(new CylinderGeometry(0.012, 0.012, 0.58, 6), materials.rope));
+    tillerLine.position.set(x, 0.42, -0.32);
+    tillerLine.rotation.x = Math.PI / 2;
+    helm.add(tillerLine);
+  }
+
+  const highlight = createHighlight(0.55);
+  helm.add(highlight);
+  helm.userData.navigationVisuals = {
+    kind: 'helm',
+    wheel,
+    compassNeedle,
+    gimbal,
+    routePins,
+    gears,
+    highlight,
+  } satisfies HelmModelVisuals;
+  return helm;
 }
 
 export function createAnchorModel(materials: MaterialLibrary): Group {

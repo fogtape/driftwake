@@ -18,6 +18,7 @@ export class AudioSystem {
   private islandLoop: GainNode | null = null;
   private underwaterLoop: GainNode | null = null;
   private sailLoop: GainNode | null = null;
+  private stormLoop: GainNode | null = null;
   private nextCreakAt = 4;
   private nextBirdAt = 6;
   private nextReelAt = 0;
@@ -29,6 +30,7 @@ export class AudioSystem {
   private islandActivity = 0;
   private underwaterActivity = 0;
   private sailActivity = 0;
+  private stormActivity = 0;
   private mix: AudioMix = {
     master: 0.78,
     music: 0.2,
@@ -69,6 +71,7 @@ export class AudioSystem {
       this.startIslandLayer();
       this.startUnderwaterLayer();
       this.startNavigationLayer();
+      this.startStormLayer();
     }
     if (this.context.state !== 'running') await this.context.resume();
   }
@@ -224,6 +227,31 @@ export class AudioSystem {
     this.sailLoop?.gain.setTargetAtTime(this.sailActivity * 0.07, this.context.currentTime, 0.35);
   }
 
+  setStormActivity(activity: number): void {
+    this.stormActivity = Math.max(0, Math.min(1, activity));
+    if (!this.context) return;
+    this.stormLoop?.gain.setTargetAtTime(this.stormActivity * 0.13, this.context.currentTime, 0.28);
+  }
+
+  playThunder(strength = 1): void {
+    const level = Math.max(0, Math.min(1, strength));
+    this.noiseBurstTo(1.1, 190, 0.2 * level, 'lowpass', this.ambience);
+    this.noiseBurstTo(0.52, 720, 0.08 * level, 'bandpass', this.ambience);
+    if (!this.context || !this.ambience) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(58, now);
+    oscillator.frequency.exponentialRampToValueAtTime(31, now + 0.9);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.09 * level, now + 0.045);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.0);
+    oscillator.connect(gain).connect(this.ambience);
+    oscillator.start(now);
+    oscillator.stop(now + 1.05);
+  }
+
   playSailToggle(deployed: boolean): void {
     this.noiseBurst(deployed ? 0.64 : 0.46, deployed ? 1850 : 1320, deployed ? 0.085 : 0.07, 'bandpass');
     this.noiseBurst(0.18, 3600, 0.035, 'highpass');
@@ -239,6 +267,51 @@ export class AudioSystem {
     this.noiseBurst(0.16, 2350, 0.055, 'bandpass');
     this.noiseBurst(0.09, 820, 0.032, 'lowpass');
     this.playWoodKnock(0.026, 0.045);
+  }
+
+  playSailReinforce(): void {
+    this.noiseBurst(0.24, 920, 0.08, 'bandpass');
+    this.noiseBurst(0.16, 3150, 0.052, 'highpass');
+    this.playWoodKnock(0.055, 0.07);
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    [610, 470, 760].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + index * 0.075;
+      oscillator.type = 'triangle';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.036, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
+      oscillator.connect(gain).connect(this.effects!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.13);
+    });
+  }
+
+  playSailOverload(): void {
+    this.noiseBurst(0.62, 1580, 0.14, 'bandpass');
+    this.noiseBurst(0.28, 3700, 0.09, 'highpass');
+    this.playWoodKnock(0.09, 0.12);
+  }
+
+  playHelmRoute(): void {
+    this.noiseBurst(0.11, 1850, 0.036, 'bandpass');
+    this.noiseBurst(0.08, 680, 0.045, 'lowpass');
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    [392, 523.25].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + index * 0.07;
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.026, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.14);
+      oscillator.connect(gain).connect(this.effects!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.15);
+    });
   }
 
   playAnchor(deployed: boolean): void {
@@ -746,6 +819,7 @@ export class AudioSystem {
     this.islandLoop = null;
     this.underwaterLoop = null;
     this.sailLoop = null;
+    this.stormLoop = null;
   }
 
   private startAmbientLayers(): void {
@@ -820,6 +894,47 @@ export class AudioSystem {
     this.sailLoop.gain.value = this.sailActivity * 0.07;
     source.connect(filter).connect(this.sailLoop).connect(this.effects);
     source.start(0, 0.7);
+  }
+
+  private startStormLayer(): void {
+    if (!this.context || !this.ambience) return;
+    const duration = 6;
+    const sampleRate = this.context.sampleRate;
+    const buffer = this.context.createBuffer(1, duration * sampleRate, sampleRate);
+    const channel = buffer.getChannelData(0);
+    let wash = 0;
+    for (let index = 0; index < channel.length; index += 1) {
+      const white = this.random() * 2 - 1;
+      wash += (white - wash) * 0.075;
+      const rain = this.random() > 0.94 ? white * 0.34 : white * 0.08;
+      channel[index] = wash * 0.72 + rain;
+    }
+    const source = this.context.createBufferSource();
+    const highpass = this.context.createBiquadFilter();
+    const lowpass = this.context.createBiquadFilter();
+    const windLowpass = this.context.createBiquadFilter();
+    const windGain = this.context.createGain();
+    const gustLfo = this.context.createOscillator();
+    const gustDepth = this.context.createGain();
+    this.stormLoop = this.context.createGain();
+    source.buffer = buffer;
+    source.loop = true;
+    highpass.type = 'highpass';
+    highpass.frequency.value = 420;
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 4300;
+    windLowpass.type = 'lowpass';
+    windLowpass.frequency.value = 285;
+    windGain.gain.value = 0.42;
+    gustLfo.type = 'sine';
+    gustLfo.frequency.value = 0.17;
+    gustDepth.gain.value = 0.14;
+    this.stormLoop.gain.value = this.stormActivity * 0.13;
+    source.connect(windLowpass).connect(windGain).connect(this.stormLoop);
+    source.connect(highpass).connect(lowpass).connect(this.stormLoop).connect(this.ambience);
+    gustLfo.connect(gustDepth).connect(windGain.gain);
+    source.start(0, 1.1);
+    gustLfo.start();
   }
 
   private startMusicLayer(): void {

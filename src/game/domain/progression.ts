@@ -28,6 +28,16 @@ export const RESEARCH_PROJECTS = {
     description: '一体宽刃能在每次挥砍时造成双倍切入。',
     requirements: ['timber', 'scrap', 'metalIngot'],
   },
+  helmKit: {
+    name: '定潮舵台',
+    description: '差速舵索与磁针罗盘让木筏在阵风里保持选定航线。',
+    requirements: ['timber', 'scrap', 'metalIngot'],
+  },
+  stormRigKit: {
+    name: '横风抗扭索具',
+    description: '以金属横撑和双股受力绳分散帆角载荷，延缓风暴过载。',
+    requirements: ['rope', 'scrap', 'metalIngot'],
+  },
 } as const satisfies Record<
   string,
   { name: string; description: string; requirements: readonly ResearchSampleId[] }

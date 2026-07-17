@@ -31,6 +31,7 @@ function createTestMaterials(): MaterialLibrary {
     sailCloth: material(),
     planterSoil: material(),
     refractoryClay: material(),
+    navigationAlloy: material(),
     cropLeaf: material(),
     cropDry: material(),
     cropFruit: material(),

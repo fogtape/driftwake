@@ -52,6 +52,7 @@ import { UnderwaterSystem } from './systems/UnderwaterSystem';
 import { NavigationSystem } from './systems/NavigationSystem';
 import { PlantingSystem } from './systems/PlantingSystem';
 import { ProgressionSystem } from './systems/ProgressionSystem';
+import { StormSystem } from './systems/StormSystem';
 
 export class DriftwakeGame {
   private readonly scene = new Scene();
@@ -78,14 +79,18 @@ export class DriftwakeGame {
   private navigation: NavigationSystem | null = null;
   private planting: PlantingSystem | null = null;
   private progression: ProgressionSystem | null = null;
+  private storm: StormSystem | null = null;
   private sky: Sky | null = null;
   private hemisphere: HemisphereLight | null = null;
   private ambient: AmbientLight | null = null;
   private directional: DirectionalLight | null = null;
   private readonly airBackground = new Color('#a9cfd2');
+  private readonly stormBackground = new Color('#516f72');
+  private readonly surfaceBackground = new Color();
   private readonly waterBackground = new Color('#0b5260');
   private readonly environmentColor = new Color();
   private environmentBlend = 0;
+  private stormBlend = 0;
   private elapsed = 0;
   private fpsElapsed = 0;
   private fpsFrames = 0;
@@ -133,6 +138,13 @@ export class DriftwakeGame {
       this.materials = createMaterialLibrary(this.textures);
       this.ocean = new OceanSystem(this.textures.foam);
       this.ocean.setQuality(store.quality === 'high');
+      this.storm = new StormSystem(
+        this.scene,
+        this.camera,
+        this.textures.stormClouds,
+        (strength) => this.audio.playThunder(strength),
+      );
+      this.storm.setQuality(store.quality === 'high');
       this.raft = new RaftSystem(this.materials, save?.raft.tiles ?? createDefaultRaftTiles());
       this.scene.add(this.ocean.mesh, this.raft.group);
 
@@ -354,6 +366,7 @@ export class DriftwakeGame {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, highQuality ? 1.75 : 1.0));
     this.renderer.shadowMap.enabled = highQuality;
     this.ocean?.setQuality(highQuality);
+    this.storm?.setQuality(highQuality);
     this.resize();
   }
 
@@ -415,6 +428,7 @@ export class DriftwakeGame {
     this.splashes?.dispose();
     this.debris?.dispose(this.scene);
     this.ocean?.dispose();
+    this.storm?.dispose();
     this.physics.dispose();
     this.audio.dispose();
     this.unsubscribeStore?.();
@@ -486,9 +500,13 @@ export class DriftwakeGame {
     this.island?.update(this.elapsed, simulationDelta);
     this.underwater?.update(this.elapsed, simulationDelta);
     this.splashes?.update(delta);
+    const weather = this.navigation?.getWeather() ?? { weatherPhase: 'calm' as const, stormIntensity: 0, gust: 0 };
+    const surfaceStorm = (this.player?.isSubmerged() ?? false) ? 0 : weather.stormIntensity;
+    const lightning = this.storm?.update(this.elapsed, surfaceStorm, weather.gust) ?? 0;
+    this.audio.setStormActivity(weather.stormIntensity);
     this.audio.update(this.elapsed);
     this.physics.step(simulationDelta);
-    this.updateEnvironment(delta);
+    this.updateEnvironment(delta, weather.stormIntensity, lightning);
 
     if (simulationActive) {
       this.simulationAccumulator += simulationDelta;
@@ -562,7 +580,9 @@ export class DriftwakeGame {
     const survivalDevicePlacement =
       state.placementDevice === 'purifier' || state.placementDevice === 'grill' ? state.placementDevice : null;
     const navigationPlacement =
-      state.placementDevice === 'sail' || state.placementDevice === 'anchor' ? state.placementDevice : null;
+      state.placementDevice === 'sail' || state.placementDevice === 'anchor' || state.placementDevice === 'helm'
+        ? state.placementDevice
+        : null;
     const plantingPlacement = state.placementDevice === 'planter' ? 'planter' : null;
     const progressionPlacement =
       state.placementDevice === 'researchBench' ||
@@ -626,7 +646,7 @@ export class DriftwakeGame {
     this.saveNow();
   };
 
-  private updateEnvironment(delta: number): void {
+  private updateEnvironment(delta: number, stormIntensity: number, lightning: number): void {
     const target = this.player?.isSubmerged()
       ? MathUtils.clamp(0.62 + (this.player?.getDepth() ?? 0) * 0.1, 0, 1)
       : 0;
@@ -634,18 +654,29 @@ export class DriftwakeGame {
     if (this.renderer.shadowMap.enabled !== shouldRenderShadows) this.renderer.shadowMap.enabled = shouldRenderShadows;
     if (target > 0 && this.environmentBlend < 0.78) this.environmentBlend = 0.78;
     this.environmentBlend = MathUtils.damp(this.environmentBlend, target, target > 0 ? 3.8 : 2.6, delta);
-    this.environmentColor.copy(this.airBackground).lerp(this.waterBackground, this.environmentBlend);
+    this.stormBlend = MathUtils.damp(this.stormBlend, stormIntensity, stormIntensity > this.stormBlend ? 1.6 : 0.72, delta);
+    this.surfaceBackground.copy(this.airBackground).lerp(this.stormBackground, this.stormBlend);
+    this.environmentColor.copy(this.surfaceBackground).lerp(this.waterBackground, this.environmentBlend);
     if (this.scene.background instanceof Color) this.scene.background.copy(this.environmentColor);
     if (this.scene.fog instanceof FogExp2) {
       this.scene.fog.color.copy(this.environmentColor);
-      this.scene.fog.density = MathUtils.lerp(0.0065, 0.072, this.environmentBlend);
+      const airFog = MathUtils.lerp(0.0065, 0.0145, this.stormBlend);
+      this.scene.fog.density = MathUtils.lerp(airFog, 0.072, this.environmentBlend);
     }
-    this.renderer.toneMappingExposure = MathUtils.lerp(1.08, 0.79, this.environmentBlend);
-    if (this.hemisphere) this.hemisphere.intensity = MathUtils.lerp(1.85, 0.82, this.environmentBlend);
-    if (this.ambient) this.ambient.intensity = MathUtils.lerp(0.36, 0.7, this.environmentBlend);
-    if (this.directional) this.directional.intensity = MathUtils.lerp(3.1, 0.58, this.environmentBlend);
+    const airExposure = MathUtils.lerp(1.08, 0.77, this.stormBlend) + lightning * 0.2;
+    this.renderer.toneMappingExposure = MathUtils.lerp(airExposure, 0.79, this.environmentBlend);
+    if (this.hemisphere) this.hemisphere.intensity = MathUtils.lerp(MathUtils.lerp(1.85, 0.92, this.stormBlend) + lightning * 0.65, 0.82, this.environmentBlend);
+    if (this.ambient) this.ambient.intensity = MathUtils.lerp(MathUtils.lerp(0.36, 0.54, this.stormBlend), 0.7, this.environmentBlend);
+    if (this.directional) this.directional.intensity = MathUtils.lerp(MathUtils.lerp(3.1, 0.42, this.stormBlend) + lightning * 2.4, 0.58, this.environmentBlend);
+    if (this.sky) {
+      const uniforms = this.sky.material.uniforms;
+      uniforms.turbidity.value = MathUtils.lerp(6.8, 18, this.stormBlend);
+      uniforms.rayleigh.value = MathUtils.lerp(2.25, 0.72, this.stormBlend);
+      uniforms.mieCoefficient.value = MathUtils.lerp(0.006, 0.028, this.stormBlend);
+    }
     if (this.sky) this.sky.visible = target === 0;
     this.ocean?.setUnderwater(this.environmentBlend);
+    this.ocean?.setStorm(this.stormBlend);
   }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {

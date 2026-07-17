@@ -17,7 +17,7 @@ import { craftRecipe, type CraftResult, type RecipeId } from '../game/domain/rec
 import { INITIAL_SURVIVAL, advanceSurvival, consumeItem, type SurvivalState } from '../game/domain/survival';
 import type { DeviceType } from '../game/domain/devices';
 import type { IslandPhase } from '../game/domain/island';
-import type { NavigationDeviceType } from '../game/domain/navigation';
+import type { NavigationDeviceType, NavigationRouteMode, NavigationWeatherPhase } from '../game/domain/navigation';
 import type { PlayerSurface } from '../game/domain/save';
 import {
   addResearchSample,
@@ -109,6 +109,13 @@ export interface NavigationFeedback {
   sailDeployed: boolean;
   anchorInstalled: boolean;
   anchored: boolean;
+  helmInstalled: boolean;
+  sailReinforced: boolean;
+  sailStrain: number;
+  routeMode: NavigationRouteMode;
+  weatherPhase: NavigationWeatherPhase;
+  stormIntensity: number;
+  gust: number;
   driftRisk: boolean;
 }
 
@@ -242,6 +249,13 @@ function defaultNavigation(): NavigationFeedback {
     sailDeployed: false,
     anchorInstalled: false,
     anchored: false,
+    helmInstalled: false,
+    sailReinforced: false,
+    sailStrain: 0,
+    routeMode: 'manual',
+    weatherPhase: 'calm',
+    stormIntensity: 0,
+    gust: 0,
     driftRisk: false,
   };
 }

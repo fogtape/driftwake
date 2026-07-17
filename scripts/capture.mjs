@@ -17,7 +17,7 @@ const chromiumPath = process.env.CHROMIUM_PATH ?? '/data/data/com.termux/files/u
 const outputDir = new URL('../artifacts/screenshots/', import.meta.url);
 
 const seededSave = {
-  version: 7,
+  version: 8,
   savedAt: 1,
   player: {
     inventory: {
@@ -322,10 +322,74 @@ const progressionReadySave = {
   },
 };
 
+const navigationHelmPlacementSave = {
+  ...progressionPlacementSave,
+  player: {
+    ...progressionPlacementSave.player,
+    inventory: { hook: 1, hammer: 1, helmKit: 1 },
+  },
+};
+
+const navigationRiggingSave = {
+  ...progressionPlacementSave,
+  player: {
+    ...progressionPlacementSave.player,
+    inventory: { hook: 1, hammer: 1, stormRigKit: 1 },
+  },
+  raft: {
+    ...progressionPlacementSave.raft,
+    navigation: {
+      windClock: 40,
+      weatherClock: 40,
+      courseAngle: 0,
+      heading: 0,
+      routeMode: 'manual',
+      sailStrain: 0,
+      devices: [
+        { id: 'rigging-sail', type: 'sail', x: 0, z: -1, rotation: 0, deployed: true, reinforced: false },
+      ],
+    },
+  },
+};
+
+const navigationStormSave = {
+  ...seededSave,
+  raft: {
+    ...seededSave.raft,
+    navigation: {
+      windClock: 143,
+      weatherClock: 143,
+      courseAngle: Math.PI / 5,
+      heading: Math.PI / 7,
+      routeMode: 'island',
+      sailStrain: 0.38,
+      devices: [
+        { id: 'storm-sail', type: 'sail', x: 1, z: -1, rotation: 0, deployed: true, reinforced: true },
+        { id: 'storm-helm', type: 'helm', x: 0, z: -1, rotation: 0, deployed: false, reinforced: false },
+        { id: 'storm-anchor', type: 'anchor', x: -1, z: 1, rotation: Math.PI / 2, deployed: false, reinforced: false },
+      ],
+    },
+  },
+};
+
 const narrowProgressionSave = {
   ...seededSave,
   raft: {
     ...seededSave.raft,
+    navigation: {
+      windClock: 143,
+      weatherClock: 143,
+      courseAngle: Math.PI / 5,
+      heading: Math.PI / 7,
+      routeMode: 'island',
+      sailStrain: 0.68,
+      devices: [
+        { id: 'narrow-sail', type: 'sail', x: 0, z: -1, rotation: 0, deployed: true, reinforced: true },
+        { id: 'narrow-helm', type: 'helm', x: 1, z: 1, rotation: 0, deployed: false, reinforced: false },
+        { id: 'narrow-anchor', type: 'anchor', x: -1, z: 1, rotation: Math.PI / 2, deployed: false, reinforced: false },
+      ],
+    },
+    planting: { birdClock: 0, birdVisit: 0, planters: [] },
     progression: {
       researched: ['timber', 'scrap', 'dryBrick'],
       learned: ['smelterKit'],
@@ -416,8 +480,8 @@ async function openDesktopPage(label, options = {}) {
   });
   if (options.seedSave) {
     await context.addInitScript((save) => {
-      localStorage.setItem('driftwake.save.v7', JSON.stringify(save));
-    }, options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
+      localStorage.setItem('driftwake.save.v8', JSON.stringify(save));
+    }, options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
   }
   const page = await context.newPage();
   monitorPage(page, label);
@@ -560,7 +624,7 @@ async function captureDevices() {
 }
 
 async function aimDownToPrompt(page, expected, steps = 50) {
-  let prompt = '';
+  let prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
   for (let step = 0; step < steps && !prompt.includes(expected); step += 1) {
     await page.evaluate(() => {
       const movement = new MouseEvent('mousemove');
@@ -706,7 +770,7 @@ async function captureProgressionPlacement() {
       notice: document.querySelector('.loot-notice')?.textContent?.trim() ?? '',
       prompt: document.querySelector('.interaction-prompt')?.textContent?.trim() ?? '',
       progressionHud: document.querySelector('.device-status--progression')?.textContent?.trim() ?? '',
-      save: localStorage.getItem('driftwake.save.v7'),
+      save: localStorage.getItem('driftwake.save.v8'),
     }));
     await page.screenshot({ path: new URL('progression-placement-diagnostic.png', outputDir).pathname });
     throw new Error(`Research table placement did not complete: ${JSON.stringify(state).slice(0, 1600)}`, { cause: error });
@@ -875,7 +939,7 @@ async function captureUnderwaterInteraction() {
 async function captureNarrow() {
   const context = await browser.newContext({ viewport: { width: 640, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript((save) => {
-    localStorage.setItem('driftwake.save.v7', JSON.stringify(save));
+    localStorage.setItem('driftwake.save.v8', JSON.stringify(save));
   }, narrowProgressionSave);
   const page = await context.newPage();
   monitorPage(page, 'narrow');
@@ -896,6 +960,7 @@ async function captureNarrow() {
       devices: box('.device-rack.is-visible'),
       survival: box('.survival-cluster'),
       island: box('.island-readout'),
+      weather: box('.weather-warning.is-visible'),
       actions: box('.hud-actions'),
     };
   });
@@ -907,6 +972,9 @@ async function captureNarrow() {
     ['devices', 'hotbar'],
     ['devices', 'island'],
     ['devices', 'actions'],
+    ['weather', 'navigation'],
+    ['weather', 'devices'],
+    ['weather', 'island'],
   ]) {
     if (overlaps(narrowBoxes[first], narrowBoxes[second])) {
       throw new Error(`Narrow HUD overlap: ${first} intersects ${second}; ${JSON.stringify(narrowBoxes)}`);
@@ -921,7 +989,7 @@ async function captureNarrow() {
 async function captureUnderwaterNarrow() {
   const context = await browser.newContext({ viewport: { width: 640, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript((save) => {
-    localStorage.setItem('driftwake.save.v7', JSON.stringify(save));
+    localStorage.setItem('driftwake.save.v8', JSON.stringify(save));
   }, underwaterSeededSave);
   const page = await context.newPage();
   monitorPage(page, 'underwater-narrow');
@@ -987,6 +1055,128 @@ async function captureNavigationInteraction() {
   await page.locator('.interaction-prompt').filter({ hasText: '起锚恢复航行' }).waitFor({ timeout: 4_000 });
   await inspectCanvasPixels(page, 'navigation-interaction');
   await page.screenshot({ path: new URL('navigation-interaction-desktop.png', outputDir).pathname });
+  await context.close();
+}
+
+async function captureNavigationHelmPlacement() {
+  const { context, page } = await openDesktopPage('navigation-helm-placement', {
+    seedSave: true,
+    navigationHelmPlacementStart: true,
+  });
+  await page.locator('.primary-command').click();
+  await page.keyboard.press('KeyI');
+  await page.getByRole('dialog', { name: '野外背包' }).waitFor();
+  await page.getByRole('button', { name: /定潮舵台套件/ }).click();
+  await page.getByRole('button', { name: '安置到木筏' }).click();
+  const prompt = await aimDownToPrompt(page, '安置定潮舵台');
+  if (!prompt.includes('安置定潮舵台')) {
+    await page.screenshot({ path: new URL('navigation-helm-placement-diagnostic.png', outputDir).pathname });
+    throw new Error(`Expected helm placement prompt, received: ${prompt}`);
+  }
+  await page.mouse.click(desktopWidth / 2, desktopHeight / 2);
+  await page.waitForFunction(() => document.querySelector('.loot-notice')?.textContent?.includes('定潮舵台已固定'), null, { timeout: 8_000 });
+  await page.waitForFunction(() => document.querySelector('.navigation-readout')?.getAttribute('aria-label')?.includes('已安装舵台'), null, { timeout: 8_000 });
+  await page.keyboard.down('KeyS');
+  await page.waitForTimeout(180);
+  await page.keyboard.up('KeyS');
+  await page.evaluate(() => {
+    const movement = new MouseEvent('mousemove');
+    Object.defineProperties(movement, {
+      movementX: { value: 170 },
+      movementY: { value: 70 },
+    });
+    document.dispatchEvent(movement);
+  });
+  await page.waitForTimeout(350);
+  await inspectCanvasPixels(page, 'navigation-helm-placement');
+  await page.screenshot({ path: new URL('navigation-helm-placement-desktop.png', outputDir).pathname });
+  await context.close();
+}
+
+async function captureNavigationRigging() {
+  const { context, page } = await openDesktopPage('navigation-rigging', {
+    seedSave: true,
+    navigationRiggingStart: true,
+  });
+  await page.locator('.primary-command').click();
+  await page.waitForFunction(
+    () => document.querySelector('.interaction-prompt')?.textContent?.includes('加装横风抗扭索具'),
+    null,
+    { timeout: 2_500 },
+  ).catch(() => undefined);
+  let prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  if (!prompt.includes('加装横风抗扭索具')) {
+    await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
+    await page.waitForTimeout(250);
+    prompt = await aimAroundToPrompt(page, '加装横风抗扭索具');
+  }
+  if (!prompt.includes('加装横风抗扭索具')) {
+    await page.screenshot({ path: new URL('navigation-rigging-diagnostic.png', outputDir).pathname });
+    throw new Error(`Expected sail reinforcement prompt, received: ${prompt}`);
+  }
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => document.querySelector('.loot-notice')?.textContent?.includes('抗风横撑'), null, { timeout: 8_000 });
+  await page.locator('.navigation-readout.is-reinforced').waitFor({ timeout: 8_000 });
+  await inspectCanvasPixels(page, 'navigation-rigging');
+  await page.screenshot({ path: new URL('navigation-rigging-desktop.png', outputDir).pathname });
+  await context.close();
+}
+
+async function captureNavigationStorm() {
+  const { context, page } = await openDesktopPage('navigation-storm', {
+    seedSave: true,
+    navigationStormStart: true,
+  });
+  await page.locator('.primary-command').click();
+  await page.waitForTimeout(450);
+  const initialStormState = await page.evaluate(() => {
+    const savedNavigation = JSON.parse(localStorage.getItem('driftwake.save.v8') ?? 'null')?.raft?.navigation ?? null;
+    return {
+      warningClass: document.querySelector('.weather-warning')?.className ?? 'missing',
+      warningText: document.querySelector('.weather-warning')?.textContent?.trim() ?? '',
+      navigationClass: document.querySelector('.navigation-readout')?.className ?? 'missing',
+      navigationLabel: document.querySelector('.navigation-readout')?.getAttribute('aria-label') ?? '',
+      savedNavigation,
+    };
+  });
+  console.log(`Navigation storm initial state: ${JSON.stringify(initialStormState)}`);
+  await page.locator('.weather-warning.is-visible').waitFor({ timeout: 8_000 }).catch(async (error) => {
+    await page.screenshot({ path: new URL('navigation-storm-diagnostic.png', outputDir).pathname });
+    throw new Error(`Storm warning did not become visible: ${JSON.stringify(initialStormState)}`, { cause: error });
+  });
+  await page.locator('.navigation-readout.is-storm').waitFor({ timeout: 8_000 });
+  await page.waitForFunction(
+    () => document.querySelector('.interaction-prompt')?.textContent?.includes('切换航线'),
+    null,
+    { timeout: 2_500 },
+  ).catch(() => undefined);
+  let prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  if (!prompt.includes('切换航线')) {
+    await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
+    await page.waitForTimeout(250);
+    prompt = await aimAroundToPrompt(page, '切换航线');
+  }
+  if (!prompt.includes('切换航线')) {
+    await page.screenshot({ path: new URL('navigation-storm-diagnostic.png', outputDir).pathname });
+    throw new Error(`Expected helm route prompt, received: ${prompt}`);
+  }
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => document.querySelector('.loot-notice')?.textContent?.includes('顺风避险'), null, { timeout: 8_000 });
+  await page.waitForFunction(() => document.querySelector('.navigation-readout')?.getAttribute('aria-label')?.includes('顺风避险'), null, { timeout: 8_000 });
+  await page.keyboard.down('KeyS');
+  await page.waitForTimeout(180);
+  await page.keyboard.up('KeyS');
+  await page.evaluate(() => {
+    const movement = new MouseEvent('mousemove');
+    Object.defineProperties(movement, {
+      movementX: { value: 0 },
+      movementY: { value: 180 },
+    });
+    document.dispatchEvent(movement);
+  });
+  await page.waitForTimeout(450);
+  await inspectCanvasPixels(page, 'navigation-storm');
+  await page.screenshot({ path: new URL('navigation-storm-desktop.png', outputDir).pathname });
   await context.close();
 }
 
@@ -1066,6 +1256,9 @@ try {
   if (captureOnly === 'all' || captureOnly === 'underwater-narrow') await captureUnderwaterNarrow();
   if (captureOnly === 'all' || captureOnly === 'navigation') await captureNavigation();
   if (captureOnly === 'all' || captureOnly === 'navigation-interaction') await captureNavigationInteraction();
+  if (captureOnly === 'all' || captureOnly === 'navigation-helm-placement') await captureNavigationHelmPlacement();
+  if (captureOnly === 'all' || captureOnly === 'navigation-rigging') await captureNavigationRigging();
+  if (captureOnly === 'all' || captureOnly === 'navigation-storm') await captureNavigationStorm();
   if (captureOnly === 'all' || captureOnly === 'drift-risk') await captureDriftRisk();
   if (captureOnly === 'all' || captureOnly === 'mobile') await captureMobile();
 } finally {

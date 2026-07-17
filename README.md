@@ -1,12 +1,12 @@
 # Driftwake
 
-原创桌面网页 3D 海上生存游戏。当前版本为 `0.8.0` 高质量纵向切片，不以基础 Demo 为完成标准。
+原创桌面网页 3D 海上生存游戏。当前版本为 `0.9.0` 高质量纵向切片，不以基础 Demo 为完成标准。
 
 ## 当前内容
 
 - Three.js 程序化海面、天空、雾、昼光、随波木筏和可接近的高度场岛屿；
 - 第一人称移动、蓄力抛钩、绳索、水花、漂流物命中和补给箱战利品；
-- 数据驱动的 36 类物品、20 格堆叠背包、16 项便携配方、研究门禁、消耗品和固定步长生存状态；
+- 数据驱动的 38 类物品、20 格堆叠背包、18 项便携配方、研究门禁、消耗品和固定步长生存状态；
 - 可寻址木筏筏格、邻接建造、幽灵预览、材料校验、修补、拆除与连通性保护；
 - 浮标抛投、鱼讯窗口、张力/收线对抗、断线、鱼体挣扎和收获；
 - 可放置的潮汐净水器与折铁烤架，包含杯具回收、木材燃料、蒸馏、烤制、收取和过烧；
@@ -23,15 +23,18 @@
 - 18 个确定性浅礁节点、细砂/黏土/金属矿三段钩击、海草收割、满包保护、节点动画和远征进度；
 - 动态水下雾色、曝光、双面海面、滚动焦散、气泡/悬浮物、礁石/珊瑚/海草/鱼群与独立 PBR 海床材质；
 - 深潮鲨会在玩家入水后切换目标、追击、扑咬、扣血和击退，水中木矛可命中并驱离；
-- 可制作并占用筏格的拾风帆与潮石锚，包含边缘放置、筏格损毁、拆除返还、玩家碰撞和完整存档；
-- 动态风向、八方帆向、木筏航向、风力利用与航速；正确帆向加快接近，未收帆会加快离流；
+- 可制作并占用筏格的拾风帆、潮石锚与定潮舵台，包含边缘放置、筏格损毁、拆除返还、玩家碰撞和完整存档；
+- 定潮舵台提供自由航向、追踪浅滩与顺风避险三种航线；横风抗扭索具可直接加装到现有帆面，拆除时与帆套件一并返还；
+- 动态风向、八方帆向、木筏航向、风力利用与航速；舵台提高转向稳定性，正确帆向加快接近，未收帆会加快离流；
+- 210 秒确定性海况周期包含积云、强风暴与消散阶段；阵风会造成偏航和帆具载荷，未强化帆过载后自动泄压收紧，避险航线与强化帆可共同降低风险；
+- 原创飑云穹顶、GPU 实例化雨幕、双段闪电、风暴雾光、增幅浪高/泡沫/海色和独立风雨雷声层共同表达天气，而非仅改变 HUD 数值；
 - 未锚泊浅滩仅短暂停留，玩家离筏后显示离流预警；离流阶段不会被传送回筏，错过追筏窗口后会被留在海中；
-- v7 版本化自动存档，保存三表面导航、氧气、岛礁节点、逐格筏体、生活/航行/种植/研究设备、样本知识与熔炼阶段，并迁移 v1-v6；
-- 六总线程序音频混音，以及水下低通、帆布受风、锚链绞盘、种植/收获、研究翻页、湿砖干裂、熔炉火层/金属凝固、礁区动作、鲨鱼扑咬和岛屿声音；
+- v8 版本化自动存档，保存三表面导航、氧气、岛礁节点、逐格筏体、生活/航行/种植/研究设备、天气时钟、航线、帆具载荷与强化状态，并迁移 v1-v7；
+- 六总线程序音频混音，以及水下低通、帆布受风/强化/过载、舵台拨档、锚链绞盘、分层风雨雷声、种植/收获、研究翻页、熔炉火层/金属凝固、礁区动作、鲨鱼扑咬和岛屿声音；
 - 标题、HUD、背包、制作、设置、能力提示和 Playwright 截图回归流程；
-- 原创标题美术、木材、泡沫、鲨皮、编织纤维、AI 辅助海床、拼补帆布、培养土与耐火陶土材质，以及独立 normal/roughness 图。
+- 原创标题美术、木材、泡沫、鲨皮、编织纤维、AI 辅助海床、拼补帆布、培养土、耐火陶土、导航合金 PBR 与飑云天空材质，以及对应的独立 normal/roughness 图。
 
-当前仍不是完整游戏。导航设备成长、更多生态资源、天气农业、死亡恢复、工具耐久和最终蒙皮资产仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
+当前仍不是完整游戏。持续世界航线与接收器、高级生活设备、更多生态资源、天气农业、死亡恢复、工具耐久和最终蒙皮资产仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
 
 ## 运行
 
@@ -40,7 +43,7 @@ npm ci
 npm run dev -- --port 4173
 ```
 
-目标环境为带真实 GPU、WebGL2 和键鼠的桌面 Chrome / Edge。当前交互包括：鼠标抛投/刺击/砍伐/建造/开采，`E` 操作设备或拾取资源，注视航帆时 `R` 顺时针调向、`Shift+R` 逆时针调向，游泳时 `Space` 上浮、`Ctrl` 下潜，数字键切换工具，`I` 或 `Tab` 打开背包，`C` 打开制作。
+目标环境为带真实 GPU、WebGL2 和键鼠的桌面 Chrome / Edge。当前交互包括：鼠标抛投/刺击/砍伐/建造/开采，`E` 操作设备或拾取资源；注视舵台时 `E` 切换航线，注视未强化帆且背包有索具时 `E` 直接加装，注视帆或舵台时 `R` 顺时针调向、`Shift+R` 逆时针调向；游泳时 `Space` 上浮、`Ctrl` 下潜，数字键切换工具，`I` 或 `Tab` 打开背包，`C` 打开制作。
 
 ## 验证
 
@@ -50,7 +53,7 @@ npm run build
 npm run capture
 ```
 
-截图脚本默认连接 `http://127.0.0.1:4173`，支持 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH`、`CAPTURE_HEIGHT` 和 `CAPTURE_ONLY`。目标包括 `title`、`game`、`hook`、`pack`、`crafting`、`devices`、`planting-placement`、`planting-interaction`、`planting-bird`、`progression-placement`、`progression-research`、`progression-smelting`、`island`、`island-interaction`、`underwater`、`underwater-interaction`、`navigation`、`navigation-interaction`、`drift-risk`、`underwater-narrow`、`narrow`、`settings` 和 `mobile`。3D 截图使用分布式 WebGL 像素门禁，拒绝黑屏、白屏、HUD 相交和丢失的上下文。
+截图脚本默认连接 `http://127.0.0.1:4173`，支持 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH`、`CAPTURE_HEIGHT` 和 `CAPTURE_ONLY`。目标包括 `title`、`game`、`hook`、`pack`、`crafting`、`devices`、`planting-placement`、`planting-interaction`、`planting-bird`、`progression-placement`、`progression-research`、`progression-smelting`、`island`、`island-interaction`、`underwater`、`underwater-interaction`、`navigation`、`navigation-interaction`、`navigation-helm-placement`、`navigation-rigging`、`navigation-storm`、`drift-risk`、`underwater-narrow`、`narrow`、`settings` 和 `mobile`。3D 截图使用分布式 WebGL 像素门禁，拒绝黑屏、白屏、HUD 相交和丢失的上下文。
 
 Termux Chromium 149 的纯 headless 后端会在任意 WebGL draw call 后首次 readback 时丢失上下文。脚本在 Termux 下会自动启动临时 Xvfb 并走 headful GLES 路径，完成后自动清理；真实 GPU 下的 20 分钟稳定性和性能仍需单独验收。
 
