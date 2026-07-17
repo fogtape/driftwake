@@ -33,7 +33,7 @@ import {
 
 export type GamePhase = 'title' | 'playing';
 export type QualityPreset = 'low' | 'high';
-export type OverlayPanel = 'pack' | 'crafting' | 'research' | null;
+export type OverlayPanel = 'pack' | 'crafting' | 'research' | 'storage' | null;
 export type FishingPhase = 'idle' | 'casting' | 'waiting' | 'nibble' | 'hooked' | 'caught' | 'lost';
 export type SharkMode = 'distant' | 'circling' | 'approaching' | 'attacking' | 'retreating';
 export type PlacementType = DeviceType | NavigationDeviceType | ProgressionDeviceType | 'planter';
@@ -82,6 +82,14 @@ export interface DeviceFeedback {
   progress: number;
 }
 
+export interface StorageFeedback {
+  deviceId: string;
+  name: string;
+  inventory: Inventory;
+  slots: number;
+  capacity: number;
+}
+
 export type DeviceFeedbackMap = Record<DeviceType, DeviceFeedback>;
 
 export interface IslandFeedback {
@@ -111,7 +119,9 @@ export interface NavigationFeedback {
   anchored: boolean;
   helmInstalled: boolean;
   sailReinforced: boolean;
+  anchorReinforced: boolean;
   sailStrain: number;
+  anchorStrain: number;
   routeMode: NavigationRouteMode;
   weatherPhase: NavigationWeatherPhase;
   stormIntensity: number;
@@ -172,6 +182,7 @@ interface GameState {
   shark: SharkFeedback;
   raft: RaftFeedback;
   devices: DeviceFeedbackMap;
+  storage: StorageFeedback | null;
   navigation: NavigationFeedback;
   planting: PlantingFeedback;
   progression: ProgressionFeedback;
@@ -207,6 +218,7 @@ interface GameState {
   setShark: (feedback: Partial<SharkFeedback>) => void;
   setRaft: (feedback: RaftFeedback) => void;
   setDevices: (feedback: DeviceFeedbackMap) => void;
+  setStorage: (feedback: StorageFeedback | null) => void;
   setNavigation: (feedback: NavigationFeedback) => void;
   setPlanting: (feedback: PlantingFeedback) => void;
   setProgressionFeedback: (feedback: Omit<ProgressionFeedback, keyof ProgressionKnowledge>) => void;
@@ -251,7 +263,9 @@ function defaultNavigation(): NavigationFeedback {
     anchored: false,
     helmInstalled: false,
     sailReinforced: false,
+    anchorReinforced: false,
     sailStrain: 0,
+    anchorStrain: 0,
     routeMode: 'manual',
     weatherPhase: 'calm',
     stormIntensity: 0,
@@ -331,7 +345,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   devices: {
     purifier: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
     grill: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
+    solarPurifier: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
+    tripleGrill: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
+    locker: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
   },
+  storage: null,
   navigation: defaultNavigation(),
   planting: defaultPlanting(),
   progression: defaultProgression(),
@@ -371,9 +389,11 @@ export const useGameStore = create<GameState>((set, get) => ({
     return result.accepted;
   },
   spendItems: (bundle) => {
-    const result = removeItems(get().inventory, bundle);
+    const state = get();
+    const result = removeItems(state.inventory, bundle);
     if (!result) return false;
-    set({ inventory: result, inventorySlots: usedInventorySlots(result) });
+    const selectedTool = itemCount(result, state.selectedTool) > 0 ? state.selectedTool : 'hook';
+    set({ inventory: result, inventorySlots: usedInventorySlots(result), selectedTool });
     return true;
   },
   craft: (recipeId) => {
@@ -440,6 +460,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
   setRaft: (raft) => set({ raft }),
   setDevices: (devices) => set({ devices }),
+  setStorage: (storage) => set({ storage }),
   setNavigation: (navigation) => set({ navigation }),
   setPlanting: (planting) => set({ planting }),
   setProgressionFeedback: (feedback) =>
@@ -506,6 +527,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       navigation: defaultNavigation(),
       planting: defaultPlanting(),
       progression: defaultProgression(),
+      storage: null,
       placementDevice: null,
       interaction: null,
       interactionOwner: null,

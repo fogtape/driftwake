@@ -1,7 +1,7 @@
 # 原创资产清单
 
 > 更新日期：2026-07-17
-> 状态：第九轮舵台、强化帆具与风暴航线美术交互基线，发布前仍需做最终授权、DCC 替换与相似性复核
+> 状态：第十轮高级生活设备、密封储物与锚具强化美术交互基线，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -9,6 +9,7 @@
 - AI 位图通过项目 `scripts/imagegen` 调用配置 provider 生成，仓库不保存服务 URL 或密钥；
 - 运行时模型、动画和音效均为项目代码原生生成；
 - AI 输出先进入忽略版本控制的 `output/imagegen/`，人工检查后才转换到 `public/assets/`；
+- 第十轮起，已采用且需要跨环境继续加工的原始 PNG 归档到 `artifacts/imagegen/`；截图仍由 `.gitignore` 排除；
 - 确定性程序材质由仓库脚本生成，种子、周期、边缝阈值和派生参数必须可复现；
 - albedo、normal 和 roughness 分离使用，不把颜色图长期当作法线替代；
 - 被拒绝的泡沫初稿未进入运行时，第二版通过方向性和 2x2 平铺检查后采用。
@@ -232,9 +233,53 @@ Use case: stylized-concept. Asset type: seamless tileable color texture for a fu
 
 初次 172/286/96 px 过渡带均因相对内部差异门禁失败，没有降低阈值；48 px 版本保持大尺度云体并通过原门禁。运行时云穹顶与物理天空分层，不把位图中的雨帘当作近景雨线，近景仍由实例化 VFX 独立驱动。
 
+### TEX-011：盐蚀集热玻璃材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `saltglass-collector.webp`、`saltglass-collector-normal.webp`、`saltglass-collector-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/saltglass-collector-raw.png` |
+| 模型 | `gpt-image-2` |
+| 请求质量 | `high` |
+| 请求尺寸 | `2048x2048` |
+| 实际输出 | 1254x1254 PNG；采用版统一为 1024x1024 WebP |
+| 处理方式 | `scripts/prepare_imagegen_material.py` 半幅环移、中央不规则羽化、周期模糊与 PBR 图派生 |
+| 用途 | 潮镜五联净水器斜置集热板与盐蚀表面层次 |
+| 检查 | 无完整装置、杯具、文字、标志和烘焙高光；接缝 x=8.38/1.02x、y=8.79/1.19x，2x2 平铺无硬边 |
+
+采用提示词：
+
+```text
+Use case: stylized-concept. Asset type: seamless tileable PBR base-color material for an original solar water collector. Primary request: original salt-aged translucent collector glass made from pale aqua recycled panes, fine mineral frosting, faint hammered waviness, sparse chalk-white salt blooms and restrained warm amber sealing traces. Scene/backdrop: texture sheet only. Style/medium: premium stylized-realistic hand-authored game material with controlled tactile micro-detail and broad readable variation. Composition/framing: exact orthographic top-down square, uniform texel density, seamless wrapping on all four edges, no central focal object or manufactured panel layout. Lighting/mood: flat neutral albedo with no baked directional light, reflection, highlight, cast shadow or ambient occlusion. Constraints: fully original edge-to-edge material; no purifier, frame, cup, pipe, text, symbols, logos, watermark or border. Avoid: mirror glass, window scene, stained-glass imagery, large cracks, photographic perspective, material ball, repeated checker pattern or recognizable copyrighted design.
+```
+
+运行时由独立 normal/roughness 提供盐晶与玻璃起伏，不把源图高光当作透明效果；净水器本体另用五个透明杯体和动态水位表达功能状态。
+
+### TEX-012：蜡封密舱帆布材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `sealed-canvas.webp`、`sealed-canvas-normal.webp`、`sealed-canvas-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/sealed-canvas-raw.png` |
+| 模型 | `gpt-image-2` |
+| 请求质量 | `high` |
+| 请求尺寸 | `2048x2048` |
+| 实际输出 | 1254x1254 PNG；采用版统一为 1024x1024 WebP |
+| 处理方式 | `scripts/prepare_imagegen_material.py` 半幅环移、中央不规则羽化、周期模糊与 PBR 图派生 |
+| 用途 | 干舱储物柜柜门、顶盖和侧面密封补片 |
+| 检查 | 无箱体、扣具、文字、标志和烘焙阴影；接缝 x=15.29/1.23x、y=15.05/1.10x，2x2 平铺无硬边 |
+
+采用提示词：
+
+```text
+Use case: stylized-concept. Asset type: seamless tileable PBR base-color material for an original raft dry-storage locker. Primary request: original wax-sealed marine canvas woven from charcoal teal reclaimed fibers, with compressed waterproof grain, subtle graphite wax rub, sparse salt-gray abrasion, tiny oxidized-brass dust and restrained hand-mended thread variation. Scene/backdrop: texture sheet only. Style/medium: premium stylized-realistic game material, tactile and dense rather than photographic fabric noise. Composition/framing: exact orthographic top-down square, uniform texel density, seamless wrapping on all four edges, no central patch or recognizable bag pattern. Lighting/mood: flat neutral albedo with no baked directional light, highlights, cast shadows or ambient occlusion. Constraints: fully original edge-to-edge material; no chest, straps, buckles, labels, text, symbols, logos, watermark, frame or border. Avoid: leather, denim, camouflage, glossy plastic tarp, large tears, perspective preview, material ball, checker repetition or recognizable copyrighted design.
+```
+
+源图保留 C2PA 生成来源信息并随仓库归档；运行时 WebP 经统一门禁派生，柜体的木框、潮铸铰链、把手和八个内容标记均为代码原生几何。
+
 ## 本轮 Imagegen 尝试
 
-调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider，模型 `gpt-image-2`，质量 `high`。本轮 2048x2048 PNG 导航合金和飑云请求分别在 44.0/90.6 秒完成并通过人工内容检查；耐火陶土、培养土、帆布和海床此前分别为 46.8/93.6/47.2/38.1 秒。没有在仓库保存 provider URL 或 API Key，也没有切换低阶模型。先前鲨皮与编织纤维请求的超时记录继续保留，它们仍使用确定性程序版本。
+调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider，模型 `gpt-image-2`，质量 `high`。本轮盐蚀集热玻璃与蜡封密舱帆布均以 2048x2048 请求并返回 1254x1254 PNG，通过人工内容、接缝和 2x2 平铺检查；采用源图随仓库归档以便跨环境继续加工。此前导航合金、飑云、耐火陶土、培养土、帆布和海床同样使用高质量模型。没有在仓库保存 provider URL 或 API Key，也没有切换低阶模型。先前鲨皮与编织纤维请求的超时记录继续保留，它们仍使用确定性程序版本。
 
 鲨皮最终请求提示词：
 
@@ -270,7 +315,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 ## 代码原生模型与动画
 
-本轮定潮舵台、强化帆具和风暴层需要确定性响应航线、风向、阵风、载荷、筏格位置和跨版本存档，因此继续以代码原生形体与实时动画建立统一可玩的近最终基线。导航合金使用独立 AI PBR，风暴天空使用独立 AI 云层材质；没有因软件截图后端较慢而降低运行时贴图质量。
+本轮高级净水、三槽烤台、密封储物和锚具强化需要确定性响应并行队列、独立火候、真实物品堆叠、风暴载荷、筏格位置和跨版本存档，因此继续以代码原生形体与实时动画建立统一可玩的近最终基线。盐玻璃与密舱帆布使用独立 AI PBR；没有因软件截图后端较慢而降低运行时贴图质量。
 
 | ID | 资产 | 位置 | 当前状态 |
 | --- | --- | --- | --- |
@@ -299,6 +344,10 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | MOD-023 | 潮铸穿浪矛与宽刃斧：回收木柄、潮铸金属刃/矛头、护套、铆接与纤维绑扎 | `src/game/art/ProceduralModels.ts` | 与基础工具共享第一视角节奏但使用独立高阶形体、材质和伤害数据 |
 | MOD-024 | 定潮舵台：双层轮缘、八辐手柄、斜撑、盐蚀合金面板、万向罗盘、三枚航线针、三组齿轮与双侧舵索 | `src/game/art/NavigationModels.ts` | 55+ 网格，筏格附着；轮、罗盘、齿轮与航线针按航向/阵风/模式实时驱动 |
 | MOD-025 | 横风抗扭索具：双金属横撑、四枚帆缘锁扣和双股交叉受力绳 | `src/game/art/NavigationModels.ts` | 直接加装到既有拾风帆，强化状态、拆除返还和 v8 存档已接通 |
+| MOD-026 | 潮镜五联净水器：斜置盐玻璃集热板、合金框、五个独立杯位、分流歧管、冷凝管与蒸汽/滴水层 | `src/game/art/AdvancedDeviceModels.ts` | 55+ 网格、五路水位和完成标记；队列并行推进且无需燃料 |
+| MOD-027 | 三槽烟鳍烤台：宽体耐火炉膛、十三根炉条、三组食物位、共享燃料条、火焰/余烬/烟层 | `src/game/art/AdvancedDeviceModels.ts` | 70+ 网格；三份渔获分别经历生/熟/焦状态，共享漂木燃料 |
+| MOD-028 | 干舱储物柜：蜡封帆布柜门/顶盖、木质骨架、潮铸铰链、把手、锁扣和八个内容标记 | `src/game/art/AdvancedDeviceModels.ts` | 25+ 网格；柜盖动画、八格真实堆叠与拆除原子返还已接通 |
+| MOD-029 | 深锚锁链棘轮：双爪棘轮、潮铸护圈、短节锁链与加固绞盘 | `src/game/art/NavigationModels.ts` | 直接加装到现有锚具，风暴载荷、滑脱与 v9 强化状态同步 |
 | ANI-001 | 木筏三轴波浪升沉 | `src/game/systems/RaftSystem.ts` | 已实现 |
 | ANI-002 | 第一人称移动、镜头与木筏局部坐标 | `src/game/systems/PlayerController.ts` | 已实现基础版 |
 | ANI-003 | 钩具蓄力、抛射、旋转、拖回与收起 | `src/game/systems/HookSystem.ts` | 已实现基础闭环 |
@@ -315,6 +364,8 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | ANI-014 | 研究拨盘/页面反馈、逐砖湿干变化、熔炉炉门/内容物/热光阶段 | `src/game/systems/ProgressionSystem.ts` | 与全局知识、逐砖计时、熔炼工作/完成和 v8 恢复同步 |
 | ANI-015 | 木矛/金属矛与石斧/金属斧实时换模、挥击和分级命中 | `src/game/systems/SpearSystem.ts`、`IslandSystem.ts` | 升级制作后自动替换快捷栏，鲨鱼和棕榈实际接收不同伤害 |
 | ANI-016 | 舵轮修正、罗盘指向、齿轮联动、航线针切换、强化帆鼓动和过载自动泄压 | `src/game/systems/NavigationSystem.ts` | 与三种航线、阵风偏航、帆具载荷、交互、音频和 v8 恢复同步 |
+| ANI-017 | 五杯水位/完成标记、三份鱼体独立火候、共享燃料条、柜盖与内容标记 | `src/game/systems/DeviceSystem.ts` | 与高级设备领域队列、真实库存、HUD、音频和 v9 恢复同步 |
+| ANI-018 | 锚机棘轮加装、锁链受力、风暴载荷累积与未强化锚滑脱 | `src/game/systems/NavigationSystem.ts` | 与锚泊后果、警报、音频、模型强化和 v9 恢复同步 |
 | VFX-001 | 入水粒子 | `src/game/systems/SplashSystem.ts` | 已实现 |
 | VFX-002 | 木屑、修补、拆除、武器和咬击冲击粒子 | `src/game/systems/SplashSystem.ts` | 颜色与数量按事件区分 |
 | VFX-003 | 五层加色火焰、动态点光、五块余烬和八层烟雾 | `src/game/art/ProceduralModels.ts` | 火势与设备阶段联动，焦鱼阶段转为深色烟 |
@@ -325,6 +376,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | VFX-008 | 作物盆放置冲击、湿土覆盖、种子标记、生长叶冠、枯萎材质、果实节点和交互高亮 | `src/game/systems/PlantingSystem.ts` | 随作物领域状态实时驱动 |
 | VFX-009 | 耐火砖湿干材质、五层加色炉火、动态点光、炉烟、火星、矿石退场、金属锭凝固和设备高亮 | `src/game/systems/ProgressionSystem.ts` | 预览态关闭动态热源；运行时粒子循环复用并随熔炼阶段驱动 |
 | VFX-010 | 内向飑云穹顶、330 条高画质/160 条低画质 GPU 实例雨线、双段闪电、风暴雾光、增幅波浪和泡沫 | `src/game/systems/StormSystem.ts`、`DriftwakeGame.ts`、`src/game/shaders/ocean.ts` | 云、雨、海况、曝光和雷声由同一确定性天气强度驱动；水下关闭不适用的表面雨幕 |
+| VFX-011 | 五路冷凝蒸汽/滴水、三槽火焰/焦烟/鱼体材质、柜盖阻尼和内容物标记 | `src/game/systems/DeviceSystem.ts` | 所有可见状态由领域队列、燃料、火候和真实储物内容驱动，不使用菜单假状态 |
 
 ## 程序音频分层
 
@@ -340,13 +392,13 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | AMB-STORM | 独立低通风压、带通雨噪、慢速阵风幅度变化，以及双段闪光触发的雷声簇 | `src/game/systems/AudioSystem.ts` |
 | SFX-HOOK/BUILD | 抛钩、落水、收获、木击、修补、拆除与拒绝反馈 | `src/game/systems/AudioSystem.ts` |
 | SFX-FISHING | 抛线、浮标、三连鱼讯、卷线、捕获与断线 | `src/game/systems/AudioSystem.ts` |
-| SFX-DEVICE | 放置木/铁冲击、点火、完成提示、焦糊反馈、持续火焰噪声和蒸汽高通层 | `src/game/systems/AudioSystem.ts` |
+| SFX-DEVICE | 放置木/铁冲击、五联海水装填、三槽食物位、干舱开合/物资双向转移、点火、完成、焦糊、持续火焰和蒸汽层 | `src/game/systems/AudioSystem.ts` |
 | SFX-ISLAND | 木筏/沙地脚步、石斧破风、入木、倒树、枝料/石料/植被拾取 | `src/game/systems/AudioSystem.ts` |
 | SFX-REEF | 入水/游动、钩刃擦水、细砂/黏土/金属分层撞击和海草收割 | `src/game/systems/AudioSystem.ts` |
-| SFX-NAV | 帆布受风持续带通层、展收帆摩擦、调帆绳索、索具锁紧、帆具过载泄压、舵台拨档、锚链坠落和绞盘回收 | `src/game/systems/AudioSystem.ts` |
+| SFX-NAV | 帆布受风持续带通层、展收帆摩擦、调帆绳索、索具锁紧、帆具过载、舵台拨档、锚链坠落、棘轮强化与滑脱/绞盘回收 | `src/game/systems/AudioSystem.ts` |
 | SFX-PLANT | 土壤落种、倒水低通/水滴音、成熟三音提示、干裂叶响和收获层 | `src/game/systems/AudioSystem.ts` |
 | SFX-RESEARCH | 开台、样本落盘/刻度确认、项目学习和纸页/金属拨盘反馈 | `src/game/systems/AudioSystem.ts` |
-| SFX-FORGE | 湿砖落架、干砖裂响、矿石/燃料装填、持续炉火、完成凝固和收锭金属层 | `src/game/systems/AudioSystem.ts` |
+| SFX-FORGE | 湿砖落架、干砖裂响、矿石/细砂/燃料装填、持续炉火、金属或玻璃完成凝固与收取层 | `src/game/systems/AudioSystem.ts` |
 | CREATURE | 鲨鱼低频预兆、扑咬冲击与武器命中；盐翼盗鸟警报、啄食和惊飞 | `src/game/systems/AudioSystem.ts` |
 | UI | 短促确认、拒绝和工具切换 | `src/game/systems/AudioSystem.ts` |
 
@@ -356,9 +408,9 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 - 用 Blender 或等效 DCC 建立可蒙皮的最终双手、工具、鲨鱼和生活设备资产，当前代码模型是原创近最终形体基线而非最终蒙皮资产；
 - 为木材补充经过人工修整的 normal、roughness 与 AO；鲨皮和编织纤维已使用独立派生图；
-- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005 至 TEX-010 已采用高质量输出；
+- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005 至 TEX-012 已采用高质量输出；
 - 建立同一角色比例与材质语言下的模型规范；
 - 为岛屿补充手绘沙地/草地/岩面材质组、草丛层级和更丰富的岸线小物，保持现有确定性地形与碰撞接口；
-- 为珊瑚、海草、鱼群、水下钩具、拾风帆、强化索具、潮石锚、定潮舵台、作物、盐翼盗鸟、研究台、通风架、熔炉和金属工具建立最终 DCC 模型、蒙皮与顶点动画，保留当前布局和领域接口；
+- 为珊瑚、海草、鱼群、水下钩具、拾风帆、强化索具/锚具、定潮舵台、高级生活设备、作物、盐翼盗鸟、研究台、通风架、熔炉和金属工具建立最终 DCC 模型、蒙皮与顶点动画，保留当前布局和领域接口；
 - 录制或生成多样本海浪、绳索、木结构、研究器械、湿砖、金属、火焰、蒸汽、烹饪和鲨鱼音效，保留当前程序音频作动态底层；
 - 为所有最终资产建立来源、版本、修改记录和发布授权结论。

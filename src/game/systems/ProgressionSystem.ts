@@ -109,6 +109,7 @@ export class ProgressionSystem {
   private lastPrompt: string | null = null;
   private lastRaftRevision = -1;
   private feedbackElapsed = 0;
+  private smelterMode: 'metalOre' | 'sand' = 'metalOre';
   private noticeTimer: number | null = null;
   private serial = 0;
 
@@ -171,7 +172,7 @@ export class ProgressionSystem {
           this.showNotice('一块盐壳耐火砖已完全晾干');
         } else if (result.event === 'smelter-ready') {
           this.audio.playSmelterReady();
-          this.showNotice('熔炉中的潮铸金属锭已凝固');
+          this.showNotice(runtime.state.smeltInput === 'sand' ? '熔炉中的潮镜玻璃板已经退火' : '熔炉中的潮铸金属锭已凝固');
         }
       }
       if (runtime.state.type === 'smelter' && runtime.state.phase === 'working') activeForges += 1;
@@ -471,12 +472,17 @@ export class ProgressionSystem {
       const remaining = Math.ceil(Math.max(0, BRICK_DRY_SECONDS - Math.max(...state.brickElapsed)));
       return `晾干中 · ${remaining} 秒`;
     }
-    if (state.phase === 'working') return `矿石熔炼中 · ${Math.ceil(SMELT_SECONDS - state.elapsed)} 秒`;
-    if (state.phase === 'ready') return '收取潮铸金属锭';
+    if (state.phase === 'working') {
+      const material = state.smeltInput === 'sand' ? '玻璃澄清' : '矿石熔炼';
+      return `${material}中 · ${Math.ceil(SMELT_SECONDS - state.elapsed)} 秒`;
+    }
+    if (state.phase === 'ready') return state.smeltInput === 'sand' ? '收取潮镜玻璃板' : '收取潮铸金属锭';
+    const input = this.smelterMode;
     const missing: string[] = [];
-    if (itemCount(store.inventory, 'metalOre') < 1) missing.push('金属矿');
+    if (itemCount(store.inventory, input) < 1) missing.push(input === 'sand' ? '浅礁细砂' : '金属矿');
     if (itemCount(store.inventory, 'timber') < 2) missing.push('漂木×2');
-    return missing.length > 0 ? `需要 ${missing.join('、')}` : '装入金属矿与漂木并点燃';
+    if (missing.length > 0) return `${input === 'sand' ? '玻璃板' : '金属锭'}炉料 · 需要 ${missing.join('、')}`;
+    return input === 'sand' ? '装入细砂与漂木，烧制玻璃板' : '装入金属矿与漂木并点燃';
   }
 
   private interact(): void {
@@ -515,25 +521,28 @@ export class ProgressionSystem {
         this.showNotice(this.interactionLabel(runtime));
       }
     } else if (runtime.state.phase === 'idle') {
-      if (!store.spendItems({ metalOre: 1, timber: 2 })) {
+      const input = this.smelterMode;
+      if (!store.spendItems({ [input]: 1, timber: 2 })) {
         this.audio.playDenied();
         this.showNotice(this.interactionLabel(runtime));
         return;
       }
-      runtime.state = startSmelter(runtime.state);
+      runtime.state = startSmelter(runtime.state, input);
       this.audio.playSmelterLoad();
-      this.showNotice('矿石已装入坩埚，炉膛开始升温');
+      this.showNotice(input === 'sand' ? '细砂已装入坩埚，炉膛开始澄清玻璃' : '矿石已装入坩埚，炉膛开始升温');
     } else if (runtime.state.phase === 'ready') {
-      const preview = addItems(store.inventory, { metalIngot: 1 });
+      const output: ItemBundle = runtime.state.smeltInput === 'sand' ? { glassPane: 1 } : { metalIngot: 1 };
+      const preview = addItems(store.inventory, output);
       if (Object.keys(preview.rejected).length > 0) {
         this.audio.playDenied();
-        this.showNotice('背包没有空间收下金属锭');
+        this.showNotice(runtime.state.smeltInput === 'sand' ? '背包没有空间收下玻璃板' : '背包没有空间收下金属锭');
         return;
       }
-      store.addItemBundle({ metalIngot: 1 });
+      const glass = runtime.state.smeltInput === 'sand';
+      store.addItemBundle(output);
       runtime.state = collectSmelter(runtime.state);
-      this.audio.playSmelterCollect();
-      this.showNotice('+1 金属锭');
+      this.audio.playSmelterCollect(glass);
+      this.showNotice(bundleLabel(output));
     }
     this.updateVisuals(runtime, 0);
     this.publishFeedback();
@@ -569,8 +578,21 @@ export class ProgressionSystem {
     const progress = progressionDeviceProgress(state);
     visuals.fire.visible = heating;
     visuals.ore.visible = heating && progress < 0.72;
+    if (visuals.ore.material instanceof MeshStandardMaterial) {
+      visuals.ore.material.color.setHex(state.smeltInput === 'sand' ? 0xd9cda8 : 0x5f8583);
+      visuals.ore.material.metalness = state.smeltInput === 'sand' ? 0 : 0.62;
+      visuals.ore.material.roughness = state.smeltInput === 'sand' ? 0.92 : 0.52;
+    }
     visuals.ore.scale.setScalar(MathUtils.lerp(1, 0.55, progress));
     visuals.ingot.visible = ready;
+    if (visuals.ingot.material instanceof MeshStandardMaterial) {
+      const glass = state.smeltInput === 'sand';
+      visuals.ingot.material.color.setHex(glass ? 0x83c9c4 : 0xb4d0c9);
+      visuals.ingot.material.metalness = glass ? 0.05 : 0.72;
+      visuals.ingot.material.roughness = glass ? 0.24 : 0.36;
+      visuals.ingot.material.transparent = glass;
+      visuals.ingot.material.opacity = glass ? 0.82 : 1;
+    }
     visuals.crucible.rotation.z = heating ? Math.sin(time * 1.7) * 0.012 : 0;
     visuals.door.rotation.y = MathUtils.damp(visuals.door.rotation.y, state.phase === 'idle' ? -0.72 : 0, 4.5, 0.016);
     visuals.light.intensity = heating ? 1.25 + Math.sin(time * 15.5) * 0.24 : ready ? 0.22 : 0;
@@ -693,6 +715,21 @@ export class ProgressionSystem {
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (
+      event.code === 'KeyR' &&
+      !event.repeat &&
+      this.inputEnabled &&
+      !this.placementType &&
+      this.focused?.state.type === 'smelter' &&
+      this.focused.state.phase === 'idle' &&
+      useGameStore.getState().interactionOwner === 'progression'
+    ) {
+      this.smelterMode = this.smelterMode === 'metalOre' ? 'sand' : 'metalOre';
+      this.audio.playUi();
+      this.showNotice(this.smelterMode === 'sand' ? '炉料切换为潮镜玻璃板' : '炉料切换为潮铸金属锭');
+      this.setPrompt(this.interactionLabel(this.focused));
+      return;
+    }
     if (
       event.code !== 'KeyE' ||
       event.repeat ||

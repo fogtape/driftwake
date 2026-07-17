@@ -32,6 +32,7 @@ export interface AnchorModelVisuals {
   wheel: Group;
   rope: Mesh<CylinderGeometry>;
   anchor: Group;
+  reinforcement: Group;
   highlight: Mesh;
 }
 
@@ -378,6 +379,43 @@ export function createAnchorModel(materials: MaterialLibrary): Group {
   anchor.position.set(0, 0.32, 0.58);
   assembly.add(anchor);
 
+  const reinforcement = new Group();
+  reinforcement.name = 'anchor-ratchet-reinforcement';
+  for (const x of [-0.34, 0.34]) {
+    const cheek = shadowed(new Mesh(new BoxGeometry(0.08, 0.48, 0.34), materials.navigationAlloy));
+    cheek.position.set(x, 0.43, 0);
+    reinforcement.add(cheek);
+    const collar = shadowed(new Mesh(new TorusGeometry(0.21, 0.025, 7, 26), materials.navigationAlloy));
+    collar.position.set(x * 1.08, 0.46, 0);
+    collar.rotation.y = Math.PI / 2;
+    reinforcement.add(collar);
+  }
+  const ratchet = new Group();
+  ratchet.position.set(0.41, 0.46, 0);
+  const ratchetCore = shadowed(new Mesh(new CylinderGeometry(0.12, 0.12, 0.05, 12), materials.navigationAlloy));
+  ratchetCore.rotation.z = Math.PI / 2;
+  ratchet.add(ratchetCore);
+  for (let tooth = 0; tooth < 12; tooth += 1) {
+    const angle = tooth / 12 * Math.PI * 2;
+    const block = shadowed(new Mesh(new BoxGeometry(0.04, 0.035, 0.065), materials.navigationAlloy));
+    block.position.set(0, Math.cos(angle) * 0.145, Math.sin(angle) * 0.145);
+    block.rotation.x = angle;
+    ratchet.add(block);
+  }
+  reinforcement.add(ratchet);
+  for (let link = 0; link < 7; link += 1) {
+    const chain = shadowed(new Mesh(new TorusGeometry(0.045, 0.011, 5, 12), materials.navigationAlloy));
+    chain.position.set(-0.18 + link * 0.06, 0.23 + Math.sin(link * 0.9) * 0.02, 0.24);
+    chain.rotation.set(Math.PI / 2, link % 2 ? Math.PI / 2 : 0, 0);
+    reinforcement.add(chain);
+  }
+  const pawl = shadowed(new Mesh(new BoxGeometry(0.07, 0.22, 0.08), materials.rustMetal));
+  pawl.position.set(0.48, 0.64, 0.03);
+  pawl.rotation.z = -0.52;
+  reinforcement.add(pawl);
+  reinforcement.visible = false;
+  assembly.add(reinforcement);
+
   const highlight = createHighlight(0.52);
   assembly.add(highlight);
   assembly.userData.navigationVisuals = {
@@ -385,6 +423,7 @@ export function createAnchorModel(materials: MaterialLibrary): Group {
     wheel,
     rope,
     anchor,
+    reinforcement,
     highlight,
   } satisfies AnchorModelVisuals;
   return assembly;

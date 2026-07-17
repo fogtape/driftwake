@@ -9,7 +9,7 @@ export const MAX_PROGRESSION_DEVICES = 6;
 export type ProgressionDeviceType = 'researchBench' | 'dryingBricks' | 'smelter';
 export type ProgressionPhase = 'idle' | 'working' | 'ready';
 
-export const RESEARCH_SAMPLE_IDS = ['timber', 'rope', 'scrap', 'dryBrick', 'metalIngot'] as const satisfies readonly ItemId[];
+export const RESEARCH_SAMPLE_IDS = ['timber', 'rope', 'scrap', 'dryBrick', 'metalIngot', 'glassPane', 'hinge'] as const satisfies readonly ItemId[];
 export type ResearchSampleId = (typeof RESEARCH_SAMPLE_IDS)[number];
 
 export const RESEARCH_PROJECTS = {
@@ -38,6 +38,31 @@ export const RESEARCH_PROJECTS = {
     description: '以金属横撑和双股受力绳分散帆角载荷，延缓风暴过载。',
     requirements: ['rope', 'scrap', 'metalIngot'],
   },
+  hinge: {
+    name: '潮铸密封铰链',
+    description: '把耐蚀合金分成咬合轴套，为密封柜盖与锚机棘轮提供可维护转轴。',
+    requirements: ['scrap', 'metalIngot'],
+  },
+  solarPurifierKit: {
+    name: '潮镜五联净水器',
+    description: '五块盐蚀玻璃分路吸热，让多杯海水在同一轮日照中完成蒸馏。',
+    requirements: ['timber', 'scrap', 'glassPane'],
+  },
+  tripleGrillKit: {
+    name: '三槽烟鳍烤台',
+    description: '蓄热炉膛与三组独立托架共享燃料，又分别记录每份渔获的火候。',
+    requirements: ['timber', 'rope', 'metalIngot'],
+  },
+  lockerKit: {
+    name: '干舱储物柜',
+    description: '潮铸铰链压紧蜡封内衬，为筏上物资提供八个防飞沫堆叠格。',
+    requirements: ['timber', 'scrap', 'hinge'],
+  },
+  anchorBraceKit: {
+    name: '深锚锁链棘轮',
+    description: '锁链与防回滑棘轮分散风暴冲击，避免锚索在峰值载荷中自行松脱。',
+    requirements: ['rope', 'metalIngot', 'hinge'],
+  },
 } as const satisfies Record<
   string,
   { name: string; description: string; requirements: readonly ResearchSampleId[] }
@@ -59,6 +84,7 @@ export interface SavedProgressionDevice {
   phase: ProgressionPhase;
   elapsed: number;
   brickElapsed: number[];
+  smeltInput: 'metalOre' | 'sand' | null;
 }
 
 export interface SavedProgressionState extends ProgressionKnowledge {
@@ -129,6 +155,7 @@ export function createProgressionDevice(
     phase: 'idle',
     elapsed: 0,
     brickElapsed: type === 'dryingBricks' ? [0] : [],
+    smeltInput: null,
   };
 }
 
@@ -146,14 +173,17 @@ export function collectDryBricks(device: SavedProgressionDevice): { device: Save
   };
 }
 
-export function startSmelter(device: SavedProgressionDevice): SavedProgressionDevice {
+export function startSmelter(
+  device: SavedProgressionDevice,
+  input: 'metalOre' | 'sand' = 'metalOre',
+): SavedProgressionDevice {
   if (device.type !== 'smelter' || device.phase !== 'idle') return device;
-  return { ...device, phase: 'working', elapsed: 0 };
+  return { ...device, phase: 'working', elapsed: 0, smeltInput: input };
 }
 
 export function collectSmelter(device: SavedProgressionDevice): SavedProgressionDevice {
   if (device.type !== 'smelter' || device.phase !== 'ready') return device;
-  return { ...device, phase: 'idle', elapsed: 0 };
+  return { ...device, phase: 'idle', elapsed: 0, smeltInput: null };
 }
 
 export function advanceProgressionDevice(device: SavedProgressionDevice, delta: number): ProgressionAdvanceResult {
@@ -232,6 +262,11 @@ export function sanitizeProgressionState(value: unknown): SavedProgressionState 
           .slice(0, MAX_DRYING_BRICKS)
           .map((seconds) => Math.max(0, Math.min(BRICK_DRY_SECONDS, finite(seconds))))
         : [];
+      const smeltInput = type === 'smelter' && (device.smeltInput === 'metalOre' || device.smeltInput === 'sand')
+        ? device.smeltInput
+        : type === 'smelter' && phase !== 'idle'
+          ? 'metalOre'
+          : null;
       if (type === 'dryingBricks' && brickElapsed.length === 0) return null;
       ids.add(id);
       typeCounts[type] += 1;
@@ -244,6 +279,7 @@ export function sanitizeProgressionState(value: unknown): SavedProgressionState 
         phase,
         elapsed,
         brickElapsed,
+        smeltInput,
       };
     })
     .filter((device): device is SavedProgressionDevice => device !== null)

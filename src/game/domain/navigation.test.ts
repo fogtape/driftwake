@@ -11,6 +11,7 @@ import {
   navigationMetrics,
   normalizeAngle,
   reinforceNavigationSail,
+  reinforceNavigationAnchor,
   sanitizeNavigationState,
   shortestAngle,
 } from './navigation';
@@ -114,5 +115,22 @@ describe('raft navigation', () => {
     state = advanceNavigationState(state, 3, 0);
     expect(state.devices[0]).toMatchObject({ deployed: false, reinforced: false });
     expect(state.sailStrain).toBeCloseTo(0.74);
+  });
+
+  it('lets an exposed anchor slip at peak load while a ratchet-reinforced anchor unloads', () => {
+    const exposed = {
+      ...createDefaultNavigationState(),
+      weatherClock: 140,
+      anchorStrain: 0.99,
+      devices: [{ ...createNavigationDevice('anchor', 0, 0, 0, 'anchor'), deployed: true }],
+    };
+    const slipped = advanceNavigationState(exposed, 3, 0);
+    expect(slipped.devices[0]).toMatchObject({ deployed: false, reinforced: false });
+    expect(slipped.anchorStrain).toBeCloseTo(0.7);
+
+    const reinforced = reinforceNavigationAnchor(exposed);
+    const held = advanceNavigationState(reinforced, 3, 0);
+    expect(held.devices[0]).toMatchObject({ deployed: true, reinforced: true });
+    expect(held.anchorStrain).toBeLessThan(reinforced.anchorStrain);
   });
 });

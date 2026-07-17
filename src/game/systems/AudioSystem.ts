@@ -475,6 +475,62 @@ export class AudioSystem {
     this.noiseBurst(0.18, 420, 0.08, 'lowpass');
   }
 
+  playWaterCharge(): void {
+    this.noiseBurst(0.34, 760, 0.16, 'lowpass');
+    this.noiseBurst(0.12, 2550, 0.055, 'bandpass');
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    [820, 1120].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + 0.08 + index * 0.038;
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.018, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.1);
+      oscillator.connect(gain).connect(this.effects!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.11);
+    });
+  }
+
+  playGrillSlot(): void {
+    this.noiseBurst(0.18, 1750, 0.085, 'bandpass');
+    this.noiseBurst(0.11, 4300, 0.12, 'highpass');
+    this.playWoodKnock(0.025, 0.035);
+  }
+
+  playStorageOpen(open = true): void {
+    this.playWoodKnock(open ? 0.055 : 0.075, open ? 0.07 : 0.09);
+    this.noiseBurst(open ? 0.14 : 0.1, open ? 1180 : 840, 0.055, 'bandpass');
+    this.noiseBurst(0.08, 3150, 0.075, 'highpass');
+  }
+
+  playStorageTransfer(toStorage: boolean): void {
+    this.noiseBurst(0.13, toStorage ? 980 : 1320, 0.065, 'bandpass');
+    this.noiseBurst(0.08, 3600, 0.052, 'highpass');
+    this.playWoodKnock(0.024, 0.035);
+  }
+
+  playAnchorReinforce(): void {
+    this.noiseBurst(0.24, 720, 0.09, 'bandpass');
+    this.noiseBurst(0.13, 3280, 0.06, 'highpass');
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    [186, 148, 220].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + index * 0.07;
+      oscillator.type = 'square';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.018, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.075);
+      oscillator.connect(gain).connect(this.effects!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.085);
+    });
+  }
+
   playDeviceReady(isPurifier: boolean): void {
     if (!this.context || !this.effects) return;
     const now = this.context.currentTime;
@@ -589,9 +645,9 @@ export class AudioSystem {
     });
   }
 
-  playSmelterCollect(): void {
+  playSmelterCollect(glass = false): void {
     this.noiseBurst(0.15, 530, 0.085, 'bandpass');
-    this.noiseBurst(0.09, 2500, 0.05, 'highpass');
+    this.noiseBurst(glass ? 0.13 : 0.09, glass ? 3900 : 2500, glass ? 0.075 : 0.05, 'highpass');
     this.playCollect();
   }
 

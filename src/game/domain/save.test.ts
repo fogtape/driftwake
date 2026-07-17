@@ -26,13 +26,13 @@ describe('save schema', () => {
     expect(save?.player.survival).toEqual({ health: 100, thirst: 34, hunger: 0, oxygen: 100 });
     expect(save?.player.playSeconds).toBe(42);
     expect(save?.raft.tiles).toEqual([{ x: 0, z: 0, health: 75 }]);
-    expect(save?.raft.devices).toEqual([
+    expect(save?.raft.devices).toMatchObject([
       { id: 'p', type: 'purifier', x: 0, z: 0, rotation: Math.PI / 2, phase: 'working', elapsed: 9 },
     ]);
   });
 
   it('rejects unsupported versions and provides a stable starting raft', () => {
-    expect(sanitizeSave({ version: 9 })).toBeNull();
+    expect(sanitizeSave({ version: 10 })).toBeNull();
     expect(createDefaultRaftTiles()).toHaveLength(9);
   });
 
@@ -57,8 +57,8 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v8');
-    expect(save?.version).toBe(8);
+    expect(SAVE_KEY).toBe('driftwake.save.v9');
+    expect(save?.version).toBe(9);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
     expect(save?.world.island.phase).toBe('approaching');
@@ -306,5 +306,48 @@ describe('save schema', () => {
     });
     expect(save?.raft.navigation.devices).toHaveLength(3);
     expect(save?.raft.navigation.devices.find((device) => device.type === 'sail')).toMatchObject({ reinforced: true });
+  });
+
+  it('restores v9 advanced device queues, bounded storage and reinforced anchor load', () => {
+    const save = sanitizeSave({
+      version: 9,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 24 },
+      raft: {
+        tiles: [
+          { x: 0, z: 0, health: 100 },
+          { x: 1, z: 0, health: 100 },
+          { x: -1, z: 0, health: 100 },
+        ],
+        devices: [
+          {
+            id: 'solar',
+            type: 'solarPurifier',
+            x: 0,
+            z: 0,
+            waterQueue: [4, 999],
+            freshWater: 1,
+          },
+          {
+            id: 'locker',
+            type: 'locker',
+            x: 1,
+            z: 0,
+            storage: { timber: 40, polymer: 40, fiber: 40, scrap: 12, rope: 10, stone: 16, sand: 20, clay: 20, metalOre: 12 },
+          },
+        ],
+        navigation: {
+          ...createDefaultNavigationState(),
+          anchorStrain: 0.76,
+          devices: [{ id: 'anchor', type: 'anchor', x: -1, z: 0, rotation: 0, deployed: true, reinforced: true }],
+        },
+      },
+      world: { island: { seed: 9, cycle: 0, phase: 'docked', elapsed: 5, nodes: [] } },
+    });
+    const solar = save?.raft.devices.find((device) => device.type === 'solarPurifier');
+    const locker = save?.raft.devices.find((device) => device.type === 'locker');
+    expect(solar).toMatchObject({ freshWater: 2, waterQueue: [4], phase: 'ready' });
+    expect(locker?.storage).toEqual({ timber: 40, polymer: 40, fiber: 40, scrap: 12, rope: 10 });
+    expect(save?.raft.navigation).toMatchObject({ anchorStrain: 0.76 });
+    expect(save?.raft.navigation.devices[0]).toMatchObject({ type: 'anchor', reinforced: true, deployed: true });
   });
 });

@@ -9,6 +9,8 @@ import {
   LockKeyhole,
   MapPin,
   Microscope,
+  MoveLeft,
+  MoveRight,
   PackageOpen,
   ShieldCheck,
   X,
@@ -34,6 +36,7 @@ import type {
   ProgressionFeedback,
   RaftFeedback,
   ResearchSampleResult,
+  StorageFeedback,
 } from '../state/gameStore';
 import { ItemIcon } from './ItemIcon';
 
@@ -43,6 +46,7 @@ interface FieldPackPanelProps {
   inventorySlots: number;
   raft: RaftFeedback;
   progression: ProgressionFeedback;
+  storage: StorageFeedback | null;
   saveStatus: 'idle' | 'saved' | 'error';
   onPanelChange: (panel: Exclude<OverlayPanel, null>) => void;
   onCraft: (recipeId: RecipeId) => CraftResult;
@@ -50,6 +54,7 @@ interface FieldPackPanelProps {
   onPlace: (deviceType: PlacementType) => void;
   onResearch: (sample: ResearchSampleId) => ResearchSampleResult;
   onLearn: (projectId: ResearchProjectId) => boolean;
+  onStorageTransfer: (itemId: ItemId, direction: 'to-storage' | 'to-pack') => boolean;
   onClose: () => void;
 }
 
@@ -65,6 +70,9 @@ const CONSUMABLES = new Set<ItemId>([
 const PLACEABLES: Partial<Record<ItemId, PlacementType>> = {
   purifierKit: 'purifier',
   grillKit: 'grill',
+  solarPurifierKit: 'solarPurifier',
+  tripleGrillKit: 'tripleGrill',
+  lockerKit: 'locker',
   sailKit: 'sail',
   anchorKit: 'anchor',
   helmKit: 'helm',
@@ -88,6 +96,7 @@ export function FieldPackPanel({
   inventorySlots,
   raft,
   progression,
+  storage,
   saveStatus,
   onPanelChange,
   onCraft,
@@ -95,6 +104,7 @@ export function FieldPackPanel({
   onPlace,
   onResearch,
   onLearn,
+  onStorageTransfer,
   onClose,
 }: FieldPackPanelProps) {
   const itemIds = useMemo(
@@ -115,12 +125,28 @@ export function FieldPackPanel({
     [inventory, itemIds],
   );
   const [selectedItem, setSelectedItem] = useState<ItemId>('hook');
+  const storageItemIds = useMemo(
+    () => storage ? (Object.keys(ITEM_DEFINITIONS) as ItemId[]).filter((id) => itemCount(storage.inventory, id) > 0) : [],
+    [storage],
+  );
+  const storageStacks = useMemo(
+    () => storageItemIds.flatMap((itemId) => {
+      const maxStack = ITEM_DEFINITIONS[itemId].maxStack;
+      const count = storage ? itemCount(storage.inventory, itemId) : 0;
+      return Array.from({ length: Math.ceil(count / maxStack) }, (_, index) => ({
+        itemId,
+        count: Math.min(maxStack, count - index * maxStack),
+        stackIndex: index,
+      }));
+    }),
+    [storage, storageItemIds],
+  );
 
   useEffect(() => {
     if (itemCount(inventory, selectedItem) <= 0 && itemIds[0]) setSelectedItem(itemIds[0]);
   }, [inventory, itemIds, selectedItem]);
 
-  if (!panel) return null;
+  if (!panel || (panel === 'storage' && !storage)) return null;
   const selectedDefinition = ITEM_DEFINITIONS[selectedItem];
   const emptySlots = Math.max(0, INVENTORY_SLOT_CAPACITY - stacks.length);
 
@@ -129,13 +155,13 @@ export function FieldPackPanel({
       <section className="field-pack" role="dialog" aria-modal="true" aria-labelledby="field-pack-heading">
         <header className="field-pack__header">
           <div className="field-pack__identity">
-            {panel === 'research' ? <Microscope size={22} /> : <Backpack size={22} />}
+            {panel === 'research' ? <Microscope size={22} /> : panel === 'storage' ? <PackageOpen size={22} /> : <Backpack size={22} />}
             <div>
-              <span>{panel === 'research' ? '材料推演' : '航次装备'}</span>
-              <h2 id="field-pack-heading">{panel === 'research' ? '盐迹研究台' : '野外背包'}</h2>
+              <span>{panel === 'research' ? '材料推演' : panel === 'storage' ? '干舱清单' : '航次装备'}</span>
+              <h2 id="field-pack-heading">{panel === 'research' ? '盐迹研究台' : panel === 'storage' ? storage?.name : '野外背包'}</h2>
             </div>
           </div>
-          {panel !== 'research' && <nav className="field-pack__tabs" aria-label="背包视图">
+          {panel !== 'research' && panel !== 'storage' && <nav className="field-pack__tabs" aria-label="背包视图">
             <button className={panel === 'pack' ? 'is-active' : ''} type="button" onClick={() => onPanelChange('pack')}>
               <PackageOpen size={18} />
               物资
@@ -152,13 +178,79 @@ export function FieldPackPanel({
 
         <div className="field-pack__status">
           <span><PackageOpen size={15} /> {inventorySlots}/{INVENTORY_SLOT_CAPACITY}</span>
+          {panel === 'storage' && storage && <span><ShieldCheck size={15} /> 干舱 {storage.slots}/{storage.capacity}</span>}
           <span><ShieldCheck size={15} /> 筏体 {raft.averageIntegrity}%</span>
           <span className={`save-indicator save-indicator--${saveStatus}`}>
             <Check size={14} /> {saveStatus === 'error' ? '存档异常' : saveStatus === 'saved' ? '航迹已记录' : '航迹记录中'}
           </span>
         </div>
 
-        {panel === 'pack' ? (
+        {panel === 'storage' && storage ? (
+          <div className="field-pack__body field-pack__body--storage">
+            <section className="storage-inventory" aria-labelledby="storage-pack-heading">
+              <div className="crafting-heading">
+                <div><Backpack size={20} /><span id="storage-pack-heading">随身背包</span></div>
+                <small>{inventorySlots}/{INVENTORY_SLOT_CAPACITY}</small>
+              </div>
+              <div className="inventory-grid inventory-grid--storage" aria-label="可存入的背包物品">
+                {stacks.map(({ itemId, count, stackIndex }) => {
+                  const definition = ITEM_DEFINITIONS[itemId];
+                  return (
+                    <button
+                      key={`pack-${itemId}-${stackIndex}`}
+                      className="inventory-slot storage-transfer-slot"
+                      type="button"
+                      disabled={itemId === 'hook'}
+                      onClick={() => onStorageTransfer(itemId, 'to-storage')}
+                      style={{ '--item-tone': definition.tone } as React.CSSProperties}
+                      aria-label={`将${definition.name}移入干舱`}
+                      title={itemId === 'hook' ? '打捞钩保留在随身工具位' : '移入干舱'}
+                    >
+                      <ItemIcon itemId={itemId} size={27} strokeWidth={1.8} />
+                      <strong>{count}</strong>
+                      <MoveRight className="storage-transfer-slot__direction" size={13} />
+                    </button>
+                  );
+                })}
+                {Array.from({ length: emptySlots }, (_, index) => (
+                  <span className="inventory-slot inventory-slot--empty" key={`pack-empty-${index}`} />
+                ))}
+              </div>
+            </section>
+
+            <div className="storage-transfer-axis" aria-hidden="true"><MoveRight size={18} /><MoveLeft size={18} /></div>
+
+            <section className="storage-inventory" aria-labelledby="storage-hold-heading">
+              <div className="crafting-heading">
+                <div><PackageOpen size={20} /><span id="storage-hold-heading">密封干舱</span></div>
+                <small>{storage.slots}/{storage.capacity}</small>
+              </div>
+              <div className="inventory-grid inventory-grid--storage inventory-grid--locker" aria-label="干舱物品">
+                {storageStacks.map(({ itemId, count, stackIndex }) => {
+                  const definition = ITEM_DEFINITIONS[itemId];
+                  return (
+                    <button
+                      key={`hold-${itemId}-${stackIndex}`}
+                      className="inventory-slot storage-transfer-slot"
+                      type="button"
+                      onClick={() => onStorageTransfer(itemId, 'to-pack')}
+                      style={{ '--item-tone': definition.tone } as React.CSSProperties}
+                      aria-label={`将${definition.name}移回背包`}
+                      title="移回背包"
+                    >
+                      <ItemIcon itemId={itemId} size={27} strokeWidth={1.8} />
+                      <strong>{count}</strong>
+                      <MoveLeft className="storage-transfer-slot__direction" size={13} />
+                    </button>
+                  );
+                })}
+                {Array.from({ length: Math.max(0, storage.capacity - storageStacks.length) }, (_, index) => (
+                  <span className="inventory-slot inventory-slot--empty" key={`hold-empty-${index}`} />
+                ))}
+              </div>
+            </section>
+          </div>
+        ) : panel === 'pack' ? (
           <div className="field-pack__body field-pack__body--inventory">
             <div className="inventory-grid" aria-label="背包物品">
               {stacks.map(({ itemId, count, stackIndex }) => {

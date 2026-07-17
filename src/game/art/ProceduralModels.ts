@@ -42,15 +42,23 @@ import type { MaterialLibrary } from './Materials';
 export type DebrisKind = 'timber' | 'polymer' | 'fiber' | 'cache';
 
 export interface DeviceModelVisuals {
-  fire: Group;
-  light: PointLight;
-  puffs: Mesh[];
-  embers: Mesh[];
+  fire?: Group;
+  light?: PointLight;
+  puffs?: Mesh[];
+  embers?: Mesh[];
   rawWater?: Mesh;
   cleanWater?: Mesh;
   drip?: Mesh;
   food?: Group;
   foodMeshes?: Mesh<BufferGeometry, MeshStandardMaterial>[];
+  collectorPivot?: Group;
+  waterCells?: Mesh[];
+  waterReadyMarkers?: Mesh[];
+  foodSlots?: Group[];
+  foodSlotMeshes?: Mesh<BufferGeometry, MeshStandardMaterial>[][];
+  fuelBars?: Mesh[];
+  lid?: Group;
+  storageMarkers?: Mesh[];
 }
 
 export interface IslandModelVisuals {
@@ -522,7 +530,14 @@ export function createRaftTile(materials: MaterialLibrary, variant: number): Gro
   return tile;
 }
 
-function createFireVisuals(smokeColor = 0xb9c2b5): Pick<DeviceModelVisuals, 'fire' | 'light' | 'puffs' | 'embers'> {
+interface DeviceFireVisuals {
+  fire: Group;
+  light: PointLight;
+  puffs: Mesh[];
+  embers: Mesh[];
+}
+
+function createFireVisuals(smokeColor = 0xb9c2b5): DeviceFireVisuals {
   const fire = new Group();
   fire.name = 'device-fire';
   const flameGeometry = new SphereGeometry(0.12, 10, 7);

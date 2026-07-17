@@ -27,7 +27,8 @@ import {
   type MaterialLibrary,
 } from './art/Materials';
 import { useGameStore, type AudioMix, type QualityPreset } from '../state/gameStore';
-import { preferredToolOrder } from './domain/items';
+import { preferredToolOrder, type ItemId } from './domain/items';
+import type { DeviceType } from './domain/devices';
 import { SAVE_VERSION, createDefaultRaftTiles, loadSave, writeSave, type DriftwakeSave } from './domain/save';
 import { createDefaultIslandState } from './domain/island';
 import { createDefaultUnderwaterState } from './domain/underwater';
@@ -340,6 +341,7 @@ export class DriftwakeGame {
 
   begin(): void {
     if (!useGameStore.getState().ready) return;
+    this.devices?.closeStorage();
     useGameStore.getState().setOverlayPanel(null);
     useGameStore.getState().setSettingsOpen(false);
     this.audio.setMix(useGameStore.getState().audioMix);
@@ -377,6 +379,14 @@ export class DriftwakeGame {
 
   playConsume(): void {
     this.audio.playCollect();
+  }
+
+  transferStorage(itemId: ItemId, direction: 'to-storage' | 'to-pack'): boolean {
+    return this.devices?.transferStorage(itemId, direction) ?? false;
+  }
+
+  closeStorage(): void {
+    this.devices?.closeStorage();
   }
 
   playResearchSample(success: boolean): void {
@@ -577,8 +587,10 @@ export class DriftwakeGame {
     const surface = this.player?.getSurface() ?? 'raft';
     const inWater = surface === 'water';
     const onIsland = surface === 'island';
-    const survivalDevicePlacement =
-      state.placementDevice === 'purifier' || state.placementDevice === 'grill' ? state.placementDevice : null;
+    const survivalDeviceTypes: readonly DeviceType[] = ['purifier', 'grill', 'solarPurifier', 'tripleGrill', 'locker'];
+    const survivalDevicePlacement = survivalDeviceTypes.includes(state.placementDevice as DeviceType)
+      ? state.placementDevice as DeviceType
+      : null;
     const navigationPlacement =
       state.placementDevice === 'sail' || state.placementDevice === 'anchor' || state.placementDevice === 'helm'
         ? state.placementDevice
@@ -686,6 +698,7 @@ export class DriftwakeGame {
       event.preventDefault();
       const requested = event.code === 'KeyC' ? 'crafting' : 'pack';
       const nextPanel = state.overlayPanel === requested ? null : requested;
+      if (state.overlayPanel === 'storage') this.devices?.closeStorage();
       if (nextPanel !== null) state.setPlacementDevice(null);
       state.setOverlayPanel(nextPanel);
       if (nextPanel !== null && document.pointerLockElement === this.renderer.domElement) document.exitPointerLock();

@@ -32,6 +32,7 @@ import {
   cycleNavigationRoute,
   navigationMetrics,
   normalizeAngle,
+  reinforceNavigationAnchor,
   reinforceNavigationSail,
   shortestAngle,
   type NavigationRouteMode,
@@ -161,13 +162,19 @@ export class NavigationSystem {
     if (delta > 0) {
       const current = this.currentState();
       const sailWasDeployed = current.devices.some((device) => device.type === 'sail' && device.deployed);
+      const anchorWasDeployed = current.devices.some((device) => device.type === 'anchor' && device.deployed);
       const advanced = advanceNavigationState(current, delta, this.targetBearing());
       const sailIsDeployed = advanced.devices.some((device) => device.type === 'sail' && device.deployed);
+      const anchorIsDeployed = advanced.devices.some((device) => device.type === 'anchor' && device.deployed);
       this.state = advanced;
       this.applyAdvancedDevices(advanced.devices);
       if (sailWasDeployed && !sailIsDeployed && advanced.sailStrain >= 0.7) {
         this.audio.playSailOverload();
         this.showNotice('阵风载荷过高，拾风帆已自动泄压收紧');
+      }
+      if (anchorWasDeployed && !anchorIsDeployed && advanced.anchorStrain >= 0.68) {
+        this.audio.playAnchor(false);
+        this.showNotice('风暴载荷顶开绞盘，潮石锚已经回滑松脱');
       }
     }
     this.metrics = this.calculateMetrics();
@@ -213,6 +220,7 @@ export class NavigationSystem {
       courseAngle: Number(current.courseAngle.toFixed(5)),
       heading: Number(current.heading.toFixed(5)),
       sailStrain: Number(current.sailStrain.toFixed(4)),
+      anchorStrain: Number(current.anchorStrain.toFixed(4)),
       devices: current.devices.map((device) => ({ ...device })),
     };
   }
@@ -232,6 +240,7 @@ export class NavigationSystem {
     const refund: ItemBundle = {
       [kit]: 1,
       ...(runtime.state.type === 'sail' && runtime.state.reinforced ? { stormRigKit: 1 } : {}),
+      ...(runtime.state.type === 'anchor' && runtime.state.reinforced ? { anchorBraceKit: 1 } : {}),
     };
     const store = useGameStore.getState();
     const preview = addItems(store.inventory, refund);
@@ -450,6 +459,10 @@ export class NavigationSystem {
     visuals.anchor.position.y = 0.32 - 2.92 * progress + Math.sin(time * 1.8) * 0.025 * progress;
     visuals.anchor.rotation.y = Math.sin(time * 0.7) * 0.08 * progress;
     visuals.wheel.rotation.x += (progress - previousDeploy) * 7.8;
+    visuals.reinforcement.visible = runtime.state.reinforced;
+    if (runtime.state.reinforced) {
+      visuals.reinforcement.rotation.x = Math.sin(time * 0.8) * this.state.anchorStrain * 0.008;
+    }
   }
 
   private updatePlacementPreview(): void {
@@ -545,6 +558,9 @@ export class NavigationSystem {
         : `展开拾风帆 · 航向${cardinalLabel(this.state.courseAngle)}`;
     }
     if (runtime.state.type === 'helm') return `切换航线 · ${ROUTE_LABELS[this.state.routeMode]}`;
+    if (!runtime.state.reinforced && itemCount(useGameStore.getState().inventory, 'anchorBraceKit') > 0) {
+      return '为潮石锚加装深锚锁链棘轮';
+    }
     if (runtime.state.deployed) return '起锚恢复航行';
     return this.island.getEncounterState().phase === 'docked' ? '抛下潮石锚' : '海床太深，无法锚泊';
   }
@@ -552,8 +568,8 @@ export class NavigationSystem {
   private interact(): void {
     const runtime = this.focused;
     if (!runtime) return;
+    const store = useGameStore.getState();
     if (runtime.state.type === 'sail' && !runtime.state.reinforced && itemCount(useGameStore.getState().inventory, 'stormRigKit') > 0) {
-      const store = useGameStore.getState();
       if (!store.spendItems({ stormRigKit: 1 })) {
         this.audio.playDenied();
         return;
@@ -577,6 +593,21 @@ export class NavigationSystem {
       this.setPrompt(this.interactionLabel(runtime));
       return;
     }
+    if (runtime.state.type === 'anchor' && !runtime.state.reinforced && itemCount(store.inventory, 'anchorBraceKit') > 0) {
+      if (!store.spendItems({ anchorBraceKit: 1 })) {
+        this.audio.playDenied();
+        return;
+      }
+      const reinforced = reinforceNavigationAnchor(this.currentState());
+      this.state = reinforced;
+      this.applyAdvancedDevices(reinforced.devices);
+      this.audio.playAnchorReinforce();
+      this.showNotice('防回滑棘轮与短节锁链已经锁紧锚机');
+      this.metrics = this.calculateMetrics();
+      this.publishFeedback();
+      this.setPrompt(this.interactionLabel(runtime));
+      return;
+    }
     if (runtime.state.type === 'anchor' && !runtime.state.deployed && this.island.getEncounterState().phase !== 'docked') {
       this.audio.playDenied();
       this.showNotice('靠近浅滩后才能抓牢海床');
@@ -587,6 +618,7 @@ export class NavigationSystem {
       this.audio.playSailToggle(runtime.state.deployed);
       this.showNotice(runtime.state.deployed ? '拾风帆已经展开' : '拾风帆已经收紧');
     } else {
+      if (runtime.state.deployed) this.state = { ...this.state, anchorStrain: Math.min(this.state.anchorStrain, 0.55) };
       this.audio.playAnchor(runtime.state.deployed);
       this.showNotice(runtime.state.deployed ? '潮石锚已经抓牢' : '潮石锚已经回收');
     }
@@ -681,7 +713,9 @@ export class NavigationSystem {
       anchored: anchor?.state.deployed ?? false,
       helmInstalled: Boolean(helm),
       sailReinforced: sail?.state.reinforced ?? false,
+      anchorReinforced: anchor?.state.reinforced ?? false,
       sailStrain: this.metrics.sailStrain,
+      anchorStrain: this.metrics.anchorStrain,
       routeMode: this.metrics.routeMode,
       weatherPhase: this.metrics.weatherPhase,
       stormIntensity: this.metrics.stormIntensity,

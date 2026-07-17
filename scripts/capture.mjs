@@ -17,7 +17,7 @@ const chromiumPath = process.env.CHROMIUM_PATH ?? '/data/data/com.termux/files/u
 const outputDir = new URL('../artifacts/screenshots/', import.meta.url);
 
 const seededSave = {
-  version: 8,
+  version: 9,
   savedAt: 1,
   player: {
     inventory: {
@@ -48,7 +48,7 @@ const seededSave = {
     survival: { health: 92, thirst: 67, hunger: 61, oxygen: 100 },
     selectedTool: 'hook',
     playSeconds: 180,
-    navigation: { surface: 'raft', x: 0, z: 1.08 },
+    navigation: { surface: 'raft', x: 0, z: 0.92 },
   },
   raft: {
     tiles: Array.from({ length: 9 }, (_, index) => ({
@@ -357,8 +357,8 @@ const navigationStormSave = {
   raft: {
     ...seededSave.raft,
     navigation: {
-      windClock: 143,
-      weatherClock: 143,
+      windClock: 20,
+      weatherClock: 20,
       courseAngle: Math.PI / 5,
       heading: Math.PI / 7,
       routeMode: 'island',
@@ -399,6 +399,110 @@ const narrowProgressionSave = {
         { id: 'narrow-smelter', type: 'smelter', x: 1, z: -1, rotation: 0, phase: 'working', elapsed: 24, brickElapsed: [] },
       ],
     },
+  },
+};
+
+const advancedDeviceSave = {
+  ...seededSave,
+  version: 9,
+  player: {
+    ...seededSave.player,
+    inventory: {
+      hook: 1,
+      hammer: 1,
+      timber: 26,
+      polymer: 14,
+      rope: 6,
+      scrap: 8,
+      rawFish: 4,
+      emptyCup: 1,
+      glassPane: 4,
+      hinge: 2,
+      anchorBraceKit: 1,
+    },
+    navigation: { surface: 'raft', x: 0, z: 1.08 },
+  },
+  raft: {
+    tiles: Array.from({ length: 15 }, (_, index) => ({
+      x: (index % 5) - 2,
+      z: Math.floor(index / 5) - 1,
+      health: 100,
+    })),
+    devices: [
+      {
+        id: 'advanced-solar',
+        type: 'solarPurifier',
+        x: -1,
+        z: -1,
+        rotation: 0,
+        phase: 'ready',
+        elapsed: 26,
+        waterQueue: [13, 20],
+        freshWater: 2,
+      },
+      {
+        id: 'advanced-grill',
+        type: 'tripleGrill',
+        x: 0,
+        z: 0,
+        rotation: Math.PI,
+        grillSlots: [
+          { phase: 'working', elapsed: 12 },
+          { phase: 'ready', elapsed: 25 },
+          { phase: 'burnt', elapsed: 56 },
+        ],
+        fuelSeconds: 74,
+      },
+      {
+        id: 'advanced-locker',
+        type: 'locker',
+        x: 1,
+        z: -1,
+        rotation: 0,
+        storage: { timber: 8, polymer: 6, rope: 3, cookedFish: 2 },
+      },
+    ],
+    navigation: {
+      windClock: 143,
+      weatherClock: 143,
+      courseAngle: 0,
+      heading: 0,
+      routeMode: 'manual',
+      sailStrain: 0.18,
+      anchorStrain: 0.18,
+      devices: [
+        { id: 'advanced-sail', type: 'sail', x: 2, z: -1, rotation: 0, deployed: false, reinforced: true },
+        { id: 'advanced-anchor', type: 'anchor', x: -2, z: 1, rotation: Math.PI / 2, deployed: true, reinforced: true },
+        { id: 'advanced-helm', type: 'helm', x: 2, z: 1, rotation: 0, deployed: false, reinforced: false },
+      ],
+    },
+    planting: { birdClock: 0, birdVisit: 0, planters: [] },
+    progression: {
+      researched: ['timber', 'rope', 'scrap', 'dryBrick', 'metalIngot', 'glassPane', 'hinge'],
+      learned: ['smelterKit', 'metalSpear', 'metalAxe', 'helmKit', 'stormRigKit', 'hinge', 'solarPurifierKit', 'tripleGrillKit', 'lockerKit', 'anchorBraceKit'],
+      devices: [],
+    },
+  },
+};
+
+const advancedStorageSave = {
+  ...advancedDeviceSave,
+  player: {
+    ...advancedDeviceSave.player,
+    navigation: { surface: 'raft', x: 0, z: 1.3 },
+  },
+  raft: {
+    ...advancedDeviceSave.raft,
+    devices: [
+      {
+        id: 'advanced-storage-test',
+        type: 'locker',
+        x: 0,
+        z: 0,
+        rotation: 0,
+        storage: { timber: 8, polymer: 6, rope: 3, cookedFish: 2 },
+      },
+    ],
   },
 };
 
@@ -480,8 +584,8 @@ async function openDesktopPage(label, options = {}) {
   });
   if (options.seedSave) {
     await context.addInitScript((save) => {
-      localStorage.setItem('driftwake.save.v8', JSON.stringify(save));
-    }, options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
+      localStorage.setItem('driftwake.save.v9', JSON.stringify(save));
+    }, options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
   }
   const page = await context.newPage();
   monitorPage(page, label);
@@ -604,6 +708,10 @@ async function captureCrafting() {
   await page.keyboard.press('KeyC');
   await page.getByRole('dialog', { name: '野外背包' }).waitFor();
   await page.screenshot({ path: new URL('crafting-desktop.png', outputDir).pathname });
+  const advancedRecipe = page.locator('.recipe-row').filter({ hasText: '潮镜五联净水器' });
+  await advancedRecipe.scrollIntoViewIfNeeded();
+  await advancedRecipe.waitFor({ state: 'visible' });
+  await page.screenshot({ path: new URL('crafting-advanced-desktop.png', outputDir).pathname });
   await context.close();
 }
 
@@ -620,6 +728,75 @@ async function captureDevices() {
   await page.getByRole('button', { name: '开始漂流' }).click();
   await page.waitForTimeout(900);
   await page.screenshot({ path: new URL('devices-hud-desktop.png', outputDir).pathname });
+  await context.close();
+}
+
+async function captureAdvancedDevices() {
+  const { context: showcaseContext, page: showcasePage } = await openDesktopPage('advanced-devices', { seedSave: true, advancedStart: true });
+  await showcasePage.getByRole('button', { name: '开始漂流' }).click();
+  await showcasePage.waitForTimeout(1200);
+  await inspectCanvasPixels(showcasePage, 'advanced-devices');
+  await showcasePage.screenshot({ path: new URL('advanced-devices-desktop.png', outputDir).pathname });
+  await showcaseContext.close();
+
+  const { context, page } = await openDesktopPage('advanced-storage', { seedSave: true, advancedStorageStart: true });
+  await page.getByRole('button', { name: '开始漂流' }).click();
+  await page.waitForTimeout(900);
+  await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
+  await page.waitForFunction(() => Boolean(document.pointerLockElement), null, { timeout: 5_000 });
+  let storagePrompt = await aimDownToPrompt(page, '打开干舱储物柜', 70);
+  if (!storagePrompt.includes('打开干舱储物柜')) {
+    storagePrompt = await aimAroundToPrompt(page, '打开干舱储物柜');
+  }
+  if (!storagePrompt.includes('打开干舱储物柜')) {
+    await page.screenshot({ path: new URL('advanced-focus-diagnostic.png', outputDir).pathname });
+    throw new Error(`Advanced storage focus missing: ${storagePrompt}`);
+  }
+  console.log(`Advanced interaction prompt: ${storagePrompt}`);
+  await page.keyboard.press('KeyE');
+  await page.waitForTimeout(350);
+  console.log(`Advanced storage DOM: ${JSON.stringify(await page.evaluate(() => ({
+    dialog: document.querySelector('.field-pack')?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 120) ?? null,
+    prompt: document.querySelector('.interaction-prompt')?.textContent?.trim() ?? null,
+    pointerLocked: Boolean(document.pointerLockElement),
+  })))}`);
+  const dialog = page.getByRole('dialog', { name: '干舱储物柜' });
+  await dialog.waitFor({ timeout: 8_000 });
+  const layout = await dialog.evaluate((element) => {
+    const panes = [...element.querySelectorAll('.storage-inventory')].map((pane) => {
+      const rect = pane.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, scrollWidth: pane.scrollWidth, clientWidth: pane.clientWidth };
+    });
+    const rect = element.getBoundingClientRect();
+    return { rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }, panes };
+  });
+  if (layout.panes.length !== 2 || layout.panes.some((pane) => pane.scrollWidth > pane.clientWidth + 2)) {
+    throw new Error(`Advanced storage layout overflow: ${JSON.stringify(layout)}`);
+  }
+  await page.getByRole('button', { name: /将盐蚀漂木移入干舱/ }).first().click();
+  await page.waitForFunction(() => document.querySelector('.field-pack__status')?.textContent?.includes('干舱 5/8'));
+  console.log(`Advanced storage layout: ${JSON.stringify(layout)}`);
+  await page.screenshot({ path: new URL('advanced-storage-desktop.png', outputDir).pathname });
+
+  await page.setViewportSize({ width: 640, height: 720 });
+  await page.waitForTimeout(250);
+  const narrowLayout = await dialog.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom },
+      bodyScrollWidth: document.body.scrollWidth,
+      viewportWidth: window.innerWidth,
+    };
+  });
+  if (
+    narrowLayout.rect.left < -2
+    || narrowLayout.rect.right > narrowLayout.viewportWidth + 2
+    || narrowLayout.bodyScrollWidth > narrowLayout.viewportWidth + 2
+  ) {
+    throw new Error(`Advanced storage narrow overflow: ${JSON.stringify(narrowLayout)}`);
+  }
+  console.log(`Advanced storage narrow layout: ${JSON.stringify(narrowLayout)}`);
+  await page.screenshot({ path: new URL('advanced-storage-narrow.png', outputDir).pathname });
   await context.close();
 }
 
@@ -644,6 +821,39 @@ async function aimDownToPrompt(page, expected, steps = 50) {
       { timeout: 4_000 },
     ).catch(() => undefined);
     prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  }
+  return prompt;
+}
+
+async function aimTowardDeckPrompt(page, expected, steps = 80) {
+  let prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  for (let step = 0; step < steps && !prompt.includes(expected); step += 1) {
+    await page.evaluate(() => {
+      const movement = new MouseEvent('mousemove');
+      Object.defineProperties(movement, {
+        movementX: { value: 0 },
+        movementY: { value: 7 },
+      });
+      document.dispatchEvent(movement);
+    });
+    await page.waitForTimeout(70);
+    prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  }
+  if (prompt.includes(expected)) return prompt;
+  for (const [direction, yawSteps] of [[1, 34], [-1, 68]]) {
+    for (let step = 0; step < yawSteps && !prompt.includes(expected); step += 1) {
+      await page.evaluate((movementX) => {
+        const movement = new MouseEvent('mousemove');
+        Object.defineProperties(movement, {
+          movementX: { value: movementX },
+          movementY: { value: 0 },
+        });
+        document.dispatchEvent(movement);
+      }, direction * 10);
+      await page.waitForTimeout(70);
+      prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+    }
+    if (prompt.includes(expected)) break;
   }
   return prompt;
 }
@@ -770,7 +980,7 @@ async function captureProgressionPlacement() {
       notice: document.querySelector('.loot-notice')?.textContent?.trim() ?? '',
       prompt: document.querySelector('.interaction-prompt')?.textContent?.trim() ?? '',
       progressionHud: document.querySelector('.device-status--progression')?.textContent?.trim() ?? '',
-      save: localStorage.getItem('driftwake.save.v8'),
+      save: localStorage.getItem('driftwake.save.v9'),
     }));
     await page.screenshot({ path: new URL('progression-placement-diagnostic.png', outputDir).pathname });
     throw new Error(`Research table placement did not complete: ${JSON.stringify(state).slice(0, 1600)}`, { cause: error });
@@ -939,7 +1149,7 @@ async function captureUnderwaterInteraction() {
 async function captureNarrow() {
   const context = await browser.newContext({ viewport: { width: 640, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript((save) => {
-    localStorage.setItem('driftwake.save.v8', JSON.stringify(save));
+    localStorage.setItem('driftwake.save.v9', JSON.stringify(save));
   }, narrowProgressionSave);
   const page = await context.newPage();
   monitorPage(page, 'narrow');
@@ -989,7 +1199,7 @@ async function captureNarrow() {
 async function captureUnderwaterNarrow() {
   const context = await browser.newContext({ viewport: { width: 640, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript((save) => {
-    localStorage.setItem('driftwake.save.v8', JSON.stringify(save));
+    localStorage.setItem('driftwake.save.v9', JSON.stringify(save));
   }, underwaterSeededSave);
   const page = await context.newPage();
   monitorPage(page, 'underwater-narrow');
@@ -1130,7 +1340,7 @@ async function captureNavigationStorm() {
   await page.locator('.primary-command').click();
   await page.waitForTimeout(450);
   const initialStormState = await page.evaluate(() => {
-    const savedNavigation = JSON.parse(localStorage.getItem('driftwake.save.v8') ?? 'null')?.raft?.navigation ?? null;
+    const savedNavigation = JSON.parse(localStorage.getItem('driftwake.save.v9') ?? 'null')?.raft?.navigation ?? null;
     return {
       warningClass: document.querySelector('.weather-warning')?.className ?? 'missing',
       warningText: document.querySelector('.weather-warning')?.textContent?.trim() ?? '',
@@ -1242,6 +1452,7 @@ try {
   if (captureOnly === 'all' || captureOnly === 'crafting') await captureCrafting();
   if (captureOnly === 'all' || captureOnly === 'settings') await captureSettings();
   if (captureOnly === 'all' || captureOnly === 'devices') await captureDevices();
+  if (captureOnly === 'all' || captureOnly === 'advanced') await captureAdvancedDevices();
   if (captureOnly === 'all' || captureOnly === 'planting-placement') await capturePlantingPlacement();
   if (captureOnly === 'all' || captureOnly === 'planting-interaction') await capturePlantingInteraction();
   if (captureOnly === 'all' || captureOnly === 'planting-bird') await capturePlantingBird();

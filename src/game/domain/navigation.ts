@@ -21,6 +21,7 @@ export interface SavedNavigationState {
   heading: number;
   routeMode: NavigationRouteMode;
   sailStrain: number;
+  anchorStrain: number;
   devices: SavedNavigationDevice[];
 }
 
@@ -37,7 +38,9 @@ export interface NavigationMetrics {
   sailDeployed: boolean;
   helmInstalled: boolean;
   sailReinforced: boolean;
+  anchorReinforced: boolean;
   sailStrain: number;
+  anchorStrain: number;
   routeMode: NavigationRouteMode;
   weatherPhase: NavigationWeatherPhase;
   stormIntensity: number;
@@ -141,6 +144,7 @@ export function createDefaultNavigationState(): SavedNavigationState {
     heading: 0,
     routeMode: 'manual',
     sailStrain: 0,
+    anchorStrain: 0,
     devices: [],
   };
 }
@@ -177,7 +181,7 @@ export function sanitizeNavigationDevice(value: unknown): SavedNavigationDevice 
     z,
     rotation: normalizeQuarterTurn(candidate.rotation ?? 0),
     deployed: candidate.type !== 'helm' && candidate.deployed === true,
-    reinforced: candidate.type === 'sail' && candidate.reinforced === true,
+    reinforced: candidate.type !== 'helm' && candidate.reinforced === true,
   };
 }
 
@@ -214,6 +218,10 @@ export function sanitizeNavigationState(value: unknown): SavedNavigationState {
       typeof candidate.sailStrain === 'number' && Number.isFinite(candidate.sailStrain)
         ? Math.max(0, Math.min(1, candidate.sailStrain))
         : 0,
+    anchorStrain:
+      typeof candidate.anchorStrain === 'number' && Number.isFinite(candidate.anchorStrain)
+        ? Math.max(0, Math.min(1, candidate.anchorStrain))
+        : 0,
     devices,
   };
 }
@@ -244,6 +252,15 @@ export function reinforceNavigationSail(state: SavedNavigationState): SavedNavig
   };
 }
 
+export function reinforceNavigationAnchor(state: SavedNavigationState): SavedNavigationState {
+  if (!state.devices.some((device) => device.type === 'anchor' && !device.reinforced)) return state;
+  return {
+    ...state,
+    anchorStrain: Math.min(state.anchorStrain, 0.22),
+    devices: state.devices.map((device) => device.type === 'anchor' ? { ...device, reinforced: true } : device),
+  };
+}
+
 export function advanceNavigationState(
   state: SavedNavigationState,
   seconds: number,
@@ -253,6 +270,7 @@ export function advanceNavigationState(
   if (delta <= 0) return state;
   const sailDeployed = state.devices.some((device) => device.type === 'sail' && device.deployed);
   const sailReinforced = state.devices.some((device) => device.type === 'sail' && device.reinforced);
+  const anchor = state.devices.find((device) => device.type === 'anchor');
   const helmInstalled = state.devices.some((device) => device.type === 'helm');
   const weather = navigationWeatherAt(state.weatherClock);
   const effectiveCourse = navigationRouteCourse(state, targetBearing);
@@ -267,10 +285,19 @@ export function advanceNavigationState(
     : 0;
   const recovery = sailDeployed ? 0 : delta * 0.018;
   let sailStrain = Math.max(0, Math.min(1, state.sailStrain + strainGain - recovery));
+  const anchorLoadGain = anchor?.deployed && !anchor.reinforced
+    ? weather.intensity * (0.48 + Math.abs(weather.gust) * 0.72) * delta * 0.034
+    : 0;
+  const anchorRecovery = anchorLoadGain > 0 ? 0 : delta * (anchor?.reinforced ? 0.09 : 0.034);
+  let anchorStrain = Math.max(0, Math.min(1, state.anchorStrain + anchorLoadGain - anchorRecovery));
   let devices = state.devices;
   if (sailDeployed && !sailReinforced && sailStrain >= 1) {
     devices = state.devices.map((device) => device.type === 'sail' ? { ...device, deployed: false } : device);
     sailStrain = 0.74;
+  }
+  if (anchor?.deployed && !anchor.reinforced && anchorStrain >= 1) {
+    devices = devices.map((device) => device.type === 'anchor' ? { ...device, deployed: false } : device);
+    anchorStrain = 0.7;
   }
   return {
     ...state,
@@ -279,6 +306,7 @@ export function advanceNavigationState(
     courseAngle: effectiveCourse,
     heading: normalizeAngle(state.heading + turn + stormDrift),
     sailStrain,
+    anchorStrain,
     devices,
   };
 }
@@ -288,6 +316,7 @@ export function navigationMetrics(state: SavedNavigationState, targetBearing = 0
   const anchored = state.devices.some((device) => device.type === 'anchor' && device.deployed);
   const helmInstalled = state.devices.some((device) => device.type === 'helm');
   const sailReinforced = state.devices.some((device) => device.type === 'sail' && device.reinforced);
+  const anchorReinforced = state.devices.some((device) => device.type === 'anchor' && device.reinforced);
   const windAngle = windAngleAt(state.windClock);
   const effectiveCourse = navigationRouteCourse(state, targetBearing);
   const weather = navigationWeatherAt(state.weatherClock);
@@ -309,7 +338,9 @@ export function navigationMetrics(state: SavedNavigationState, targetBearing = 0
     sailDeployed,
     helmInstalled,
     sailReinforced,
+    anchorReinforced,
     sailStrain: state.sailStrain,
+    anchorStrain: state.anchorStrain,
     routeMode: state.routeMode,
     weatherPhase: weather.phase,
     stormIntensity: weather.intensity,

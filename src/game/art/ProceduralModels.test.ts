@@ -16,6 +16,7 @@ import { createReefModel, createReefNodeModel } from './UnderwaterModels';
 import { createAnchorModel, createHelmModel, createSailModel } from './NavigationModels';
 import { createPlanterModel, createSaltwingBirdModel } from './PlantingModels';
 import { createDryingRackModel, createResearchBenchModel, createSmelterModel } from './ProgressionModels';
+import { createLockerModel, createSolarPurifierModel, createTripleGrillModel } from './AdvancedDeviceModels';
 
 function createTestMaterials(): MaterialLibrary {
   const material = () => new MeshStandardMaterial();
@@ -46,6 +47,8 @@ function createTestMaterials(): MaterialLibrary {
     planterSoil: material(),
     refractoryClay: material(),
     navigationAlloy: material(),
+    saltglassCollector: material(),
+    sealedCanvas: material(),
     cropLeaf: material(),
     cropDry: material(),
     cropFruit: material(),
@@ -124,6 +127,22 @@ describe('procedural model assets', () => {
     expect(grillSize.x).toBeGreaterThan(0.8);
     expect(purifier.userData.deviceVisuals.cleanWater).toBeDefined();
     expect(grill.userData.deviceVisuals.foodMeshes.length).toBeGreaterThanOrEqual(3);
+  }, 15_000);
+
+  it('builds high-detail advanced survival devices with per-slot visual references', () => {
+    const materials = createTestMaterials();
+    const solar = createSolarPurifierModel(materials);
+    const grill = createTripleGrillModel(materials);
+    const locker = createLockerModel(materials);
+    expect(meshStats(solar).meshes).toBeGreaterThanOrEqual(55);
+    expect(meshStats(grill).meshes).toBeGreaterThanOrEqual(70);
+    expect(meshStats(locker).meshes).toBeGreaterThanOrEqual(25);
+    expect(solar.userData.deviceVisuals.waterCells).toHaveLength(5);
+    expect(grill.userData.deviceVisuals.foodSlots).toHaveLength(3);
+    expect(grill.userData.deviceVisuals.fuelBars).toHaveLength(4);
+    expect(locker.userData.deviceVisuals.storageMarkers).toHaveLength(8);
+    expect(new Box3().setFromObject(solar).getSize(new Vector3()).x).toBeGreaterThan(1.05);
+    expect(new Box3().setFromObject(locker).getSize(new Vector3()).y).toBeGreaterThan(0.85);
   }, 15_000);
 
   it('builds an explorable heightfield island with shoreline and collision landmarks', () => {

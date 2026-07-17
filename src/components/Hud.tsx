@@ -126,16 +126,21 @@ export function Hud({
   const fishingActive = fishing.phase === 'hooked';
   const placedDeviceTypes = island.ashore
     ? []
-    : (['purifier', 'grill'] as const).filter((type) => devices[type].placed > 0);
+    : (['purifier', 'grill', 'solarPurifier', 'tripleGrill', 'locker'] as const)
+      .filter((type) => devices[type].placed > 0);
   const planterVisible = !island.ashore && planting.placed > 0;
   const progressionVisible = !island.ashore && (
     progression.researchBenches > 0 || progression.dryingRacks > 0 || progression.smelters > 0
   );
   const reefExpedition = player.surface === 'water' && island.phase === 'docked';
-  const stormAlert = player.surface !== 'water' && (navigation.stormIntensity > 0.58 || navigation.sailStrain > 0.62);
+  const stormAlert = player.surface !== 'water' && (
+    navigation.stormIntensity > 0.58 || navigation.sailStrain > 0.62 || navigation.anchorStrain > 0.62
+  );
   const routeLabel = navigation.routeMode === 'manual' ? '自由航向' : navigation.routeMode === 'island' ? '追踪浅滩' : '顺风避险';
-  const weatherLabel = navigation.sailStrain > 0.78
-    ? '帆具接近过载'
+  const weatherLabel = navigation.anchorStrain > 0.78 && navigation.anchored
+    ? '锚机接近回滑载荷'
+    : navigation.sailStrain > 0.78
+      ? '帆具接近过载'
     : navigation.weatherPhase === 'storm'
       ? '强风暴横穿航线'
       : navigation.weatherPhase === 'building'
@@ -217,8 +222,8 @@ export function Hud({
       </div>
 
       <div
-        className={`navigation-readout ${navigation.sailDeployed ? 'is-sailing' : ''} ${navigation.sailReinforced ? 'is-reinforced' : ''} ${navigation.anchored ? 'is-anchored' : ''} ${navigation.stormIntensity > 0.3 ? 'is-storm' : ''} ${navigation.driftRisk ? 'is-drift-risk' : ''}`}
-        aria-label={`${routeLabel} 航向${cardinalLabel(navigation.courseAngle)} 风力利用${Math.round(navigation.windCapture * 100)}% 航速${navigation.speedKnots.toFixed(1)}节${navigation.helmInstalled ? ' 已安装舵台' : ''}${navigation.sailReinforced ? ' 帆具已强化' : ''}${navigation.anchored ? ' 已锚泊' : ''}`}
+        className={`navigation-readout ${navigation.sailDeployed ? 'is-sailing' : ''} ${navigation.sailReinforced ? 'is-reinforced' : ''} ${navigation.anchorReinforced ? 'is-anchor-reinforced' : ''} ${navigation.anchored ? 'is-anchored' : ''} ${navigation.stormIntensity > 0.3 ? 'is-storm' : ''} ${navigation.driftRisk ? 'is-drift-risk' : ''}`}
+        aria-label={`${routeLabel} 航向${cardinalLabel(navigation.courseAngle)} 风力利用${Math.round(navigation.windCapture * 100)}% 航速${navigation.speedKnots.toFixed(1)}节${navigation.helmInstalled ? ' 已安装舵台' : ''}${navigation.sailReinforced ? ' 帆具已强化' : ''}${navigation.anchorReinforced ? ' 锚机已强化' : ''}${navigation.anchored ? ' 已锚泊' : ''}`}
       >
         <Compass size={18} style={{ transform: `rotate(${navigation.heading}rad)` }} />
         <div className="navigation-readout__course">
@@ -234,14 +239,14 @@ export function Hud({
         <em>{navigation.speedKnots.toFixed(1)} kn</em>
         <Sailboat className={navigation.sailInstalled ? 'is-installed' : ''} size={16} />
         <ShipWheel className={navigation.helmInstalled ? 'is-installed' : ''} size={16} />
-        <Anchor className={navigation.anchorInstalled ? 'is-installed' : ''} size={16} />
+        <Anchor className={`${navigation.anchorInstalled ? 'is-installed' : ''} ${navigation.anchorReinforced ? 'is-reinforced' : ''}`} size={16} />
       </div>
 
       <div className={`weather-warning ${stormAlert ? 'is-visible' : ''}`} aria-live="polite">
         <CloudLightning size={18} />
         <div>
           <span>{weatherLabel}</span>
-          <i><b style={{ width: `${Math.round(Math.max(navigation.stormIntensity, navigation.sailStrain) * 100)}%` }} /></i>
+          <i><b style={{ width: `${Math.round(Math.max(navigation.stormIntensity, navigation.sailStrain, navigation.anchorStrain) * 100)}%` }} /></i>
         </div>
       </div>
 
@@ -331,13 +336,34 @@ export function Hud({
         {placedDeviceTypes.map((type) => {
           const status = devices[type];
           const label =
-            status.burnt > 0 ? '焦黑' : status.ready > 0 ? '可收取' : status.working > 0 ? '运行中' : '待机';
-          const phase = status.burnt > 0 ? 'burnt' : status.ready > 0 ? 'ready' : status.working > 0 ? 'working' : 'idle';
+            type === 'locker'
+              ? '已密封'
+              : status.burnt > 0
+                ? `${status.burnt} 份焦黑`
+                : status.ready > 0
+                  ? `${status.ready} 份可取`
+                  : status.working > 0
+                    ? `${status.working} 份运行`
+                    : '待机';
+          const phase = type === 'locker' ? 'idle' : status.burnt > 0 ? 'burnt' : status.ready > 0 ? 'ready' : status.working > 0 ? 'working' : 'idle';
+          const name = type === 'purifier'
+            ? '净水器'
+            : type === 'grill'
+              ? '烤架'
+              : type === 'solarPurifier'
+                ? '五联净水'
+                : type === 'tripleGrill'
+                  ? '三槽烤台'
+                  : '干舱储物';
           return (
             <div className={`device-status device-status--${type} device-status--${phase}`} key={type}>
-              {type === 'purifier' ? <GlassWater size={18} /> : <CookingPot size={18} />}
+              {type === 'purifier' || type === 'solarPurifier'
+                ? <GlassWater size={18} />
+                : type === 'locker'
+                  ? <PackageOpen size={18} />
+                  : <CookingPot size={18} />}
               <div>
-                <span>{type === 'purifier' ? '净水器' : '烤架'}</span>
+                <span>{name}</span>
                 <i><b style={{ width: `${status.progress * 100}%` }} /></i>
               </div>
               <strong>{label}</strong>

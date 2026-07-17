@@ -41,6 +41,7 @@ export function App() {
   const shark = useGameStore((state) => state.shark);
   const raft = useGameStore((state) => state.raft);
   const devices = useGameStore((state) => state.devices);
+  const storage = useGameStore((state) => state.storage);
   const navigation = useGameStore((state) => state.navigation);
   const planting = useGameStore((state) => state.planting);
   const progression = useGameStore((state) => state.progression);
@@ -97,6 +98,7 @@ export function App() {
 
   const openSettings = () => {
     gameRef.current?.pauseInput();
+    gameRef.current?.closeStorage();
     useGameStore.getState().setOverlayPanel(null);
     useGameStore.getState().setPlacementDevice(null);
     useGameStore.getState().setSettingsOpen(true);
@@ -135,6 +137,7 @@ export function App() {
   };
   const openPack = (panel: Exclude<OverlayPanel, null>) => {
     gameRef.current?.pauseInput();
+    gameRef.current?.closeStorage();
     useGameStore.getState().setPlacementDevice(null);
     useGameStore.getState().setOverlayPanel(panel);
     gameRef.current?.playUi();
@@ -231,6 +234,7 @@ export function App() {
         inventorySlots={inventorySlots}
         raft={raft}
         progression={progression}
+        storage={storage}
         saveStatus={saveStatus}
         onPanelChange={(panel) => {
           useGameStore.getState().setOverlayPanel(panel);
@@ -241,7 +245,9 @@ export function App() {
         onPlace={placeDevice}
         onResearch={researchSample}
         onLearn={learnProject}
+        onStorageTransfer={(itemId, direction) => gameRef.current?.transferStorage(itemId, direction) ?? false}
         onClose={() => {
+          gameRef.current?.closeStorage();
           useGameStore.getState().setOverlayPanel(null);
           gameRef.current?.playUi();
         }}

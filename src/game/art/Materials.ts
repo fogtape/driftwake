@@ -37,6 +37,12 @@ export interface AssetTextures {
   navigationAlloy: Texture;
   navigationAlloyNormal: Texture;
   navigationAlloyRoughness: Texture;
+  saltglassCollector: Texture;
+  saltglassCollectorNormal: Texture;
+  saltglassCollectorRoughness: Texture;
+  sealedCanvas: Texture;
+  sealedCanvasNormal: Texture;
+  sealedCanvasRoughness: Texture;
   stormClouds: Texture;
 }
 
@@ -67,6 +73,8 @@ export interface MaterialLibrary {
   planterSoil: MeshStandardMaterial;
   refractoryClay: MeshStandardMaterial;
   navigationAlloy: MeshStandardMaterial;
+  saltglassCollector: MeshStandardMaterial;
+  sealedCanvas: MeshStandardMaterial;
   cropLeaf: MeshStandardMaterial;
   cropDry: MeshStandardMaterial;
   cropFruit: MeshStandardMaterial;
@@ -102,6 +110,12 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     navigationAlloy,
     navigationAlloyNormal,
     navigationAlloyRoughness,
+    saltglassCollector,
+    saltglassCollectorNormal,
+    saltglassCollectorRoughness,
+    sealedCanvas,
+    sealedCanvasNormal,
+    sealedCanvasRoughness,
     stormClouds,
   ] = await Promise.all([
     loader.loadAsync('/assets/textures/weathered-cedar.webp'),
@@ -127,6 +141,12 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/navigation-alloy.webp'),
     loader.loadAsync('/assets/textures/navigation-alloy-normal.webp'),
     loader.loadAsync('/assets/textures/navigation-alloy-roughness.webp'),
+    loader.loadAsync('/assets/textures/saltglass-collector.webp'),
+    loader.loadAsync('/assets/textures/saltglass-collector-normal.webp'),
+    loader.loadAsync('/assets/textures/saltglass-collector-roughness.webp'),
+    loader.loadAsync('/assets/textures/sealed-canvas.webp'),
+    loader.loadAsync('/assets/textures/sealed-canvas-normal.webp'),
+    loader.loadAsync('/assets/textures/sealed-canvas-roughness.webp'),
     loader.loadAsync('/assets/textures/storm-clouds.webp'),
   ]);
 
@@ -209,6 +229,26 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   navigationAlloyNormal.colorSpace = NoColorSpace;
   navigationAlloyRoughness.colorSpace = NoColorSpace;
 
+  for (const texture of [saltglassCollector, saltglassCollectorNormal, saltglassCollectorRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(1.35, 1.15);
+    texture.anisotropy = anisotropy;
+  }
+  saltglassCollector.colorSpace = SRGBColorSpace;
+  saltglassCollectorNormal.colorSpace = NoColorSpace;
+  saltglassCollectorRoughness.colorSpace = NoColorSpace;
+
+  for (const texture of [sealedCanvas, sealedCanvasNormal, sealedCanvasRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(1.5, 1.35);
+    texture.anisotropy = anisotropy;
+  }
+  sealedCanvas.colorSpace = SRGBColorSpace;
+  sealedCanvasNormal.colorSpace = NoColorSpace;
+  sealedCanvasRoughness.colorSpace = NoColorSpace;
+
   stormClouds.colorSpace = SRGBColorSpace;
   stormClouds.wrapS = RepeatWrapping;
   stormClouds.wrapT = RepeatWrapping;
@@ -239,6 +279,12 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     navigationAlloy,
     navigationAlloyNormal,
     navigationAlloyRoughness,
+    saltglassCollector,
+    saltglassCollectorNormal,
+    saltglassCollectorRoughness,
+    sealedCanvas,
+    sealedCanvasNormal,
+    sealedCanvasRoughness,
     stormClouds,
   };
 }
@@ -356,6 +402,25 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       roughnessMap: textures.navigationAlloyRoughness,
       roughness: 0.66,
       metalness: 0.76,
+    }),
+    saltglassCollector: new MeshStandardMaterial({
+      color: 0xd8f2e9,
+      map: textures.saltglassCollector,
+      normalMap: textures.saltglassCollectorNormal,
+      normalScale: new Vector2(0.36, 0.36),
+      roughnessMap: textures.saltglassCollectorRoughness,
+      roughness: 0.46,
+      metalness: 0.06,
+    }),
+    sealedCanvas: new MeshStandardMaterial({
+      color: 0xb8cfca,
+      map: textures.sealedCanvas,
+      normalMap: textures.sealedCanvasNormal,
+      normalScale: new Vector2(0.72, 0.72),
+      roughnessMap: textures.sealedCanvasRoughness,
+      roughness: 0.98,
+      metalness: 0,
+      side: DoubleSide,
     }),
     cropLeaf: new MeshStandardMaterial({ color: 0x5f8c54, roughness: 0.86, side: DoubleSide }),
     cropDry: new MeshStandardMaterial({ color: 0x9b7750, roughness: 0.98, side: DoubleSide }),

@@ -48,6 +48,9 @@ describe('research progression', () => {
     expect(ready.event).toBe('smelter-ready');
     expect(ready.device.phase).toBe('ready');
     expect(collectSmelter(ready.device)).toMatchObject({ phase: 'idle', elapsed: 0 });
+    const glass = startSmelter(smelter, 'sand');
+    expect(glass).toMatchObject({ phase: 'working', smeltInput: 'sand' });
+    expect(collectSmelter(advanceProgressionDevice(glass, SMELT_SECONDS).device)).toMatchObject({ smeltInput: null });
   });
 
   it('sanitizes device limits, timers and forged knowledge claims', () => {
