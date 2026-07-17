@@ -30,6 +30,7 @@ function createTestMaterials(): MaterialLibrary {
     reefCaustic: new MeshBasicMaterial(),
     sailCloth: material(),
     planterSoil: material(),
+    refractoryClay: material(),
     cropLeaf: material(),
     cropDry: material(),
     cropFruit: material(),

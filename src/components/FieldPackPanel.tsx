@@ -6,7 +6,9 @@ import {
   FlaskConical,
   Hammer,
   HeartPulse,
+  LockKeyhole,
   MapPin,
+  Microscope,
   PackageOpen,
   ShieldCheck,
   X,
@@ -18,8 +20,21 @@ import {
   type Inventory,
   type ItemId,
 } from '../game/domain/items';
-import { RECIPES, missingForRecipe, type CraftResult, type RecipeId } from '../game/domain/recipes';
-import type { OverlayPanel, PlacementType, RaftFeedback } from '../state/gameStore';
+import { RECIPES, isRecipeUnlocked, missingForRecipe, type CraftResult, type RecipeId } from '../game/domain/recipes';
+import {
+  RESEARCH_PROJECTS,
+  RESEARCH_SAMPLE_IDS,
+  canLearnProject,
+  type ResearchProjectId,
+  type ResearchSampleId,
+} from '../game/domain/progression';
+import type {
+  OverlayPanel,
+  PlacementType,
+  ProgressionFeedback,
+  RaftFeedback,
+  ResearchSampleResult,
+} from '../state/gameStore';
 import { ItemIcon } from './ItemIcon';
 
 interface FieldPackPanelProps {
@@ -27,11 +42,14 @@ interface FieldPackPanelProps {
   inventory: Inventory;
   inventorySlots: number;
   raft: RaftFeedback;
+  progression: ProgressionFeedback;
   saveStatus: 'idle' | 'saved' | 'error';
   onPanelChange: (panel: Exclude<OverlayPanel, null>) => void;
   onCraft: (recipeId: RecipeId) => CraftResult;
   onUse: (itemId: ItemId) => boolean;
   onPlace: (deviceType: PlacementType) => void;
+  onResearch: (sample: ResearchSampleId) => ResearchSampleResult;
+  onLearn: (projectId: ResearchProjectId) => boolean;
   onClose: () => void;
 }
 
@@ -50,6 +68,9 @@ const PLACEABLES: Partial<Record<ItemId, PlacementType>> = {
   sailKit: 'sail',
   anchorKit: 'anchor',
   planterKit: 'planter',
+  researchBenchKit: 'researchBench',
+  smelterKit: 'smelter',
+  wetBrick: 'dryingBricks',
 };
 
 function categoryLabel(category: (typeof ITEM_DEFINITIONS)[ItemId]['category']): string {
@@ -65,11 +86,14 @@ export function FieldPackPanel({
   inventory,
   inventorySlots,
   raft,
+  progression,
   saveStatus,
   onPanelChange,
   onCraft,
   onUse,
   onPlace,
+  onResearch,
+  onLearn,
   onClose,
 }: FieldPackPanelProps) {
   const itemIds = useMemo(
@@ -104,13 +128,13 @@ export function FieldPackPanel({
       <section className="field-pack" role="dialog" aria-modal="true" aria-labelledby="field-pack-heading">
         <header className="field-pack__header">
           <div className="field-pack__identity">
-            <Backpack size={22} />
+            {panel === 'research' ? <Microscope size={22} /> : <Backpack size={22} />}
             <div>
-              <span>航次装备</span>
-              <h2 id="field-pack-heading">野外背包</h2>
+              <span>{panel === 'research' ? '材料推演' : '航次装备'}</span>
+              <h2 id="field-pack-heading">{panel === 'research' ? '盐迹研究台' : '野外背包'}</h2>
             </div>
           </div>
-          <nav className="field-pack__tabs" aria-label="背包视图">
+          {panel !== 'research' && <nav className="field-pack__tabs" aria-label="背包视图">
             <button className={panel === 'pack' ? 'is-active' : ''} type="button" onClick={() => onPanelChange('pack')}>
               <PackageOpen size={18} />
               物资
@@ -119,7 +143,7 @@ export function FieldPackPanel({
               <Hammer size={18} />
               制作
             </button>
-          </nav>
+          </nav>}
           <button className="icon-command icon-command--dark" type="button" onClick={onClose} aria-label="关闭背包" title="关闭">
             <X size={20} />
           </button>
@@ -182,7 +206,7 @@ export function FieldPackPanel({
               )}
             </aside>
           </div>
-        ) : (
+        ) : panel === 'crafting' ? (
           <div className="field-pack__body field-pack__body--crafting">
             <div className="crafting-heading">
               <div><FlaskConical size={20} /><span>便携制作</span></div>
@@ -193,15 +217,16 @@ export function FieldPackPanel({
                 const outputId = Object.keys(recipe.output)[0] as ItemId;
                 const missing = missingForRecipe(inventory, recipeId);
                 const alreadyOwned = ITEM_DEFINITIONS[outputId].category === 'tool' && itemCount(inventory, outputId) > 0;
-                const canCraft = Object.keys(missing).length === 0 && !alreadyOwned;
+                const unlocked = isRecipeUnlocked(recipeId, progression.learned);
+                const canCraft = unlocked && Object.keys(missing).length === 0 && !alreadyOwned;
                 return (
-                  <article className={`recipe-row ${canCraft ? 'is-ready' : ''}`} key={recipeId}>
+                  <article className={`recipe-row ${canCraft ? 'is-ready' : ''} ${unlocked ? '' : 'is-locked'}`} key={recipeId}>
                     <div className="recipe-row__icon" style={{ '--item-tone': ITEM_DEFINITIONS[outputId].tone } as React.CSSProperties}>
                       <ItemIcon itemId={outputId} size={29} />
                     </div>
                     <div className="recipe-row__copy">
                       <h3>{recipe.name}</h3>
-                      <p>{recipe.description}</p>
+                      <p>{unlocked ? recipe.description : '需要在盐迹研究台完成材料推演。'}</p>
                       <div className="recipe-costs">
                         {(Object.entries(recipe.cost) as [ItemId, number][]).map(([itemId, amount]) => {
                           const enough = itemCount(inventory, itemId) >= amount;
@@ -215,12 +240,81 @@ export function FieldPackPanel({
                       </div>
                     </div>
                     <button className="recipe-command" type="button" disabled={!canCraft} onClick={() => onCraft(recipeId)} aria-label={`制作${recipe.name}`}>
-                      {alreadyOwned ? <Check size={19} /> : <ChevronRight size={20} />}
+                      {!unlocked ? <LockKeyhole size={18} /> : alreadyOwned ? <Check size={19} /> : <ChevronRight size={20} />}
                     </button>
                   </article>
                 );
               })}
             </div>
+          </div>
+        ) : (
+          <div className="field-pack__body field-pack__body--research">
+            <section className="research-samples" aria-labelledby="research-samples-heading">
+              <div className="crafting-heading">
+                <div><Microscope size={20} /><span id="research-samples-heading">材料样本</span></div>
+                <small>{progression.researched.length}/{RESEARCH_SAMPLE_IDS.length} 已建档</small>
+              </div>
+              <div className="research-sample-list">
+                {RESEARCH_SAMPLE_IDS.map((sample) => {
+                  const definition = ITEM_DEFINITIONS[sample];
+                  const researched = progression.researched.includes(sample);
+                  const available = itemCount(inventory, sample) > 0;
+                  return (
+                    <article className={`research-sample ${researched ? 'is-complete' : available ? 'is-ready' : ''}`} key={sample}>
+                      <div className="research-sample__icon" style={{ '--item-tone': definition.tone } as React.CSSProperties}>
+                        <ItemIcon itemId={sample} size={24} />
+                      </div>
+                      <div>
+                        <h3>{definition.shortName}</h3>
+                        <span>{researched ? '已建档' : `持有 ${itemCount(inventory, sample)}`}</span>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={researched || !available}
+                        onClick={() => onResearch(sample)}
+                        aria-label={`研究${definition.name}`}
+                      >
+                        {researched ? <Check size={17} /> : <Microscope size={17} />}
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+            <section className="research-projects" aria-labelledby="research-projects-heading">
+              <div className="crafting-heading">
+                <div><FlaskConical size={20} /><span id="research-projects-heading">可推演项目</span></div>
+                <small>{progression.learned.length}/{Object.keys(RESEARCH_PROJECTS).length} 已学习</small>
+              </div>
+              <div className="research-project-list">
+                {(Object.keys(RESEARCH_PROJECTS) as ResearchProjectId[]).map((projectId) => {
+                  const project = RESEARCH_PROJECTS[projectId];
+                  const learned = progression.learned.includes(projectId);
+                  const ready = canLearnProject(progression, projectId);
+                  return (
+                    <article className={`research-project ${learned ? 'is-complete' : ready ? 'is-ready' : ''}`} key={projectId}>
+                      <header>
+                        <div className="research-project__icon">
+                          <ItemIcon itemId={projectId} size={28} />
+                        </div>
+                        <div><span>{learned ? '已学习' : ready ? '可推演' : '缺少样本'}</span><h3>{project.name}</h3></div>
+                      </header>
+                      <p>{project.description}</p>
+                      <div className="recipe-costs">
+                        {project.requirements.map((sample) => {
+                          const met = progression.researched.includes(sample);
+                          return <span className={met ? 'is-met' : 'is-missing'} key={sample}><ItemIcon itemId={sample} size={14} />{ITEM_DEFINITIONS[sample].shortName}</span>;
+                        })}
+                      </div>
+                      <button className="panel-command" type="button" disabled={!ready} onClick={() => onLearn(projectId)}>
+                        {learned ? <Check size={18} /> : ready ? <FlaskConical size={18} /> : <LockKeyhole size={18} />}
+                        {learned ? '已写入制作记录' : '学习配方'}
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
           </div>
         )}
       </section>

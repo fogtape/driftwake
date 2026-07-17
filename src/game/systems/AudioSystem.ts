@@ -25,6 +25,7 @@ export class AudioSystem {
   private enabled = true;
   private deviceFireActivity = 0;
   private deviceSteamActivity = 0;
+  private progressionForgeActivity = 0;
   private islandActivity = 0;
   private underwaterActivity = 0;
   private sailActivity = 0;
@@ -188,8 +189,18 @@ export class AudioSystem {
     this.deviceSteamActivity = Math.max(0, Math.min(1, steam));
     if (!this.context) return;
     const now = this.context.currentTime;
-    this.fireLoop?.gain.setTargetAtTime(this.deviceFireActivity * 0.052, now, 0.18);
+    this.fireLoop?.gain.setTargetAtTime(Math.min(1, this.deviceFireActivity + this.progressionForgeActivity) * 0.052, now, 0.18);
     this.steamLoop?.gain.setTargetAtTime(this.deviceSteamActivity * 0.035, now, 0.22);
+  }
+
+  setProgressionForgeActivity(activity: number): void {
+    this.progressionForgeActivity = Math.max(0, Math.min(1, activity));
+    if (!this.context) return;
+    this.fireLoop?.gain.setTargetAtTime(
+      Math.min(1, this.deviceFireActivity + this.progressionForgeActivity) * 0.052,
+      this.context.currentTime,
+      0.2,
+    );
   }
 
   setIslandActivity(activity: number): void {
@@ -418,6 +429,97 @@ export class AudioSystem {
   playDeviceLost(): void {
     this.playWoodKnock(0.12, 0.16);
     this.noiseBurst(0.38, 720, 0.12, 'lowpass');
+  }
+
+  playResearchOpen(): void {
+    this.playWoodKnock(0.045, 0.07);
+    this.noiseBurst(0.16, 2350, 0.035, 'highpass');
+  }
+
+  playResearchSample(): void {
+    this.noiseBurst(0.12, 2850, 0.045, 'highpass');
+    this.noiseBurst(0.08, 760, 0.04, 'bandpass');
+    if (!this.context || !this.ui) return;
+    const now = this.context.currentTime;
+    [330, 440].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + index * 0.075;
+      oscillator.type = 'triangle';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.025, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
+      oscillator.connect(gain).connect(this.ui!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.17);
+    });
+  }
+
+  playResearchLearn(): void {
+    if (!this.context || !this.ui) return;
+    const now = this.context.currentTime;
+    [392, 523.25, 659.25, 783.99].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + index * 0.065;
+      oscillator.type = index % 2 ? 'triangle' : 'sine';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.028, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+      oscillator.connect(gain).connect(this.ui!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.23);
+    });
+  }
+
+  playBrickPlace(): void {
+    this.noiseBurst(0.16, 310, 0.1, 'lowpass');
+    this.noiseBurst(0.08, 1120, 0.035, 'bandpass');
+  }
+
+  playBrickDry(): void {
+    this.noiseBurst(0.22, 1850, 0.045, 'bandpass');
+    this.noiseBurst(0.1, 3900, 0.024, 'highpass');
+  }
+
+  playBrickCollect(): void {
+    this.noiseBurst(0.13, 720, 0.07, 'bandpass');
+    this.noiseBurst(0.08, 1460, 0.035, 'highpass');
+    this.playCollect();
+  }
+
+  playSmelterLoad(): void {
+    this.noiseBurst(0.2, 430, 0.11, 'lowpass');
+    this.noiseBurst(0.13, 1760, 0.065, 'bandpass');
+    if (!this.context) return;
+    const timer = window.setTimeout(() => {
+      this.playIgnite();
+      window.clearTimeout(timer);
+    }, 105);
+  }
+
+  playSmelterReady(): void {
+    this.noiseBurst(0.18, 2800, 0.042, 'highpass');
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    [246.94, 369.99, 493.88].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + index * 0.09;
+      oscillator.type = 'triangle';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.038, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.28);
+      oscillator.connect(gain).connect(this.effects!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.29);
+    });
+  }
+
+  playSmelterCollect(): void {
+    this.noiseBurst(0.15, 530, 0.085, 'bandpass');
+    this.noiseBurst(0.09, 2500, 0.05, 'highpass');
+    this.playCollect();
   }
 
   playPlantSeed(): void {
@@ -765,7 +867,7 @@ export class AudioSystem {
     fireFilter.type = 'bandpass';
     fireFilter.frequency.value = 760;
     fireFilter.Q.value = 0.42;
-    this.fireLoop.gain.value = this.deviceFireActivity * 0.052;
+    this.fireLoop.gain.value = Math.min(1, this.deviceFireActivity + this.progressionForgeActivity) * 0.052;
     fireSource.connect(fireFilter).connect(this.fireLoop).connect(this.effects);
     fireSource.start();
 

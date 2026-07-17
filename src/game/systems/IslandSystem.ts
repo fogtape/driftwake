@@ -68,7 +68,7 @@ export class IslandSystem {
   private island = new Group();
   private visuals: IslandModelVisuals = { foam: [], obstacles: [] };
   private readonly nodes = new Map<string, HarvestRuntime>();
-  private readonly axeViewModel: Group;
+  private readonly axeViewModels: { stone: Group; metal: Group };
   private readonly ray = new Ray();
   private readonly forward = new Vector3();
   private readonly center = new Vector3();
@@ -83,6 +83,7 @@ export class IslandSystem {
   private swingTarget: HarvestRuntime | null = null;
   private inputEnabled = false;
   private axeEquipped = false;
+  private axeUpgraded = false;
   private swingTime = 0;
   private impactResolved = false;
   private lastAudioActivity = -1;
@@ -104,11 +105,17 @@ export class IslandSystem {
       ...savedState,
       nodes: savedState.nodes.map((node) => ({ ...node })),
     };
-    this.axeViewModel = createAxeModel(materials);
-    this.axeViewModel.name = 'first-person-stone-axe';
-    this.axeViewModel.scale.setScalar(0.82);
-    this.axeViewModel.visible = false;
-    this.camera.add(this.axeViewModel);
+    this.axeViewModels = {
+      stone: createAxeModel(materials),
+      metal: createAxeModel(materials, true),
+    };
+    this.axeViewModels.stone.name = 'first-person-stone-axe';
+    this.axeViewModels.metal.name = 'first-person-metal-axe';
+    for (const model of Object.values(this.axeViewModels)) {
+      model.scale.setScalar(0.82);
+      model.visible = false;
+      this.camera.add(model);
+    }
     this.rebuildIsland();
     this.applyTransform();
     this.publishFeedback();
@@ -124,9 +131,11 @@ export class IslandSystem {
     this.navigationProvider = provider;
   }
 
-  setAxeEquipped(equipped: boolean): void {
+  setAxeEquipped(equipped: boolean, upgraded = false): void {
     this.axeEquipped = equipped;
-    this.axeViewModel.visible = equipped;
+    this.axeUpgraded = upgraded;
+    this.axeViewModels.stone.visible = equipped && !upgraded;
+    this.axeViewModels.metal.visible = equipped && upgraded;
     if (!equipped) {
       this.swingTime = 0;
       this.swingTarget = null;
@@ -252,8 +261,9 @@ export class IslandSystem {
     if (this.noticeTimer !== null) window.clearTimeout(this.noticeTimer);
     this.clearPrompt();
     this.audio.setIslandActivity(0);
-    this.camera.remove(this.axeViewModel);
-    this.disposeGroup(this.axeViewModel);
+    this.camera.remove(this.axeViewModels.stone, this.axeViewModels.metal);
+    this.disposeGroup(this.axeViewModels.stone);
+    this.disposeGroup(this.axeViewModels.metal);
     this.scene.remove(this.island);
     this.disposeGroup(this.island);
     this.nodes.clear();
@@ -337,12 +347,13 @@ export class IslandSystem {
   }
 
   private updateAxe(time: number, delta: number): void {
+    const axeViewModel = this.axeUpgraded ? this.axeViewModels.metal : this.axeViewModels.stone;
     this.swingTime = Math.max(0, this.swingTime - delta);
     const progress = this.swingTime > 0 ? 1 - this.swingTime / 0.58 : 0;
     const arc = this.swingTime > 0 ? Math.sin(progress * Math.PI) : 0;
     const settle = Math.sin(time * 1.45) * 0.008;
-    this.axeViewModel.position.set(0.55 + settle - arc * 0.18, -0.58 + arc * 0.13, -0.64 - arc * 0.38);
-    this.axeViewModel.rotation.set(-0.9 - arc * 0.26, -0.18 + arc * 0.24, -0.38 + arc * 1.12);
+    axeViewModel.position.set(0.55 + settle - arc * 0.18, -0.58 + arc * 0.13, -0.64 - arc * 0.38);
+    axeViewModel.rotation.set(-0.9 - arc * 0.26, -0.18 + arc * 0.24, -0.38 + arc * 1.12);
     if (this.swingTime > 0 && !this.impactResolved && progress >= 0.42) {
       this.impactResolved = true;
       this.strikePalm(this.swingTarget);
@@ -409,7 +420,8 @@ export class IslandSystem {
     if (!runtime || runtime.state.health <= 0 || runtime.definition.type !== 'palm') return;
     runtime.model.getWorldPosition(this.center);
     if (this.camera.position.distanceTo(this.center) > 4.1) return;
-    const finalHit = runtime.state.health <= 1;
+    const damage = this.axeUpgraded ? 2 : 1;
+    const finalHit = runtime.state.health <= damage;
     if (finalHit) {
       const store = useGameStore.getState();
       const preview = addItems(store.inventory, runtime.definition.output);
@@ -420,7 +432,7 @@ export class IslandSystem {
       }
       store.addItemBundle(runtime.definition.output);
     }
-    runtime.state.health -= 1;
+    runtime.state.health = Math.max(0, runtime.state.health - damage);
     runtime.hitPulse = 1;
     runtime.model.getWorldPosition(this.impactPosition);
     this.impactPosition.y += 1.12;

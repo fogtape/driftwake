@@ -1,5 +1,6 @@
 import {
   Anchor,
+  Anvil,
   Bird,
   Compass,
   CookingPot,
@@ -21,7 +22,7 @@ import {
   Waves,
   Wind,
 } from 'lucide-react';
-import { ITEM_DEFINITIONS, TOOL_ORDER, itemCount, type Inventory, type ToolId } from '../game/domain/items';
+import { ITEM_DEFINITIONS, itemCount, preferredToolOrder, type Inventory, type ToolId } from '../game/domain/items';
 import { ISLAND_APPROACH_SECONDS, ISLAND_DEPART_SECONDS, ISLAND_DOCK_SECONDS } from '../game/domain/island';
 import { cardinalLabel } from '../game/domain/navigation';
 import type {
@@ -30,6 +31,7 @@ import type {
   IslandFeedback,
   NavigationFeedback,
   PlantingFeedback,
+  ProgressionFeedback,
   PlayerFeedback,
   RaftFeedback,
   ReefFeedback,
@@ -53,6 +55,7 @@ interface HudProps {
   devices: DeviceFeedbackMap;
   navigation: NavigationFeedback;
   planting: PlantingFeedback;
+  progression: ProgressionFeedback;
   island: IslandFeedback;
   reef: ReefFeedback;
   placementDevice: PlacementType | null;
@@ -104,6 +107,7 @@ export function Hud({
   devices,
   navigation,
   planting,
+  progression,
   island,
   reef,
   placementDevice,
@@ -122,6 +126,9 @@ export function Hud({
     ? []
     : (['purifier', 'grill'] as const).filter((type) => devices[type].placed > 0);
   const planterVisible = !island.ashore && planting.placed > 0;
+  const progressionVisible = !island.ashore && (
+    progression.researchBenches > 0 || progression.dryingRacks > 0 || progression.smelters > 0
+  );
   const reefExpedition = player.surface === 'water' && island.phase === 'docked';
   const resourceItems = reefExpedition
     ? (['sand', 'clay', 'metalOre', 'seaweed', 'scrap'] as const)
@@ -258,7 +265,7 @@ export function Hud({
       </div>
 
       <div className="hotbar" aria-label="快捷工具">
-        {TOOL_ORDER.map((tool) => {
+        {preferredToolOrder(inventory).map((tool) => {
           const unlocked = itemCount(inventory, tool) > 0;
           return (
             <button
@@ -276,7 +283,7 @@ export function Hud({
         })}
       </div>
 
-      <div className={`crosshair ${fishing.phase === 'nibble' ? 'is-nibble' : ''} ${sharkAlert && selectedTool === 'spear' ? 'is-danger' : ''}`} aria-hidden="true">
+      <div className={`crosshair ${fishing.phase === 'nibble' ? 'is-nibble' : ''} ${sharkAlert && (selectedTool === 'spear' || selectedTool === 'metalSpear') ? 'is-danger' : ''}`} aria-hidden="true">
         <i /><i /><i /><i />
       </div>
 
@@ -296,7 +303,7 @@ export function Hud({
       </div>
 
       <div
-        className={`device-rack ${placedDeviceTypes.length > 0 || planterVisible ? 'is-visible' : ''} ${sharkAlert || planting.birdActive ? 'has-threat' : ''} ${sharkAlert && planting.birdActive ? 'has-two-threats' : ''}`}
+        className={`device-rack ${placedDeviceTypes.length > 0 || planterVisible || progressionVisible ? 'is-visible' : ''} ${sharkAlert || planting.birdActive ? 'has-threat' : ''} ${sharkAlert && planting.birdActive ? 'has-two-threats' : ''}`}
         aria-label="筏上设备状态"
       >
         {placedDeviceTypes.map((type) => {
@@ -344,6 +351,40 @@ export function Hud({
               <div>
                 <span>作物盆</span>
                 <i><b style={{ width: `${planting.progress * 100}%` }} /></i>
+              </div>
+              <strong>{label}</strong>
+            </div>
+          );
+        })()}
+        {progressionVisible && (() => {
+          const phase = progression.ready > 0
+            ? 'ready'
+            : progression.working > 0
+              ? 'working'
+              : progression.dryBricks > 0
+                ? 'ready'
+                : progression.wetBricks > 0
+                  ? 'working'
+              : progression.learnable > 0
+                ? 'research'
+                : 'idle';
+          const label = progression.ready > 0
+            ? '金属锭可收取'
+            : progression.working > 0
+                ? '熔炼中'
+              : progression.dryBricks > 0
+                ? `${progression.dryBricks} 块干砖`
+                : progression.wetBricks > 0
+                  ? '晾干中'
+                  : progression.learnable > 0
+                    ? `${progression.learnable} 项可学习`
+                    : '待研究';
+          return (
+            <div className={`device-status device-status--progression device-status--${phase}`}>
+              <Anvil size={18} />
+              <div>
+                <span>研究·冶炼</span>
+                <i><b style={{ width: `${progression.progress * 100}%` }} /></i>
               </div>
               <strong>{label}</strong>
             </div>

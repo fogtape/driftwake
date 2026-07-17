@@ -7,6 +7,7 @@ import { TitleScreen } from './components/TitleScreen';
 import type { DriftwakeGame } from './game/DriftwakeGame';
 import { ITEM_DEFINITIONS, type ItemId, type ToolId } from './game/domain/items';
 import { RECIPES, type RecipeId } from './game/domain/recipes';
+import { RESEARCH_PROJECTS, type ResearchProjectId, type ResearchSampleId } from './game/domain/progression';
 import { loadPreferences, writePreferences } from './game/domain/preferences';
 import { useGameStore, type AudioMix, type OverlayPanel, type PlacementType, type QualityPreset } from './state/gameStore';
 
@@ -42,6 +43,7 @@ export function App() {
   const devices = useGameStore((state) => state.devices);
   const navigation = useGameStore((state) => state.navigation);
   const planting = useGameStore((state) => state.planting);
+  const progression = useGameStore((state) => state.progression);
   const island = useGameStore((state) => state.island);
   const reef = useGameStore((state) => state.reef);
   const placementDevice = useGameStore((state) => state.placementDevice);
@@ -143,6 +145,7 @@ export function App() {
     if (result.ok) showTransientNotice(`${RECIPES[recipeId].name} 已制作`);
     else if (result.reason === 'inventory-full') showTransientNotice('背包没有空位');
     else if (result.reason === 'already-owned') showTransientNotice('已经持有该工具');
+    else if (result.reason === 'locked') showTransientNotice('需要先在研究台学习配方');
     else showTransientNotice('材料不足');
     return result;
   };
@@ -166,6 +169,21 @@ export function App() {
     store.setPlacementDevice(deviceType);
     gameRef.current?.playUi();
     gameRef.current?.begin();
+  };
+  const researchSample = (sample: ResearchSampleId) => {
+    const result = useGameStore.getState().researchSample(sample);
+    const success = result === 'researched';
+    gameRef.current?.playResearchSample(success);
+    if (success) showTransientNotice(`${ITEM_DEFINITIONS[sample].shortName} 已建立材料档案`);
+    else if (result === 'already-researched') showTransientNotice('该材料已经完成研究');
+    else showTransientNotice('背包中缺少该样本');
+    return result;
+  };
+  const learnProject = (projectId: ResearchProjectId) => {
+    const learned = useGameStore.getState().learnResearchProject(projectId);
+    gameRef.current?.playResearchLearn(learned);
+    showTransientNotice(learned ? `${RESEARCH_PROJECTS[projectId].name} 已写入制作记录` : '研究样本尚未齐全');
+    return learned;
   };
 
   return (
@@ -191,6 +209,7 @@ export function App() {
         fishing={fishing}
         shark={shark}
         raft={raft}
+        progression={progression}
         devices={devices}
         navigation={navigation}
         planting={planting}
@@ -211,6 +230,7 @@ export function App() {
         inventory={inventory}
         inventorySlots={inventorySlots}
         raft={raft}
+        progression={progression}
         saveStatus={saveStatus}
         onPanelChange={(panel) => {
           useGameStore.getState().setOverlayPanel(panel);
@@ -219,6 +239,8 @@ export function App() {
         onCraft={craft}
         onUse={useItem}
         onPlace={placeDevice}
+        onResearch={researchSample}
+        onLearn={learnProject}
         onClose={() => {
           useGameStore.getState().setOverlayPanel(null);
           gameRef.current?.playUi();

@@ -57,14 +57,15 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v6');
-    expect(save?.version).toBe(6);
+    expect(SAVE_KEY).toBe('driftwake.save.v7');
+    expect(save?.version).toBe(7);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
     expect(save?.world.island.phase).toBe('approaching');
     expect(save?.world.underwater.nodes).toHaveLength(18);
     expect(save?.raft.navigation.devices).toEqual([]);
     expect(save?.raft.planting.planters).toEqual([]);
+    expect(save?.raft.progression.devices).toEqual([]);
   });
 
   it('falls back to a legacy save when the current slot is corrupt', () => {
@@ -246,5 +247,29 @@ describe('save schema', () => {
     expect(v6?.raft.planting.planters).toHaveLength(1);
     expect(v6?.raft.planting.planters[0]).toMatchObject({ id: 'crop', growth: 0.4, water: 0.6 });
     expect(v6?.raft.planting.birdVisit).toBe(3);
+    expect(v6?.raft.progression).toEqual({ devices: [], researched: [], learned: [] });
+  });
+
+  it('restores v7 research knowledge and rejects progression devices on occupied tiles', () => {
+    const save = sanitizeSave({
+      version: 7,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 12 },
+      raft: {
+        tiles: [{ x: 0, z: 0, health: 100 }, { x: 1, z: 0, health: 100 }],
+        devices: [{ id: 'grill', type: 'grill', x: 0, z: 0, rotation: 0, phase: 'idle', elapsed: 0 }],
+        progression: {
+          researched: ['timber', 'scrap', 'dryBrick'],
+          learned: ['smelterKit'],
+          devices: [
+            { id: 'blocked', type: 'researchBench', x: 0, z: 0, rotation: 0 },
+            { id: 'forge', type: 'smelter', x: 1, z: 0, rotation: 0, phase: 'working', elapsed: 22 },
+          ],
+        },
+      },
+    });
+    expect(save?.raft.progression.researched).toEqual(['timber', 'scrap', 'dryBrick']);
+    expect(save?.raft.progression.learned).toEqual(['smelterKit']);
+    expect(save?.raft.progression.devices).toHaveLength(1);
+    expect(save?.raft.progression.devices[0]).toMatchObject({ id: 'forge', phase: 'working', elapsed: 22 });
   });
 });

@@ -42,4 +42,19 @@ describe('game store item use', () => {
     store.setInteraction(null);
     expect(useGameStore.getState().interaction).toBeNull();
   });
+
+  it('selects the upgraded tool when crafting replaces the equipped base tier', () => {
+    const inventory = { spear: 1, metalIngot: 2, rope: 1 } as const;
+    useGameStore.setState((state) => ({
+      inventory,
+      inventorySlots: usedInventorySlots(inventory),
+      selectedTool: 'spear',
+      progression: { ...state.progression, learned: ['metalSpear'] },
+    }));
+    expect(useGameStore.getState().craft('metalSpear').ok).toBe(true);
+    const state = useGameStore.getState();
+    expect(state.selectedTool).toBe('metalSpear');
+    expect(itemCount(state.inventory, 'spear')).toBe(0);
+    expect(itemCount(state.inventory, 'metalSpear')).toBe(1);
+  });
 });

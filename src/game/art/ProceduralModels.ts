@@ -147,15 +147,23 @@ export function createHammerModel(materials: MaterialLibrary): Group {
   return group;
 }
 
-export function createSpearModel(materials: MaterialLibrary): Group {
+export function createSpearModel(materials: MaterialLibrary, upgraded = false): Group {
   const group = new Group();
-  group.name = 'sharpened-wood-spear';
+  group.name = upgraded ? 'tide-cast-wave-piercer' : 'sharpened-wood-spear';
   const shaft = shadowed(new Mesh(new CylinderGeometry(0.028, 0.045, 2.45, 9), materials.darkWood));
   shaft.position.y = 0.4;
   group.add(shaft);
-  const tip = shadowed(new Mesh(new ConeGeometry(0.085, 0.36, 7), materials.metal));
-  tip.position.y = 1.8;
+  const tip = shadowed(new Mesh(new ConeGeometry(upgraded ? 0.115 : 0.085, upgraded ? 0.54 : 0.36, upgraded ? 9 : 7), upgraded ? materials.metal : materials.rustMetal));
+  tip.position.y = upgraded ? 1.88 : 1.8;
   group.add(tip);
+  if (upgraded) {
+    const collar = shadowed(new Mesh(new CylinderGeometry(0.075, 0.055, 0.23, 9), materials.metal));
+    collar.position.y = 1.57;
+    const crossPin = shadowed(new Mesh(new CylinderGeometry(0.024, 0.024, 0.28, 7), materials.rustMetal));
+    crossPin.position.y = 1.53;
+    crossPin.rotation.z = Math.PI / 2;
+    group.add(collar, crossPin);
+  }
   for (let index = 0; index < 5; index += 1) {
     const binding = shadowed(new Mesh(new TorusGeometry(0.052, 0.009, 5, 12), materials.wovenFiber));
     binding.position.y = 1.54 + index * 0.045;
@@ -191,25 +199,35 @@ export function createFishingRodModel(materials: MaterialLibrary): Group {
   return group;
 }
 
-export function createAxeModel(materials: MaterialLibrary): Group {
+export function createAxeModel(materials: MaterialLibrary, upgraded = false): Group {
   const axe = new Group();
-  axe.name = 'tide-stone-axe';
+  axe.name = upgraded ? 'tide-cast-broad-axe' : 'tide-stone-axe';
   const handle = shadowed(new Mesh(new CylinderGeometry(0.045, 0.07, 0.92, 9), materials.darkWood));
   handle.position.y = 0.12;
   handle.rotation.z = -0.08;
   axe.add(handle);
 
-  const head = shadowed(new Mesh(new DodecahedronGeometry(0.19, 0), materials.rock));
-  head.scale.set(1.42, 0.8, 0.58);
+  const head = shadowed(new Mesh(
+    upgraded ? new RoundedBoxGeometry(0.42, 0.24, 0.16, 3, 0.035) : new DodecahedronGeometry(0.19, 0),
+    upgraded ? materials.metal : materials.rock,
+  ));
+  head.scale.set(upgraded ? 1 : 1.42, upgraded ? 1 : 0.8, upgraded ? 1 : 0.58);
   head.position.set(-0.02, 0.58, 0);
   head.rotation.z = 0.18;
   axe.add(head);
 
-  const cuttingEdge = shadowed(new Mesh(new ConeGeometry(0.18, 0.32, 4), materials.metal));
-  cuttingEdge.position.set(-0.24, 0.58, 0);
+  const cuttingEdge = shadowed(new Mesh(new ConeGeometry(upgraded ? 0.25 : 0.18, upgraded ? 0.4 : 0.32, 4), materials.metal));
+  cuttingEdge.position.set(upgraded ? -0.32 : -0.24, 0.58, 0);
   cuttingEdge.rotation.z = Math.PI / 2;
   cuttingEdge.scale.z = 0.42;
   axe.add(cuttingEdge);
+
+  if (upgraded) {
+    const counterweight = shadowed(new Mesh(new CylinderGeometry(0.095, 0.12, 0.2, 8), materials.rustMetal));
+    counterweight.position.set(0.27, 0.58, 0);
+    counterweight.rotation.z = Math.PI / 2;
+    axe.add(counterweight);
+  }
 
   const binding = new InstancedMesh(new TorusGeometry(0.073, 0.011, 5, 13), materials.wovenFiber, 6);
   const bindingMatrix = new Matrix4();

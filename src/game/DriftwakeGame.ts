@@ -27,12 +27,13 @@ import {
   type MaterialLibrary,
 } from './art/Materials';
 import { useGameStore, type AudioMix, type QualityPreset } from '../state/gameStore';
-import { TOOL_ORDER } from './domain/items';
+import { preferredToolOrder } from './domain/items';
 import { SAVE_VERSION, createDefaultRaftTiles, loadSave, writeSave, type DriftwakeSave } from './domain/save';
 import { createDefaultIslandState } from './domain/island';
 import { createDefaultUnderwaterState } from './domain/underwater';
 import { createDefaultNavigationState } from './domain/navigation';
 import { createDefaultPlantingState } from './domain/planting';
+import { createDefaultProgressionState, type ProgressionDeviceType } from './domain/progression';
 import { AudioSystem } from './systems/AudioSystem';
 import { BuildSystem } from './systems/BuildSystem';
 import { DebrisField } from './systems/DebrisField';
@@ -50,6 +51,7 @@ import { SplashSystem } from './systems/SplashSystem';
 import { UnderwaterSystem } from './systems/UnderwaterSystem';
 import { NavigationSystem } from './systems/NavigationSystem';
 import { PlantingSystem } from './systems/PlantingSystem';
+import { ProgressionSystem } from './systems/ProgressionSystem';
 
 export class DriftwakeGame {
   private readonly scene = new Scene();
@@ -75,6 +77,7 @@ export class DriftwakeGame {
   private underwater: UnderwaterSystem | null = null;
   private navigation: NavigationSystem | null = null;
   private planting: PlantingSystem | null = null;
+  private progression: ProgressionSystem | null = null;
   private sky: Sky | null = null;
   private hemisphere: HemisphereLight | null = null;
   private ambient: AmbientLight | null = null;
@@ -195,7 +198,8 @@ export class DriftwakeGame {
         save?.raft.devices ?? [],
         (coordinate) =>
           (this.navigation?.hasDeviceAt(coordinate) ?? false) ||
-          (this.planting?.hasDeviceAt(coordinate) ?? false),
+          (this.planting?.hasDeviceAt(coordinate) ?? false) ||
+          (this.progression?.hasDeviceAt(coordinate) ?? false),
       );
       this.navigation = new NavigationSystem(
         this.renderer,
@@ -209,7 +213,8 @@ export class DriftwakeGame {
         save?.raft.navigation ?? createDefaultNavigationState(),
         (coordinate) =>
           (this.devices?.hasDeviceAt(coordinate) ?? false) ||
-          (this.planting?.hasDeviceAt(coordinate) ?? false),
+          (this.planting?.hasDeviceAt(coordinate) ?? false) ||
+          (this.progression?.hasDeviceAt(coordinate) ?? false),
       );
       this.planting = new PlantingSystem(
         this.renderer,
@@ -222,7 +227,22 @@ export class DriftwakeGame {
         save?.raft.planting ?? createDefaultPlantingState(),
         (coordinate) =>
           (this.devices?.hasDeviceAt(coordinate) ?? false) ||
-          (this.navigation?.hasDeviceAt(coordinate) ?? false),
+          (this.navigation?.hasDeviceAt(coordinate) ?? false) ||
+          (this.progression?.hasDeviceAt(coordinate) ?? false),
+      );
+      this.progression = new ProgressionSystem(
+        this.renderer,
+        this.camera,
+        this.materials,
+        this.raft,
+        this.player,
+        this.audio,
+        this.splashes,
+        save?.raft.progression ?? createDefaultProgressionState(),
+        (coordinate) =>
+          (this.devices?.hasDeviceAt(coordinate) ?? false) ||
+          (this.navigation?.hasDeviceAt(coordinate) ?? false) ||
+          (this.planting?.hasDeviceAt(coordinate) ?? false),
       );
       this.island.setNavigationProvider(() =>
         this.navigation?.getIslandTravel() ?? { approachRate: 0.55, dockDriftRate: 1, anchored: false },
@@ -231,6 +251,7 @@ export class DriftwakeGame {
         this.devices?.resolvePlayerCollision(position, previous);
         this.navigation?.resolvePlayerCollision(position, previous);
         this.planting?.resolvePlayerCollision(position, previous);
+        this.progression?.resolvePlayerCollision(position, previous);
       });
       this.build = new BuildSystem(
         this.renderer,
@@ -242,11 +263,13 @@ export class DriftwakeGame {
         (coordinate) =>
           (this.devices?.hasDeviceAt(coordinate) ?? false) ||
           (this.navigation?.hasDeviceAt(coordinate) ?? false) ||
-          (this.planting?.hasDeviceAt(coordinate) ?? false),
+          (this.planting?.hasDeviceAt(coordinate) ?? false) ||
+          (this.progression?.hasDeviceAt(coordinate) ?? false),
         (coordinate) =>
           (this.devices?.dismantleAt(coordinate) ?? false) ||
           (this.navigation?.dismantleAt(coordinate) ?? false) ||
-          (this.planting?.dismantleAt(coordinate) ?? false),
+          (this.planting?.dismantleAt(coordinate) ?? false) ||
+          (this.progression?.dismantleAt(coordinate) ?? false),
       );
       this.fishing = new FishingSystem(
         this.renderer,
@@ -270,7 +293,7 @@ export class DriftwakeGame {
         this.camera,
         this.materials,
         this.audio,
-        () => this.shark?.receiveSpearStrike(this.camera) ?? false,
+        (damage) => this.shark?.receiveSpearStrike(this.camera, damage) ?? false,
       );
       store.setRaft(this.raft.getIntegrityStats());
       this.unsubscribeStore = useGameStore.subscribe((state, previous) => {
@@ -343,6 +366,16 @@ export class DriftwakeGame {
     this.audio.playCollect();
   }
 
+  playResearchSample(success: boolean): void {
+    if (success) this.audio.playResearchSample();
+    else this.audio.playDenied();
+  }
+
+  playResearchLearn(success: boolean): void {
+    if (success) this.audio.playResearchLearn();
+    else this.audio.playDenied();
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -372,6 +405,7 @@ export class DriftwakeGame {
     this.build?.dispose();
     this.navigation?.dispose();
     this.planting?.dispose();
+    this.progression?.dispose();
     this.devices?.dispose();
     this.fishing?.dispose(this.scene);
     this.spear?.dispose();
@@ -448,6 +482,7 @@ export class DriftwakeGame {
     this.devices?.update(this.elapsed, simulationDelta);
     this.navigation?.update(this.elapsed, simulationDelta);
     this.planting?.update(this.elapsed, simulationDelta);
+    this.progression?.update(this.elapsed, simulationDelta);
     this.island?.update(this.elapsed, simulationDelta);
     this.underwater?.update(this.elapsed, simulationDelta);
     this.splashes?.update(delta);
@@ -529,12 +564,20 @@ export class DriftwakeGame {
     const navigationPlacement =
       state.placementDevice === 'sail' || state.placementDevice === 'anchor' ? state.placementDevice : null;
     const plantingPlacement = state.placementDevice === 'planter' ? 'planter' : null;
+    const progressionPlacement =
+      state.placementDevice === 'researchBench' ||
+      state.placementDevice === 'dryingBricks' ||
+      state.placementDevice === 'smelter'
+        ? state.placementDevice as ProgressionDeviceType
+        : null;
     this.devices?.setPlacementType(survivalDevicePlacement);
     this.devices?.setInputEnabled(inputEnabled && onRaft);
     this.navigation?.setPlacementType(navigationPlacement);
     this.navigation?.setInputEnabled(inputEnabled && onRaft);
     this.planting?.setPlacementType(plantingPlacement);
     this.planting?.setInputEnabled(inputEnabled && onRaft);
+    this.progression?.setPlacementType(progressionPlacement);
+    this.progression?.setInputEnabled(inputEnabled && onRaft);
     this.hook?.setEquipped(onRaft && !placingDevice && state.selectedTool === 'hook');
     this.hook?.setEnabled(inputEnabled && onRaft && !placingDevice && state.selectedTool === 'hook');
     this.underwater?.setHookEquipped(inWater && !placingDevice && state.selectedTool === 'hook');
@@ -542,9 +585,11 @@ export class DriftwakeGame {
     this.build?.setInputEnabled(inputEnabled && onRaft && !placingDevice && state.selectedTool === 'hammer');
     this.fishing?.setEquipped(onRaft && !placingDevice && state.selectedTool === 'fishingRod');
     this.fishing?.setInputEnabled(inputEnabled && onRaft && !placingDevice && state.selectedTool === 'fishingRod');
-    this.spear?.setEquipped((onRaft || inWater) && !placingDevice && state.selectedTool === 'spear');
-    this.spear?.setInputEnabled(inputEnabled && (onRaft || inWater) && !placingDevice && state.selectedTool === 'spear');
-    this.island?.setAxeEquipped(onIsland && !placingDevice && state.selectedTool === 'axe');
+    const spearEquipped = state.selectedTool === 'spear' || state.selectedTool === 'metalSpear';
+    const axeEquipped = state.selectedTool === 'axe' || state.selectedTool === 'metalAxe';
+    this.spear?.setEquipped((onRaft || inWater) && !placingDevice && spearEquipped, state.selectedTool === 'metalSpear');
+    this.spear?.setInputEnabled(inputEnabled && (onRaft || inWater) && !placingDevice && spearEquipped);
+    this.island?.setAxeEquipped(onIsland && !placingDevice && axeEquipped, state.selectedTool === 'metalAxe');
     this.island?.setInputEnabled(inputEnabled);
     this.underwater?.setInputEnabled(inputEnabled);
     this.player?.setEnabled(inputEnabled);
@@ -565,6 +610,7 @@ export class DriftwakeGame {
         devices: this.devices?.getSavedDevices() ?? [],
         navigation: this.navigation?.getSavedState() ?? createDefaultNavigationState(),
         planting: this.planting?.getSavedState() ?? createDefaultPlantingState(),
+        progression: this.progression?.getSavedState() ?? createDefaultProgressionState(),
       },
       world: {
         island: islandState,
@@ -617,7 +663,7 @@ export class DriftwakeGame {
     }
     const digit = /^Digit([1-5])$/.exec(event.code);
     if (digit && state.overlayPanel === null && !state.settingsOpen && state.placementDevice === null) {
-      const tool = TOOL_ORDER[Number(digit[1]) - 1];
+      const tool = preferredToolOrder(state.inventory)[Number(digit[1]) - 1];
       if (!state.setSelectedTool(tool)) {
         this.audio.playDenied();
         this.showTransientNotice('需要先制作该工具');

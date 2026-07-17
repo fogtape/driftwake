@@ -1,7 +1,7 @@
 # 原创资产清单
 
-> 更新日期：2026-07-16
-> 状态：第七轮种植与鸟类美术交互基线，发布前仍需做最终授权、DCC 替换与相似性复核
+> 更新日期：2026-07-17
+> 状态：第八轮研究、耐火砖、熔炼与金属工具美术交互基线，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -169,9 +169,30 @@ Use case: stylized-concept. Asset type: seamless tileable PBR base-color materia
 
 原始高频壳屑让通用处理流程的纵向接缝差达到 24.05，超过既定 24 门禁 0.05；没有放宽门禁。专用脚本先做亚像素预滤波和轻度去饱和，再执行同一环移羽化流程，最终横纵绝对差与相对内部差全部通过。源 PNG 保留在忽略版本控制的 `output/imagegen/`。
 
+### TEX-008：回潮耐火陶土材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `refractory-clay.webp`、`refractory-clay-normal.webp`、`refractory-clay-roughness.webp` |
+| 模型 | `gpt-image-2` |
+| 请求质量 | `high` |
+| 请求尺寸 | `2048x2048` |
+| 实际输出 | 1254x1254 PNG；采用版统一为 1024x1024 WebP |
+| 处理方式 | `scripts/prepare_imagegen_material.py` 半幅环移、中央不规则羽化、周期模糊与 PBR 图派生；seam 168、normal 0.94、roughness 184-242 |
+| 用途 | 回潮熔炉耐火砖、炉口和热工陶土构件 |
+| 检查 | 正交材质；无熔炉、工具、火焰、文字和烘焙光影；接缝 x=13.58/1.00x、y=15.75/1.27x，2x2 平铺无硬边 |
+
+最终提示词：
+
+```text
+Use case: stylized-concept. Asset type: seamless tileable PBR base-color material for original raft smelting equipment. Primary request: original hand-fired refractory clay composite made from muted red tidal clay, pale shell aggregate, dark charcoal inclusions, mineral bloom and sparse hammered metal dust, weathered by salt air but structurally dense. Scene/backdrop: texture sheet only. Style/medium: premium stylized-realistic game material, tactile hand-authored PBR albedo with crisp controlled micro-detail and physically plausible ceramic variation. Composition/framing: exact orthographic top-down square, uniform texel density, seamless wrap on all four edges, no central focal object, no recognizable brick layout. Lighting/mood: flat neutral albedo with absolutely no baked directional light, highlights, cast shadows or ambient occlusion. Color palette: desaturated iron-red clay, charcoal gray, chalk shell flecks and cool mineral teal traces, balanced and not monochrome orange or brown. Constraints: fully original, edge-to-edge refractory material coverage, no furnace, tools, flames, molten metal, hands, footprints, text, symbols, logos, watermark, frame or border. Avoid: wet glossy mud, large cracks, dramatic contrast, photographic scan framing, perspective preview, material ball, repeated checker pattern, masonry wall pattern or recognizable copyrighted design.
+```
+
+源图内容、色彩层次和颗粒尺度通过人工检查，直接使用通用材质处理脚本即通过既定绝对差和相对差门禁，没有降低质量或放宽阈值。normal 与 roughness 独立派生，运行时三图均使用 1024 分辨率；源 PNG 保留在忽略版本控制的 `output/imagegen/`。
+
 ## 本轮 Imagegen 尝试
 
-调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider，模型 `gpt-image-2`，质量 `high`。本轮 2048x2048 PNG 培养土请求在 93.6 秒完成并通过人工内容检查；前两轮帆布和海床分别为 47.2/38.1 秒。没有在仓库保存 provider URL 或 API Key，也没有切换低阶模型。先前鲨皮与编织纤维请求的超时记录继续保留，它们仍使用确定性程序版本。
+调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider，模型 `gpt-image-2`，质量 `high`。本轮 2048x2048 PNG 耐火陶土请求在 46.8 秒完成并通过人工内容检查；培养土、帆布和海床此前分别为 93.6/47.2/38.1 秒。没有在仓库保存 provider URL 或 API Key，也没有切换低阶模型。先前鲨皮与编织纤维请求的超时记录继续保留，它们仍使用确定性程序版本。
 
 鲨皮最终请求提示词：
 
@@ -207,7 +228,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 ## 代码原生模型与动画
 
-本轮作物盆、分阶段作物和盐翼盗鸟需要确定性响应供水、生长、枯萎、鸟害、筏格位置和跨版本存档，因此继续以代码原生形体与实时动画建立统一可玩的近最终基线。培养土使用独立 AI PBR 材质；没有因软件截图后端较慢而降低运行时贴图质量。
+本轮研究台、逐砖通风架、熔炉和金属工具需要确定性响应知识、干燥、热工阶段、工具等级、筏格位置和跨版本存档，因此继续以代码原生形体与实时动画建立统一可玩的近最终基线。耐火陶土使用独立 AI PBR 材质；没有因软件截图后端较慢而降低运行时贴图质量。
 
 | ID | 资产 | 位置 | 当前状态 |
 | --- | --- | --- | --- |
@@ -230,6 +251,10 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | MOD-017 | 潮石锚：木质底座、双立柱、绞盘鼓、轮缘、曲柄、四圈绳卷、垂绳、石坠和双锚爪 | `src/game/art/NavigationModels.ts` | 15+ 网格，自动朝筏外，支持水下部署和筏格损毁 |
 | MOD-018 | 潮生作物盆：风化木板、绑绳、角铁、排水口、PBR 培养土、湿润层、4 茎节、9 叶片枢轴、3 果实和种子标记 | `src/game/art/PlantingModels.ts` | 42+ 网格，生长、供水、枯萎和收获分别驱动，不使用整体静态缩放 |
 | MOD-019 | 盐翼盗鸟：躯干、胸羽、头颈、喙、双眼眉羽、14 主翼羽、3 尾羽、双腿和 6 趾 | `src/game/art/PlantingModels.ts` | 28+ 网格、700+ 顶点，支持盘旋、俯冲、啄食和惊飞姿态 |
+| MOD-020 | 盐迹研究台：支脚、双层台面、斜撑、样本盘、样本碎片、翻页板、比较刻度、旋转拨盘和透镜臂 | `src/game/art/ProgressionModels.ts` | 30+ 网格，样本与项目状态分别驱动页面、拨盘、指示和高亮 |
+| MOD-021 | 潮红通风架：双层木轨、编织晾垫、绑扎和四个独立砖位 | `src/game/art/ProgressionModels.ts` | 每砖独立材质、计时、缩放和湿/干状态，不以整架计时替代 |
+| MOD-022 | 回潮熔炉：58+ 独立耐火砖、锈蚀束带、烟囱、炉门、通风口、坩埚、矿石、金属锭和分层热源 | `src/game/art/ProgressionModels.ts` | AI 耐火 PBR；工作/完成状态分别驱动炉门、内容物、火、烟、火星和热光 |
+| MOD-023 | 潮铸穿浪矛与宽刃斧：回收木柄、潮铸金属刃/矛头、护套、铆接与纤维绑扎 | `src/game/art/ProceduralModels.ts` | 与基础工具共享第一视角节奏但使用独立高阶形体、材质和伤害数据 |
 | ANI-001 | 木筏三轴波浪升沉 | `src/game/systems/RaftSystem.ts` | 已实现 |
 | ANI-002 | 第一人称移动、镜头与木筏局部坐标 | `src/game/systems/PlayerController.ts` | 已实现基础版 |
 | ANI-003 | 钩具蓄力、抛射、旋转、拖回与收起 | `src/game/systems/HookSystem.ts` | 已实现基础闭环 |
@@ -242,7 +267,9 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | ANI-010 | 木筏/岛屿/水域三表面移动、三维游动、上浮/下潜、登筏与上岸 | `src/game/systems/PlayerController.ts` | 水域位置与潜深可保存，地形和礁石碰撞已接通 |
 | ANI-011 | 水下钩具挥击、矿点分段生命、海草摇曳、鱼群巡游和鲨鱼追击/扑咬 | `src/game/systems/UnderwaterSystem.ts`、`SharkSystem.ts` | 音效、粒子、UI、生命伤害和击退同步 |
 | ANI-012 | 展帆/收帆、帆面逐顶点鼓动、桅顶风标、八向调帆、筏体转向、锚绳伸缩、绞盘旋转和锚爪摆动 | `src/game/systems/NavigationSystem.ts` | 风效、航速、部署状态、UI 和音频同步 |
-| ANI-013 | 作物叶片分段萌发/风摆/枯萎下垂、果实减产，以及盐翼盗鸟翼/尾/头颈/抓爪状态动画 | `src/game/systems/PlantingSystem.ts` | 与供水、生长、鸟害和 v6 攻击中恢复同步 |
+| ANI-013 | 作物叶片分段萌发/风摆/枯萎下垂、果实减产，以及盐翼盗鸟翼/尾/头颈/抓爪状态动画 | `src/game/systems/PlantingSystem.ts` | 与供水、生长、鸟害和 v7 攻击中恢复同步 |
+| ANI-014 | 研究拨盘/页面反馈、逐砖湿干变化、熔炉炉门/内容物/热光阶段 | `src/game/systems/ProgressionSystem.ts` | 与全局知识、逐砖计时、熔炼工作/完成和 v7 恢复同步 |
+| ANI-015 | 木矛/金属矛与石斧/金属斧实时换模、挥击和分级命中 | `src/game/systems/SpearSystem.ts`、`IslandSystem.ts` | 升级制作后自动替换快捷栏，鲨鱼和棕榈实际接收不同伤害 |
 | VFX-001 | 入水粒子 | `src/game/systems/SplashSystem.ts` | 已实现 |
 | VFX-002 | 木屑、修补、拆除、武器和咬击冲击粒子 | `src/game/systems/SplashSystem.ts` | 颜色与数量按事件区分 |
 | VFX-003 | 五层加色火焰、动态点光、五块余烬和八层烟雾 | `src/game/art/ProceduralModels.ts` | 火势与设备阶段联动，焦鱼阶段转为深色烟 |
@@ -251,6 +278,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | VFX-006 | 水下雾色/曝光过渡、双面海面、滚动焦散、气泡、悬浮物和矿屑 | `src/game/systems/UnderwaterSystem.ts`、`DriftwakeGame.ts` | 随潜深和玩家表面驱动；水下关闭不符合物理的硬阴影 pass |
 | VFX-007 | 航行设备放置冲击、脉动交互环、帆面风压形变、风标和水下锚爪 | `src/game/systems/NavigationSystem.ts` | 随帆向、风力利用与部署插值实时驱动 |
 | VFX-008 | 作物盆放置冲击、湿土覆盖、种子标记、生长叶冠、枯萎材质、果实节点和交互高亮 | `src/game/systems/PlantingSystem.ts` | 随作物领域状态实时驱动 |
+| VFX-009 | 耐火砖湿干材质、五层加色炉火、动态点光、炉烟、火星、矿石退场、金属锭凝固和设备高亮 | `src/game/systems/ProgressionSystem.ts` | 预览态关闭动态热源；运行时粒子循环复用并随熔炼阶段驱动 |
 
 ## 程序音频分层
 
@@ -270,6 +298,8 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | SFX-REEF | 入水/游动、钩刃擦水、细砂/黏土/金属分层撞击和海草收割 | `src/game/systems/AudioSystem.ts` |
 | SFX-NAV | 帆布受风持续带通层、展收帆摩擦、调帆绳索、锚链坠落和绞盘回收 | `src/game/systems/AudioSystem.ts` |
 | SFX-PLANT | 土壤落种、倒水低通/水滴音、成熟三音提示、干裂叶响和收获层 | `src/game/systems/AudioSystem.ts` |
+| SFX-RESEARCH | 开台、样本落盘/刻度确认、项目学习和纸页/金属拨盘反馈 | `src/game/systems/AudioSystem.ts` |
+| SFX-FORGE | 湿砖落架、干砖裂响、矿石/燃料装填、持续炉火、完成凝固和收锭金属层 | `src/game/systems/AudioSystem.ts` |
 | CREATURE | 鲨鱼低频预兆、扑咬冲击与武器命中；盐翼盗鸟警报、啄食和惊飞 | `src/game/systems/AudioSystem.ts` |
 | UI | 短促确认、拒绝和工具切换 | `src/game/systems/AudioSystem.ts` |
 
@@ -279,9 +309,9 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 - 用 Blender 或等效 DCC 建立可蒙皮的最终双手、工具、鲨鱼和生活设备资产，当前代码模型是原创近最终形体基线而非最终蒙皮资产；
 - 为木材补充经过人工修整的 normal、roughness 与 AO；鲨皮和编织纤维已使用独立派生图；
-- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005/TEX-006/TEX-007 已采用高质量输出；
+- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005/TEX-006/TEX-007/TEX-008 已采用高质量输出；
 - 建立同一角色比例与材质语言下的模型规范；
 - 为岛屿补充手绘沙地/草地/岩面材质组、草丛层级和更丰富的岸线小物，保持现有确定性地形与碰撞接口；
-- 为珊瑚、海草、鱼群、水下钩具、拾风帆、潮石锚、作物和盐翼盗鸟建立最终 DCC 模型、蒙皮与顶点动画，保留当前布局和领域接口；
-- 录制或生成多样本海浪、绳索、木结构、金属、火焰、蒸汽、烹饪和鲨鱼音效，保留当前程序音频作动态底层；
+- 为珊瑚、海草、鱼群、水下钩具、拾风帆、潮石锚、作物、盐翼盗鸟、研究台、通风架、熔炉和金属工具建立最终 DCC 模型、蒙皮与顶点动画，保留当前布局和领域接口；
+- 录制或生成多样本海浪、绳索、木结构、研究器械、湿砖、金属、火焰、蒸汽、烹饪和鲨鱼音效，保留当前程序音频作动态底层；
 - 为所有最终资产建立来源、版本、修改记录和发布授权结论。

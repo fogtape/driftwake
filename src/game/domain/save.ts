@@ -26,10 +26,15 @@ import {
   sanitizePlantingState,
   type SavedPlantingState,
 } from './planting';
+import {
+  createDefaultProgressionState,
+  sanitizeProgressionState,
+  type SavedProgressionState,
+} from './progression';
 
-export const SAVE_VERSION = 6;
-export const SAVE_KEY = 'driftwake.save.v6';
-export const LEGACY_SAVE_KEYS = ['driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
+export const SAVE_VERSION = 7;
+export const SAVE_KEY = 'driftwake.save.v7';
+export const LEGACY_SAVE_KEYS = ['driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
 
 export type PlayerSurface = 'raft' | 'island' | 'water';
 
@@ -61,6 +66,7 @@ export interface DriftwakeSave {
     devices: SavedDeviceState[];
     navigation: SavedNavigationState;
     planting: SavedPlantingState;
+    progression: SavedProgressionState;
   };
   world: {
     island: SavedIslandState;
@@ -68,7 +74,7 @@ export interface DriftwakeSave {
   };
 }
 
-const TOOL_IDS = new Set<ToolId>(['hook', 'hammer', 'spear', 'fishingRod', 'axe']);
+const TOOL_IDS = new Set<ToolId>(['hook', 'hammer', 'spear', 'metalSpear', 'fishingRod', 'axe', 'metalAxe']);
 
 function finiteInteger(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : fallback;
@@ -124,11 +130,17 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
     version?: number;
     savedAt?: number;
     player?: Partial<DriftwakeSave['player']>;
-    raft?: { tiles?: SavedRaftTile[]; devices?: SavedDeviceState[]; navigation?: SavedNavigationState; planting?: SavedPlantingState };
+    raft?: {
+      tiles?: SavedRaftTile[];
+      devices?: SavedDeviceState[];
+      navigation?: SavedNavigationState;
+      planting?: SavedPlantingState;
+      progression?: SavedProgressionState;
+    };
     world?: { island?: SavedIslandState; underwater?: SavedUnderwaterState };
   };
   if (
-    (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3 && candidate.version !== 4 && candidate.version !== 5 && candidate.version !== SAVE_VERSION) ||
+    (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3 && candidate.version !== 4 && candidate.version !== 5 && candidate.version !== 6 && candidate.version !== SAVE_VERSION) ||
     !candidate.player ||
     !candidate.raft
   ) return null;
@@ -210,6 +222,18 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
     birdElapsed: plantingBirdTargetValid ? rawPlanting.birdElapsed : 0,
     birdTargetId: plantingBirdTargetValid ? rawPlanting.birdTargetId : null,
   };
+  const rawProgression = candidate.version >= 7
+    ? sanitizeProgressionState(candidate.raft.progression)
+    : createDefaultProgressionState();
+  const progression = {
+    ...rawProgression,
+    devices: rawProgression.devices.filter((device) => {
+      const key = deviceKey(device.x, device.z);
+      if (!tileKeys.has(key) || occupied.has(key)) return false;
+      occupied.add(key);
+      return true;
+    }),
+  };
 
   return {
     version: SAVE_VERSION,
@@ -221,7 +245,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       playSeconds: Math.max(0, finiteInteger(candidate.player.playSeconds)),
       navigation: sanitizeNavigation(candidate.player.navigation, island),
     },
-    raft: { tiles: stableTiles, devices, navigation, planting },
+    raft: { tiles: stableTiles, devices, navigation, planting, progression },
     world: { island, underwater },
   };
 }

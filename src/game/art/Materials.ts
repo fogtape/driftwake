@@ -31,6 +31,9 @@ export interface AssetTextures {
   planterSoil: Texture;
   planterSoilNormal: Texture;
   planterSoilRoughness: Texture;
+  refractoryClay: Texture;
+  refractoryClayNormal: Texture;
+  refractoryClayRoughness: Texture;
 }
 
 export interface MaterialLibrary {
@@ -58,6 +61,7 @@ export interface MaterialLibrary {
   reefCaustic: MeshBasicMaterial;
   sailCloth: MeshStandardMaterial;
   planterSoil: MeshStandardMaterial;
+  refractoryClay: MeshStandardMaterial;
   cropLeaf: MeshStandardMaterial;
   cropDry: MeshStandardMaterial;
   cropFruit: MeshStandardMaterial;
@@ -87,6 +91,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     planterSoil,
     planterSoilNormal,
     planterSoilRoughness,
+    refractoryClay,
+    refractoryClayNormal,
+    refractoryClayRoughness,
   ] = await Promise.all([
     loader.loadAsync('/assets/textures/weathered-cedar.webp'),
     loader.loadAsync('/assets/textures/ocean-foam-mask.png'),
@@ -105,6 +112,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/planter-soil.webp'),
     loader.loadAsync('/assets/textures/planter-soil-normal.webp'),
     loader.loadAsync('/assets/textures/planter-soil-roughness.webp'),
+    loader.loadAsync('/assets/textures/refractory-clay.webp'),
+    loader.loadAsync('/assets/textures/refractory-clay-normal.webp'),
+    loader.loadAsync('/assets/textures/refractory-clay-roughness.webp'),
   ]);
 
   const anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -166,6 +176,16 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   planterSoilNormal.colorSpace = NoColorSpace;
   planterSoilRoughness.colorSpace = NoColorSpace;
 
+  for (const texture of [refractoryClay, refractoryClayNormal, refractoryClayRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(1.55, 1.35);
+    texture.anisotropy = anisotropy;
+  }
+  refractoryClay.colorSpace = SRGBColorSpace;
+  refractoryClayNormal.colorSpace = NoColorSpace;
+  refractoryClayRoughness.colorSpace = NoColorSpace;
+
   return {
     wood,
     foam,
@@ -184,6 +204,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     planterSoil,
     planterSoilNormal,
     planterSoilRoughness,
+    refractoryClay,
+    refractoryClayNormal,
+    refractoryClayRoughness,
   };
 }
 
@@ -281,6 +304,15 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       normalScale: new Vector2(0.48, 0.48),
       roughnessMap: textures.planterSoilRoughness,
       roughness: 1,
+      metalness: 0,
+    }),
+    refractoryClay: new MeshStandardMaterial({
+      color: 0xd4a28a,
+      map: textures.refractoryClay,
+      normalMap: textures.refractoryClayNormal,
+      normalScale: new Vector2(0.56, 0.56),
+      roughnessMap: textures.refractoryClayRoughness,
+      roughness: 0.94,
       metalness: 0,
     }),
     cropLeaf: new MeshStandardMaterial({ color: 0x5f8c54, roughness: 0.86, side: DoubleSide }),

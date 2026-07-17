@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addItems, itemCount, salvageLoot, usedInventorySlots, type Inventory } from './items';
+import { addItems, itemCount, preferredToolOrder, salvageLoot, usedInventorySlots, type Inventory } from './items';
 import { craftRecipe } from './recipes';
 
 describe('inventory domain', () => {
@@ -27,6 +27,30 @@ describe('inventory domain', () => {
     const result = craftRecipe({ timber: 3, stone: 2, rope: 1, scrap: 1, fiber: 4 }, 'axe');
     expect(result.ok).toBe(true);
     expect(result.inventory).toEqual({ timber: 1, fiber: 4, axe: 1 });
+  });
+
+  it('keeps researched recipes locked until their project is learned', () => {
+    const inventory = { timber: 4, dryBrick: 6, scrap: 3 } as const;
+    const locked = craftRecipe(inventory, 'smelterKit');
+    expect(locked).toMatchObject({ ok: false, reason: 'locked', inventory });
+    const learned = craftRecipe(inventory, 'smelterKit', ['smelterKit']);
+    expect(learned).toMatchObject({ ok: true, reason: 'crafted', inventory: { smelterKit: 1 } });
+  });
+
+  it('upgrades a basic spear instead of leaving duplicate tool tiers', () => {
+    const result = craftRecipe({ spear: 1, metalIngot: 2, rope: 1, timber: 3 }, 'metalSpear', ['metalSpear']);
+    expect(result.ok).toBe(true);
+    expect(result.inventory).toEqual({ timber: 3, metalSpear: 1 });
+  });
+
+  it('keeps upgraded tools in the same stable hotbar slots', () => {
+    expect(preferredToolOrder({ metalSpear: 1, metalAxe: 1 })).toEqual([
+      'hook',
+      'hammer',
+      'metalSpear',
+      'fishingRod',
+      'metalAxe',
+    ]);
   });
 
   it('expands a cache into useful loot instead of a cache counter', () => {

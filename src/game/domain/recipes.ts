@@ -68,6 +68,31 @@ export const RECIPES = {
     cost: { timber: 4, fiber: 3, rope: 1, stone: 2 },
     description: '搭建带排水层的培养槽，播种后需要持续供应蒸馏淡水。',
   },
+  researchBenchKit: {
+    id: 'researchBenchKit',
+    name: '盐迹研究台',
+    category: 'survival',
+    output: { researchBenchKit: 1 },
+    cost: { timber: 6, scrap: 2, rope: 1 },
+    description: '用样本、草图和机械比对推导新设备与工具。',
+  },
+  wetBrick: {
+    id: 'wetBrick',
+    name: '潮红湿砖',
+    category: 'material',
+    output: { wetBrick: 1 },
+    cost: { sand: 2, clay: 2 },
+    description: '将浅礁细砂和潮红黏土压成耐火砖坯，需放在甲板晾干。',
+  },
+  smelterKit: {
+    id: 'smelterKit',
+    name: '回潮熔炉',
+    category: 'survival',
+    output: { smelterKit: 1 },
+    cost: { timber: 4, dryBrick: 6, scrap: 3 },
+    description: '以耐火砖胆和导风炉口聚集热量，每次熔炼一份矿石。',
+    requiresResearch: true,
+  },
   hammer: {
     id: 'hammer',
     name: '建造锤',
@@ -83,6 +108,15 @@ export const RECIPES = {
     output: { spear: 1 },
     cost: { timber: 3, rope: 1 },
     description: '在鲨鱼贴近木筏时进行短促刺击。',
+  },
+  metalSpear: {
+    id: 'metalSpear',
+    name: '潮铸穿浪矛',
+    category: 'tool',
+    output: { metalSpear: 1 },
+    cost: { spear: 1, metalIngot: 2, rope: 1 },
+    description: '替换木制矛尖并加固绑缚，让每次命中造成更深的创口。',
+    requiresResearch: true,
   },
   fishingRod: {
     id: 'fishingRod',
@@ -100,6 +134,15 @@ export const RECIPES = {
     cost: { timber: 2, stone: 2, rope: 1, scrap: 1 },
     description: '把潮磨石刃固定到回收木柄上，用于砍取岛屿棕榈。',
   },
+  metalAxe: {
+    id: 'metalAxe',
+    name: '潮铸宽刃斧',
+    category: 'tool',
+    output: { metalAxe: 1 },
+    cost: { axe: 1, metalIngot: 2, scrap: 1 },
+    description: '把石斧升级为一体宽刃，砍伐时每击造成双倍切入。',
+    requiresResearch: true,
+  },
 } as const satisfies Record<
   string,
   {
@@ -109,6 +152,7 @@ export const RECIPES = {
     output: ItemBundle;
     cost: ItemBundle;
     description: string;
+    requiresResearch?: boolean;
   }
 >;
 
@@ -117,8 +161,13 @@ export type RecipeId = keyof typeof RECIPES;
 export interface CraftResult {
   ok: boolean;
   inventory: Inventory;
-  reason: 'crafted' | 'missing-materials' | 'already-owned' | 'inventory-full';
+  reason: 'crafted' | 'missing-materials' | 'already-owned' | 'inventory-full' | 'locked';
   missing: ItemBundle;
+}
+
+export function isRecipeUnlocked(recipeId: RecipeId, learned: readonly RecipeId[] = []): boolean {
+  const recipe = RECIPES[recipeId];
+  return !('requiresResearch' in recipe) || !recipe.requiresResearch || learned.includes(recipeId);
 }
 
 export function missingForRecipe(inventory: Inventory, recipeId: RecipeId): ItemBundle {
@@ -130,8 +179,11 @@ export function missingForRecipe(inventory: Inventory, recipeId: RecipeId): Item
   return missing;
 }
 
-export function craftRecipe(inventory: Inventory, recipeId: RecipeId): CraftResult {
+export function craftRecipe(inventory: Inventory, recipeId: RecipeId, learned: readonly RecipeId[] = []): CraftResult {
   const recipe = RECIPES[recipeId];
+  if (!isRecipeUnlocked(recipeId, learned)) {
+    return { ok: false, inventory, reason: 'locked', missing: {} };
+  }
   const outputId = Object.keys(recipe.output)[0] as ItemId;
   if (ITEM_DEFINITIONS[outputId].category === 'tool' && itemCount(inventory, outputId) > 0) {
     return { ok: false, inventory, reason: 'already-owned', missing: {} };

@@ -87,9 +87,9 @@ export class SharkSystem {
     return this.cameraForward.dot(this.strikeVector) > 0.69;
   }
 
-  receiveSpearStrike(camera: PerspectiveCamera): boolean {
+  receiveSpearStrike(camera: PerspectiveCamera, damage = 34): boolean {
     if (!this.canStrike(camera)) return false;
-    this.health = Math.max(0, this.health - 34);
+    this.health = Math.max(0, this.health - Math.max(1, damage));
     this.hitsDuringAttack += 1;
     this.audio.playSpearHit();
     this.splashes.spawnImpact(this.model.position, 0xb74f45, 16);
@@ -345,7 +345,7 @@ export class SharkSystem {
 
   private updateSpearInteraction(message: string): void {
     const store = useGameStore.getState();
-    if (store.selectedTool === 'spear') store.setInteraction(message, 'shark');
+    if (store.selectedTool === 'spear' || store.selectedTool === 'metalSpear') store.setInteraction(message, 'shark');
     else if (store.interaction?.startsWith('鲨鱼')) store.setInteraction(null, 'shark');
   }
 }

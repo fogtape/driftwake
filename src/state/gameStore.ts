@@ -19,14 +19,25 @@ import type { DeviceType } from '../game/domain/devices';
 import type { IslandPhase } from '../game/domain/island';
 import type { NavigationDeviceType } from '../game/domain/navigation';
 import type { PlayerSurface } from '../game/domain/save';
+import {
+  addResearchSample,
+  canLearnProject,
+  createDefaultProgressionState,
+  learnProject,
+  RESEARCH_PROJECTS,
+  type ProgressionDeviceType,
+  type ProgressionKnowledge,
+  type ResearchProjectId,
+  type ResearchSampleId,
+} from '../game/domain/progression';
 
 export type GamePhase = 'title' | 'playing';
 export type QualityPreset = 'low' | 'high';
-export type OverlayPanel = 'pack' | 'crafting' | null;
+export type OverlayPanel = 'pack' | 'crafting' | 'research' | null;
 export type FishingPhase = 'idle' | 'casting' | 'waiting' | 'nibble' | 'hooked' | 'caught' | 'lost';
 export type SharkMode = 'distant' | 'circling' | 'approaching' | 'attacking' | 'retreating';
-export type PlacementType = DeviceType | NavigationDeviceType | 'planter';
-export type InteractionOwner = 'build' | 'device' | 'fishing' | 'island' | 'navigation' | 'planting' | 'shark' | 'underwater' | 'global';
+export type PlacementType = DeviceType | NavigationDeviceType | ProgressionDeviceType | 'planter';
+export type InteractionOwner = 'build' | 'device' | 'fishing' | 'island' | 'navigation' | 'planting' | 'progression' | 'shark' | 'underwater' | 'global';
 
 export interface AudioMix {
   master: number;
@@ -113,6 +124,20 @@ export interface PlantingFeedback {
   birdThreat: number;
 }
 
+export interface ProgressionFeedback extends ProgressionKnowledge {
+  researchBenches: number;
+  dryingRacks: number;
+  wetBricks: number;
+  dryBricks: number;
+  smelters: number;
+  working: number;
+  ready: number;
+  progress: number;
+  learnable: number;
+}
+
+export type ResearchSampleResult = 'researched' | 'already-researched' | 'missing-sample';
+
 export interface PlayerSaveSnapshot {
   inventory: Inventory;
   survival: SurvivalState;
@@ -142,6 +167,7 @@ interface GameState {
   devices: DeviceFeedbackMap;
   navigation: NavigationFeedback;
   planting: PlantingFeedback;
+  progression: ProgressionFeedback;
   placementDevice: PlacementType | null;
   island: IslandFeedback;
   reef: ReefFeedback;
@@ -176,6 +202,10 @@ interface GameState {
   setDevices: (feedback: DeviceFeedbackMap) => void;
   setNavigation: (feedback: NavigationFeedback) => void;
   setPlanting: (feedback: PlantingFeedback) => void;
+  setProgressionFeedback: (feedback: Omit<ProgressionFeedback, keyof ProgressionKnowledge>) => void;
+  hydrateProgression: (knowledge: ProgressionKnowledge) => void;
+  researchSample: (sample: ResearchSampleId) => ResearchSampleResult;
+  learnResearchProject: (projectId: ResearchProjectId) => boolean;
   setPlacementDevice: (device: PlacementType | null) => void;
   setIsland: (feedback: IslandFeedback) => void;
   setReef: (feedback: ReefFeedback) => void;
@@ -230,6 +260,28 @@ function defaultPlanting(): PlantingFeedback {
   };
 }
 
+function defaultProgression(): ProgressionFeedback {
+  const knowledge = createDefaultProgressionState();
+  return {
+    researched: knowledge.researched,
+    learned: knowledge.learned,
+    researchBenches: 0,
+    dryingRacks: 0,
+    wetBricks: 0,
+    dryBricks: 0,
+    smelters: 0,
+    working: 0,
+    ready: 0,
+    progress: 0,
+    learnable: 0,
+  };
+}
+
+function countLearnableProjects(knowledge: ProgressionKnowledge): number {
+  return (Object.keys(RESEARCH_PROJECTS) as ResearchProjectId[])
+    .filter((projectId) => canLearnProject(knowledge, projectId)).length;
+}
+
 function clampAudioMix(current: AudioMix, patch: Partial<AudioMix>): AudioMix {
   const merged = { ...current, ...patch };
   const clamp = (value: number) => Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
@@ -268,6 +320,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
   navigation: defaultNavigation(),
   planting: defaultPlanting(),
+  progression: defaultProgression(),
   placementDevice: null,
   island: { phase: 'approaching', distance: 80, remaining: 72, ashore: false, harvested: 0, total: 18 },
   reef: { harvested: 0, total: 18 },
@@ -310,8 +363,17 @@ export const useGameStore = create<GameState>((set, get) => ({
     return true;
   },
   craft: (recipeId) => {
-    const result = craftRecipe(get().inventory, recipeId);
-    if (result.ok) set({ inventory: result.inventory, inventorySlots: usedInventorySlots(result.inventory) });
+    const state = get();
+    const result = craftRecipe(state.inventory, recipeId, state.progression.learned);
+    if (result.ok) {
+      const selectedTool =
+        recipeId === 'metalSpear' && state.selectedTool === 'spear'
+          ? 'metalSpear'
+          : recipeId === 'metalAxe' && state.selectedTool === 'axe'
+            ? 'metalAxe'
+            : state.selectedTool;
+      set({ inventory: result.inventory, inventorySlots: usedInventorySlots(result.inventory), selectedTool });
+    }
     return result;
   },
   useItem: (itemId) => {
@@ -366,6 +428,39 @@ export const useGameStore = create<GameState>((set, get) => ({
   setDevices: (devices) => set({ devices }),
   setNavigation: (navigation) => set({ navigation }),
   setPlanting: (planting) => set({ planting }),
+  setProgressionFeedback: (feedback) =>
+    set((state) => ({ progression: { ...state.progression, ...feedback } })),
+  hydrateProgression: (knowledge) =>
+    set((state) => ({
+      progression: {
+        ...state.progression,
+        researched: [...knowledge.researched],
+        learned: [...knowledge.learned],
+        learnable: countLearnableProjects(knowledge),
+      },
+    })),
+  researchSample: (sample) => {
+    const state = get();
+    if (state.progression.researched.includes(sample)) return 'already-researched';
+    const inventory = removeItems(state.inventory, { [sample]: 1 });
+    if (!inventory) return 'missing-sample';
+    const knowledge = addResearchSample(state.progression, sample);
+    const progression = { ...state.progression, researched: knowledge.researched };
+    set({
+      inventory,
+      inventorySlots: usedInventorySlots(inventory),
+      progression: { ...progression, learnable: countLearnableProjects(progression) },
+    });
+    return 'researched';
+  },
+  learnResearchProject: (projectId) => {
+    const state = get();
+    const knowledge = learnProject(state.progression, projectId);
+    if (knowledge === state.progression) return false;
+    const progression = { ...state.progression, learned: knowledge.learned };
+    set({ progression: { ...progression, learnable: countLearnableProjects(progression) } });
+    return true;
+  },
   setPlacementDevice: (placementDevice) => set({ placementDevice, interaction: null, interactionOwner: null }),
   setIsland: (island) => set({ island }),
   setReef: (reef) => set({ reef }),
@@ -396,6 +491,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       player: defaultPlayer(),
       navigation: defaultNavigation(),
       planting: defaultPlanting(),
+      progression: defaultProgression(),
       placementDevice: null,
       interaction: null,
       interactionOwner: null,

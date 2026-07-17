@@ -15,6 +15,7 @@ import {
 import { createReefModel, createReefNodeModel } from './UnderwaterModels';
 import { createAnchorModel, createSailModel } from './NavigationModels';
 import { createPlanterModel, createSaltwingBirdModel } from './PlantingModels';
+import { createDryingRackModel, createResearchBenchModel, createSmelterModel } from './ProgressionModels';
 
 function createTestMaterials(): MaterialLibrary {
   const material = () => new MeshStandardMaterial();
@@ -43,6 +44,7 @@ function createTestMaterials(): MaterialLibrary {
     reefCaustic: new MeshBasicMaterial(),
     sailCloth: material(),
     planterSoil: material(),
+    refractoryClay: material(),
     cropLeaf: material(),
     cropDry: material(),
     cropFruit: material(),
@@ -105,6 +107,8 @@ describe('procedural model assets', () => {
     expect(meshCounts[2]).toBeGreaterThanOrEqual(4);
     expect(meshCounts[3]).toBeGreaterThanOrEqual(4);
     expect(renderedPartCount(tools[3])).toBeGreaterThanOrEqual(9);
+    expect(meshStats(createSpearModel(materials, true)).meshes).toBeGreaterThan(meshCounts[1]);
+    expect(meshStats(createAxeModel(materials, true)).meshes).toBeGreaterThan(meshCounts[3]);
   }, 15_000);
 
   it('builds readable purifier and grill assemblies with animated state references', () => {
@@ -193,5 +197,20 @@ describe('procedural model assets', () => {
     expect(birdSize.x).toBeGreaterThan(1);
     expect(bird.userData.birdVisuals.leftWing).toBeDefined();
     expect(bird.userData.birdVisuals.feet).toBeDefined();
+  }, 15_000);
+
+  it('builds layered research, brick-drying and smelting equipment with stateful parts', () => {
+    const materials = createTestMaterials();
+    const research = createResearchBenchModel(materials);
+    const drying = createDryingRackModel(materials);
+    const smelter = createSmelterModel(materials);
+    expect(meshStats(research).meshes).toBeGreaterThanOrEqual(30);
+    expect(meshStats(drying).meshes).toBeGreaterThanOrEqual(9);
+    expect(meshStats(smelter).meshes).toBeGreaterThanOrEqual(58);
+    expect(drying.userData.dryingRackVisuals.bricks).toHaveLength(4);
+    expect(research.userData.researchBenchVisuals.dial).toBeDefined();
+    expect(smelter.userData.smelterVisuals.smoke).toHaveLength(6);
+    expect(smelter.userData.smelterVisuals.sparks).toHaveLength(9);
+    expect(smelter.userData.smelterVisuals.crucible).toBeDefined();
   }, 15_000);
 });

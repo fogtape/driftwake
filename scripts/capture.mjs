@@ -17,7 +17,7 @@ const chromiumPath = process.env.CHROMIUM_PATH ?? '/data/data/com.termux/files/u
 const outputDir = new URL('../artifacts/screenshots/', import.meta.url);
 
 const seededSave = {
-  version: 6,
+  version: 7,
   savedAt: 1,
   player: {
     inventory: {
@@ -85,6 +85,11 @@ const seededSave = {
           birdDamage: 0,
         },
       ],
+    },
+    progression: {
+      researched: [],
+      learned: [],
+      devices: [],
     },
   },
   world: {
@@ -251,6 +256,88 @@ const plantingBirdSave = {
   },
 };
 
+const progressionPlacementSave = {
+  ...seededSave,
+  player: {
+    ...seededSave.player,
+    inventory: { hook: 1, hammer: 1, researchBenchKit: 1 },
+  },
+  raft: {
+    ...seededSave.raft,
+    devices: [],
+    navigation: { ...seededSave.raft.navigation, devices: [] },
+    planting: { birdClock: 0, birdVisit: 0, planters: [] },
+    progression: { researched: [], learned: [], devices: [] },
+  },
+};
+
+const progressionResearchSave = {
+  ...progressionPlacementSave,
+  player: {
+    ...progressionPlacementSave.player,
+    inventory: { hook: 1, hammer: 1, timber: 1, scrap: 1, dryBrick: 1 },
+  },
+  raft: {
+    ...progressionPlacementSave.raft,
+    progression: {
+      researched: [],
+      learned: [],
+      devices: [
+        { id: 'research-table', type: 'researchBench', x: 0, z: -1, rotation: 0, phase: 'idle', elapsed: 0, brickElapsed: [] },
+      ],
+    },
+  },
+};
+
+const progressionSmeltingSave = {
+  ...progressionPlacementSave,
+  player: {
+    ...progressionPlacementSave.player,
+    inventory: { hook: 1, hammer: 1, timber: 4, wetBrick: 1 },
+  },
+  raft: {
+    ...progressionPlacementSave.raft,
+    progression: {
+      researched: ['timber', 'scrap', 'dryBrick'],
+      learned: ['smelterKit'],
+      devices: [
+        { id: 'smelting-table', type: 'researchBench', x: -1, z: -1, rotation: 0, phase: 'idle', elapsed: 0, brickElapsed: [] },
+        { id: 'brick-rack', type: 'dryingBricks', x: 1, z: -1, rotation: 0, phase: 'idle', elapsed: 0, brickElapsed: [42, 25, 8] },
+        { id: 'active-smelter', type: 'smelter', x: 0, z: -1, rotation: 0, phase: 'working', elapsed: 55, brickElapsed: [] },
+      ],
+    },
+  },
+};
+
+const progressionReadySave = {
+  ...progressionSmeltingSave,
+  raft: {
+    ...progressionSmeltingSave.raft,
+    progression: {
+      ...progressionSmeltingSave.raft.progression,
+      devices: progressionSmeltingSave.raft.progression.devices.map((device) =>
+        device.id === 'active-smelter' ? { ...device, phase: 'ready', elapsed: 58 } : device,
+      ),
+    },
+  },
+};
+
+const narrowProgressionSave = {
+  ...seededSave,
+  raft: {
+    ...seededSave.raft,
+    progression: {
+      researched: ['timber', 'scrap', 'dryBrick'],
+      learned: ['smelterKit'],
+      devices: [
+        { id: 'narrow-table', type: 'researchBench', x: -1, z: -1, rotation: 0, phase: 'idle', elapsed: 0, brickElapsed: [] },
+        { id: 'narrow-rack', type: 'dryingBricks', x: 0, z: 0, rotation: 0, phase: 'idle', elapsed: 0, brickElapsed: [31, 14] },
+        { id: 'narrow-smelter', type: 'smelter', x: 1, z: -1, rotation: 0, phase: 'working', elapsed: 24, brickElapsed: [] },
+      ],
+    },
+  },
+};
+
 await mkdir(outputDir, { recursive: true });
 
 async function startVirtualDisplay() {
@@ -329,8 +416,8 @@ async function openDesktopPage(label, options = {}) {
   });
   if (options.seedSave) {
     await context.addInitScript((save) => {
-      localStorage.setItem('driftwake.save.v6', JSON.stringify(save));
-    }, options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
+      localStorage.setItem('driftwake.save.v7', JSON.stringify(save));
+    }, options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
   }
   const page = await context.newPage();
   monitorPage(page, label);
@@ -497,6 +584,27 @@ async function aimDownToPrompt(page, expected, steps = 50) {
   return prompt;
 }
 
+async function aimAroundToPrompt(page, expected) {
+  let prompt = await aimDownToPrompt(page, expected, 32);
+  if (prompt.includes(expected)) return prompt;
+  for (const [direction, steps] of [[1, 38], [-1, 76]]) {
+    for (let step = 0; step < steps && !prompt.includes(expected); step += 1) {
+      await page.evaluate((movementX) => {
+        const movement = new MouseEvent('mousemove');
+        Object.defineProperties(movement, {
+          movementX: { value: movementX },
+          movementY: { value: 0 },
+        });
+        document.dispatchEvent(movement);
+      }, direction * 14);
+      await page.waitForTimeout(70);
+      prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+    }
+    if (prompt.includes(expected)) break;
+  }
+  return prompt;
+}
+
 async function capturePlantingPlacement() {
   const { context, page } = await openDesktopPage('planting-placement', { seedSave: true, plantingPlacementStart: true });
   await page.locator('.primary-command').click();
@@ -580,6 +688,113 @@ async function capturePlantingBird() {
   await context.close();
 }
 
+async function captureProgressionPlacement() {
+  const { context, page } = await openDesktopPage('progression-placement', { seedSave: true, progressionPlacementStart: true });
+  await page.locator('.primary-command').click();
+  await page.keyboard.press('KeyI');
+  await page.getByRole('dialog', { name: '野外背包' }).waitFor();
+  await page.getByRole('button', { name: /盐迹研究台套件/ }).click();
+  await page.getByRole('button', { name: '安置到木筏' }).click();
+  const prompt = await aimDownToPrompt(page, '安置盐迹研究台');
+  if (!prompt.includes('安置盐迹研究台')) {
+    await page.screenshot({ path: new URL('progression-placement-diagnostic.png', outputDir).pathname });
+    throw new Error(`Expected research table placement prompt, received: ${prompt}`);
+  }
+  await page.mouse.click(desktopWidth / 2, desktopHeight / 2);
+  await page.waitForFunction(() => document.querySelector('.loot-notice')?.textContent?.includes('研究台已固定'), null, { timeout: 12_000 }).catch(async (error) => {
+    const state = await page.evaluate(() => ({
+      notice: document.querySelector('.loot-notice')?.textContent?.trim() ?? '',
+      prompt: document.querySelector('.interaction-prompt')?.textContent?.trim() ?? '',
+      progressionHud: document.querySelector('.device-status--progression')?.textContent?.trim() ?? '',
+      save: localStorage.getItem('driftwake.save.v7'),
+    }));
+    await page.screenshot({ path: new URL('progression-placement-diagnostic.png', outputDir).pathname });
+    throw new Error(`Research table placement did not complete: ${JSON.stringify(state).slice(0, 1600)}`, { cause: error });
+  });
+  await page.locator('.device-status--progression').waitFor({ timeout: 12_000 }).catch(async (error) => {
+    const state = await page.evaluate(() => ({
+      notice: document.querySelector('.loot-notice')?.textContent?.trim() ?? '',
+      prompt: document.querySelector('.interaction-prompt')?.textContent?.trim() ?? '',
+      rack: document.querySelector('.device-rack')?.textContent?.trim() ?? '',
+      rackClass: document.querySelector('.device-rack')?.className ?? '',
+      surface: document.querySelector('.island-readout')?.className ?? '',
+    }));
+    await page.screenshot({ path: new URL('progression-placement-diagnostic.png', outputDir).pathname });
+    throw new Error(`Progression HUD did not appear after placement: ${JSON.stringify(state)}`, { cause: error });
+  });
+  await inspectCanvasPixels(page, 'progression-placement');
+  await page.screenshot({ path: new URL('progression-placement-desktop.png', outputDir).pathname });
+  await context.close();
+}
+
+async function captureProgressionResearch() {
+  const { context, page } = await openDesktopPage('progression-research', { seedSave: true, progressionResearchStart: true });
+  await page.locator('.primary-command').click();
+  await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
+  const prompt = await aimAroundToPrompt(page, '打开盐迹研究台');
+  if (!prompt.includes('打开盐迹研究台')) {
+    await page.screenshot({ path: new URL('progression-research-diagnostic.png', outputDir).pathname });
+    throw new Error(`Expected research table prompt, received: ${prompt}`);
+  }
+  await page.keyboard.press('KeyE');
+  await page.getByRole('dialog', { name: '盐迹研究台' }).waitFor({ timeout: 4_000 });
+  for (const sample of ['盐蚀漂木', '氧化废铁', '盐壳耐火砖']) {
+    await page.getByRole('button', { name: `研究${sample}` }).click();
+  }
+  const smelterProject = page.locator('.research-project').filter({ hasText: '回潮熔炉' });
+  await smelterProject.waitFor({ state: 'visible' });
+  if (!(await smelterProject.evaluate((element) => element.classList.contains('is-ready')))) {
+    throw new Error('Smelter project did not become learnable after researching all samples');
+  }
+  await page.screenshot({ path: new URL('progression-research-desktop.png', outputDir).pathname });
+  await smelterProject.getByRole('button', { name: '学习配方' }).click();
+  await smelterProject.getByText('已学习').waitFor({ timeout: 4_000 });
+  await page.getByRole('button', { name: '关闭背包' }).click();
+  await page.keyboard.press('KeyC');
+  const smelterRecipe = page.locator('.recipe-row').filter({ hasText: '回潮熔炉' });
+  await smelterRecipe.waitFor({ state: 'visible' });
+  if (await smelterRecipe.evaluate((element) => element.classList.contains('is-locked'))) {
+    throw new Error('Learned smelter recipe remained locked in crafting');
+  }
+  await context.close();
+}
+
+async function captureProgressionSmelting() {
+  const { context, page } = await openDesktopPage('progression-smelting', { seedSave: true, progressionSmeltingStart: true });
+  await page.locator('.primary-command').click();
+  await page.waitForTimeout(300);
+  const prompt = await aimAroundToPrompt(page, '矿石熔炼中');
+  if (!prompt.includes('矿石熔炼中')) {
+    await page.screenshot({ path: new URL('progression-smelting-diagnostic.png', outputDir).pathname });
+    throw new Error(`Expected active smelter prompt, received: ${prompt}`);
+  }
+  await page.locator('.device-status--progression').filter({ hasText: '熔炼中' }).waitFor({ timeout: 4_000 });
+  await page.evaluate(() => {
+    const movement = new MouseEvent('mousemove');
+    Object.defineProperties(movement, {
+      movementX: { value: 220 },
+      movementY: { value: 120 },
+    });
+    document.dispatchEvent(movement);
+  });
+  await page.waitForTimeout(450);
+  await inspectCanvasPixels(page, 'progression-smelting');
+  await page.screenshot({ path: new URL('progression-smelting-desktop.png', outputDir).pathname });
+  await context.close();
+  const { context: readyContext, page: readyPage } = await openDesktopPage('progression-ready', { seedSave: true, progressionReadyStart: true });
+  await readyPage.locator('.primary-command').click();
+  await readyPage.waitForTimeout(300);
+  const readyPrompt = await aimAroundToPrompt(readyPage, '收取潮铸金属锭');
+  if (!readyPrompt.includes('收取潮铸金属锭')) {
+    throw new Error(`Expected ready smelter prompt, received: ${readyPrompt}`);
+  }
+  await readyPage.keyboard.press('KeyE');
+  await readyPage.waitForFunction(() => document.querySelector('.loot-notice')?.textContent?.includes('+1 金属锭'), null, { timeout: 8_000 });
+  await readyPage.keyboard.press('KeyI');
+  await readyPage.getByRole('button', { name: /潮铸金属锭/ }).waitFor({ timeout: 8_000 });
+  await readyContext.close();
+}
+
 async function captureIsland() {
   const { context, page } = await openDesktopPage('island', { seedSave: true, islandStart: true });
   await page.getByRole('button', { name: '开始漂流' }).click();
@@ -660,8 +875,8 @@ async function captureUnderwaterInteraction() {
 async function captureNarrow() {
   const context = await browser.newContext({ viewport: { width: 640, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript((save) => {
-    localStorage.setItem('driftwake.save.v6', JSON.stringify(save));
-  }, seededSave);
+    localStorage.setItem('driftwake.save.v7', JSON.stringify(save));
+  }, narrowProgressionSave);
   const page = await context.newPage();
   monitorPage(page, 'narrow');
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
@@ -706,7 +921,7 @@ async function captureNarrow() {
 async function captureUnderwaterNarrow() {
   const context = await browser.newContext({ viewport: { width: 640, height: 720 }, deviceScaleFactor: 1 });
   await context.addInitScript((save) => {
-    localStorage.setItem('driftwake.save.v6', JSON.stringify(save));
+    localStorage.setItem('driftwake.save.v7', JSON.stringify(save));
   }, underwaterSeededSave);
   const page = await context.newPage();
   monitorPage(page, 'underwater-narrow');
@@ -840,6 +1055,9 @@ try {
   if (captureOnly === 'all' || captureOnly === 'planting-placement') await capturePlantingPlacement();
   if (captureOnly === 'all' || captureOnly === 'planting-interaction') await capturePlantingInteraction();
   if (captureOnly === 'all' || captureOnly === 'planting-bird') await capturePlantingBird();
+  if (captureOnly === 'all' || captureOnly === 'progression-placement') await captureProgressionPlacement();
+  if (captureOnly === 'all' || captureOnly === 'progression-research') await captureProgressionResearch();
+  if (captureOnly === 'all' || captureOnly === 'progression-smelting') await captureProgressionSmelting();
   if (captureOnly === 'all' || captureOnly === 'island') await captureIsland();
   if (captureOnly === 'all' || captureOnly === 'island-interaction') await captureIslandInteraction();
   if (captureOnly === 'all' || captureOnly === 'underwater') await captureUnderwater();

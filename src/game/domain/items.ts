@@ -91,6 +91,33 @@ export const ITEM_DEFINITIONS = {
     tone: '#789694',
     description: '附着于深色母岩的原生金属，需要熔炼后才能用于升级工具。',
   },
+  wetBrick: {
+    id: 'wetBrick',
+    name: '潮红湿砖',
+    shortName: '湿砖',
+    category: 'material',
+    maxStack: 8,
+    tone: '#ad6655',
+    description: '细砂、黏土和壳屑压制的耐火砖坯，需要在甲板通风处完全晾干。',
+  },
+  dryBrick: {
+    id: 'dryBrick',
+    name: '盐壳耐火砖',
+    shortName: '干砖',
+    category: 'material',
+    maxStack: 8,
+    tone: '#c78367',
+    description: '晾干后形成稳定孔隙的耐火砖，是制作高温炉胆的核心材料。',
+  },
+  metalIngot: {
+    id: 'metalIngot',
+    name: '潮铸金属锭',
+    shortName: '金属锭',
+    category: 'material',
+    maxStack: 8,
+    tone: '#91b3ad',
+    description: '冶炼后浇铸成形的耐蚀合金，能支撑更薄、更强韧的刃口与矛尖。',
+  },
   seaweed: {
     id: 'seaweed',
     name: '长叶海草',
@@ -154,6 +181,24 @@ export const ITEM_DEFINITIONS = {
     tone: '#86aa68',
     description: '以漂木、椰糠和排水铁件拼成的耐盐种植槽，可在木筏上培育盐冠棕榈。',
   },
+  researchBenchKit: {
+    id: 'researchBenchKit',
+    name: '盐迹研究台套件',
+    shortName: '研究台',
+    category: 'placeable',
+    maxStack: 1,
+    tone: '#79a9a1',
+    description: '带样本盘、记录板和机械比对尺的工作台，用实物样本推导新配方。',
+  },
+  smelterKit: {
+    id: 'smelterKit',
+    name: '回潮熔炉套件',
+    shortName: '熔炉',
+    category: 'placeable',
+    maxStack: 1,
+    tone: '#d0785d',
+    description: '耐火砖胆、回收铁箍和导风炉口组成的单槽熔炉，可将矿石炼成金属锭。',
+  },
   hook: {
     id: 'hook',
     name: '打捞钩',
@@ -181,6 +226,15 @@ export const ITEM_DEFINITIONS = {
     tone: '#e18162',
     description: '近距离驱赶海中威胁，出手时机比挥舞速度更重要。',
   },
+  metalSpear: {
+    id: 'metalSpear',
+    name: '潮铸穿浪矛',
+    shortName: '金属矛',
+    category: 'tool',
+    maxStack: 1,
+    tone: '#9cc9bf',
+    description: '窄长合金矛尖与加固矛柄能把刺击力集中到更小的面积。',
+  },
   fishingRod: {
     id: 'fishingRod',
     name: '纤维钓竿',
@@ -198,6 +252,15 @@ export const ITEM_DEFINITIONS = {
     maxStack: 1,
     tone: '#b6b09c',
     description: '用潮磨石与废铁固定刃口，适合砍取岛上的纤维木。',
+  },
+  metalAxe: {
+    id: 'metalAxe',
+    name: '潮铸宽刃斧',
+    shortName: '金属斧',
+    category: 'tool',
+    maxStack: 1,
+    tone: '#a7c4bd',
+    description: '一体铸造的宽刃能更深地切入潮湿木质，显著减少砍伐次数。',
   },
   emergencyWater: {
     id: 'emergencyWater',
@@ -276,18 +339,27 @@ export const ITEM_DEFINITIONS = {
 >;
 
 export type ItemId = keyof typeof ITEM_DEFINITIONS;
-export type ToolId = Extract<ItemId, 'hook' | 'hammer' | 'spear' | 'fishingRod' | 'axe'>;
+export type ToolId = Extract<ItemId, 'hook' | 'hammer' | 'spear' | 'metalSpear' | 'fishingRod' | 'axe' | 'metalAxe'>;
 export type SalvageKind = 'timber' | 'polymer' | 'fiber' | 'cache';
 export type Inventory = Partial<Record<ItemId, number>>;
 export type ItemBundle = Partial<Record<ItemId, number>>;
 
 export const INVENTORY_SLOT_CAPACITY = 20;
-export const TOOL_ORDER: readonly ToolId[] = ['hook', 'hammer', 'spear', 'fishingRod', 'axe'];
 export const STARTING_INVENTORY: Inventory = {
   hook: 1,
   emergencyWater: 1,
   ration: 1,
 };
+
+export function preferredToolOrder(inventory: Inventory): readonly ToolId[] {
+  return [
+    'hook',
+    'hammer',
+    itemCount(inventory, 'metalSpear') > 0 ? 'metalSpear' : 'spear',
+    'fishingRod',
+    itemCount(inventory, 'metalAxe') > 0 ? 'metalAxe' : 'axe',
+  ];
+}
 
 export interface InventoryMutation {
   inventory: Inventory;
