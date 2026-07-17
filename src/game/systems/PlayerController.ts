@@ -1,6 +1,7 @@
 import { Euler, MathUtils, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import type { EnvironmentSample } from '../environment/environment';
 import { sampleWaveHeight } from '../math/waves';
+import { CameraMotionFilter } from '../player/CameraMotionFilter';
 import { RaftHorizontalFrame } from '../player/RaftHorizontalFrame';
 import {
   isInClimbBand,
@@ -28,6 +29,8 @@ export class PlayerController {
   private readonly lookEuler = new Euler(0, 0, 0, 'YXZ');
   private readonly lookQuaternion = new Quaternion();
   private readonly raftHorizontalFrame = new RaftHorizontalFrame();
+  private readonly cameraMotionFilter = new CameraMotionFilter();
+  private readonly filteredRaftRotation = new Quaternion();
   private readonly worldPosition = new Vector3();
   private readonly previousWorldPosition = new Vector3();
   private readonly cameraPosition = new Vector3();
@@ -54,7 +57,7 @@ export class PlayerController {
   private moveCycle = 0;
   private jumpQueued = false;
   private interactQueued = false;
-  private headBobEnabled = true;
+  private motionEnabled = true;
   private enabled = false;
 
   constructor(
@@ -88,6 +91,18 @@ export class PlayerController {
     return this.raftLocalProbe.z;
   }
 
+  get cameraRaftTiltDegrees(): number {
+    return MathUtils.radToDeg(this.cameraMotionFilter.tiltRadians);
+  }
+
+  get cameraRaftTiltPeakStepDegrees(): number {
+    return MathUtils.radToDeg(this.cameraMotionFilter.peakTiltStepRadians);
+  }
+
+  get cameraMotionEnabled(): boolean {
+    return this.motionEnabled;
+  }
+
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
     if (!enabled) {
@@ -98,7 +113,7 @@ export class PlayerController {
   }
 
   setHeadBobEnabled(enabled: boolean): void {
-    this.headBobEnabled = enabled;
+    this.motionEnabled = enabled;
     if (!enabled) this.moveCycle = 0;
   }
 
@@ -229,13 +244,19 @@ export class PlayerController {
 
     this.lookQuaternion.setFromEuler(this.lookEuler);
     if (this.verticalState.mode === 'raft') {
-      const headBob = inputLength > 0 && this.enabled && this.headBobEnabled
+      const headBob = inputLength > 0 && this.enabled && this.motionEnabled
         ? Math.sin(this.moveCycle) * 0.018
         : 0;
       this.localPosition.y = CAMERA_HEIGHT + headBob;
       this.raft.localPointToWorld(this.localPosition, this.cameraPosition);
       this.camera.position.copy(this.cameraPosition);
-      this.camera.quaternion.copy(this.raft.group.quaternion).multiply(this.lookQuaternion);
+      this.cameraMotionFilter.update(
+        this.raft.group.quaternion,
+        delta,
+        this.motionEnabled,
+        this.filteredRaftRotation,
+      );
+      this.camera.quaternion.copy(this.filteredRaftRotation).multiply(this.lookQuaternion);
       this.localPosition.y = CAMERA_HEIGHT;
     } else {
       this.camera.position.copy(this.worldPosition);

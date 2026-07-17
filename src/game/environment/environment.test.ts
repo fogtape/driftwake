@@ -5,6 +5,7 @@ import {
   createEnvironmentSample,
   parseEnvironmentOffset,
   sampleEnvironment,
+  sampleEnvironmentLighting,
 } from './environment';
 
 describe('sampleEnvironment', () => {
@@ -58,6 +59,22 @@ describe('sampleEnvironment', () => {
     expect(Math.abs(beforeBoundary.waveScale - afterBoundary.waveScale)).toBeLessThan(0.01);
     expect(Math.abs(beforeBoundary.windStrength - afterBoundary.windStrength)).toBeLessThan(0.01);
     expect(Math.abs(beforeBoundary.visibility - afterBoundary.visibility)).toBeLessThan(0.01);
+  });
+
+  it('keeps storm-night surfaces readable without flattening daylight contrast', () => {
+    const stormNight = sampleEnvironment(WEATHER_STAGE_SECONDS * 3.5);
+    const stormLighting = sampleEnvironmentLighting(stormNight);
+    const daylightLighting = sampleEnvironmentLighting(sampleEnvironment(0));
+
+    expect(stormNight.weather).toBe('storm');
+    expect(stormNight.daylight).toBeLessThan(0.05);
+    expect(stormLighting.exposure).toBeGreaterThanOrEqual(0.68);
+    expect(stormLighting.hemisphereIntensity).toBeGreaterThanOrEqual(0.5);
+    expect(stormLighting.ambientIntensity).toBeGreaterThanOrEqual(0.28);
+    expect(stormLighting.sunIntensity).toBeGreaterThanOrEqual(0.4);
+    expect(daylightLighting.exposure).toBeGreaterThan(1);
+    expect(daylightLighting.hemisphereIntensity).toBeGreaterThan(1.7);
+    expect(daylightLighting.sunIntensity).toBeGreaterThan(2.8);
   });
 
   it('sanitizes invalid and negative simulation time', () => {

@@ -1,5 +1,4 @@
 import {
-  BoxGeometry,
   CylinderGeometry,
   Euler,
   Group,
@@ -45,10 +44,11 @@ export class RaftSystem {
 
   private buildInstancedDeck(materials: MaterialLibrary): void {
     const plankGeometry = new RoundedBoxGeometry(1.36, 0.16, 0.42, 3, 0.035);
-    const beamGeometry = new BoxGeometry(1.45, 0.1, 0.085);
+    const beamGeometry = new RoundedBoxGeometry(1.45, 0.14, 0.13, 2, 0.02);
     const nailGeometry = new CylinderGeometry(0.025, 0.03, 0.02, 7);
     const plankMeshes = materials.wood.map((material) => new InstancedMesh(plankGeometry, material, 9));
     const beams = new InstancedMesh(beamGeometry, materials.darkWood, 18);
+    beams.name = 'raft-underbeams';
     const nails = new InstancedMesh(nailGeometry, materials.rustMetal, 36);
     const plankCounts = [0, 0, 0];
     let beamCount = 0;

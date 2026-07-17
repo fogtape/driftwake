@@ -221,7 +221,6 @@ async function captureWeather() {
 async function captureHook() {
   const { context, page } = await openDesktopPage('hook');
   await enterGame(page);
-  await page.mouse.move(Math.round(desktopWidth * 0.53), Math.round(desktopHeight * 0.48));
   await page.mouse.down();
   try {
     await page.waitForTimeout(650);
@@ -261,10 +260,19 @@ async function captureLocomotion() {
   await page.keyboard.down('KeyC');
   try {
     await page.waitForFunction(
-      () => Number.parseFloat(getComputedStyle(document.querySelector('.game-mount')).getPropertyValue('--underwater-mix')) >= 0.3,
+      () => {
+        const mount = document.querySelector('.game-mount');
+        const underwaterMix = Number.parseFloat(getComputedStyle(mount).getPropertyValue('--underwater-mix'));
+        const submersion = Number.parseFloat(mount?.dataset.playerSubmersion ?? '0');
+        return underwaterMix >= 0.65 && submersion >= 0.55;
+      },
       undefined,
       { timeout: 8_000, polling: 100 },
     );
+    await page.evaluate(() => {
+      document.dispatchEvent(new MouseEvent('mousemove', { movementY: -240 }));
+    });
+    await page.waitForTimeout(250);
     await inspectCanvas(page, 'locomotion', 'underwater-before-capture');
     await page.screenshot({ path: new URL('underwater-desktop.png', outputDir).pathname });
     await inspectCanvas(page, 'locomotion', 'underwater-after-capture');
@@ -341,6 +349,40 @@ async function captureSettings() {
   ) {
     throw new Error(`settings: invalid responsive layout ${JSON.stringify(layout)}`);
   }
+  const motionToggle = page.getByRole('switch', { name: '镜头摇晃' });
+  await motionToggle.scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    const panel = document.querySelector('.settings-panel');
+    const header = document.querySelector('.settings-panel__header');
+    const toggle = document.querySelector('button[aria-label="镜头摇晃"]');
+    if (!(panel instanceof HTMLElement) || !(header instanceof HTMLElement) || !(toggle instanceof HTMLElement)) return;
+    const gap = 12;
+    const overlap = header.getBoundingClientRect().bottom + gap - toggle.getBoundingClientRect().top;
+    if (overlap > 0) panel.scrollTop = Math.max(0, panel.scrollTop - overlap);
+  });
+  await page.waitForFunction(
+    () => {
+      const header = document.querySelector('.settings-panel__header');
+      const toggle = document.querySelector('button[aria-label="镜头摇晃"]');
+      if (!(header instanceof HTMLElement) || !(toggle instanceof HTMLElement)) return false;
+      return toggle.getBoundingClientRect().top >= header.getBoundingClientRect().bottom + 11;
+    },
+    undefined,
+    { timeout: 2_000 },
+  );
+  await page.getByText('关闭后稳定步行起伏与木筏倾斜', { exact: true }).waitFor();
+  const motionVisible = await page.evaluate(() => {
+    const panel = document.querySelector('.settings-panel');
+    const header = document.querySelector('.settings-panel__header');
+    const toggle = document.querySelector('[role="switch"][aria-label="镜头摇晃"]');
+    const panelRect = panel?.getBoundingClientRect();
+    const headerRect = header?.getBoundingClientRect();
+    const toggleRect = toggle?.getBoundingClientRect();
+    return Boolean(panelRect && headerRect && toggleRect)
+      && toggleRect.top >= headerRect.bottom
+      && toggleRect.bottom <= panelRect.bottom;
+  });
+  if (!motionVisible) throw new Error('settings: motion comfort control is not visible');
   await inspectCanvas(page, 'settings', 'before-capture');
   await page.screenshot({ path: new URL('settings-desktop.png', outputDir).pathname });
   await inspectCanvas(page, 'settings', 'after-capture');

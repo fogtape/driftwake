@@ -35,6 +35,7 @@ export const oceanVertexShader = /* glsl */ `
 
 export const oceanFragmentShader = /* glsl */ `
   uniform float uTime;
+  uniform float uDaylight;
   uniform sampler2D uFoamMap;
   uniform vec3 uSunDirection;
   uniform vec3 uDeepColor;
@@ -53,14 +54,19 @@ export const oceanFragmentShader = /* glsl */ `
   }
 
   void main() {
-    vec3 normal = normalize(vWorldNormal);
+    vec3 normal = normalize(gl_FrontFacing ? vWorldNormal : -vWorldNormal);
     vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
     float facing = clamp(dot(normal, viewDirection), 0.0, 1.0);
     float fresnel = pow(1.0 - facing, 3.0);
 
     float lightFacing = clamp(dot(normal, normalize(uSunDirection)), 0.0, 1.0);
     vec3 halfVector = normalize(normalize(uSunDirection) + viewDirection);
-    float sunGlint = pow(max(dot(normal, halfVector), 0.0), 180.0) * 2.3;
+    float halfFacing = max(dot(normal, halfVector), 0.0);
+    float sunGlint = pow(halfFacing, 180.0) * 2.3;
+    float nightSheen = pow(halfFacing, 12.0) * (1.0 - uDaylight) * 0.34;
+    float slopeContour = smoothstep(0.002, 0.08, 1.0 - clamp(normal.y, 0.0, 1.0));
+    float nightWaveLift = (1.0 - uDaylight)
+      * (0.08 + lightFacing * 0.12 + slopeContour * 0.16);
 
     vec2 flow = vec2(uTime * 0.012, -uTime * 0.007);
     vec2 foamUvA = vWorldPosition.xz * 0.026 + flow;
@@ -74,7 +80,8 @@ export const oceanFragmentShader = /* glsl */ `
     vec3 water = mix(uDeepColor, uSurfaceColor, depthTint);
     vec3 reflection = mix(uSurfaceColor, uSkyColor, 0.72);
     vec3 color = mix(water, reflection, fresnel * 0.78);
-    color += vec3(1.0, 0.78, 0.48) * sunGlint;
+    vec3 glintColor = mix(vec3(0.43, 0.68, 0.8), vec3(1.0, 0.78, 0.48), uDaylight);
+    color += glintColor * (sunGlint + nightSheen + nightWaveLift);
     color = mix(color, vec3(0.91, 0.97, 0.96), foam * 0.86);
 
     float distanceToCamera = length(cameraPosition.xz - vWorldPosition.xz);

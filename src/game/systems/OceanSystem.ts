@@ -1,18 +1,20 @@
-import { Color, Mesh, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
+import { Color, DoubleSide, Mesh, PlaneGeometry, ShaderMaterial, Vector3 } from 'three';
 import type { Texture } from 'three';
 import type { EnvironmentSample } from '../environment/environment';
 import { oceanFragmentShader, oceanVertexShader } from '../shaders/ocean';
+
+const OCEAN_EXTENT = 320;
 
 export class OceanSystem {
   readonly mesh: Mesh<PlaneGeometry, ShaderMaterial>;
   private readonly material: ShaderMaterial;
   private readonly sunDirection = new Vector3();
   private readonly dayDeep = new Color('#063d52');
-  private readonly nightDeep = new Color('#020b17');
-  private readonly stormDeep = new Color('#071a24');
+  private readonly nightDeep = new Color('#061522');
+  private readonly stormDeep = new Color('#0c2a36');
   private readonly daySurface = new Color('#1b8790');
-  private readonly nightSurface = new Color('#08202f');
-  private readonly stormSurface = new Color('#163945');
+  private readonly nightSurface = new Color('#123246');
+  private readonly stormSurface = new Color('#285868');
   private readonly daySky = new Color('#91cad2');
   private readonly nightSky = new Color('#07101f');
   private readonly stormSky = new Color('#334753');
@@ -21,15 +23,17 @@ export class OceanSystem {
   private readonly stormFog = new Color('#526671');
 
   constructor(foamMap: Texture) {
-    const geometry = new PlaneGeometry(320, 320, 150, 150);
+    const geometry = new PlaneGeometry(OCEAN_EXTENT, OCEAN_EXTENT, 150, 150);
     geometry.rotateX(-Math.PI / 2);
 
     this.material = new ShaderMaterial({
       vertexShader: oceanVertexShader,
       fragmentShader: oceanFragmentShader,
+      side: DoubleSide,
       uniforms: {
         uTime: { value: 0 },
         uWaveScale: { value: 1 },
+        uDaylight: { value: 1 },
         uFoamMap: { value: foamMap },
         uSunDirection: { value: new Vector3(0.56, 0.72, 0.4).normalize() },
         uDeepColor: { value: new Color('#063d52') },
@@ -48,11 +52,12 @@ export class OceanSystem {
   update(time: number, environment: EnvironmentSample): void {
     this.material.uniforms.uTime.value = time;
     this.material.uniforms.uWaveScale.value = environment.waveScale;
+    this.material.uniforms.uDaylight.value = environment.daylight;
     const cloudMix = environment.cloudCover * 0.72;
     const horizontal = Math.sqrt(Math.max(0, 1 - environment.sunElevation * environment.sunElevation));
     this.sunDirection.set(
       Math.cos(environment.sunAzimuth) * horizontal,
-      environment.sunElevation,
+      Math.max(0.18, environment.sunElevation),
       Math.sin(environment.sunAzimuth) * horizontal,
     ).normalize();
     this.material.uniforms.uSunDirection.value.copy(this.sunDirection);
@@ -73,7 +78,7 @@ export class OceanSystem {
   setQuality(highQuality: boolean): void {
     this.mesh.geometry.dispose();
     const segments = highQuality ? 150 : 84;
-    const geometry = new PlaneGeometry(320, 320, segments, segments);
+    const geometry = new PlaneGeometry(OCEAN_EXTENT, OCEAN_EXTENT, segments, segments);
     geometry.rotateX(-Math.PI / 2);
     this.mesh.geometry = geometry;
   }

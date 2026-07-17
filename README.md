@@ -11,7 +11,7 @@
 - 木料、聚合片、纤维和补给箱漂流物；
 - 蓄力抛钩、飞行、绳索、入水、命中、拖回和收获流程；
 - 海浪、风、雨、木筏结构、抛钩、落水、收获、UI、音乐和水下低通音景；主音量/音乐/环境/音效/UI 五组独立控制；
-- 水下颜色/雾化过渡、水花、水中操作提示与镜头起伏舒适开关；
+- 水下颜色/雾化过渡、水花、水中操作提示，以及可平滑关闭步行起伏与木筏倾斜的镜头舒适开关；
 - 高/低画质与动态分辨率，HUD/长稳证据记录 FPS、渲染比例、draw calls、三角面、几何、纹理和 Heap；
 - 菜单首屏与 3D 世界分 chunk，首次点击后才加载 Three.js/Rapier 世界运行时；
 - 标题界面、环境/性能 HUD、快捷栏、可滚动设置与移动设备能力页；
@@ -43,11 +43,14 @@ npm run dev
 npm test
 npm run build
 npm run test:collision
+npm run test:motion-comfort
 npm run capture
 npm run test:stability
 ```
 
 `npm run test:collision` 使用状态条件而不是固定墙钟等待，验证玩家离筏后在水面被移动甲板 collider 阻挡、下潜后从筏底抵达另一侧，并从边缘攀回；可通过 `DRIFTWAKE_URL`、`CHROMIUM_PATH` 和 `PLAYWRIGHT_HEADFUL` 调整运行环境。
+
+`npm run test:motion-comfort` 在确定性风暴海况下通过公开设置执行镜头摇晃 `on → off → on`，验证木筏镜头倾斜平滑降至接近水平后可恢复；运行时同时公开基于 world-Y swing–twist 分解的历史峰值步进，并硬性要求每个固定步不超过 `0.7 rad/s ÷ 60 Hz = 0.668°`。流程还会检查 Pointer Lock、模拟门禁、WebGL Context 与浏览器错误。
 
 `npm run capture` 默认连接 `http://127.0.0.1:4173`，可通过 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH` 和 `CAPTURE_HEIGHT` 调整。标题场景会确认玩家首次点击前没有 Canvas，并检查整页 PNG 内容；进入世界后再验证 Canvas/Context、合成 PNG 的非空画面指标，以及游戏、夜间风暴、钩具蓄力、水下行动、短视口音频/画质设置和移动能力页流程。设置 `DRIFTWAKE_FORCE_BLANK_FRAME=1 CAPTURE_ONLY=title` 可验证整页空白帧门禁会按预期红灯。
 

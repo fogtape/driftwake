@@ -91,6 +91,26 @@ function lerp(from: number, to: number, mix: number): number {
   return from + (to - from) * mix;
 }
 
+export interface EnvironmentLighting {
+  exposure: number;
+  hemisphereIntensity: number;
+  ambientIntensity: number;
+  sunIntensity: number;
+}
+
+export function sampleEnvironmentLighting(environment: EnvironmentSample): EnvironmentLighting {
+  const daylight = clamp01(environment.daylight);
+  const cloudCover = clamp01(environment.cloudCover);
+
+  return {
+    exposure: Math.max(0.68, 0.72 + daylight * 0.38 - cloudCover * 0.04),
+    hemisphereIntensity: 0.5 + daylight * 1.32 * (1 - cloudCover * 0.52),
+    ambientIntensity: 0.28 + daylight * 0.12,
+    sunIntensity: 3.1 * daylight * (1 - cloudCover * 0.78)
+      + 0.48 * (1 - daylight) * (1 - cloudCover * 0.15),
+  };
+}
+
 export function createEnvironmentSample(): EnvironmentSample {
   return {
     weather: 'calm',

@@ -261,13 +261,13 @@ button:focus-visible {
 
 .title-screen__footer {
   position: absolute;
-  right: max(28px, env(safe-area-inset-right));
-  bottom: max(24px, env(safe-area-inset-bottom));
+  right: max(36px, env(safe-area-inset-right));
+  bottom: max(30px, env(safe-area-inset-bottom));
   display: flex;
   gap: 18px;
-  color: rgba(237, 246, 242, 0.66);
+  color: rgba(237, 246, 242, 0.74);
   font-family: 'Barlow Condensed', sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -496,17 +496,34 @@ button:focus-visible {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   transform: translate(-50%, -50%);
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
 }
 
-.crosshair i { position: absolute; display: block; background: rgba(244, 250, 247, 0.86); }
-.crosshair i:nth-child(1) { top: 2px; left: 11px; width: 2px; height: 6px; }
-.crosshair i:nth-child(2) { bottom: 2px; left: 11px; width: 2px; height: 6px; }
-.crosshair i:nth-child(3) { top: 11px; left: 2px; width: 6px; height: 2px; }
-.crosshair i:nth-child(4) { top: 11px; right: 2px; width: 6px; height: 2px; }
+.crosshair::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--sun);
+  box-shadow: 0 0 0 1px rgba(2, 14, 18, 0.96), 0 1px 3px rgba(0, 0, 0, 0.82);
+  content: '';
+  transform: translate(-50%, -50%);
+}
+
+.crosshair i {
+  position: absolute;
+  display: block;
+  background: rgba(244, 250, 247, 0.96);
+  box-shadow: 0 0 0 1px rgba(2, 14, 18, 0.94), 0 1px 4px rgba(0, 0, 0, 0.82);
+}
+.crosshair i:nth-child(1) { top: 2px; left: 12px; width: 3px; height: 8px; }
+.crosshair i:nth-child(2) { bottom: 2px; left: 12px; width: 3px; height: 8px; }
+.crosshair i:nth-child(3) { top: 12px; left: 2px; width: 8px; height: 3px; }
+.crosshair i:nth-child(4) { top: 12px; right: 2px; width: 8px; height: 3px; }
 
 .hook-charge {
   position: absolute;
@@ -528,13 +545,16 @@ button:focus-visible {
   position: absolute;
   right: 0;
   bottom: calc(100% + 5px);
-  color: rgba(255, 244, 209, 0.86);
+  padding: 1px 4px 2px;
+  color: rgba(255, 244, 209, 0.94);
+  border-radius: 3px;
+  background: rgba(5, 22, 27, 0.62);
   font-family: 'Barlow Condensed', sans-serif;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.12em;
   content: '投掷蓄力';
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.96), 0 1px 4px rgba(0, 0, 0, 0.9);
 }
 
 .hook-charge.is-active { opacity: 1; }

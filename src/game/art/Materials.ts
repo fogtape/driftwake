@@ -21,6 +21,8 @@ export interface MaterialLibrary {
   rope: MeshStandardMaterial;
   metal: MeshStandardMaterial;
   rustMetal: MeshStandardMaterial;
+  toolMetal: MeshStandardMaterial;
+  toolRustMetal: MeshStandardMaterial;
   polymer: MeshStandardMaterial;
   leaf: MeshStandardMaterial;
   rock: MeshStandardMaterial;
@@ -74,6 +76,20 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
     rope: new MeshStandardMaterial({ color: 0xc49b63, roughness: 1.0 }),
     metal: new MeshStandardMaterial({ color: 0x8fa7a4, roughness: 0.58, metalness: 0.72 }),
     rustMetal: new MeshStandardMaterial({ color: 0x8f5742, roughness: 0.76, metalness: 0.58 }),
+    toolMetal: new MeshStandardMaterial({
+      color: 0x8fa7a4,
+      roughness: 0.64,
+      metalness: 0.38,
+      emissive: 0x31515a,
+      emissiveIntensity: 0.42,
+    }),
+    toolRustMetal: new MeshStandardMaterial({
+      color: 0x8f5742,
+      roughness: 0.8,
+      metalness: 0.3,
+      emissive: 0x4b271b,
+      emissiveIntensity: 0.34,
+    }),
     polymer: new MeshStandardMaterial({ color: 0x4b9aa3, roughness: 0.67, metalness: 0.0 }),
     leaf: new MeshStandardMaterial({ color: 0x718e55, roughness: 0.92, side: DoubleSide }),
     rock: new MeshStandardMaterial({ color: new Color('#766f62'), roughness: 0.96, flatShading: true }),

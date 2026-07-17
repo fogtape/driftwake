@@ -50,10 +50,10 @@ export function createHookModel(materials: MaterialLibrary): Group {
     new Vector3(0.43, 0.63, 0.0),
     new Vector3(0.35, 0.51, 0.0),
   ]);
-  const hook = shadowed(new Mesh(new TubeGeometry(curve, 28, 0.036, 7, false), materials.rustMetal));
+  const hook = shadowed(new Mesh(new TubeGeometry(curve, 28, 0.036, 7, false), materials.toolRustMetal));
   group.add(hook);
 
-  const tip = shadowed(new Mesh(new ConeGeometry(0.055, 0.2, 7), materials.metal));
+  const tip = shadowed(new Mesh(new ConeGeometry(0.055, 0.2, 7), materials.toolMetal));
   tip.position.set(0.32, 0.43, 0.0);
   tip.rotation.z = -0.46;
   group.add(tip);

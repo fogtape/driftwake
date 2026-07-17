@@ -39,7 +39,12 @@ import { RaftSystem } from './systems/RaftSystem';
 import { SplashSystem } from './systems/SplashSystem';
 import { WeatherSystem } from './systems/WeatherSystem';
 import { sampleWaveHeight } from './math/waves';
-import { createEnvironmentSample, parseEnvironmentOffset, sampleEnvironment } from './environment/environment';
+import {
+  createEnvironmentSample,
+  parseEnvironmentOffset,
+  sampleEnvironment,
+  sampleEnvironmentLighting,
+} from './environment/environment';
 import type { EnvironmentSample } from './environment/environment';
 import { FixedStepScheduler, isGameReady, isSimulationActive } from './runtime/runtime';
 import {
@@ -92,7 +97,10 @@ export class DriftwakeGame {
   private readonly nightSurfaceColor = new Color('#071323');
   private readonly stormSurfaceColor = new Color('#526671');
   private readonly underwaterColor = new Color('#0a4652');
+  private readonly dayKeyColor = new Color('#ffe1b1');
+  private readonly nightKeyColor = new Color('#8fb8cc');
   private readonly sunPosition = new Vector3();
+  private readonly keyLightPosition = new Vector3();
   private readonly splashPosition = new Vector3();
   private readonly audio = new AudioSystem();
   private readonly physics = new PhysicsSystem();
@@ -261,6 +269,7 @@ export class DriftwakeGame {
   setHeadBobEnabled(enabled: boolean): void {
     this.player?.setHeadBobEnabled(enabled);
     this.mount.dataset.headBobEnabled = String(enabled);
+    this.mount.dataset.cameraMotionEnabled = String(enabled);
   }
 
   setQuality(quality: QualityPreset): void {
@@ -329,6 +338,9 @@ export class DriftwakeGame {
     delete this.mount.dataset.playerSubmersion;
     delete this.mount.dataset.playerRaftX;
     delete this.mount.dataset.playerRaftZ;
+    delete this.mount.dataset.cameraRaftTiltDegrees;
+    delete this.mount.dataset.cameraRaftTiltPeakStepDegrees;
+    delete this.mount.dataset.cameraMotionEnabled;
     delete this.mount.dataset.weather;
     delete this.mount.dataset.daylight;
     delete this.mount.dataset.environmentRisk;
@@ -395,6 +407,8 @@ export class DriftwakeGame {
       this.mount.dataset.playerSubmersion = this.player.submersionDepth.toFixed(3);
       this.mount.dataset.playerRaftX = this.player.raftLocalX.toFixed(3);
       this.mount.dataset.playerRaftZ = this.player.raftLocalZ.toFixed(3);
+      this.mount.dataset.cameraRaftTiltDegrees = this.player.cameraRaftTiltDegrees.toFixed(3);
+      this.mount.dataset.cameraRaftTiltPeakStepDegrees = this.player.cameraRaftTiltPeakStepDegrees.toFixed(3);
     }
     this.debris?.update(simulationSeconds, stepSeconds, this.environment);
     this.hook?.update(simulationSeconds, stepSeconds, this.environment.waveScale);
@@ -465,10 +479,8 @@ export class DriftwakeGame {
       .lerpColors(this.nightSurfaceColor, this.daySurfaceColor, environment.daylight)
       .lerp(this.stormSurfaceColor, cloudMix);
     this.environmentFogDensity = 0.0065 + (1 - environment.visibility) * 0.024;
-    this.environmentExposure = Math.max(
-      0.42,
-      0.5 + environment.daylight * 0.58 - environment.cloudCover * 0.12,
-    );
+    const lighting = sampleEnvironmentLighting(environment);
+    this.environmentExposure = lighting.exposure;
 
     const background = this.scene.background;
     if (background instanceof Color) background.copy(this.surfaceColor);
@@ -493,17 +505,21 @@ export class DriftwakeGame {
       uniforms.mieCoefficient.value = 0.006 + environment.cloudCover * 0.012;
     }
     if (this.hemisphereLight) {
-      this.hemisphereLight.intensity = 0.2
-        + environment.daylight * 1.65 * (1 - environment.cloudCover * 0.52);
+      this.hemisphereLight.intensity = lighting.hemisphereIntensity;
     }
     if (this.ambientLight) {
-      this.ambientLight.intensity = 0.12 + environment.daylight * 0.28;
+      this.ambientLight.intensity = lighting.ambientIntensity;
     }
     if (this.sunLight) {
-      this.sunLight.intensity = 3.1
-        * environment.daylight
-        * (1 - environment.cloudCover * 0.78);
-      this.sunLight.position.copy(this.sunPosition).multiplyScalar(70);
+      this.sunLight.intensity = lighting.sunIntensity;
+      this.sunLight.color.lerpColors(
+        this.nightKeyColor,
+        this.dayKeyColor,
+        environment.daylight,
+      );
+      this.keyLightPosition.copy(this.sunPosition);
+      this.keyLightPosition.y = Math.max(0.24, this.keyLightPosition.y);
+      this.sunLight.position.copy(this.keyLightPosition.normalize()).multiplyScalar(70);
     }
 
     const environmentSecond = Math.floor(this.elapsed);

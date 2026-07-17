@@ -107,7 +107,7 @@ export function SettingsPanel({
         <div className="setting-row">
           <div className="setting-row__label">
             <Waves size={20} />
-            <div><strong>镜头摇晃</strong><span>关闭后移除步行头部起伏</span></div>
+            <div><strong>镜头摇晃</strong><span>关闭后稳定步行起伏与木筏倾斜</span></div>
           </div>
           <button className={`toggle ${headBobEnabled ? 'is-on' : ''}`} type="button" onClick={() => onHeadBobChange(!headBobEnabled)} role="switch" aria-checked={headBobEnabled} aria-label="镜头摇晃">
             <span>{headBobEnabled && <Check size={14} />}</span>
