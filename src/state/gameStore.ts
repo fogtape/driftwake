@@ -19,6 +19,7 @@ import type { DeviceType } from '../game/domain/devices';
 import type { IslandPhase } from '../game/domain/island';
 import type { NavigationDeviceType, NavigationRouteMode, NavigationWeatherPhase, SignalArrayStatus } from '../game/domain/navigation';
 import type { PlayerSurface } from '../game/domain/save';
+import type { CameraMotionMode } from '../game/domain/settings';
 import {
   addResearchSample,
   canLearnProject,
@@ -180,11 +181,15 @@ interface GameState {
   ready: boolean;
   loadingLabel: string;
   pointerLocked: boolean;
+  pointerLockDenied: boolean;
   settingsOpen: boolean;
   overlayPanel: OverlayPanel;
   audioEnabled: boolean;
   audioMix: AudioMix;
+  muteOnFocusLoss: boolean;
+  cameraMotionMode: CameraMotionMode;
   quality: QualityPreset;
+  dynamicResolutionEnabled: boolean;
   selectedTool: ToolId;
   hookCharge: number;
   inventory: Inventory;
@@ -212,11 +217,15 @@ interface GameState {
   setReady: (ready: boolean) => void;
   setLoadingLabel: (loadingLabel: string) => void;
   setPointerLocked: (pointerLocked: boolean) => void;
+  setPointerLockDenied: (pointerLockDenied: boolean) => void;
   setSettingsOpen: (settingsOpen: boolean) => void;
   setOverlayPanel: (overlayPanel: OverlayPanel) => void;
   setAudioEnabled: (audioEnabled: boolean) => void;
   setAudioMix: (audioMix: Partial<AudioMix>) => void;
+  setMuteOnFocusLoss: (muteOnFocusLoss: boolean) => void;
+  setCameraMotionMode: (cameraMotionMode: CameraMotionMode) => void;
   setQuality: (quality: QualityPreset) => void;
+  setDynamicResolutionEnabled: (dynamicResolutionEnabled: boolean) => void;
   setSelectedTool: (selectedTool: ToolId) => boolean;
   setHookCharge: (hookCharge: number) => void;
   addLoot: (kind: SalvageKind, roll?: number) => ItemBundle;
@@ -354,11 +363,15 @@ export const useGameStore = create<GameState>((set, get) => ({
   ready: false,
   loadingLabel: '正在唤醒海面',
   pointerLocked: false,
+  pointerLockDenied: false,
   settingsOpen: false,
   overlayPanel: null,
   audioEnabled: true,
   audioMix: { master: 0.78, music: 0.2, ambience: 0.43, effects: 0.72, creatures: 0.78, ui: 0.56 },
+  muteOnFocusLoss: true,
+  cameraMotionMode: 'balanced',
   quality: 'high',
+  dynamicResolutionEnabled: true,
   selectedTool: 'hook',
   hookCharge: 0,
   inventory: { ...STARTING_INVENTORY },
@@ -392,11 +405,15 @@ export const useGameStore = create<GameState>((set, get) => ({
   setReady: (ready) => set({ ready }),
   setLoadingLabel: (loadingLabel) => set({ loadingLabel }),
   setPointerLocked: (pointerLocked) => set({ pointerLocked }),
+  setPointerLockDenied: (pointerLockDenied) => set({ pointerLockDenied }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setOverlayPanel: (overlayPanel) => set({ overlayPanel }),
   setAudioEnabled: (audioEnabled) => set({ audioEnabled }),
   setAudioMix: (audioMix) => set((state) => ({ audioMix: clampAudioMix(state.audioMix, audioMix) })),
+  setMuteOnFocusLoss: (muteOnFocusLoss) => set({ muteOnFocusLoss }),
+  setCameraMotionMode: (cameraMotionMode) => set({ cameraMotionMode }),
   setQuality: (quality) => set({ quality }),
+  setDynamicResolutionEnabled: (dynamicResolutionEnabled) => set({ dynamicResolutionEnabled }),
   setSelectedTool: (selectedTool) => {
     if (itemCount(get().inventory, selectedTool) <= 0) return false;
     set({ selectedTool, interaction: null, interactionOwner: null });

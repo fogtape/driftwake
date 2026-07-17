@@ -46,7 +46,9 @@ import { ItemIcon } from './ItemIcon';
 
 interface HudProps {
   visible: boolean;
+  ready: boolean;
   pointerLocked: boolean;
+  pointerLockDenied: boolean;
   audioEnabled: boolean;
   selectedTool: ToolId;
   hookCharge: number;
@@ -98,7 +100,9 @@ function Gauge({ icon, value, tone, label }: GaugeProps) {
 
 export function Hud({
   visible,
+  ready,
   pointerLocked,
+  pointerLockDenied,
   audioEnabled,
   selectedTool,
   hookCharge,
@@ -487,11 +491,26 @@ export function Hud({
       <div className={`loot-notice ${notice ? 'is-visible' : ''}`} aria-live="polite">{notice}</div>
 
       {!pointerLocked && visible && (
-        <div className="focus-prompt">
-          <button type="button" onClick={onResume}>
-            <MousePointer2 size={21} />
-            <span>继续漂流</span>
-          </button>
+        <div className="focus-prompt" role="dialog" aria-modal="true" aria-labelledby="focus-prompt-heading">
+          <div className="focus-prompt__content">
+            <span className="focus-prompt__mark" aria-hidden="true"><ShipWheel size={25} /></span>
+            <p>航程暂停</p>
+            <h2 id="focus-prompt-heading">DRIFTWAKE</h2>
+            <div className={`focus-prompt__status ${!ready || pointerLockDenied ? 'is-denied' : ''}`}>
+              {!ready || pointerLockDenied ? <TriangleAlert size={14} /> : <i />}
+              <span>{!ready ? '图形海况恢复中' : pointerLockDenied ? '浏览器未开放视角锁定' : '海面已就绪'}</span>
+            </div>
+            <div className="focus-prompt__actions">
+              <button className="focus-prompt__resume" type="button" onClick={onResume} disabled={!ready}>
+                <MousePointer2 size={20} />
+                <span>{!ready ? '等待恢复' : pointerLockDenied ? '重试继续' : '继续漂流'}</span>
+              </button>
+              <button className="focus-prompt__settings" type="button" onClick={onSettings} aria-label="设置" title="设置">
+                <Settings size={20} />
+              </button>
+            </div>
+          </div>
+          <span className="focus-prompt__voyage">VOYAGE 01 / OPEN WATER</span>
         </div>
       )}
     </section>

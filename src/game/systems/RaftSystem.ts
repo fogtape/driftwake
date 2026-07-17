@@ -49,6 +49,10 @@ export class RaftSystem {
   private readonly tiles = new Map<string, RaftTileState>();
   private readonly targetQuaternion = new Quaternion();
   private readonly targetEuler = new Euler();
+  private readonly previousPosition = new Vector3();
+  private readonly simulationPosition = new Vector3();
+  private readonly previousQuaternion = new Quaternion();
+  private readonly simulationQuaternion = new Quaternion();
   private readonly plankMeshes: InstancedMesh[];
   private readonly beams: InstancedMesh;
   private readonly nails: InstancedMesh;
@@ -89,6 +93,10 @@ export class RaftSystem {
       });
     }
     this.rebuildInstances();
+    this.previousPosition.copy(this.group.position);
+    this.simulationPosition.copy(this.group.position);
+    this.previousQuaternion.copy(this.group.quaternion);
+    this.simulationQuaternion.copy(this.group.quaternion);
   }
 
   get tileCount(): number {
@@ -109,13 +117,30 @@ export class RaftSystem {
   }
 
   update(time: number, delta: number): void {
-    const wave = sampleWave(this.group.position.x, this.group.position.z, time);
+    this.previousPosition.copy(this.simulationPosition);
+    this.previousQuaternion.copy(this.simulationQuaternion);
+    const wave = sampleWave(this.simulationPosition.x, this.simulationPosition.z, time);
     const targetY = wave.height + 0.08;
-    this.group.position.y = MathUtils.damp(this.group.position.y, targetY, 5.8, delta);
+    this.simulationPosition.y = MathUtils.damp(this.simulationPosition.y, targetY, 5.8, delta);
 
     this.targetEuler.set(wave.slopeZ * 0.33, this.heading, -wave.slopeX * 0.32, 'YXZ');
     this.targetQuaternion.setFromEuler(this.targetEuler);
-    this.group.quaternion.slerp(this.targetQuaternion, 1 - Math.exp(-delta * 3.4));
+    this.simulationQuaternion.slerp(this.targetQuaternion, 1 - Math.exp(-delta * 3.4));
+    this.group.position.copy(this.simulationPosition);
+    this.group.quaternion.copy(this.simulationQuaternion);
+    this.group.updateMatrixWorld();
+  }
+
+  present(alpha: number): void {
+    const mix = MathUtils.clamp(Number.isFinite(alpha) ? alpha : 0, 0, 1);
+    this.group.position.lerpVectors(this.previousPosition, this.simulationPosition, mix);
+    this.group.quaternion.slerpQuaternions(this.previousQuaternion, this.simulationQuaternion, mix);
+    this.group.updateMatrixWorld();
+  }
+
+  restoreSimulationPose(): void {
+    this.group.position.copy(this.simulationPosition);
+    this.group.quaternion.copy(this.simulationQuaternion);
     this.group.updateMatrixWorld();
   }
 

@@ -5,6 +5,9 @@
 ## 当前内容
 
 - Three.js 程序化海面、天空、雾、昼光、随波木筏和可接近的高度场岛屿；
+- 统一 60 Hz 固定步模拟、渲染插值、失焦/隐藏/WebGL Context 生命周期门禁，以及可诊断的积压丢弃保护；
+- 完整昼夜环境采样、木筏水平参考系、跳跃/落地状态机、三档镜头舒适度和运行时动态分辨率；
+- 玩家首次开始后才延迟加载 Three.js/Rapier 世界；初始化完成会先进入稳定暂停画面，再由“继续漂流”申请鼠标锁；
 - 第一人称移动、蓄力抛钩、绳索、水花、漂流物命中和补给箱战利品；
 - 数据驱动的 48 类物品、20 格堆叠背包、27 项便携配方、研究门禁、消耗品和固定步长生存状态；
 - 可寻址木筏筏格、邻接建造、幽灵预览、材料校验、修补、拆除与连通性保护；
@@ -47,19 +50,21 @@ npm ci
 npm run dev -- --port 4173
 ```
 
-目标环境为带真实 GPU、WebGL2 和键鼠的桌面 Chrome / Edge。当前交互包括：鼠标抛投/刺击/砍伐/建造/开采，`E` 操作设备、打开干舱或拾取资源；注视接收台时 `E` 装入盐差电池/开关机、`R` 调到下一频段、`Shift+R` 调到上一频段；注视舵台时 `E` 切换航线，注视未强化帆/锚且背包有升级件时 `E` 现场加装，注视帆或舵台时 `R` 顺时针调向、`Shift+R` 逆时针调向，注视空熔炉时 `R` 切换矿石/细砂模式；游泳时 `Space` 上浮、`Ctrl` 下潜，数字键切换工具，`I` 或 `Tab` 打开背包，`C` 打开制作。
+目标环境为带真实 GPU、WebGL2 和键鼠的桌面 Chrome / Edge。当前交互包括：鼠标抛投/刺击/砍伐/建造/开采，`E` 操作设备、打开干舱或拾取资源；注视接收台时 `E` 装入盐差电池/开关机、`R` 调到下一频段、`Shift+R` 调到上一频段；注视舵台时 `E` 切换航线，注视未强化帆/锚且背包有升级件时 `E` 现场加装，注视帆或舵台时 `R` 顺时针调向、`Shift+R` 逆时针调向，注视空熔炉时 `R` 切换矿石/细砂模式；木筏或岛屿上按 `Space` 跳跃，游泳时 `Space` 上浮、`Ctrl` 下潜，数字键切换工具，`I` 或 `Tab` 打开背包，`C` 打开制作。
 
 ## 验证
 
 ```sh
 npm test
 npm run build
+npm run test:m1-runtime
+npm run test:stability
 npm run capture
 ```
 
-截图脚本默认连接 `http://127.0.0.1:4173`，支持 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH`、`CAPTURE_HEIGHT` 和 `CAPTURE_ONLY`。目标包括 `title`、`game`、`hook`、`pack`、`crafting`、`devices`、`advanced`、`signal`、种植/研究/岛屿/水下/导航各主流程、`underwater-narrow`、`narrow`、`settings` 和 `mobile`。3D 截图使用分布式 WebGL 像素门禁，拒绝黑屏、白屏、HUD 相交和丢失的上下文；`signal` 会实际聚焦接收台，执行 `R` 调谐、`E` 断电/复电，并验证 1440/640 信号 HUD 与三类世界资产。
+截图脚本默认连接 `http://127.0.0.1:4173`，支持 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH`、`CAPTURE_HEIGHT`、`CAPTURE_QUALITY` 和 `CAPTURE_ONLY`。目标包括 `title`、`pause`、`game`、`hook`、`pack`、`crafting`、`devices`、`advanced`、`signal`、种植/研究/岛屿/水下/导航各主流程、`underwater-narrow`、`narrow`、`settings` 和 `mobile`。`pause` 还会模拟 Pointer Lock 拒绝，验证手机浏览器“电脑模式”不会退回标题或显示错位世界。3D 截图使用分布式 WebGL 像素门禁，拒绝黑屏、白屏、HUD 相交和丢失的上下文；`signal` 会实际聚焦接收台，执行 `R` 调谐、`E` 断电/复电，并验证 1440/640 信号 HUD 与三类世界资产。
 
-Termux Chromium 149 的纯 headless 后端会在任意 WebGL draw call 后首次 readback 时丢失上下文。脚本在 Termux 下会自动启动临时 Xvfb 并走 headful GLES 路径，完成后自动清理；真实 GPU 下的 20 分钟稳定性和性能仍需单独验收。
+Termux Chromium 149 的纯 headless 后端会在任意 WebGL draw call 后首次 readback 时丢失上下文。截图和浏览器回归会自动启动临时 Xvfb 并走 headful GLES，完成后自动清理；本设备的 1200 秒软件长稳则使用 Debian Chromium 150 + Xvfb/headful GLES。两者都不能替代真实 GPU 的 1280x720/30 与 1920x1080/60 发布性能门禁。M1 的分层验收、失败环境和复现命令见 [M1 验收记录](docs/M1_ACCEPTANCE.md)。
 
 ## 资产管线
 

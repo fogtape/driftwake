@@ -1,18 +1,26 @@
 import type { AudioMix, QualityPreset } from '../../state/gameStore';
+import type { CameraMotionMode } from './settings';
 
-export const PREFERENCES_KEY = 'driftwake.preferences.v1';
+export const PREFERENCES_KEY = 'driftwake.preferences.v2';
+export const LEGACY_PREFERENCES_KEY = 'driftwake.preferences.v1';
 
 export interface GamePreferences {
-  version: 1;
+  version: 2;
   audioEnabled: boolean;
+  muteOnFocusLoss: boolean;
+  cameraMotionMode: CameraMotionMode;
   quality: QualityPreset;
+  dynamicResolutionEnabled: boolean;
   audioMix: AudioMix;
 }
 
 export const DEFAULT_PREFERENCES: GamePreferences = {
-  version: 1,
+  version: 2,
   audioEnabled: true,
+  muteOnFocusLoss: true,
+  cameraMotionMode: 'balanced',
   quality: 'high',
+  dynamicResolutionEnabled: true,
   audioMix: { master: 0.78, music: 0.2, ambience: 0.43, effects: 0.72, creatures: 0.78, ui: 0.56 },
 };
 
@@ -25,9 +33,23 @@ export function sanitizePreferences(value: unknown): GamePreferences {
   const candidate = value as Partial<GamePreferences>;
   const mix = candidate.audioMix as Partial<AudioMix> | undefined;
   return {
-    version: 1,
+    version: 2,
     audioEnabled: typeof candidate.audioEnabled === 'boolean' ? candidate.audioEnabled : DEFAULT_PREFERENCES.audioEnabled,
+    muteOnFocusLoss:
+      typeof candidate.muteOnFocusLoss === 'boolean'
+        ? candidate.muteOnFocusLoss
+        : DEFAULT_PREFERENCES.muteOnFocusLoss,
+    cameraMotionMode:
+      candidate.cameraMotionMode === 'comfort'
+      || candidate.cameraMotionMode === 'balanced'
+      || candidate.cameraMotionMode === 'immersive'
+        ? candidate.cameraMotionMode
+        : DEFAULT_PREFERENCES.cameraMotionMode,
     quality: candidate.quality === 'low' || candidate.quality === 'high' ? candidate.quality : DEFAULT_PREFERENCES.quality,
+    dynamicResolutionEnabled:
+      typeof candidate.dynamicResolutionEnabled === 'boolean'
+        ? candidate.dynamicResolutionEnabled
+        : DEFAULT_PREFERENCES.dynamicResolutionEnabled,
     audioMix: {
       master: normalizedLevel(mix?.master, DEFAULT_PREFERENCES.audioMix.master),
       music: normalizedLevel(mix?.music, DEFAULT_PREFERENCES.audioMix.music),
@@ -40,12 +62,15 @@ export function sanitizePreferences(value: unknown): GamePreferences {
 }
 
 export function loadPreferences(storage: Pick<Storage, 'getItem'> = window.localStorage): GamePreferences {
-  try {
-    const raw = storage.getItem(PREFERENCES_KEY);
-    return raw ? sanitizePreferences(JSON.parse(raw)) : structuredClone(DEFAULT_PREFERENCES);
-  } catch {
-    return structuredClone(DEFAULT_PREFERENCES);
+  for (const key of [PREFERENCES_KEY, LEGACY_PREFERENCES_KEY]) {
+    try {
+      const raw = storage.getItem(key);
+      if (raw) return sanitizePreferences(JSON.parse(raw));
+    } catch {
+      continue;
+    }
   }
+  return structuredClone(DEFAULT_PREFERENCES);
 }
 
 export function writePreferences(

@@ -9,6 +9,7 @@ import { ITEM_DEFINITIONS, type ItemId, type ToolId } from './game/domain/items'
 import { RECIPES, type RecipeId } from './game/domain/recipes';
 import { RESEARCH_PROJECTS, type ResearchProjectId, type ResearchSampleId } from './game/domain/progression';
 import { loadPreferences, writePreferences } from './game/domain/preferences';
+import type { CameraMotionMode } from './game/domain/settings';
 import { useGameStore, type AudioMix, type OverlayPanel, type PlacementType, type QualityPreset } from './state/gameStore';
 
 function detectUnsupportedDevice(): boolean {
@@ -21,16 +22,23 @@ function detectUnsupportedDevice(): boolean {
 export function App() {
   const mountRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<DriftwakeGame | null>(null);
+  const initializingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const [loadingGame, setLoadingGame] = useState(false);
   const [unsupported] = useState(detectUnsupportedDevice);
   const phase = useGameStore((state) => state.phase);
   const ready = useGameStore((state) => state.ready);
   const loadingLabel = useGameStore((state) => state.loadingLabel);
   const pointerLocked = useGameStore((state) => state.pointerLocked);
+  const pointerLockDenied = useGameStore((state) => state.pointerLockDenied);
   const settingsOpen = useGameStore((state) => state.settingsOpen);
   const overlayPanel = useGameStore((state) => state.overlayPanel);
   const audioEnabled = useGameStore((state) => state.audioEnabled);
   const audioMix = useGameStore((state) => state.audioMix);
+  const muteOnFocusLoss = useGameStore((state) => state.muteOnFocusLoss);
+  const cameraMotionMode = useGameStore((state) => state.cameraMotionMode);
   const quality = useGameStore((state) => state.quality);
+  const dynamicResolutionEnabled = useGameStore((state) => state.dynamicResolutionEnabled);
   const hookCharge = useGameStore((state) => state.hookCharge);
   const selectedTool = useGameStore((state) => state.selectedTool);
   const inventory = useGameStore((state) => state.inventory);
@@ -54,40 +62,41 @@ export function App() {
   const fps = useGameStore((state) => state.fps);
 
   useEffect(() => {
-    if (unsupported || !mountRef.current) return;
-    let active = true;
+    mountedRef.current = true;
+    if (unsupported) return () => {
+      mountedRef.current = false;
+    };
     const preferences = loadPreferences();
     const store = useGameStore.getState();
     store.setAudioEnabled(preferences.audioEnabled);
     store.setAudioMix(preferences.audioMix);
+    store.setMuteOnFocusLoss(preferences.muteOnFocusLoss);
+    store.setCameraMotionMode(preferences.cameraMotionMode);
     store.setQuality(preferences.quality);
-    void import('./game/DriftwakeGame')
-      .then(({ DriftwakeGame: Game }) => {
-        if (!active || !mountRef.current) return;
-        const game = new Game(mountRef.current);
-        gameRef.current = game;
-        void game.initialize().catch(() => undefined);
-      })
-      .catch((error) => {
-        console.error('Failed to load Driftwake game module', error);
-        useGameStore.getState().setLoadingLabel('游戏模块加载失败');
-      });
+    store.setDynamicResolutionEnabled(preferences.dynamicResolutionEnabled);
     const unsubscribePreferences = useGameStore.subscribe((state, previous) => {
       if (
         state.audioEnabled !== previous.audioEnabled ||
         state.audioMix !== previous.audioMix ||
-        state.quality !== previous.quality
+        state.muteOnFocusLoss !== previous.muteOnFocusLoss ||
+        state.cameraMotionMode !== previous.cameraMotionMode ||
+        state.quality !== previous.quality ||
+        state.dynamicResolutionEnabled !== previous.dynamicResolutionEnabled
       ) {
         writePreferences({
-          version: 1,
+          version: 2,
           audioEnabled: state.audioEnabled,
           audioMix: state.audioMix,
+          muteOnFocusLoss: state.muteOnFocusLoss,
+          cameraMotionMode: state.cameraMotionMode,
           quality: state.quality,
+          dynamicResolutionEnabled: state.dynamicResolutionEnabled,
         });
       }
     });
     return () => {
-      active = false;
+      mountedRef.current = false;
+      initializingRef.current = false;
       unsubscribePreferences();
       gameRef.current?.dispose();
       gameRef.current = null;
@@ -108,9 +117,41 @@ export function App() {
     useGameStore.getState().setSettingsOpen(false);
     gameRef.current?.playUi();
   };
-  const begin = () => {
-    useGameStore.getState().setPhase('playing');
-    gameRef.current?.begin();
+  const begin = async () => {
+    const store = useGameStore.getState();
+    if (gameRef.current) {
+      store.setPhase('playing');
+      if (store.ready) gameRef.current.begin();
+      else store.showNotice('图形上下文仍在恢复');
+      return;
+    }
+    if (initializingRef.current || !mountRef.current) return;
+
+    initializingRef.current = true;
+    setLoadingGame(true);
+    store.setLoadingLabel('正在唤醒海面');
+    let game: DriftwakeGame | null = null;
+    try {
+      const { DriftwakeGame: Game } = await import('./game/DriftwakeGame');
+      if (!mountedRef.current || !mountRef.current) return;
+      game = new Game(mountRef.current);
+      gameRef.current = game;
+      await game.initialize();
+      if (!mountedRef.current || gameRef.current !== game) return;
+      if (!useGameStore.getState().ready) throw new Error('game initialization completed without becoming ready');
+      useGameStore.getState().setPhase('playing');
+    } catch (error) {
+      console.error('Failed to load Driftwake game module', error);
+      game?.dispose();
+      if (gameRef.current === game) gameRef.current = null;
+      const failedStore = useGameStore.getState();
+      failedStore.setReady(false);
+      failedStore.setLoadingLabel('加载失败，请重试');
+      failedStore.showNotice('海面加载失败');
+    } finally {
+      initializingRef.current = false;
+      if (mountedRef.current) setLoadingGame(false);
+    }
   };
   const changeAudio = (enabled: boolean) => {
     useGameStore.getState().setAudioEnabled(enabled);
@@ -123,6 +164,18 @@ export function App() {
   const changeAudioMix = (mix: Partial<AudioMix>) => {
     useGameStore.getState().setAudioMix(mix);
     gameRef.current?.setAudioMix(useGameStore.getState().audioMix);
+  };
+  const changeMuteOnFocusLoss = (enabled: boolean) => {
+    useGameStore.getState().setMuteOnFocusLoss(enabled);
+    gameRef.current?.setMuteOnFocusLoss(enabled);
+  };
+  const changeCameraMotionMode = (mode: CameraMotionMode) => {
+    useGameStore.getState().setCameraMotionMode(mode);
+    gameRef.current?.setCameraMotionMode(mode);
+  };
+  const changeDynamicResolution = (enabled: boolean) => {
+    useGameStore.getState().setDynamicResolutionEnabled(enabled);
+    gameRef.current?.setDynamicResolutionEnabled(enabled);
   };
   const showTransientNotice = (message: string) => {
     useGameStore.getState().showNotice(message);
@@ -194,7 +247,7 @@ export function App() {
       <div ref={mountRef} className="game-mount" />
       <TitleScreen
         visible={phase === 'title'}
-        ready={ready}
+        loading={loadingGame}
         loadingLabel={loadingLabel}
         onBegin={begin}
         onSettings={openSettings}
@@ -202,7 +255,9 @@ export function App() {
       <div className={`underwater-veil ${player.submerged ? 'is-visible' : ''}`} aria-hidden="true" />
       <Hud
         visible={phase === 'playing'}
+        ready={ready}
         pointerLocked={pointerLocked}
+        pointerLockDenied={pointerLockDenied}
         audioEnabled={audioEnabled}
         selectedTool={selectedTool}
         hookCharge={hookCharge}
@@ -256,10 +311,16 @@ export function App() {
         open={settingsOpen}
         audioEnabled={audioEnabled}
         audioMix={audioMix}
+        muteOnFocusLoss={muteOnFocusLoss}
+        cameraMotionMode={cameraMotionMode}
         quality={quality}
+        dynamicResolutionEnabled={dynamicResolutionEnabled}
         onAudioChange={changeAudio}
         onAudioMixChange={changeAudioMix}
+        onMuteOnFocusLossChange={changeMuteOnFocusLoss}
+        onCameraMotionModeChange={changeCameraMotionMode}
         onQualityChange={changeQuality}
+        onDynamicResolutionChange={changeDynamicResolution}
         onClose={closeSettings}
       />
     </main>

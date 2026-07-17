@@ -19,7 +19,18 @@ import type { AudioSystem } from './AudioSystem';
 import type { DebrisField, DebrisItem } from './DebrisField';
 import type { SplashSystem } from './SplashSystem';
 
-type HookState = 'idle' | 'charging' | 'flying' | 'latched' | 'retracting';
+export type HookState = 'idle' | 'charging' | 'flying' | 'latched' | 'retracting';
+
+export interface HookVisualState {
+  state: HookState;
+  heldVisible: boolean;
+  projectileVisible: boolean;
+  ropeVisible: boolean;
+}
+
+export function shouldShowHeldHook(state: HookState, equipped: boolean): boolean {
+  return equipped && (state === 'idle' || state === 'charging');
+}
 
 export class HookSystem {
   private readonly viewModel: Group;
@@ -79,8 +90,17 @@ export class HookSystem {
 
   setEquipped(equipped: boolean): void {
     this.equipped = equipped;
-    this.viewModel.visible = equipped;
     if (!equipped && this.state === 'charging') this.reset();
+    else this.syncHeldVisibility();
+  }
+
+  getVisualState(): HookVisualState {
+    return {
+      state: this.state,
+      heldVisible: this.viewModel.visible,
+      projectileVisible: this.projectile.visible,
+      ropeVisible: this.rope.visible,
+    };
   }
 
   update(time: number, delta: number): void {
@@ -143,6 +163,7 @@ export class HookSystem {
 
   private cast(): void {
     this.state = 'flying';
+    this.syncHeldVisibility();
     this.getHandWorldPosition(this.hookPosition);
     this.camera.getWorldDirection(this.forward);
     const strength = 12.5 + this.charge * 12.5;
@@ -171,13 +192,18 @@ export class HookSystem {
   }
 
   private reset(): void {
-    if (this.latchedItem) this.latchedItem.latched = false;
+    if (this.latchedItem) this.debris.release(this.latchedItem);
     this.latchedItem = null;
     this.state = 'idle';
     this.charge = 0;
     this.projectile.visible = false;
     this.rope.visible = false;
+    this.syncHeldVisibility();
     useGameStore.getState().setHookCharge(0);
+  }
+
+  private syncHeldVisibility(): void {
+    this.viewModel.visible = shouldShowHeldHook(this.state, this.equipped);
   }
 
   private getHandWorldPosition(target: Vector3): Vector3 {
@@ -203,6 +229,7 @@ export class HookSystem {
     if (event.button !== 0 || !this.enabled || !this.equipped || this.state !== 'idle') return;
     this.state = 'charging';
     this.charge = 0;
+    this.syncHeldVisibility();
   };
 
   private readonly onPointerUp = (event: MouseEvent): void => {

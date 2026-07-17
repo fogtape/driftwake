@@ -2,15 +2,16 @@ import { Play, Settings, Waves } from 'lucide-react';
 
 interface TitleScreenProps {
   visible: boolean;
-  ready: boolean;
+  loading: boolean;
   loadingLabel: string;
   onBegin: () => void;
   onSettings: () => void;
 }
 
-export function TitleScreen({ visible, ready, loadingLabel, onBegin, onSettings }: TitleScreenProps) {
+export function TitleScreen({ visible, loading, loadingLabel, onBegin, onSettings }: TitleScreenProps) {
+  const loadFailed = !loading && loadingLabel.includes('失败');
   return (
-    <section className={`title-screen ${visible ? 'is-visible' : ''}`} aria-hidden={!visible}>
+    <section className={`title-screen ${visible ? 'is-visible' : ''}`} aria-hidden={!visible} aria-busy={loading}>
       <div className="title-screen__art" />
       <div className="title-screen__shade" />
       <header className="title-screen__masthead">
@@ -25,21 +26,22 @@ export function TitleScreen({ visible, ready, loadingLabel, onBegin, onSettings 
         <h1>DRIFTWAKE</h1>
         <p className="title-screen__subtitle">漂痕</p>
         <div className="title-screen__actions">
-          <button className="primary-command" type="button" onClick={onBegin} disabled={!ready}>
+          <button className="primary-command" type="button" onClick={onBegin} disabled={loading}>
             <Play size={20} fill="currentColor" />
-            <span>{ready ? '开始漂流' : loadingLabel}</span>
+            <span>{loading ? loadingLabel : '开始漂流'}</span>
           </button>
           <button className="icon-command" type="button" onClick={onSettings} aria-label="设置" title="设置">
             <Settings size={21} />
           </button>
         </div>
-        {!ready && (
+        {loading && (
           <div className="loading-tide" aria-label={loadingLabel}>
             <i />
             <i />
             <i />
           </div>
         )}
+        {loadFailed && <p className="title-screen__error" role="alert">{loadingLabel}</p>}
       </div>
 
       <footer className="title-screen__footer">

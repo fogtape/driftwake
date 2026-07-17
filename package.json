@@ -9,6 +9,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:stability": "node scripts/stability.mjs",
+    "test:m1-runtime": "node scripts/m1-regression.mjs",
     "capture": "node scripts/capture.mjs"
   },
   "dependencies": {

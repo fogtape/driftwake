@@ -25,6 +25,7 @@ export class AudioSystem {
   private nextReelAt = 0;
   private readonly random = createSeededRandom(0xa0d10);
   private enabled = true;
+  private focusMuted = false;
   private deviceFireActivity = 0;
   private deviceSteamActivity = 0;
   private progressionForgeActivity = 0;
@@ -52,7 +53,7 @@ export class AudioSystem {
       this.music = this.context.createGain();
       this.ui = this.context.createGain();
       this.worldFilter = this.context.createBiquadFilter();
-      this.master.gain.value = this.enabled ? this.mix.master : 0;
+      this.master.gain.value = this.effectiveMasterGain();
       this.ambience.gain.value = this.mix.ambience;
       this.effects.gain.value = this.mix.effects;
       this.creatures.gain.value = this.mix.creatures;
@@ -80,15 +81,19 @@ export class AudioSystem {
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
-    if (!this.context || !this.master) return;
-    this.master.gain.setTargetAtTime(enabled ? this.mix.master : 0, this.context.currentTime, 0.06);
+    this.applyMasterGain(0.06);
+  }
+
+  setFocusMuted(focusMuted: boolean): void {
+    this.focusMuted = focusMuted;
+    this.applyMasterGain(0.06);
   }
 
   setMix(mix: AudioMix): void {
     this.mix = { ...mix };
     if (!this.context) return;
     const now = this.context.currentTime;
-    this.master?.gain.setTargetAtTime(this.enabled ? mix.master : 0, now, 0.05);
+    this.master?.gain.setTargetAtTime(this.effectiveMasterGain(), now, 0.05);
     this.music?.gain.setTargetAtTime(mix.music, now, 0.08);
     this.ambience?.gain.setTargetAtTime(mix.ambience, now, 0.08);
     this.effects?.gain.setTargetAtTime(mix.effects, now, 0.05);
@@ -97,7 +102,7 @@ export class AudioSystem {
   }
 
   update(time: number): void {
-    if (!this.context) return;
+    if (!this.context || this.focusMuted || !this.enabled) return;
     if (time >= this.nextCreakAt) {
       this.playCreak();
       this.nextCreakAt = time + randomRange(this.random, 4.8, 10.5);
@@ -106,6 +111,15 @@ export class AudioSystem {
       this.playIslandBird();
       this.nextBirdAt = time + randomRange(this.random, 5.5, 12.5);
     }
+  }
+
+  private effectiveMasterGain(): number {
+    return this.enabled && !this.focusMuted ? this.mix.master : 0;
+  }
+
+  private applyMasterGain(timeConstant: number): void {
+    if (!this.context || !this.master) return;
+    this.master.gain.setTargetAtTime(this.effectiveMasterGain(), this.context.currentTime, timeConstant);
   }
 
   playUi(): void {

@@ -3,6 +3,7 @@ import { INITIAL_SURVIVAL, normalizeSurvival, type SurvivalState } from './survi
 import { MAX_RAFT_DEVICES, deviceKey, sanitizeSavedDevice, type SavedDeviceState } from './devices';
 import {
   createDefaultIslandState,
+  islandDockZForRaft,
   islandTransform,
   isIslandWalkable,
   sanitizeIslandState,
@@ -84,28 +85,35 @@ function finiteNumber(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-function sanitizeNavigation(value: unknown, island: SavedIslandState): SavedPlayerNavigation {
+function sanitizeNavigation(
+  value: unknown,
+  island: SavedIslandState,
+  dockZ: number,
+  legacyDockLayout: boolean,
+): SavedPlayerNavigation {
   if (!value || typeof value !== 'object') return { surface: 'raft', x: 0, z: 1.08 };
   const candidate = value as Partial<SavedPlayerNavigation>;
   const x = finiteNumber(candidate.x);
   const z = finiteNumber(candidate.z, 1.08);
+  const transform = islandTransform(island, dockZ);
+  const sourceTransform = legacyDockLayout ? islandTransform(island) : transform;
+  const localX = x - sourceTransform.x;
+  const localZ = z - sourceTransform.z;
+  const relocatedX = x + transform.x - sourceTransform.x;
+  const relocatedZ = z + transform.z - sourceTransform.z;
   if (candidate.surface === 'island' && island.phase !== 'approaching') {
-    const transform = islandTransform(island);
-    if (isIslandWalkable(island.seed, x - transform.x, z - transform.z)) {
-      return { surface: 'island', x, z };
+    if (isIslandWalkable(island.seed, localX, localZ)) {
+      return { surface: 'island', x: relocatedX, z: relocatedZ };
     }
   }
   if (candidate.surface === 'water' && island.phase !== 'approaching') {
-    const transform = islandTransform(island);
-    const localX = x - transform.x;
-    const localZ = z - transform.z;
     const floor = sampleReefFloorHeight(island.seed, localX, localZ);
     if (floor !== null && isReefNavigable(island.seed, localX, localZ)) {
       return {
         surface: 'water',
-        x,
+        x: relocatedX,
         y: Math.max(floor + 0.72, Math.min(WATER_SURFACE_Y, finiteNumber(candidate.y, WATER_SURFACE_Y))),
-        z,
+        z: relocatedZ,
       };
     }
   }
@@ -148,6 +156,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
   if (candidate.version < 5 && island.phase === 'docked') {
     island = { ...island, elapsed: Math.min(18, island.elapsed) };
   }
+  const legacyDockLayout = island.dockVersion === 0;
   const underwater =
     candidate.version >= 4
       ? sanitizeUnderwaterState(candidate.world?.underwater, island.seed, island.cycle)
@@ -245,10 +254,15 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       survival: normalizeSurvival(candidate.player.survival ?? INITIAL_SURVIVAL),
       selectedTool,
       playSeconds: Math.max(0, finiteInteger(candidate.player.playSeconds)),
-      navigation: sanitizeNavigation(candidate.player.navigation, island),
+      navigation: sanitizeNavigation(
+        candidate.player.navigation,
+        island,
+        islandDockZForRaft(stableTiles),
+        legacyDockLayout,
+      ),
     },
     raft: { tiles: stableTiles, devices, navigation, planting, progression },
-    world: { island, underwater },
+    world: { island: { ...island, dockVersion: 1 }, underwater },
   };
 }
 

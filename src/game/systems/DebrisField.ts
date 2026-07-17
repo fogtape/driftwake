@@ -3,6 +3,7 @@ import type { MaterialLibrary } from '../art/Materials';
 import { createDebrisModel, type DebrisKind, varyModel } from '../art/ProceduralModels';
 import { createSeededRandom, randomRange, type RandomSource } from '../math/random';
 import { sampleWaveHeight } from '../math/waves';
+import { selectActiveDebris } from './debrisQuality';
 
 export interface DebrisItem {
   model: Group;
@@ -10,6 +11,7 @@ export interface DebrisItem {
   bobPhase: number;
   driftSpeed: number;
   spinSpeed: number;
+  active: boolean;
   latched: boolean;
 }
 
@@ -27,8 +29,10 @@ const KIND_SEQUENCE: readonly DebrisKind[] = [
 export class DebrisField {
   readonly items: DebrisItem[] = [];
   private readonly random: RandomSource = createSeededRandom(0xd71f7a9);
+  private requestedCount: number;
 
   constructor(scene: Scene, materials: MaterialLibrary, count = 30) {
+    this.requestedCount = count;
     const prototypes = new Map<DebrisKind, Group>();
     for (const kind of new Set(KIND_SEQUENCE)) {
       prototypes.set(kind, createDebrisModel(kind, materials));
@@ -45,6 +49,7 @@ export class DebrisField {
         bobPhase: randomRange(this.random, 0, Math.PI * 2),
         driftSpeed: randomRange(this.random, 0.52, 0.9),
         spinSpeed: randomRange(this.random, -0.18, 0.18),
+        active: true,
         latched: false,
       };
       this.items.push(item);
@@ -52,9 +57,18 @@ export class DebrisField {
     }
   }
 
+  get activeCount(): number {
+    return this.items.reduce((count, item) => count + (item.active ? 1 : 0), 0);
+  }
+
+  setQuality(highQuality: boolean): void {
+    this.requestedCount = Math.min(this.items.length, highQuality ? 30 : 18);
+    this.applyQualityBudget();
+  }
+
   update(time: number, delta: number): void {
     for (const item of this.items) {
-      if (item.latched) continue;
+      if (!item.active || item.latched) continue;
       item.model.position.z += item.driftSpeed * delta;
       item.model.position.x += Math.sin(time * 0.21 + item.bobPhase) * delta * 0.035;
       item.model.position.y =
@@ -71,7 +85,7 @@ export class DebrisField {
     let closest: DebrisItem | null = null;
     let closestDistance = radius;
     for (const item of this.items) {
-      if (item.latched) continue;
+      if (!item.active || item.latched) continue;
       const distance = item.model.position.distanceTo(point);
       if (distance < closestDistance) {
         closest = item;
@@ -82,19 +96,27 @@ export class DebrisField {
   }
 
   latch(item: DebrisItem): void {
+    item.active = true;
+    item.model.visible = true;
     item.latched = true;
+  }
+
+  release(item: DebrisItem): void {
+    item.latched = false;
+    this.applyQualityBudget();
   }
 
   collect(item: DebrisItem): DebrisKind {
     const kind = item.kind;
     item.latched = false;
     this.respawn(item);
+    this.applyQualityBudget();
     return kind;
   }
 
   private respawn(item: DebrisItem, forcedZ?: number): void {
     item.latched = false;
-    item.model.visible = true;
+    item.model.visible = item.active;
     item.model.position.set(
       randomRange(this.random, -17, 17),
       0,
@@ -105,6 +127,15 @@ export class DebrisField {
     item.spinSpeed = randomRange(this.random, -0.18, 0.18);
     const scale = item.kind === 'cache' ? randomRange(this.random, 0.82, 1.04) : randomRange(this.random, 0.86, 1.18);
     item.model.scale.setScalar(scale);
+  }
+
+  private applyQualityBudget(): void {
+    const activeItems = selectActiveDebris(this.items.map((item) => item.latched), this.requestedCount);
+    for (let index = 0; index < this.items.length; index += 1) {
+      const item = this.items[index];
+      item.active = activeItems[index];
+      item.model.visible = item.active;
+    }
   }
 
   dispose(scene: Scene): void {

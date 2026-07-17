@@ -273,6 +273,10 @@ export class NavigationSystem {
     };
   }
 
+  getEnvironmentClock(): number {
+    return this.state.weatherClock;
+  }
+
   getSavedState(): SavedNavigationState {
     const current = this.currentState();
     return {
@@ -288,6 +292,12 @@ export class NavigationSystem {
       receiverCharge: Number(current.receiverCharge.toFixed(3)),
       devices: current.devices.map((device) => ({ ...device })),
     };
+  }
+
+  getSailAttachmentState(): 'missing' | 'raft' | 'detached' {
+    const sail = this.runtimes.get('sail');
+    if (!sail) return 'missing';
+    return sail.model.parent === this.raft.group ? 'raft' : 'detached';
   }
 
   hasDeviceAt(coordinate: GridCoordinate): boolean {

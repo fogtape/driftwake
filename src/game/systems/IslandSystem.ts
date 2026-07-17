@@ -20,10 +20,13 @@ import type { MaterialLibrary } from '../art/Materials';
 import {
   ISLAND_APPROACH_SECONDS,
   ISLAND_DEPART_SECONDS,
+  ISLAND_TERRAIN_HALF_DEPTH,
   ISLAND_DOCK_SECONDS,
   advanceIslandState,
   generateHarvestNodes,
+  islandDockZForRaft,
   islandTransform,
+  raftFrontEdgeZForTiles,
   sampleIslandHeight,
   type HarvestNodeDefinition,
   type HarvestNodeType,
@@ -36,6 +39,7 @@ import { useGameStore } from '../../state/gameStore';
 import type { PlayerSurface } from '../domain/save';
 import type { AudioSystem } from './AudioSystem';
 import type { PlayerController } from './PlayerController';
+import type { RaftSystem } from './RaftSystem';
 import type { SplashSystem } from './SplashSystem';
 
 interface HarvestRuntime {
@@ -91,12 +95,15 @@ export class IslandSystem {
   private lastPrompt: string | null = null;
   private noticeTimer: number | null = null;
   private navigationProvider: (() => IslandNavigationInput) | null = null;
+  private dockZ: number;
+  private dockRaftRevision: number;
 
   constructor(
     private readonly scene: Scene,
     private readonly camera: PerspectiveCamera,
     private readonly renderer: WebGLRenderer,
     private readonly materials: MaterialLibrary,
+    private readonly raft: RaftSystem,
     private readonly audio: AudioSystem,
     private readonly splashes: SplashSystem,
     savedState: SavedIslandState,
@@ -105,6 +112,8 @@ export class IslandSystem {
       ...savedState,
       nodes: savedState.nodes.map((node) => ({ ...node })),
     };
+    this.dockZ = islandDockZForRaft(this.raft.getTiles());
+    this.dockRaftRevision = this.raft.currentRevision;
     this.axeViewModels = {
       stone: createAxeModel(materials),
       metal: createAxeModel(materials, true),
@@ -185,9 +194,10 @@ export class IslandSystem {
   }
 
   update(time: number, delta: number): void {
+    this.refreshDockTarget();
     const playerAshore = this.player?.getSurface() === 'island';
     const previousPhase = this.state.phase;
-    const previousTransform = islandTransform(this.state);
+    const previousTransform = this.getTransform();
     if (delta > 0) {
       const advanced = advanceIslandState(
         this.state,
@@ -205,12 +215,13 @@ export class IslandSystem {
         this.showNotice('远处出现新的岛影');
       }
     }
-    const nextTransform = islandTransform(this.state);
+    this.refreshDockTarget();
+    const nextTransform = this.getTransform();
     if (previousPhase === 'departing' && this.state.phase === 'departing') {
       this.player?.translateExpedition(nextTransform.x - previousTransform.x, nextTransform.z - previousTransform.z);
     }
     this.applyTransform();
-    const transform = islandTransform(this.state);
+    const transform = this.getTransform();
     const shoreDistance = Math.max(0, Math.hypot(transform.x, transform.z) - 7);
     const resourcesVisible = this.state.phase !== 'approaching' || shoreDistance < 34;
     this.nodes.forEach((runtime) => (runtime.model.visible = resourcesVisible));
@@ -246,13 +257,20 @@ export class IslandSystem {
   }
 
   getEncounterState(): Pick<SavedIslandState, 'seed' | 'cycle' | 'phase'> & { x: number; z: number; scale: number } {
-    const transform = islandTransform(this.state);
+    const transform = this.getTransform();
     return {
       seed: this.state.seed,
       cycle: this.state.cycle,
       phase: this.state.phase,
       ...transform,
     };
+  }
+
+  getRaftClearance(): number {
+    const transform = this.getTransform();
+    const raftFront = this.raft.group.position.z + raftFrontEdgeZForTiles(this.raft.getTiles());
+    const islandFront = transform.z + ISLAND_TERRAIN_HALF_DEPTH * transform.scale;
+    return raftFront - islandFront;
   }
 
   dispose(): void {
@@ -310,9 +328,19 @@ export class IslandSystem {
   }
 
   private applyTransform(): void {
-    const transform = islandTransform(this.state);
+    const transform = this.getTransform();
     this.island.position.set(transform.x, 0, transform.z);
     this.island.scale.setScalar(transform.scale);
+  }
+
+  private getTransform() {
+    return islandTransform(this.state, this.dockZ);
+  }
+
+  private refreshDockTarget(): void {
+    if (this.state.phase !== 'approaching' || this.dockRaftRevision === this.raft.currentRevision) return;
+    this.dockZ = islandDockZForRaft(this.raft.getTiles());
+    this.dockRaftRevision = this.raft.currentRevision;
   }
 
   private animateIsland(time: number, delta: number): void {
@@ -474,7 +502,7 @@ export class IslandSystem {
   }
 
   private publishFeedback(): void {
-    const transform = islandTransform(this.state);
+    const transform = this.getTransform();
     const duration =
       this.state.phase === 'approaching'
         ? ISLAND_APPROACH_SECONDS

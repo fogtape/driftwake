@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SAVE_KEY, SAVE_VERSION, createDefaultRaftTiles, loadSave, sanitizeSave } from './save';
 import { createDefaultNavigationState } from './navigation';
-import { islandTransform, sanitizeIslandState } from './island';
+import { islandDockZForRaft, islandTransform, sanitizeIslandState } from './island';
 
 describe('save schema', () => {
   it('sanitizes inventory, selected tools, stats and duplicate raft tiles', () => {
@@ -129,7 +129,12 @@ describe('save schema', () => {
       raft: { tiles: [{ x: 0, z: 0, health: 100 }], devices: [] },
       world: { island: { seed: 9, cycle: 0, phase: 'docked', elapsed: 5, nodes: [] } },
     });
-    expect(save?.player.navigation).toEqual({ surface: 'island', x: 0, z: -7 });
+    expect(save?.player.navigation).toEqual({
+      surface: 'island',
+      x: 0,
+      z: islandDockZForRaft([{ z: 0 }]),
+    });
+    expect(save?.world.island.dockVersion).toBe(1);
 
     const departingIsland = sanitizeIslandState({ seed: 9, cycle: 0, phase: 'departing', elapsed: 5, nodes: [] });
     const transform = islandTransform(departingIsland);

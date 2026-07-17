@@ -3,11 +3,15 @@ import {
   ISLAND_APPROACH_SECONDS,
   ISLAND_DEPART_SECONDS,
   ISLAND_DOCK_SECONDS,
+  ISLAND_DOCK_CLEARANCE,
+  ISLAND_TERRAIN_HALF_DEPTH,
   advanceIslandState,
   createDefaultIslandState,
   generateHarvestNodes,
   isIslandWalkable,
+  islandDockZForRaft,
   islandTransform,
+  raftFrontEdgeZForTiles,
   sampleIslandHeight,
   sanitizeIslandState,
 } from './island';
@@ -27,6 +31,19 @@ describe('island encounter', () => {
     expect(sampleIslandHeight(1, 0, 0)).toBeGreaterThan(1.5);
     expect(isIslandWalkable(1, 0, 4.8)).toBe(true);
     expect(sampleIslandHeight(1, 12, 12)).toBeNull();
+  });
+
+  it('keeps the complete island mesh beyond dynamic raft foundations', () => {
+    const compactRaft = Array.from({ length: 9 }, (_, index) => ({ z: Math.floor(index / 3) - 1 }));
+    const deepRaft = Array.from({ length: 35 }, (_, index) => ({ z: Math.floor(index / 7) - 2 }));
+    const compactDockZ = islandDockZForRaft(compactRaft);
+    const deepDockZ = islandDockZForRaft(deepRaft);
+
+    expect(deepDockZ).toBeLessThan(compactDockZ);
+    expect(raftFrontEdgeZForTiles(deepRaft) - (deepDockZ + ISLAND_TERRAIN_HALF_DEPTH))
+      .toBeCloseTo(ISLAND_DOCK_CLEARANCE);
+    expect(islandTransform({ ...createDefaultIslandState(1), phase: 'docked' }, deepDockZ).z)
+      .toBe(deepDockZ);
   });
 
   it('assigns axe-gated palm yields and loose shoreline supplies', () => {
@@ -88,6 +105,7 @@ describe('island encounter', () => {
       nodes: [{ id: 'palm-0', health: -2 }, { id: 'made-up', health: 99 }],
     });
     expect(state.cycle).toBe(0);
+    expect(state.dockVersion).toBe(0);
     expect(state.elapsed).toBe(ISLAND_DOCK_SECONDS);
     expect(state.nodes).toHaveLength(18);
     expect(state.nodes.find((node) => node.id === 'palm-0')?.health).toBe(0);

@@ -1,11 +1,8 @@
-import { spawn } from 'node:child_process';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { launchDriftwakeChromium, preparePlaywrightPlatform } from './browser-runtime.mjs';
+import { assertEncodedFrameContent, assertFrameContent } from './capture-utils.mjs';
 
-const isAndroid = process.platform === 'android';
-if (isAndroid) {
-  Object.defineProperty(process, 'platform', { value: 'linux' });
-  process.env.PLAYWRIGHT_HOST_PLATFORM_OVERRIDE ??= 'ubuntu24.04-arm64';
-}
+preparePlaywrightPlatform();
 
 const { chromium } = await import('@playwright/test');
 
@@ -13,8 +10,12 @@ const baseUrl = process.env.DRIFTWAKE_URL ?? 'http://127.0.0.1:4173';
 const captureOnly = process.env.CAPTURE_ONLY ?? 'all';
 const desktopWidth = Number(process.env.CAPTURE_WIDTH ?? 1440);
 const desktopHeight = Number(process.env.CAPTURE_HEIGHT ?? 900);
-const chromiumPath = process.env.CHROMIUM_PATH ?? '/data/data/com.termux/files/usr/bin/chromium-browser';
+const captureQuality = process.env.CAPTURE_QUALITY;
 const outputDir = new URL('../artifacts/screenshots/', import.meta.url);
+
+if (captureQuality !== undefined && captureQuality !== 'low' && captureQuality !== 'high') {
+  throw new Error('CAPTURE_QUALITY must be low or high');
+}
 
 const seededSave = {
   version: 10,
@@ -207,6 +208,10 @@ const plantingPlacementSave = {
 
 const plantingInteractionSave = {
   ...plantingPlacementSave,
+  player: {
+    ...plantingPlacementSave.player,
+    navigation: { surface: 'raft', x: 1, z: 1.08 },
+  },
   raft: {
     ...plantingPlacementSave.raft,
     planting: {
@@ -568,62 +573,19 @@ const signalNetworkSave = {
     ...seededSave.world,
     island: {
       ...seededSave.world.island,
-      phase: 'approaching',
-      elapsed: 20,
+      phase: 'docked',
+      elapsed: 12,
     },
   },
 };
 
 await mkdir(outputDir, { recursive: true });
 
-async function startVirtualDisplay() {
-  const display = `:${100 + (process.pid % 400)}`;
-  const server = spawn(
-    'Xvfb',
-    [display, '-screen', '0', `${Math.max(1440, desktopWidth)}x${Math.max(900, desktopHeight)}x24`, '-nolisten', 'tcp', '-ac'],
-    { stdio: 'ignore' },
-  );
-  await new Promise((resolve, reject) => {
-    let timer;
-    const onError = (error) => {
-      clearTimeout(timer);
-      reject(error);
-    };
-    timer = setTimeout(() => {
-      server.off('error', onError);
-      if (server.exitCode === null) resolve();
-      else reject(new Error(`Xvfb exited with code ${server.exitCode}`));
-    }, 500);
-    server.once('error', onError);
-  });
-  process.env.DISPLAY = display;
-  console.log(`Using virtual display ${display} for WebGL capture`);
-  return server;
-}
-
-const autoVirtualDisplay = isAndroid && !process.env.DISPLAY && process.env.PLAYWRIGHT_HEADFUL !== '0';
-const virtualDisplay = autoVirtualDisplay ? await startVirtualDisplay() : null;
-const stopVirtualDisplay = () => {
-  if (virtualDisplay?.exitCode === null) virtualDisplay.kill('SIGTERM');
-};
-process.once('exit', stopVirtualDisplay);
-const headless = virtualDisplay ? false : process.env.PLAYWRIGHT_HEADFUL !== '1';
-const renderingArgs = headless
-  ? ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader-webgl']
-  : ['--use-gl=angle', '--use-angle=gles'];
-
-const browser = await chromium.launch({
-  executablePath: chromiumPath,
-  headless,
-  args: [
-    '--no-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-gpu-sandbox',
-    '--enable-webgl',
-    '--ignore-gpu-blocklist',
-    ...renderingArgs,
-  ],
+const browserRuntime = await launchDriftwakeChromium(chromium, {
+  width: desktopWidth,
+  height: desktopHeight,
 });
+const browser = browserRuntime.browser;
 
 const errors = [];
 
@@ -650,6 +612,19 @@ async function openDesktopPage(label, options = {}) {
     viewport: { width: desktopWidth, height: desktopHeight },
     deviceScaleFactor: 1,
   });
+  if (captureQuality) {
+    await context.addInitScript((quality) => {
+      localStorage.setItem('driftwake.preferences.v2', JSON.stringify({
+        version: 2,
+        audioEnabled: false,
+        muteOnFocusLoss: true,
+        cameraMotionMode: 'balanced',
+        quality,
+        dynamicResolutionEnabled: true,
+        audioMix: { master: 0, music: 0, ambience: 0, effects: 0, creatures: 0, ui: 0 },
+      }));
+    }, captureQuality);
+  }
   if (options.seedSave) {
     await context.addInitScript((save) => {
       localStorage.setItem('driftwake.save.v10', JSON.stringify(save));
@@ -678,54 +653,137 @@ async function openDesktopPage(label, options = {}) {
   return { context, page };
 }
 
-async function inspectCanvasPixels(page, label) {
-  const result = await page.locator('canvas').evaluate(
-    (canvas) =>
-      new Promise((resolve) => {
-        requestAnimationFrame(() => {
-          const gl = canvas.getContext('webgl2');
-          if (!gl || gl.isContextLost()) {
-            resolve({ contextLost: true, variation: 0, nonBlack: 0 });
-            return;
-          }
-          const width = Math.min(24, canvas.width);
-          const height = Math.min(24, canvas.height);
-          const pixels = new Uint8Array(width * height * 4);
-          const anchors = [
-            [0.2, 0.2],
-            [0.8, 0.2],
-            [0.5, 0.5],
-            [0.2, 0.8],
-            [0.8, 0.8],
-          ];
-          let min = 255;
-          let max = 0;
-          let nonBlack = 0;
-          for (const [anchorX, anchorY] of anchors) {
-            gl.readPixels(
-              Math.max(0, Math.floor(canvas.width * anchorX - width / 2)),
-              Math.max(0, Math.floor(canvas.height * anchorY - height / 2)),
-              width,
-              height,
-              gl.RGBA,
-              gl.UNSIGNED_BYTE,
-              pixels,
-            );
-            for (let index = 0; index < pixels.length; index += 4) {
-              const luminance = pixels[index] * 0.2126 + pixels[index + 1] * 0.7152 + pixels[index + 2] * 0.0722;
-              min = Math.min(min, luminance);
-              max = Math.max(max, luminance);
-              if (luminance > 4) nonBlack += 1;
-            }
-          }
-          resolve({ contextLost: false, variation: Math.round(max - min), nonBlack });
-        });
-      }),
-  );
-  console.log(`${label} canvas pixels: ${JSON.stringify(result)}`);
-  if (result.contextLost || result.variation < 4 || result.nonBlack < 32) {
-    throw new Error(`${label} canvas is blank or unavailable: ${JSON.stringify(result)}`);
+async function enterGame(page) {
+  await page.getByRole('button', { name: '开始漂流', exact: true }).click();
+  const enter = page.getByRole('button', { name: '继续漂流', exact: true });
+  await enter.waitFor({ timeout: 45_000 });
+  await enter.click({ force: true });
+  await waitForRuntime(page, () => {
+    const canvas = document.querySelector('canvas');
+    const mount = document.querySelector('.game-mount');
+    return document.pointerLockElement === canvas
+      && mount?.dataset.contextHealthy === 'true'
+      && mount?.dataset.simulationActive === 'true';
+  }, 20_000);
+  await page.waitForTimeout(250);
+}
+
+async function ensurePointerLock(page) {
+  const locked = await page.evaluate(() => document.pointerLockElement === document.querySelector('canvas'));
+  if (!locked) {
+    await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
   }
+  await waitForRuntime(page, () => {
+    const canvas = document.querySelector('canvas');
+    const mount = document.querySelector('.game-mount');
+    return document.pointerLockElement === canvas && mount?.dataset.simulationActive === 'true';
+  }, 5_000);
+}
+
+async function assertHookVisualOwnership(page, label, expected = 'any') {
+  const state = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return {
+      state: data?.hookState ?? 'missing',
+      heldVisible: data?.hookHeldVisible === 'true',
+      projectileVisible: data?.hookProjectileVisible === 'true',
+      ropeVisible: data?.hookRopeVisible === 'true',
+    };
+  });
+  if (state.state === 'missing' || state.state === 'uninitialized') {
+    throw new Error(`${label} hook diagnostics unavailable: ${JSON.stringify(state)}`);
+  }
+  if (state.heldVisible && (state.projectileVisible || state.ropeVisible)) {
+    throw new Error(`${label} rendered both held and deployed hooks: ${JSON.stringify(state)}`);
+  }
+  if (expected === 'held' && (state.state !== 'idle' || !state.heldVisible || state.projectileVisible || state.ropeVisible)) {
+    throw new Error(`${label} did not retain a single idle held hook: ${JSON.stringify(state)}`);
+  }
+  if (expected === 'deployed' && (state.heldVisible || !state.projectileVisible || !state.ropeVisible)) {
+    throw new Error(`${label} did not transfer ownership to the deployed hook: ${JSON.stringify(state)}`);
+  }
+  console.log(`${label} hook ownership: ${JSON.stringify(state)}`);
+  return state;
+}
+
+async function waitForRuntime(page, predicate, timeout = 10_000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (await page.evaluate(predicate)) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  if (await page.evaluate(predicate)) return;
+  throw new Error(`runtime condition timed out after ${timeout}ms`);
+}
+
+async function captureCompositedPage(page, path) {
+  const cdp = await page.context().newCDPSession(page);
+  const screenshot = await cdp.send('Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    captureBeyondViewport: false,
+    optimizeForSpeed: true,
+  });
+  await cdp.detach();
+  await writeFile(path, Buffer.from(screenshot.data, 'base64'));
+}
+
+async function inspectCanvasPixels(page, label) {
+  let compositedData = null;
+  const result = await page.evaluate(() => {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return { contextLost: true, variation: 0, nonBlack: 0, width: 0, height: 0 };
+    const gl = canvas.getContext('webgl2');
+    if (!gl || gl.isContextLost()) return { contextLost: true, variation: 0, nonBlack: 0, width: canvas.width, height: canvas.height };
+    const width = Math.min(24, canvas.width);
+    const height = Math.min(24, canvas.height);
+    const pixels = new Uint8Array(width * height * 4);
+    let min = 255;
+    let max = 0;
+    let nonBlack = 0;
+    for (const [anchorX, anchorY] of [[0.2, 0.2], [0.8, 0.2], [0.5, 0.5], [0.2, 0.8], [0.8, 0.8]]) {
+      gl.readPixels(
+        Math.max(0, Math.floor(canvas.width * anchorX - width / 2)),
+        Math.max(0, Math.floor(canvas.height * anchorY - height / 2)),
+        width,
+        height,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        pixels,
+      );
+      for (let index = 0; index < pixels.length; index += 4) {
+        const luminance = pixels[index] * 0.2126 + pixels[index + 1] * 0.7152 + pixels[index + 2] * 0.0722;
+        min = Math.min(min, luminance);
+        max = Math.max(max, luminance);
+        if (luminance > 4) nonBlack += 1;
+      }
+    }
+    return { contextLost: false, variation: Math.round(max - min), nonBlack, width: canvas.width, height: canvas.height };
+  });
+  console.log(`${label} canvas pixels: ${JSON.stringify(result)}`);
+  try {
+    assertFrameContent(result, label);
+  } catch (error) {
+    if (result.contextLost) throw error;
+    const cdp = await page.context().newCDPSession(page);
+    const screenshot = await cdp.send('Page.captureScreenshot', {
+      format: 'png',
+      fromSurface: true,
+      captureBeyondViewport: false,
+      optimizeForSpeed: true,
+    });
+    await cdp.detach();
+    compositedData = screenshot.data;
+    const encoded = {
+      contextLost: false,
+      width: result.width,
+      height: result.height,
+      encodedBytes: Math.floor(Buffer.byteLength(screenshot.data, 'base64') * 0.75),
+    };
+    assertEncodedFrameContent(encoded, label);
+    console.log(`${label} composited frame fallback: ${JSON.stringify(encoded)}`);
+  }
+  return compositedData;
 }
 
 async function captureTitle() {
@@ -735,32 +793,123 @@ async function captureTitle() {
     disabled: element.disabled,
   }));
   console.log(`Title command: ${JSON.stringify(buttonStyle)}`);
-  const titleCanvasState = await page.locator('canvas').evaluate((canvas) => {
-    const gl = canvas.getContext('webgl2');
-    return { width: canvas.width, height: canvas.height, contextLost: gl?.isContextLost() ?? true };
-  });
-  console.log(`Title canvas before capture: ${JSON.stringify(titleCanvasState)}`);
+  const titleRuntimeState = await page.evaluate(() => ({
+    canvasFound: document.querySelector('canvas') !== null,
+    worldResources: performance.getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .filter((name) => /DriftwakeGame(?:-[^/?]+)?\.(?:js|ts)(?:\?|$)/.test(name)),
+  }));
+  if (titleRuntimeState.canvasFound || titleRuntimeState.worldResources.length > 0) {
+    throw new Error(`Title loaded world resources before player intent: ${JSON.stringify(titleRuntimeState)}`);
+  }
+  console.log(`Title runtime gate: ${JSON.stringify(titleRuntimeState)}`);
   await page.screenshot({ path: new URL('title-desktop.png', outputDir).pathname });
   await context.close();
 }
 
 async function captureGame() {
   const { context, page } = await openDesktopPage('game');
-  await page.getByRole('button', { name: '开始漂流' }).click();
+  await enterGame(page);
   await page.waitForTimeout(2200);
-  const canvasState = await page.locator('canvas').evaluate((canvas) => {
+  const canvasState = await page.evaluate(() => {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return { width: 0, height: 0, contextLost: true };
     const gl = canvas.getContext('webgl2');
     return { width: canvas.width, height: canvas.height, contextLost: gl?.isContextLost() ?? true };
   });
   console.log(`Game canvas before capture: ${JSON.stringify(canvasState)}`);
-  await inspectCanvasPixels(page, 'game');
-  await page.screenshot({ path: new URL('game-desktop.png', outputDir).pathname });
+  const compositedData = await inspectCanvasPixels(page, 'game');
+  const outputPath = new URL('game-desktop.png', outputDir);
+  if (compositedData) await writeFile(outputPath, Buffer.from(compositedData, 'base64'));
+  else await captureCompositedPage(page, outputPath);
+  await context.close();
+}
+
+async function capturePause() {
+  const context = await browser.newContext({
+    viewport: { width: desktopWidth, height: desktopHeight },
+    deviceScaleFactor: 1,
+    hasTouch: true,
+    isMobile: false,
+  });
+  await context.addInitScript(() => {
+    localStorage.setItem('driftwake.preferences.v2', JSON.stringify({
+      version: 2,
+      audioEnabled: false,
+      muteOnFocusLoss: true,
+      cameraMotionMode: 'balanced',
+      quality: 'low',
+      dynamicResolutionEnabled: true,
+      audioMix: { master: 0, music: 0, ambience: 0, effects: 0, creatures: 0, ui: 0 },
+    }));
+  });
+  const page = await context.newPage();
+  monitorPage(page, 'pause');
+  await page.goto(baseUrl, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: '开始漂流', exact: true }).click();
+  await page.getByRole('button', { name: '继续漂流', exact: true }).waitFor({ timeout: 45_000 });
+  await page.waitForTimeout(700);
+  const state = await page.evaluate(() => {
+    const canvas = document.querySelector('canvas');
+    const prompt = document.querySelector('.focus-prompt__content');
+    const canvasBox = canvas?.getBoundingClientRect();
+    const promptBox = prompt?.getBoundingClientRect();
+    return {
+      titleHidden: document.querySelector('.title-screen')?.getAttribute('aria-hidden') === 'true',
+      pointerLocked: Boolean(document.pointerLockElement),
+      cameraY: Number(document.querySelector('.game-mount')?.dataset.cameraY),
+      canvas: canvasBox ? { width: canvasBox.width, height: canvasBox.height } : null,
+      prompt: promptBox ? {
+        left: promptBox.left,
+        top: promptBox.top,
+        right: promptBox.right,
+        bottom: promptBox.bottom,
+      } : null,
+      viewport: { width: innerWidth, height: innerHeight },
+    };
+  });
+  if (!state.titleHidden || state.pointerLocked) throw new Error(`Pause transition failed: ${JSON.stringify(state)}`);
+  if (!Number.isFinite(state.cameraY) || state.cameraY < 1) throw new Error(`Pause camera was not initialized: ${JSON.stringify(state)}`);
+  if (!state.canvas || state.canvas.width < state.viewport.width - 1 || state.canvas.height < state.viewport.height - 1) {
+    throw new Error(`Pause canvas does not cover the viewport: ${JSON.stringify(state)}`);
+  }
+  if (!state.prompt || state.prompt.left < 0 || state.prompt.top < 0 || state.prompt.right > state.viewport.width || state.prompt.bottom > state.viewport.height) {
+    throw new Error(`Pause controls overflow the viewport: ${JSON.stringify(state)}`);
+  }
+  console.log(`Pause transition: ${JSON.stringify(state)}`);
+  await page.locator('canvas').evaluate((canvas) => {
+    Object.defineProperty(canvas, 'requestPointerLock', {
+      configurable: true,
+      value: () => Promise.reject(new DOMException('Pointer Lock unavailable', 'NotSupportedError')),
+    });
+  });
+  await page.getByRole('button', { name: '继续漂流', exact: true }).click({ force: true });
+  await page.waitForTimeout(400);
+  const deniedState = await page.evaluate(() => ({
+    promptVisible: Boolean(document.querySelector('.focus-prompt')),
+    pointerLocked: Boolean(document.pointerLockElement),
+    pointerLockDenied: document.querySelector('.game-mount')?.dataset.pointerLockDenied,
+    status: document.querySelector('.focus-prompt__status')?.textContent?.trim() ?? '',
+    cameraY: Number(document.querySelector('.game-mount')?.dataset.cameraY),
+  }));
+  if (
+    !deniedState.promptVisible
+    || deniedState.pointerLocked
+    || deniedState.pointerLockDenied !== 'true'
+    || !deniedState.status.includes('浏览器未开放视角锁定')
+    || !Number.isFinite(deniedState.cameraY)
+    || deniedState.cameraY < 1
+  ) {
+    throw new Error(`Rejected Pointer Lock corrupted the pause view: ${JSON.stringify(deniedState)}`);
+  }
+  console.log(`Pause rejection gate: ${JSON.stringify(deniedState)}`);
+  await page.screenshot({ path: new URL('pause-desktop-mode.png', outputDir).pathname, timeout: 90_000 });
   await context.close();
 }
 
 async function capturePack() {
   const { context, page } = await openDesktopPage('pack', { seedSave: true });
-  await page.getByRole('button', { name: '开始漂流' }).click();
+  await enterGame(page);
   await page.waitForTimeout(500);
   await page.keyboard.press('KeyI');
   await page.getByRole('dialog', { name: '野外背包' }).waitFor();
@@ -771,7 +920,7 @@ async function capturePack() {
 
 async function captureCrafting() {
   const { context, page } = await openDesktopPage('crafting', { seedSave: true });
-  await page.getByRole('button', { name: '开始漂流' }).click();
+  await enterGame(page);
   await page.waitForTimeout(500);
   await page.keyboard.press('KeyC');
   await page.getByRole('dialog', { name: '野外背包' }).waitFor();
@@ -793,7 +942,7 @@ async function captureSettings() {
 
 async function captureDevices() {
   const { context, page } = await openDesktopPage('devices', { seedSave: true });
-  await page.getByRole('button', { name: '开始漂流' }).click();
+  await enterGame(page);
   await page.waitForTimeout(900);
   await page.screenshot({ path: new URL('devices-hud-desktop.png', outputDir).pathname });
   await context.close();
@@ -801,17 +950,16 @@ async function captureDevices() {
 
 async function captureAdvancedDevices() {
   const { context: showcaseContext, page: showcasePage } = await openDesktopPage('advanced-devices', { seedSave: true, advancedStart: true });
-  await showcasePage.getByRole('button', { name: '开始漂流' }).click();
+  await enterGame(showcasePage);
   await showcasePage.waitForTimeout(1200);
   await inspectCanvasPixels(showcasePage, 'advanced-devices');
   await showcasePage.screenshot({ path: new URL('advanced-devices-desktop.png', outputDir).pathname });
   await showcaseContext.close();
 
   const { context, page } = await openDesktopPage('advanced-storage', { seedSave: true, advancedStorageStart: true });
-  await page.getByRole('button', { name: '开始漂流' }).click();
+  await enterGame(page);
   await page.waitForTimeout(900);
-  await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
-  await page.waitForFunction(() => Boolean(document.pointerLockElement), null, { timeout: 5_000 });
+  await ensurePointerLock(page);
   let storagePrompt = await aimDownToPrompt(page, '打开干舱储物柜', 70);
   if (!storagePrompt.includes('打开干舱储物柜')) {
     storagePrompt = await aimAroundToPrompt(page, '打开干舱储物柜');
@@ -870,9 +1018,23 @@ async function captureAdvancedDevices() {
 
 async function captureSignalNetwork() {
   const { context, page } = await openDesktopPage('signal-network', { seedSave: true, signalStart: true });
-  await page.getByRole('button', { name: '开始漂流' }).click();
+  await enterGame(page);
   await page.locator('.signal-readout.is-visible.is-online').waitFor({ timeout: 30_000 });
   await page.waitForFunction(() => Boolean(document.pointerLockElement), null, { timeout: 5_000 });
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const clearance = Number(data?.islandRaftClearance);
+    return data?.sailAttachment === 'raft' && Number.isFinite(clearance) && clearance >= 0.15;
+  }, 8_000);
+  const attachment = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return {
+      sailAttachment: data?.sailAttachment ?? 'missing',
+      clearance: Number(data?.islandRaftClearance),
+    };
+  });
+  console.log(`Signal sail attachment: ${JSON.stringify(attachment)}`);
+  await assertHookVisualOwnership(page, 'signal-network', 'held');
   await page.evaluate(() => {
     const movement = new MouseEvent('mousemove');
     Object.defineProperties(movement, {
@@ -884,18 +1046,15 @@ async function captureSignalNetwork() {
   await page.waitForTimeout(900);
   await inspectCanvasPixels(page, 'signal-network');
   if (process.env.CAPTURE_FAST !== '1') {
-    await page.screenshot({ path: new URL('signal-network-desktop.png', outputDir).pathname, timeout: 90_000 });
+    await captureCompositedPage(page, new URL('signal-network-desktop.png', outputDir).pathname);
   }
 
-  if (!await page.evaluate(() => Boolean(document.pointerLockElement))) {
-    await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
-    await page.waitForFunction(() => Boolean(document.pointerLockElement), null, { timeout: 5_000 });
-  }
+  await ensurePointerLock(page);
   let prompt = await aimDownToPrompt(page, '关闭潮听接收台', 46);
   if (!prompt.includes('关闭潮听接收台')) prompt = await aimAroundToPrompt(page, '关闭潮听接收台');
   if (!prompt.includes('关闭潮听接收台')) {
     if (process.env.CAPTURE_FAST !== '1') {
-      await page.screenshot({ path: new URL('signal-network-focus-diagnostic.png', outputDir).pathname, timeout: 90_000 });
+      await captureCompositedPage(page, new URL('signal-network-focus-diagnostic.png', outputDir).pathname);
     }
     throw new Error(`Signal receiver focus missing: ${prompt}`);
   }
@@ -917,7 +1076,7 @@ async function captureSignalNetwork() {
   await page.waitForTimeout(500);
   await inspectCanvasPixels(page, 'signal-array');
   if (process.env.CAPTURE_FAST !== '1') {
-    await page.screenshot({ path: new URL('signal-array-desktop.png', outputDir).pathname, timeout: 90_000 });
+    await captureCompositedPage(page, new URL('signal-array-desktop.png', outputDir).pathname);
   }
 
   await page.setViewportSize({ width: 640, height: 720 });
@@ -947,12 +1106,18 @@ async function captureSignalNetwork() {
   if (boxes.bodyWidth > boxes.viewportWidth + 2) throw new Error(`Signal HUD narrow overflow: ${JSON.stringify(boxes)}`);
   console.log(`Signal network prompt: ${prompt}; narrow boxes: ${JSON.stringify(boxes)}`);
   await inspectCanvasPixels(page, 'signal-network-narrow');
-  await page.screenshot({ path: new URL('signal-network-narrow.png', outputDir).pathname, timeout: 90_000 });
+  if (process.env.CAPTURE_FAST !== '1') {
+    await captureCompositedPage(page, new URL('signal-network-narrow.png', outputDir).pathname);
+  }
   await context.close();
 }
 
+async function readInteractionPrompt(page) {
+  return page.evaluate(() => document.querySelector('.interaction-prompt')?.textContent?.trim() ?? '');
+}
+
 async function aimDownToPrompt(page, expected, steps = 50) {
-  let prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  let prompt = await readInteractionPrompt(page);
   for (let step = 0; step < steps && !prompt.includes(expected); step += 1) {
     await page.evaluate(() => {
       const movement = new MouseEvent('mousemove');
@@ -963,7 +1128,7 @@ async function aimDownToPrompt(page, expected, steps = 50) {
       document.dispatchEvent(movement);
     });
     await page.waitForTimeout(75);
-    prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+    prompt = await readInteractionPrompt(page);
   }
   if (!prompt.includes(expected)) {
     await page.waitForFunction(
@@ -971,13 +1136,13 @@ async function aimDownToPrompt(page, expected, steps = 50) {
       expected,
       { timeout: 4_000 },
     ).catch(() => undefined);
-    prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+    prompt = await readInteractionPrompt(page);
   }
   return prompt;
 }
 
 async function aimTowardDeckPrompt(page, expected, steps = 80) {
-  let prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  let prompt = await readInteractionPrompt(page);
   for (let step = 0; step < steps && !prompt.includes(expected); step += 1) {
     await page.evaluate(() => {
       const movement = new MouseEvent('mousemove');
@@ -988,7 +1153,7 @@ async function aimTowardDeckPrompt(page, expected, steps = 80) {
       document.dispatchEvent(movement);
     });
     await page.waitForTimeout(70);
-    prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+    prompt = await readInteractionPrompt(page);
   }
   if (prompt.includes(expected)) return prompt;
   for (const [direction, yawSteps] of [[1, 34], [-1, 68]]) {
@@ -1002,7 +1167,7 @@ async function aimTowardDeckPrompt(page, expected, steps = 80) {
         document.dispatchEvent(movement);
       }, direction * 10);
       await page.waitForTimeout(70);
-      prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+      prompt = await readInteractionPrompt(page);
     }
     if (prompt.includes(expected)) break;
   }
@@ -1023,7 +1188,7 @@ async function aimAroundToPrompt(page, expected) {
         document.dispatchEvent(movement);
       }, direction * 14);
       await page.waitForTimeout(70);
-      prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+      prompt = await readInteractionPrompt(page);
     }
     if (prompt.includes(expected)) break;
   }
@@ -1032,7 +1197,7 @@ async function aimAroundToPrompt(page, expected) {
 
 async function capturePlantingPlacement() {
   const { context, page } = await openDesktopPage('planting-placement', { seedSave: true, plantingPlacementStart: true });
-  await page.locator('.primary-command').click();
+  await enterGame(page);
   await page.keyboard.press('KeyI');
   await page.getByRole('dialog', { name: '野外背包' }).waitFor();
   await page.getByRole('button', { name: /潮生作物盆套件/ }).click();
@@ -1052,20 +1217,26 @@ async function capturePlantingPlacement() {
 
 async function capturePlantingInteraction() {
   const { context, page } = await openDesktopPage('planting-interaction', { seedSave: true, plantingStart: true });
-  await page.locator('.primary-command').click();
-  await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
-  let prompt = await aimDownToPrompt(page, '埋入盐冠棕榈种');
+  await enterGame(page);
+  await ensurePointerLock(page);
+  await assertHookVisualOwnership(page, 'planting-interaction', 'held');
+  let prompt = await aimDownToPrompt(page, '埋入盐冠棕榈种', 32);
   if (!prompt.includes('埋入盐冠棕榈种')) {
     await page.waitForFunction(
       () => document.querySelector('.interaction-prompt')?.textContent?.includes('埋入盐冠棕榈种'),
       null,
       { timeout: 4_000 },
     ).catch(() => undefined);
-    prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+    prompt = await readInteractionPrompt(page);
   }
   if (!prompt.includes('埋入盐冠棕榈种')) {
-    await page.screenshot({ path: new URL('planting-interaction-diagnostic.png', outputDir).pathname });
-    throw new Error(`Expected planting prompt, received: ${prompt}`);
+    const diagnostic = await page.evaluate(() => ({
+      prompt: document.querySelector('.interaction-prompt')?.textContent?.trim() ?? '',
+      pointerLocked: Boolean(document.pointerLockElement),
+      simulationActive: document.querySelector('.game-mount')?.dataset.simulationActive ?? 'missing',
+      planter: document.querySelector('.device-status--planter')?.textContent?.trim() ?? 'missing',
+    }));
+    throw new Error(`Expected planting prompt, received: ${prompt}; ${JSON.stringify(diagnostic)}`);
   }
   await page.keyboard.press('KeyE');
   await page.locator('.interaction-prompt').filter({ hasText: '浇入一杯蒸馏淡水' }).waitFor({ timeout: 4_000 });
@@ -1087,26 +1258,33 @@ async function capturePlantingInteraction() {
   await emptyCupButton.waitFor({ timeout: 4_000 });
   await page.keyboard.press('KeyI');
   await page.getByRole('button', { name: '继续漂流' }).click();
+  await ensurePointerLock(page);
+  await assertHookVisualOwnership(page, 'planting-interaction-resumed', 'held');
   await inspectCanvasPixels(page, 'planting-interaction');
-  await page.screenshot({ path: new URL('planting-interaction-desktop.png', outputDir).pathname });
+  if (process.env.CAPTURE_FAST !== '1') {
+    await captureCompositedPage(page, new URL('planting-interaction-desktop.png', outputDir).pathname);
+  }
   await context.close();
 }
 
 async function capturePlantingBird() {
   const { context, page } = await openDesktopPage('planting-bird', { seedSave: true, plantingBirdStart: true });
-  await page.locator('.primary-command').click();
-  await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
-  const birdPrompt = await aimDownToPrompt(page, '驱赶盐翼盗鸟');
+  await enterGame(page);
+  await ensurePointerLock(page);
+  await assertHookVisualOwnership(page, 'planting-bird', 'held');
+  const birdPrompt = await aimDownToPrompt(page, '驱赶盐翼盗鸟', 32);
   if (!birdPrompt.includes('驱赶盐翼盗鸟')) throw new Error(`Expected bird deterrence prompt, received: ${birdPrompt}`);
   await page.locator('.crop-warning.is-visible').waitFor({ timeout: 8_000 });
   await page.locator('.interaction-prompt').filter({ hasText: '驱赶盐翼盗鸟' }).waitFor({ timeout: 14_000 }).catch(async (error) => {
     await page.screenshot({ path: new URL('planting-bird-diagnostic.png', outputDir).pathname });
-    const prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+    const prompt = await readInteractionPrompt(page);
     const warning = await page.locator('.crop-warning').getAttribute('class');
     throw new Error(`Bird interaction prompt missing: prompt=${prompt}; warning=${warning}`, { cause: error });
   });
   await inspectCanvasPixels(page, 'planting-bird');
-  await page.screenshot({ path: new URL('planting-bird-desktop.png', outputDir).pathname });
+  if (process.env.CAPTURE_FAST !== '1') {
+    await captureCompositedPage(page, new URL('planting-bird-desktop.png', outputDir).pathname);
+  }
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => document.querySelector('.loot-notice')?.textContent?.includes('被惊飞'), null, { timeout: 4_000 });
   await page.waitForFunction(() => !document.querySelector('.crop-warning')?.classList.contains('is-visible'), null, { timeout: 4_000 });
@@ -1115,7 +1293,7 @@ async function capturePlantingBird() {
 
 async function captureProgressionPlacement() {
   const { context, page } = await openDesktopPage('progression-placement', { seedSave: true, progressionPlacementStart: true });
-  await page.locator('.primary-command').click();
+  await enterGame(page);
   await page.keyboard.press('KeyI');
   await page.getByRole('dialog', { name: '野外背包' }).waitFor();
   await page.getByRole('button', { name: /盐迹研究台套件/ }).click();
@@ -1154,8 +1332,8 @@ async function captureProgressionPlacement() {
 
 async function captureProgressionResearch() {
   const { context, page } = await openDesktopPage('progression-research', { seedSave: true, progressionResearchStart: true });
-  await page.locator('.primary-command').click();
-  await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
+  await enterGame(page);
+  await ensurePointerLock(page);
   const prompt = await aimAroundToPrompt(page, '打开盐迹研究台');
   if (!prompt.includes('打开盐迹研究台')) {
     await page.screenshot({ path: new URL('progression-research-diagnostic.png', outputDir).pathname });
@@ -1186,7 +1364,7 @@ async function captureProgressionResearch() {
 
 async function captureProgressionSmelting() {
   const { context, page } = await openDesktopPage('progression-smelting', { seedSave: true, progressionSmeltingStart: true });
-  await page.locator('.primary-command').click();
+  await enterGame(page);
   await page.waitForTimeout(300);
   const prompt = await aimAroundToPrompt(page, '矿石熔炼中');
   if (!prompt.includes('矿石熔炼中')) {
@@ -1207,7 +1385,7 @@ async function captureProgressionSmelting() {
   await page.screenshot({ path: new URL('progression-smelting-desktop.png', outputDir).pathname });
   await context.close();
   const { context: readyContext, page: readyPage } = await openDesktopPage('progression-ready', { seedSave: true, progressionReadyStart: true });
-  await readyPage.locator('.primary-command').click();
+  await enterGame(readyPage);
   await readyPage.waitForTimeout(300);
   const readyPrompt = await aimAroundToPrompt(readyPage, '收取潮铸金属锭');
   if (!readyPrompt.includes('收取潮铸金属锭')) {
@@ -1222,7 +1400,7 @@ async function captureProgressionSmelting() {
 
 async function captureIsland() {
   const { context, page } = await openDesktopPage('island', { seedSave: true, islandStart: true });
-  await page.getByRole('button', { name: '开始漂流' }).click();
+  await enterGame(page);
   await page.waitForTimeout(1200);
   await inspectCanvasPixels(page, 'island');
   await page.screenshot({ path: new URL('island-desktop.png', outputDir).pathname });
@@ -1231,7 +1409,7 @@ async function captureIsland() {
 
 async function captureIslandInteraction() {
   const { context, page } = await openDesktopPage('island-interaction', { seedSave: true, interactionStart: true });
-  await page.getByRole('button', { name: '开始漂流' }).click();
+  await enterGame(page);
   await page.waitForTimeout(650);
   let prompt = '';
   for (let step = 0; step < 14 && !prompt.includes('拾取风干枝料'); step += 1) {
@@ -1244,7 +1422,7 @@ async function captureIslandInteraction() {
       document.dispatchEvent(movement);
     });
     await page.waitForTimeout(90);
-    prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+    prompt = await readInteractionPrompt(page);
   }
   if (!prompt.includes('拾取风干枝料')) {
     await page.waitForFunction(
@@ -1252,7 +1430,7 @@ async function captureIslandInteraction() {
       null,
       { timeout: 20_000 },
     ).catch(() => undefined);
-    prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+    prompt = await readInteractionPrompt(page);
   }
   console.log(`Island interaction prompt: ${prompt}`);
   if (!prompt.includes('拾取风干枝料')) {
@@ -1268,7 +1446,7 @@ async function captureIslandInteraction() {
 
 async function captureUnderwater() {
   const { context, page } = await openDesktopPage('underwater', { seedSave: true, underwaterStart: true });
-  await page.getByRole('button', { name: '开始漂流' }).click();
+  await enterGame(page);
   await page.waitForTimeout(1500);
   await page.locator('.dive-readout.is-visible').waitFor();
   const oxygenLabel = await page.locator('.survival-gauge--oxygen').getAttribute('aria-label');
@@ -1282,13 +1460,13 @@ async function captureUnderwater() {
 
 async function captureUnderwaterInteraction() {
   const { context, page } = await openDesktopPage('underwater-interaction', { seedSave: true, underwaterStart: true });
-  await page.getByRole('button', { name: '开始漂流' }).click();
+  await enterGame(page);
   await page.waitForFunction(
     () => document.querySelector('.interaction-prompt')?.textContent?.includes('收割长叶海草'),
     null,
     { timeout: 20_000 },
   );
-  const prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  const prompt = await readInteractionPrompt(page);
   console.log(`Underwater interaction prompt: ${prompt}`);
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => document.querySelector('.loot-notice')?.textContent?.includes('+2 海草'), null, { timeout: 15_000 });
@@ -1306,7 +1484,7 @@ async function captureNarrow() {
   monitorPage(page, 'narrow');
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
   await page.waitForSelector('.primary-command:not(:disabled)', { timeout: 45_000 });
-  await page.getByRole('button', { name: '开始漂流' }).click();
+  await enterGame(page);
   await page.waitForTimeout(900);
   const narrowBoxes = await page.evaluate(() => {
     const box = (selector) => {
@@ -1356,7 +1534,7 @@ async function captureUnderwaterNarrow() {
   monitorPage(page, 'underwater-narrow');
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
   await page.waitForSelector('.primary-command:not(:disabled)', { timeout: 45_000 });
-  await page.getByRole('button', { name: '开始漂流' }).click();
+  await enterGame(page);
   await page.waitForTimeout(1200);
   await inspectCanvasPixels(page, 'underwater-narrow');
   await page.screenshot({ path: new URL('underwater-narrow.png', outputDir).pathname });
@@ -1365,7 +1543,7 @@ async function captureUnderwaterNarrow() {
 
 async function captureNavigation() {
   const { context, page } = await openDesktopPage('navigation', { seedSave: true });
-  await page.locator('.primary-command').click();
+  await enterGame(page);
   await page.waitForTimeout(900);
   await page.locator('.interaction-prompt').filter({ hasText: '收起拾风帆' }).waitFor({ timeout: 8_000 });
   const courseBefore = await page.locator('.navigation-readout').getAttribute('aria-label');
@@ -1386,8 +1564,8 @@ async function captureNavigation() {
 
 async function captureNavigationInteraction() {
   const { context, page } = await openDesktopPage('navigation-interaction', { seedSave: true, anchorStart: true });
-  await page.locator('.primary-command').click();
-  await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
+  await enterGame(page);
+  await ensurePointerLock(page);
   await page.waitForTimeout(350);
   let prompt = '';
   for (let step = 0; step < 18 && !prompt.includes('起锚恢复航行'); step += 1) {
@@ -1400,7 +1578,7 @@ async function captureNavigationInteraction() {
       document.dispatchEvent(movement);
     });
     await page.waitForTimeout(80);
-    prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+    prompt = await readInteractionPrompt(page);
   }
   console.log(`Navigation interaction prompt: ${prompt}`);
   if (!prompt.includes('起锚恢复航行')) {
@@ -1424,7 +1602,7 @@ async function captureNavigationHelmPlacement() {
     seedSave: true,
     navigationHelmPlacementStart: true,
   });
-  await page.locator('.primary-command').click();
+  await enterGame(page);
   await page.keyboard.press('KeyI');
   await page.getByRole('dialog', { name: '野外背包' }).waitFor();
   await page.getByRole('button', { name: /定潮舵台套件/ }).click();
@@ -1459,16 +1637,15 @@ async function captureNavigationRigging() {
     seedSave: true,
     navigationRiggingStart: true,
   });
-  await page.locator('.primary-command').click();
+  await enterGame(page);
   await page.waitForFunction(
     () => document.querySelector('.interaction-prompt')?.textContent?.includes('加装横风抗扭索具'),
     null,
     { timeout: 2_500 },
   ).catch(() => undefined);
-  let prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  let prompt = await readInteractionPrompt(page);
   if (!prompt.includes('加装横风抗扭索具')) {
-    await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
-    await page.waitForTimeout(250);
+    await ensurePointerLock(page);
     prompt = await aimAroundToPrompt(page, '加装横风抗扭索具');
   }
   if (!prompt.includes('加装横风抗扭索具')) {
@@ -1488,7 +1665,7 @@ async function captureNavigationStorm() {
     seedSave: true,
     navigationStormStart: true,
   });
-  await page.locator('.primary-command').click();
+  await enterGame(page);
   await page.waitForTimeout(450);
   const initialStormState = await page.evaluate(() => {
     const savedNavigation = JSON.parse(localStorage.getItem('driftwake.save.v10') ?? 'null')?.raft?.navigation ?? null;
@@ -1511,10 +1688,9 @@ async function captureNavigationStorm() {
     null,
     { timeout: 2_500 },
   ).catch(() => undefined);
-  let prompt = (await page.locator('.interaction-prompt').textContent())?.trim() ?? '';
+  let prompt = await readInteractionPrompt(page);
   if (!prompt.includes('切换航线')) {
-    await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
-    await page.waitForTimeout(250);
+    await ensurePointerLock(page);
     prompt = await aimAroundToPrompt(page, '切换航线');
   }
   if (!prompt.includes('切换航线')) {
@@ -1543,7 +1719,7 @@ async function captureNavigationStorm() {
 
 async function captureDriftRisk() {
   const { context, page } = await openDesktopPage('drift-risk', { seedSave: true, driftRiskStart: true });
-  await page.locator('.primary-command').click();
+  await enterGame(page);
   await page.locator('.island-readout.is-drift-risk').waitFor({ timeout: 8_000 });
   await page.locator('.island-readout--departing.is-ashore').waitFor({ timeout: 20_000 });
   await page.evaluate(() => {
@@ -1567,7 +1743,7 @@ async function captureDriftRisk() {
 
 async function captureHook() {
   const { context, page } = await openDesktopPage('hook');
-  await page.getByRole('button', { name: '开始漂流' }).click();
+  await enterGame(page);
   await page.waitForTimeout(900);
   if (await page.getByRole('button', { name: '继续漂流' }).isVisible().catch(() => false)) {
     await page.getByRole('button', { name: '继续漂流' }).click();
@@ -1576,8 +1752,18 @@ async function captureHook() {
   await page.mouse.down();
   await page.waitForTimeout(650);
   await page.mouse.up();
+  await waitForRuntime(page,
+    () => document.querySelector('.game-mount')?.dataset.hookProjectileVisible === 'true',
+    10_000,
+  ).catch(async (error) => {
+    const state = await assertHookVisualOwnership(page, 'hook-cast-timeout');
+    throw new Error(`Hook cast did not deploy: ${JSON.stringify(state)}`, { cause: error });
+  });
+  await assertHookVisualOwnership(page, 'hook-cast', 'deployed');
   await page.waitForTimeout(450);
-  await page.screenshot({ path: new URL('hook-desktop.png', outputDir).pathname });
+  if (process.env.CAPTURE_FAST !== '1') {
+    await captureCompositedPage(page, new URL('hook-desktop.png', outputDir).pathname);
+  }
   await context.close();
 }
 
@@ -1598,6 +1784,7 @@ async function captureMobile() {
 try {
   if (captureOnly === 'all' || captureOnly === 'title') await captureTitle();
   if (captureOnly === 'all' || captureOnly === 'game') await captureGame();
+  if (captureOnly === 'all' || captureOnly === 'pause') await capturePause();
   if (captureOnly === 'all' || captureOnly === 'hook') await captureHook();
   if (captureOnly === 'all' || captureOnly === 'pack') await capturePack();
   if (captureOnly === 'all' || captureOnly === 'crafting') await captureCrafting();
@@ -1626,8 +1813,7 @@ try {
   if (captureOnly === 'all' || captureOnly === 'mobile') await captureMobile();
 } finally {
   await browser.close();
-  stopVirtualDisplay();
-  process.off('exit', stopVirtualDisplay);
+  browserRuntime.cleanup();
 }
 
 if (errors.length > 0) {

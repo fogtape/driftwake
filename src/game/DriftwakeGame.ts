@@ -35,6 +35,7 @@ import { createDefaultUnderwaterState } from './domain/underwater';
 import { createDefaultNavigationState } from './domain/navigation';
 import { createDefaultPlantingState } from './domain/planting';
 import { createDefaultProgressionState, type ProgressionDeviceType } from './domain/progression';
+import type { CameraMotionMode } from './domain/settings';
 import { AudioSystem } from './systems/AudioSystem';
 import { BuildSystem } from './systems/BuildSystem';
 import { DebrisField } from './systems/DebrisField';
@@ -54,12 +55,49 @@ import { NavigationSystem } from './systems/NavigationSystem';
 import { PlantingSystem } from './systems/PlantingSystem';
 import { ProgressionSystem } from './systems/ProgressionSystem';
 import { StormSystem } from './systems/StormSystem';
+import { FixedStepScheduler, isSimulationActive } from './runtime/runtime';
+import {
+  createDynamicResolutionState,
+  stepDynamicResolution,
+  summarizeFrameTimes,
+  type DynamicResolutionPolicy,
+  type DynamicResolutionState,
+} from './runtime/dynamicResolution';
+import { sampleDayCycle, sampleEnvironmentLighting } from './environment/environment';
+
+const DYNAMIC_RESOLUTION_POLICIES: Record<QualityPreset, DynamicResolutionPolicy> = {
+  high: {
+    minimumScale: 0.6,
+    maximumScale: 1,
+    decreaseStep: 0.1,
+    increaseStep: 0.05,
+    slowP95FrameMs: 20,
+    healthyMedianFrameMs: 17.5,
+    healthyP95FrameMs: 19,
+    decreaseAfterSeconds: 1.5,
+    increaseAfterSeconds: 7,
+    cooldownSeconds: 2,
+  },
+  low: {
+    minimumScale: 0.7,
+    maximumScale: 1,
+    decreaseStep: 0.1,
+    increaseStep: 0.05,
+    slowP95FrameMs: 36,
+    healthyMedianFrameMs: 30,
+    healthyP95FrameMs: 34,
+    decreaseAfterSeconds: 1.5,
+    increaseAfterSeconds: 6,
+    cooldownSeconds: 2,
+  },
+};
 
 export class DriftwakeGame {
   private readonly scene = new Scene();
   private readonly camera = new PerspectiveCamera(67, 1, 0.045, 520);
   private readonly renderer: WebGLRenderer;
   private readonly clock = new Clock();
+  private readonly fixedStep = new FixedStepScheduler();
   private readonly audio = new AudioSystem();
   private readonly physics = new PhysicsSystem();
   private textures: AssetTextures | null = null;
@@ -86,20 +124,40 @@ export class DriftwakeGame {
   private ambient: AmbientLight | null = null;
   private directional: DirectionalLight | null = null;
   private readonly airBackground = new Color('#a9cfd2');
+  private readonly nightBackground = new Color('#071323');
   private readonly stormBackground = new Color('#516f72');
   private readonly surfaceBackground = new Color();
   private readonly waterBackground = new Color('#0b5260');
+  private readonly nightWaterBackground = new Color('#062d3a');
+  private readonly dayKeyColor = new Color('#ffe1b1');
+  private readonly nightKeyColor = new Color('#8bb8d4');
+  private readonly sunPosition = new Vector3(0.56, 0.72, 0.4).normalize();
+  private readonly keyLightPosition = new Vector3();
   private readonly environmentColor = new Color();
   private environmentBlend = 0;
   private stormBlend = 0;
   private elapsed = 0;
-  private fpsElapsed = 0;
-  private fpsFrames = 0;
+  private frameTimingElapsed = 0;
+  private readonly frameTimesMs: number[] = [];
+  private dynamicResolutionState: DynamicResolutionState = createDynamicResolutionState();
+  private qualityPreset: QualityPreset = 'high';
+  private appliedPixelRatio = -1;
+  private simulationActive = false;
+  private currentStormIntensity = 0;
+  private currentGust = 0;
+  private currentLightning = 0;
   private simulationAccumulator = 0;
   private saveElapsed = 0;
+  private simulationTickCount = 0;
   private unsubscribeStore: (() => void) | null = null;
   private noticeTimer: number | null = null;
+  private windowFocused = document.hasFocus();
+  private initialized = false;
+  private contextLost = false;
   private disposed = false;
+  private lastNativeFrameAt = performance.now();
+  private frameWatchdog: number | null = null;
+  private pointerLockTimer: number | null = null;
 
   constructor(private readonly mount: HTMLElement) {
     this.renderer = new WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -114,15 +172,33 @@ export class DriftwakeGame {
     this.scene.add(this.camera);
     this.scene.background = new Color('#a9cfd2');
     this.scene.fog = new FogExp2(0xa9cfd2, 0.0065);
+    this.mount.dataset.simulationActive = 'false';
+    this.mount.dataset.contextHealthy = 'true';
+    this.mount.dataset.raftTileCount = '0';
+    this.mount.dataset.hookState = 'uninitialized';
+    this.mount.dataset.hookHeldVisible = 'false';
+    this.mount.dataset.hookProjectileVisible = 'false';
+    this.mount.dataset.hookRopeVisible = 'false';
+    this.mount.dataset.sailAttachment = 'missing';
+    this.mount.dataset.islandRaftClearance = '0';
+    this.audio.setMix(useGameStore.getState().audioMix);
+    this.syncAudioFocusMuted();
     this.setQuality(useGameStore.getState().quality);
+    this.setDynamicResolutionEnabled(useGameStore.getState().dynamicResolutionEnabled);
     this.resize();
 
     window.addEventListener('resize', this.resize);
+    window.addEventListener('blur', this.onWindowBlur);
+    window.addEventListener('focus', this.onWindowFocus);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
     document.addEventListener('pointerlockchange', this.onPointerLockChange);
+    document.addEventListener('pointerlockerror', this.onPointerLockError);
     window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('beforeunload', this.onBeforeUnload);
     this.renderer.domElement.addEventListener('click', this.onCanvasClick);
     this.renderer.domElement.addEventListener('webglcontextlost', this.onContextLost);
+    this.renderer.domElement.addEventListener('webglcontextrestored', this.onContextRestored);
   }
 
   async initialize(): Promise<void> {
@@ -150,7 +226,8 @@ export class DriftwakeGame {
       this.scene.add(this.ocean.mesh, this.raft.group);
 
       store.setLoadingLabel('正在放流物资');
-      this.debris = new DebrisField(this.scene, this.materials, store.quality === 'high' ? 30 : 18);
+      this.debris = new DebrisField(this.scene, this.materials, 30);
+      this.setQuality(store.quality);
       this.splashes = new SplashSystem(this.scene);
       const islandState = save?.world.island ?? createDefaultIslandState();
       this.island = new IslandSystem(
@@ -158,6 +235,7 @@ export class DriftwakeGame {
         this.camera,
         this.renderer,
         this.materials,
+        this.raft,
         this.audio,
         this.splashes,
         islandState,
@@ -165,9 +243,11 @@ export class DriftwakeGame {
       this.player = new PlayerController(
         this.camera,
         this.raft,
+        this.physics,
         save?.player.navigation,
         (surface) => this.audio.playFootstep(surface),
       );
+      this.setCameraMotionMode(useGameStore.getState().cameraMotionMode);
       this.island.setPlayer(this.player);
       this.underwater = new UnderwaterSystem(
         this.scene,
@@ -328,10 +408,21 @@ export class DriftwakeGame {
       store.setLoadingLabel('正在建立物理世界');
       await this.physics.initialize();
       if (this.disposed) return;
+      this.syncRaftPhysics();
+      this.physics.step(1 / 60);
+
+      this.raft.restoreSimulationPose();
+      this.player.update(0);
+      this.player.present(1);
+      this.updateEnvironment(0, 0, 0);
+      this.renderer.render(this.scene, this.camera);
 
       this.clock.start();
-      this.renderer.setAnimationLoop(this.update);
-      store.setReady(true);
+      this.lastNativeFrameAt = performance.now();
+      this.renderer.setAnimationLoop(this.onAnimationFrame);
+      this.frameWatchdog = window.setInterval(this.onFrameWatchdog, 1000 / 15);
+      this.initialized = true;
+      store.setReady(!this.contextLost);
       store.setLoadingLabel('海况稳定');
     } catch (error) {
       console.error('Failed to initialize Driftwake', error);
@@ -347,8 +438,9 @@ export class DriftwakeGame {
     useGameStore.getState().setSettingsOpen(false);
     this.audio.setMix(useGameStore.getState().audioMix);
     this.audio.setEnabled(useGameStore.getState().audioEnabled);
+    this.syncAudioFocusMuted();
     void this.audio.begin();
-    void this.renderer.domElement.requestPointerLock();
+    this.requestInputLock();
   }
 
   pauseInput(): void {
@@ -364,13 +456,32 @@ export class DriftwakeGame {
     this.audio.setMix(mix);
   }
 
+  setMuteOnFocusLoss(_enabled: boolean): void {
+    this.syncAudioFocusMuted();
+  }
+
+  setCameraMotionMode(mode: CameraMotionMode): void {
+    this.player?.setCameraMotionMode(mode);
+    this.mount.dataset.cameraMotionMode = mode;
+  }
+
+  setDynamicResolutionEnabled(enabled: boolean): void {
+    this.dynamicResolutionState = createDynamicResolutionState(1);
+    this.mount.dataset.dynamicResolution = String(enabled);
+    this.applyRenderScale();
+  }
+
   setQuality(quality: QualityPreset): void {
+    this.qualityPreset = quality;
+    this.dynamicResolutionState = createDynamicResolutionState(1);
     const highQuality = quality === 'high';
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, highQuality ? 1.75 : 1.0));
     this.renderer.shadowMap.enabled = highQuality;
     this.ocean?.setQuality(highQuality);
     this.storm?.setQuality(highQuality);
-    this.resize();
+    this.debris?.setQuality(highQuality);
+    this.mount.dataset.quality = quality;
+    this.mount.dataset.debrisCount = String(this.debris?.activeCount ?? 0);
+    this.applyRenderScale();
   }
 
   playUi(success = true): void {
@@ -404,12 +515,20 @@ export class DriftwakeGame {
     if (this.disposed) return;
     this.disposed = true;
     this.renderer.setAnimationLoop(null);
+    if (this.frameWatchdog !== null) window.clearInterval(this.frameWatchdog);
+    this.frameWatchdog = null;
     window.removeEventListener('resize', this.resize);
+    window.removeEventListener('blur', this.onWindowBlur);
+    window.removeEventListener('focus', this.onWindowFocus);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
     document.removeEventListener('pointerlockchange', this.onPointerLockChange);
+    document.removeEventListener('pointerlockerror', this.onPointerLockError);
     window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('beforeunload', this.onBeforeUnload);
     this.renderer.domElement.removeEventListener('click', this.onCanvasClick);
     this.renderer.domElement.removeEventListener('webglcontextlost', this.onContextLost);
+    this.renderer.domElement.removeEventListener('webglcontextrestored', this.onContextRestored);
     const geometries = new Set<BufferGeometry>();
     const materials = new Set<Material>();
     const textures = new Set<Texture>();
@@ -445,6 +564,7 @@ export class DriftwakeGame {
     this.unsubscribeStore?.();
     this.unsubscribeStore = null;
     if (this.noticeTimer !== null) window.clearTimeout(this.noticeTimer);
+    this.clearPointerLockTimer();
 
     geometries.forEach((geometry) => geometry.dispose());
     materials.forEach((material) => material.dispose());
@@ -486,62 +606,183 @@ export class DriftwakeGame {
     this.directional = directional;
   }
 
+  private readonly stepSimulation = (stepSeconds: number, simulationSeconds: number): void => {
+    this.simulationTickCount += 1;
+    this.elapsed = simulationSeconds;
+    this.raft?.update(simulationSeconds, stepSeconds);
+    this.syncRaftPhysics();
+    this.physics.step(stepSeconds);
+    this.player?.update(stepSeconds);
+    this.debris?.update(simulationSeconds, stepSeconds);
+    this.hook?.update(simulationSeconds, stepSeconds);
+    const hookVisual = this.hook?.getVisualState();
+    if (hookVisual) {
+      this.mount.dataset.hookState = hookVisual.state;
+      this.mount.dataset.hookHeldVisible = String(hookVisual.heldVisible);
+      this.mount.dataset.hookProjectileVisible = String(hookVisual.projectileVisible);
+      this.mount.dataset.hookRopeVisible = String(hookVisual.ropeVisible);
+    }
+    this.build?.update(simulationSeconds, stepSeconds);
+    this.fishing?.update(simulationSeconds, stepSeconds);
+    this.spear?.update(simulationSeconds, stepSeconds);
+    this.shark?.update(simulationSeconds, stepSeconds);
+    this.devices?.update(simulationSeconds, stepSeconds);
+    this.navigation?.update(simulationSeconds, stepSeconds);
+    this.planting?.update(simulationSeconds, stepSeconds);
+    this.progression?.update(simulationSeconds, stepSeconds);
+    this.island?.update(simulationSeconds, stepSeconds);
+    this.underwater?.update(simulationSeconds, stepSeconds);
+    this.splashes?.update(stepSeconds);
+
+    const weather = this.navigation?.getWeather() ?? { weatherPhase: 'calm' as const, stormIntensity: 0, gust: 0 };
+    this.currentStormIntensity = weather.stormIntensity;
+    this.currentGust = weather.gust;
+    const surfaceStorm = (this.player?.isSubmerged() ?? false) ? 0 : this.currentStormIntensity;
+    this.currentLightning = this.storm?.update(simulationSeconds, surfaceStorm, this.currentGust) ?? 0;
+    this.audio.setStormActivity(this.currentStormIntensity);
+    this.audio.update(simulationSeconds);
+
+    this.simulationAccumulator += stepSeconds;
+    while (this.simulationAccumulator >= 1) {
+      useGameStore.getState().tickSurvival(1, this.player?.isSubmerged() ?? false);
+      useGameStore.getState().advancePlayTime(1);
+      this.simulationAccumulator -= 1;
+    }
+  };
+
   private readonly update = (): void => {
     if (this.disposed) return;
-    const delta = Math.min(this.clock.getDelta(), 0.05);
-    this.elapsed += delta;
+    const frameDelta = this.clock.getDelta();
     const state = useGameStore.getState();
-    if (state.phase === 'title') return;
-    const simulationActive =
-      state.phase === 'playing' && state.pointerLocked && !state.settingsOpen && state.overlayPanel === null;
-    const simulationDelta = simulationActive ? delta : 0;
-    this.raft?.update(this.elapsed, delta);
-    this.player?.update(simulationDelta);
-    this.ocean?.update(this.elapsed);
-    this.debris?.update(this.elapsed, delta);
-    this.hook?.update(this.elapsed, simulationDelta);
-    this.build?.update(this.elapsed, simulationDelta);
-    this.fishing?.update(this.elapsed, simulationDelta);
-    this.spear?.update(this.elapsed, simulationDelta);
-    if (simulationActive) this.shark?.update(this.elapsed, simulationDelta);
-    this.devices?.update(this.elapsed, simulationDelta);
-    this.navigation?.update(this.elapsed, simulationDelta);
-    this.planting?.update(this.elapsed, simulationDelta);
-    this.progression?.update(this.elapsed, simulationDelta);
-    this.island?.update(this.elapsed, simulationDelta);
-    this.underwater?.update(this.elapsed, simulationDelta);
-    this.splashes?.update(delta);
-    const weather = this.navigation?.getWeather() ?? { weatherPhase: 'calm' as const, stormIntensity: 0, gust: 0 };
-    const surfaceStorm = (this.player?.isSubmerged() ?? false) ? 0 : weather.stormIntensity;
-    const lightning = this.storm?.update(this.elapsed, surfaceStorm, weather.gust) ?? 0;
-    this.audio.setStormActivity(weather.stormIntensity);
-    this.audio.update(this.elapsed);
-    this.physics.step(simulationDelta);
-    this.updateEnvironment(delta, weather.stormIntensity, lightning);
+    const active = isSimulationActive({
+      phase: state.phase,
+      ready: state.ready,
+      pointerLocked: state.pointerLocked,
+      settingsOpen: state.settingsOpen,
+      overlayOpen: state.overlayPanel !== null,
+      documentVisible: document.visibilityState === 'visible',
+      windowFocused: this.windowFocused,
+      contextHealthy: !this.contextLost,
+    });
+    this.setSimulationActive(active);
 
-    if (simulationActive) {
-      this.simulationAccumulator += simulationDelta;
-      while (this.simulationAccumulator >= 1) {
-        useGameStore.getState().tickSurvival(1, this.player?.isSubmerged() ?? false);
-        useGameStore.getState().advancePlayTime(1);
-        this.simulationAccumulator -= 1;
-      }
+    let renderTime = this.fixedStep.simulationSeconds;
+    let alpha = 0;
+    if (active) {
+      const fixed = this.fixedStep.advance(frameDelta, this.stepSimulation);
+      renderTime = fixed.interpolatedSeconds;
+      alpha = fixed.alpha;
     }
-    this.saveElapsed += delta;
-    if (this.saveElapsed >= 12) {
+    this.raft?.present(alpha);
+    this.player?.present(alpha);
+    this.ocean?.update(renderTime);
+    this.updateEnvironment(frameDelta, this.currentStormIntensity, this.currentLightning);
+
+    if (state.phase === 'playing') this.saveElapsed += frameDelta;
+    if (state.phase === 'playing' && this.saveElapsed >= 12) {
       this.saveElapsed = 0;
       this.saveNow();
     }
-
-    this.fpsElapsed += delta;
-    this.fpsFrames += 1;
-    if (this.fpsElapsed >= 0.75) {
-      useGameStore.getState().setFps(Math.round(this.fpsFrames / this.fpsElapsed));
-      this.fpsElapsed = 0;
-      this.fpsFrames = 0;
-    }
+    this.updateFrameTiming(frameDelta, active);
     this.renderer.render(this.scene, this.camera);
   };
+
+  private readonly onAnimationFrame = (): void => {
+    this.lastNativeFrameAt = performance.now();
+    this.mount.dataset.frameDriver = 'native';
+    this.update();
+  };
+
+  private readonly onFrameWatchdog = (): void => {
+    if (
+      this.disposed
+      || this.contextLost
+      || document.visibilityState !== 'visible'
+      || performance.now() - this.lastNativeFrameAt < 120
+    ) {
+      return;
+    }
+    this.mount.dataset.frameDriver = 'fallback';
+    this.update();
+  };
+
+  private setSimulationActive(active: boolean): void {
+    if (active !== this.simulationActive) this.fixedStep.resetAccumulator();
+    this.simulationActive = active;
+    this.mount.dataset.simulationActive = String(active);
+  }
+
+  private updateFrameTiming(frameDelta: number, active: boolean): void {
+    if (!active) {
+      this.frameTimingElapsed = 0;
+      this.frameTimesMs.length = 0;
+      return;
+    }
+    this.frameTimingElapsed += frameDelta;
+    this.frameTimesMs.push(frameDelta * 1000);
+    if (this.frameTimingElapsed < 0.75) return;
+
+    const summary = summarizeFrameTimes(this.frameTimesMs);
+    const previousScale = this.dynamicResolutionState.scale;
+    this.dynamicResolutionState = stepDynamicResolution(
+      this.dynamicResolutionState,
+      {
+        medianFrameMs: summary.medianFrameMs,
+        p95FrameMs: summary.p95FrameMs,
+        elapsedSeconds: this.frameTimingElapsed,
+        enabled: useGameStore.getState().dynamicResolutionEnabled,
+      },
+      DYNAMIC_RESOLUTION_POLICIES[this.qualityPreset],
+    );
+    if (Math.abs(previousScale - this.dynamicResolutionState.scale) >= 0.001) this.applyRenderScale();
+
+    const info = this.renderer.info;
+    const fps = summary.medianFrameMs > 0 ? Math.round(1000 / summary.medianFrameMs) : 0;
+    useGameStore.getState().setFps(fps);
+    this.mount.dataset.fps = String(fps);
+    this.mount.dataset.frameP95Ms = summary.p95FrameMs.toFixed(2);
+    this.mount.dataset.frameMaxMs = summary.maximumFrameMs.toFixed(2);
+    this.mount.dataset.frameHitches = String(summary.hitchCount);
+    this.mount.dataset.drawCalls = String(info.render.calls);
+    this.mount.dataset.triangles = String(info.render.triangles);
+    this.mount.dataset.geometries = String(info.memory.geometries);
+    this.mount.dataset.textures = String(info.memory.textures);
+    this.mount.dataset.droppedSimulationSeconds = this.fixedStep.totalDroppedSeconds.toFixed(3);
+    this.mount.dataset.raftColliderCount = String(this.physics.raftColliderCount);
+    this.mount.dataset.raftCollisionCount = String(this.physics.collisionCount);
+    this.mount.dataset.raftTileCount = String(this.raft?.tileCount ?? 0);
+    this.mount.dataset.sailAttachment = this.navigation?.getSailAttachmentState() ?? 'missing';
+    this.mount.dataset.islandRaftClearance = (this.island?.getRaftClearance() ?? 0).toFixed(3);
+    this.frameTimingElapsed = 0;
+    this.frameTimesMs.length = 0;
+  }
+
+  private applyRenderScale(): void {
+    const basePixelRatio = Math.min(
+      window.devicePixelRatio,
+      this.qualityPreset === 'high' ? 1.75 : 1,
+    );
+    const dynamicEnabled = useGameStore.getState().dynamicResolutionEnabled;
+    const renderScale = dynamicEnabled ? this.dynamicResolutionState.scale : 1;
+    const pixelRatio = Math.max(0.5, basePixelRatio * renderScale);
+    if (Math.abs(pixelRatio - this.appliedPixelRatio) >= 0.001) {
+      this.renderer.setPixelRatio(pixelRatio);
+      this.appliedPixelRatio = pixelRatio;
+      this.resize();
+    }
+    this.mount.dataset.renderScale = renderScale.toFixed(2);
+    this.mount.dataset.pixelRatio = pixelRatio.toFixed(2);
+  }
+
+  private syncRaftPhysics(): void {
+    if (!this.raft) return;
+    this.physics.syncRaft(
+      this.raft.group.position,
+      this.raft.group.quaternion,
+      this.raft.getTiles(),
+      this.raft.currentRevision,
+    );
+  }
 
   private readonly resize = (): void => {
     const width = Math.max(1, this.mount.clientWidth);
@@ -554,6 +795,11 @@ export class DriftwakeGame {
   private readonly onPointerLockChange = (): void => {
     const locked = document.pointerLockElement === this.renderer.domElement;
     const playing = useGameStore.getState().phase === 'playing';
+    if (locked) {
+      this.clearPointerLockTimer();
+      this.mount.dataset.pointerLockDenied = 'false';
+      useGameStore.getState().setPointerLockDenied(false);
+    }
     useGameStore.getState().setPointerLocked(locked);
     this.player?.setEnabled(locked && playing);
     this.syncEquipment();
@@ -563,12 +809,50 @@ export class DriftwakeGame {
     const state = useGameStore.getState();
     if (state.phase === 'playing' && !state.settingsOpen && document.pointerLockElement !== this.renderer.domElement) {
       void this.audio.begin();
-      void this.renderer.domElement.requestPointerLock();
+      this.requestInputLock();
     }
   };
 
+  private requestInputLock(): void {
+    this.clearPointerLockTimer();
+    this.mount.dataset.pointerLockDenied = 'false';
+    useGameStore.getState().setPointerLockDenied(false);
+    try {
+      const request = this.renderer.domElement.requestPointerLock();
+      this.pointerLockTimer = window.setTimeout(() => {
+        if (document.pointerLockElement === this.renderer.domElement) this.clearPointerLockTimer();
+        else this.markPointerLockDenied();
+      }, 1200);
+      void request?.catch(this.markPointerLockDenied);
+    } catch {
+      this.markPointerLockDenied();
+    }
+  }
+
+  private readonly onPointerLockError = (): void => {
+    this.markPointerLockDenied();
+  };
+
+  private readonly markPointerLockDenied = (): void => {
+    this.clearPointerLockTimer();
+    if (this.disposed) return;
+    this.mount.dataset.pointerLockDenied = 'true';
+    const store = useGameStore.getState();
+    store.setPointerLockDenied(true);
+    store.setPointerLocked(false);
+    this.player?.setEnabled(false);
+  };
+
+  private clearPointerLockTimer(): void {
+    if (this.pointerLockTimer !== null) window.clearTimeout(this.pointerLockTimer);
+    this.pointerLockTimer = null;
+  }
+
   private readonly onContextLost = (event: Event): void => {
     event.preventDefault();
+    this.contextLost = true;
+    this.mount.dataset.contextHealthy = 'false';
+    this.pauseInput();
     console.warn('[Driftwake] WebGL context lost', {
       elapsed: this.elapsed,
       geometries: this.renderer.info.memory.geometries,
@@ -576,8 +860,47 @@ export class DriftwakeGame {
       calls: this.renderer.info.render.calls,
       triangles: this.renderer.info.render.triangles,
     });
-    useGameStore.getState().showNotice('图形上下文已暂停');
+    const store = useGameStore.getState();
+    store.setReady(false);
+    store.setLoadingLabel('图形上下文恢复中');
+    store.showNotice('图形上下文已暂停');
   };
+
+  private readonly onContextRestored = (): void => {
+    this.contextLost = false;
+    this.mount.dataset.contextHealthy = 'true';
+    this.clock.start();
+    const store = useGameStore.getState();
+    store.setReady(this.initialized);
+    store.setLoadingLabel(this.initialized ? '海况恢复' : '正在唤醒海面');
+    store.showNotice('图形上下文已恢复，点击继续');
+  };
+
+  private readonly onWindowBlur = (): void => {
+    this.windowFocused = false;
+    this.syncAudioFocusMuted();
+    this.pauseInput();
+  };
+
+  private readonly onWindowFocus = (): void => {
+    this.windowFocused = true;
+    this.clock.start();
+    this.syncAudioFocusMuted();
+  };
+
+  private readonly onVisibilityChange = (): void => {
+    this.syncAudioFocusMuted();
+    if (document.visibilityState !== 'visible') this.pauseInput();
+    else this.clock.start();
+  };
+
+  private syncAudioFocusMuted(): void {
+    const state = useGameStore.getState();
+    const focusMuted = state.muteOnFocusLoss
+      && (!this.windowFocused || document.visibilityState !== 'visible');
+    this.audio.setFocusMuted(focusMuted);
+    this.mount.dataset.audioFocusMuted = String(focusMuted);
+  }
 
   private syncEquipment(): void {
     const state = useGameStore.getState();
@@ -664,6 +987,8 @@ export class DriftwakeGame {
   };
 
   private updateEnvironment(delta: number, stormIntensity: number, lightning: number): void {
+    const day = sampleDayCycle(this.navigation?.getEnvironmentClock() ?? this.elapsed);
+    const lighting = sampleEnvironmentLighting(day.daylight, stormIntensity);
     const target = this.player?.isSubmerged()
       ? MathUtils.clamp(0.62 + (this.player?.getDepth() ?? 0) * 0.1, 0, 1)
       : 0;
@@ -672,31 +997,69 @@ export class DriftwakeGame {
     if (target > 0 && this.environmentBlend < 0.78) this.environmentBlend = 0.78;
     this.environmentBlend = MathUtils.damp(this.environmentBlend, target, target > 0 ? 3.8 : 2.6, delta);
     this.stormBlend = MathUtils.damp(this.stormBlend, stormIntensity, stormIntensity > this.stormBlend ? 1.6 : 0.72, delta);
-    this.surfaceBackground.copy(this.airBackground).lerp(this.stormBackground, this.stormBlend);
-    this.environmentColor.copy(this.surfaceBackground).lerp(this.waterBackground, this.environmentBlend);
+    this.surfaceBackground
+      .lerpColors(this.nightBackground, this.airBackground, day.daylight)
+      .lerp(this.stormBackground, this.stormBlend);
+    this.environmentColor
+      .copy(this.nightWaterBackground)
+      .lerp(this.waterBackground, day.daylight)
+      .lerp(this.surfaceBackground, 1 - this.environmentBlend);
     if (this.scene.background instanceof Color) this.scene.background.copy(this.environmentColor);
     if (this.scene.fog instanceof FogExp2) {
       this.scene.fog.color.copy(this.environmentColor);
       const airFog = MathUtils.lerp(0.0065, 0.0145, this.stormBlend);
       this.scene.fog.density = MathUtils.lerp(airFog, 0.072, this.environmentBlend);
     }
-    const airExposure = MathUtils.lerp(1.08, 0.77, this.stormBlend) + lightning * 0.2;
+    const airExposure = lighting.exposure + lightning * 0.2;
     this.renderer.toneMappingExposure = MathUtils.lerp(airExposure, 0.79, this.environmentBlend);
-    if (this.hemisphere) this.hemisphere.intensity = MathUtils.lerp(MathUtils.lerp(1.85, 0.92, this.stormBlend) + lightning * 0.65, 0.82, this.environmentBlend);
-    if (this.ambient) this.ambient.intensity = MathUtils.lerp(MathUtils.lerp(0.36, 0.54, this.stormBlend), 0.7, this.environmentBlend);
-    if (this.directional) this.directional.intensity = MathUtils.lerp(MathUtils.lerp(3.1, 0.42, this.stormBlend) + lightning * 2.4, 0.58, this.environmentBlend);
+    if (this.hemisphere) this.hemisphere.intensity = MathUtils.lerp(lighting.hemisphereIntensity + lightning * 0.65, 0.82, this.environmentBlend);
+    if (this.ambient) this.ambient.intensity = MathUtils.lerp(lighting.ambientIntensity, 0.7, this.environmentBlend);
+    if (this.directional) {
+      this.directional.intensity = MathUtils.lerp(lighting.keyIntensity + lightning * 2.4, 0.58, this.environmentBlend);
+      this.directional.color.lerpColors(this.nightKeyColor, this.dayKeyColor, day.daylight);
+    }
+    const horizontal = Math.sqrt(Math.max(0, 1 - day.sunElevation * day.sunElevation));
+    this.sunPosition.set(
+      Math.cos(day.sunAzimuth) * horizontal,
+      day.sunElevation,
+      Math.sin(day.sunAzimuth) * horizontal,
+    ).normalize();
     if (this.sky) {
       const uniforms = this.sky.material.uniforms;
+      uniforms.sunPosition.value.copy(this.sunPosition);
       uniforms.turbidity.value = MathUtils.lerp(6.8, 18, this.stormBlend);
       uniforms.rayleigh.value = MathUtils.lerp(2.25, 0.72, this.stormBlend);
       uniforms.mieCoefficient.value = MathUtils.lerp(0.006, 0.028, this.stormBlend);
     }
+    if (this.directional) {
+      this.keyLightPosition.copy(this.sunPosition);
+      this.keyLightPosition.y = Math.max(0.24, this.keyLightPosition.y);
+      this.directional.position.copy(this.keyLightPosition.normalize()).multiplyScalar(70);
+    }
     if (this.sky) this.sky.visible = target === 0;
     this.ocean?.setUnderwater(this.environmentBlend);
     this.ocean?.setStorm(this.stormBlend);
+    this.ocean?.setEnvironment(day);
+    this.mount.dataset.daylight = day.daylight.toFixed(3);
+    this.mount.dataset.dayProgress = day.progress.toFixed(3);
+    this.mount.dataset.weather = this.navigation?.getWeather().weatherPhase ?? 'calm';
+    this.mount.dataset.playerSurface = this.player?.getSurface() ?? 'raft';
+    this.mount.dataset.playerAirborne = String(this.player?.isAirborne() ?? false);
+    this.mount.dataset.playerJumpCount = String(this.player?.jumpCount ?? 0);
+    this.mount.dataset.playerInputEnabled = String(this.player?.inputEnabled ?? false);
+    this.mount.dataset.playerKeyboardEventCount = String(this.player?.keyboardEventCount ?? 0);
+    this.mount.dataset.playerJumpState = this.player?.jumpState ?? 'unavailable';
+    this.mount.dataset.playerVerticalHeadY = (this.player?.verticalHeadY ?? 0).toFixed(3);
+    this.mount.dataset.playerVerticalVelocityY = (this.player?.verticalVelocityY ?? 0).toFixed(3);
+    this.mount.dataset.simulationTickCount = String(this.simulationTickCount);
+    this.mount.dataset.cameraY = this.camera.position.y.toFixed(3);
   }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
+    this.mount.dataset.lastKeyDown = event.code;
+    this.player?.handleKeyDown(event);
+    this.mount.dataset.playerKeyboardEventCount = String(this.player?.keyboardEventCount ?? 0);
+    this.mount.dataset.playerJumpState = this.player?.jumpState ?? 'unavailable';
     const state = useGameStore.getState();
     if (state.phase !== 'playing') return;
     if (event.code === 'Tab' || event.code === 'KeyI' || event.code === 'KeyC') {
@@ -718,6 +1081,10 @@ export class DriftwakeGame {
         this.showTransientNotice('需要先制作该工具');
       }
     }
+  };
+
+  private readonly onKeyUp = (event: KeyboardEvent): void => {
+    this.player?.handleKeyUp(event);
   };
 
   private showTransientNotice(message: string): void {

@@ -10,6 +10,10 @@ export const ISLAND_DOCK_SECONDS = 78;
 export const ISLAND_DEPART_SECONDS = 24;
 export const ISLAND_RADIUS_X = 6.2;
 export const ISLAND_RADIUS_Z = 6.35;
+export const DEFAULT_ISLAND_DOCK_Z = -7;
+export const ISLAND_DOCK_CLEARANCE = 0.18;
+export const ISLAND_TERRAIN_HALF_DEPTH = ISLAND_RADIUS_Z * 1.11;
+const DEFAULT_RAFT_TILE_DEPTH = 1.38;
 
 export interface HarvestNodeDefinition {
   id: string;
@@ -30,6 +34,7 @@ export interface SavedHarvestNode {
 export interface SavedIslandState {
   seed: number;
   cycle: number;
+  dockVersion: 0 | 1;
   phase: IslandPhase;
   elapsed: number;
   nodes: SavedHarvestNode[];
@@ -118,24 +123,42 @@ export function createDefaultIslandState(seed = 0x51ad7e): SavedIslandState {
   return {
     seed: seed >>> 0,
     cycle: 0,
+    dockVersion: 1,
     phase: 'approaching',
     elapsed: 0,
     nodes: generateHarvestNodes(seed).map((node) => ({ id: node.id, health: node.maxHealth })),
   };
 }
 
-export function islandTransform(state: SavedIslandState): IslandTransform {
-  if (state.phase === 'docked') return { x: 0, z: -7, scale: 1 };
+export function raftFrontEdgeZForTiles(
+  tiles: readonly { z: number }[],
+  tileDepth = DEFAULT_RAFT_TILE_DEPTH,
+): number {
+  if (tiles.length === 0) return -tileDepth * 0.5;
+  const frontRow = Math.min(...tiles.map((tile) => tile.z));
+  return frontRow * tileDepth - tileDepth * 0.5;
+}
+
+export function islandDockZForRaft(tiles: readonly { z: number }[]): number {
+  const clearDockZ = raftFrontEdgeZForTiles(tiles) - ISLAND_TERRAIN_HALF_DEPTH - ISLAND_DOCK_CLEARANCE;
+  return Math.min(DEFAULT_ISLAND_DOCK_Z, clearDockZ);
+}
+
+export function islandTransform(
+  state: SavedIslandState,
+  dockZ = DEFAULT_ISLAND_DOCK_Z,
+): IslandTransform {
+  if (state.phase === 'docked') return { x: 0, z: dockZ, scale: 1 };
   if (state.phase === 'departing') {
     const t = Math.max(0, Math.min(1, state.elapsed / ISLAND_DEPART_SECONDS));
     const eased = t * t * (3 - 2 * t);
-    return { x: eased * 24, z: -7 + eased * 30, scale: 1 };
+    return { x: eased * 24, z: dockZ + eased * 30, scale: 1 };
   }
   const t = Math.max(0, Math.min(1, state.elapsed / ISLAND_APPROACH_SECONDS));
   const eased = t * t * (3 - 2 * t);
   return {
     x: -26 * (1 - eased) + Math.sin(t * Math.PI) * 2.2,
-    z: -88 * (1 - eased) - 7 * eased,
+    z: -88 * (1 - eased) + dockZ * eased,
     scale: 0.86 + eased * 0.14,
   };
 }
@@ -176,6 +199,7 @@ export function sanitizeIslandState(value: unknown): SavedIslandState {
   const candidate = value as Partial<SavedIslandState>;
   const seed = typeof candidate.seed === 'number' && Number.isFinite(candidate.seed) ? Math.floor(candidate.seed) >>> 0 : 0x51ad7e;
   const cycle = typeof candidate.cycle === 'number' && Number.isFinite(candidate.cycle) ? Math.max(0, Math.floor(candidate.cycle)) : 0;
+  const dockVersion = candidate.dockVersion === 1 ? 1 : 0;
   const phase: IslandPhase =
     candidate.phase === 'docked' || candidate.phase === 'departing' ? candidate.phase : 'approaching';
   const phaseDuration =
@@ -196,5 +220,5 @@ export function sanitizeIslandState(value: unknown): SavedIslandState {
       health: typeof health === 'number' && Number.isFinite(health) ? Math.max(0, Math.min(node.maxHealth, Math.floor(health))) : node.maxHealth,
     };
   });
-  return { seed, cycle, phase, elapsed, nodes };
+  return { seed, cycle, dockVersion, phase, elapsed, nodes };
 }

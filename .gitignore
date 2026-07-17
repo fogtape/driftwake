@@ -6,6 +6,7 @@ output/
 playwright-report/
 test-results/
 artifacts/screenshots/
+artifacts/stability/
 *.log
 *.tsbuildinfo
 __pycache__/
