@@ -35,6 +35,7 @@ function createTestMaterials(): MaterialLibrary {
     navigationAlloy: material(),
     saltglassCollector: material(),
     sealedCanvas: material(),
+    saltsealedGlove: material(),
     signalLaminate: material(),
     phosphorGlass: material(),
     cropLeaf: material(),
@@ -60,7 +61,7 @@ describe('first-person salvage hands', () => {
     rig.root.traverse((object) => {
       if (!(object instanceof Mesh)) return;
       meshCount += 1;
-      if (object.material === materials.sealedCanvas) canvasParts += 1;
+      if (object.material === materials.saltsealedGlove) canvasParts += 1;
       const position = object.geometry.getAttribute('position');
       expect(position?.count ?? 0).toBeGreaterThan(0);
     });

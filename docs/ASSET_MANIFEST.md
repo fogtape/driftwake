@@ -1,7 +1,7 @@
 # 原创资产清单
 
 > 更新日期：2026-07-18
-> 状态：第十二轮漂流物、近距拾取与钩具损耗美术交互基线，发布前仍需做最终授权、DCC 替换与相似性复核
+> 状态：第十三轮双手钩具专用材质与近景交互基线，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -317,9 +317,42 @@ Use case: stylized-concept. Asset type: seamless tileable PBR base-color materia
 Use case: stylized-concept. Asset type: seamless tileable PBR base-color material for an original marine scanning display. Primary request: original smoke-dark phosphor glass composite with layered petroleum teal, muted bottle green and cool charcoal depth, fine mineral frosting, subtle cathode-grain specks, sparse pale aqua salt etching and restrained warm brass-dust traces around the material, readable when softly emissive but dark when unpowered. Scene/backdrop: texture sheet only. Style/medium: premium stylized-realistic hand-authored game material, controlled optical depth and fine tactile micro-detail without photographic noise. Composition/framing: exact orthographic top-down square, uniform texel density, seamless wrapping on all four edges, no central focal point or display graphic. Lighting/mood: flat neutral albedo with no baked glow, directional light, reflection, highlight, shadow or ambient occlusion. Constraints: fully original edge-to-edge glass material; no radar sweep, circles, map, grid, dots, text, numbers, symbols, logos, watermark, frame or border. Avoid: bright cyan dominance, stained glass, mirror reflection, window scene, star field, large cracks, perspective preview, material ball, checker repetition or recognizable copyrighted design.
 ```
 
+### TEX-015：盐封打捞手套材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `saltsealed-glove.webp`、`saltsealed-glove-normal.webp`、`saltsealed-glove-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/saltsealed-glove-raw.png` |
+| 模型 | `gpt-image-2` |
+| 请求质量 | `high` |
+| 请求尺寸 | `2048x2048` |
+| 实际输出 | 1254x1254 PNG；采用版统一为 1024x1024 WebP |
+| 处理方式 | `scripts/prepare_imagegen_material.py --optimize-boundary`，seam 96、normal 0.72、roughness 176-238 |
+| 用途 | 第一人称双手前臂、掌体、八组双段手指与双拇指；麻编掌垫和金属扣件继续使用独立材质 |
+| 检查 | 无手套轮廓、手指、成品接缝、扣件、文字或烘焙阴影；接缝 x=19.35/1.16x、y=20.83/0.81x，2x2 平铺无硬边 |
+
+采用提示词：
+
+```text
+Use case: stylized-concept
+Asset type: seamless tileable game texture, production PBR base-color albedo for a first-person ocean-survival glove
+Primary request: an original salt-sealed technical canvas weave made from waxed marine cloth and tightly interlaced salvage fibers, with subtle abrasion, tiny salt crystals, compressed grip wear and sparse short repair threads
+Scene/backdrop: texture sheet only
+Subject: continuous small-scale material surface with dense diagonal canvas weave, fine wax-filled pores, restrained frayed microfibers and believable irregular tension; no finished glove or separate objects
+Style/medium: premium hand-painted stylized realism, crisp controlled high-frequency detail suitable for a close first-person asset, not photographic noise
+Composition/framing: exact top-down orthographic square texture, uniform texel density, seamless wrapping on all four edges, no central focal point and no large directional stripe
+Lighting/mood: flat neutral albedo with absolutely no baked directional light, cast shadow, ambient occlusion, highlights, gloss or perspective
+Color palette: desaturated sea-glass green, cool weathered gray, pale salt residue, sparse muted coral-red and old brass repair fibers; balanced and not monochrome teal
+Materials/textures: compact waxed fibers, fine woven grain, shallow scuffs smaller than a fingertip, salt lodged between threads
+Constraints: fully original; seamless tile; no text, symbols, logos, watermark, border, frame, recognizable branded pattern or unique focal scar
+Avoid: glove silhouette, fingers, palm shape, seams crossing the whole image, large patches, eyelets, buckles, rope coils, leather, denim, camouflage, knitted wool, glossy plastic, dramatic stains, strong shadows, material sphere, perspective preview, obvious repeating cells
+```
+
+初次以 144、192、96 和 48 px 羽化带处理时，纵向绝对差仍为 26.66-28.51，未放宽绝对 24 / 相对 1.35 倍门禁。通用处理器新增显式 `--optimize-boundary` 选项，在不改变默认行为的前提下把原图最自然的相邻行列移动到周期边界，再执行原有不规则羽化；最终边界偏移为 `(1,1023)`，三张运行时贴图通过人工内容、2x2 平铺和数值门禁。源 PNG、模型参数和完整提示词随仓库归档，来源链由本清单与提交记录保留。
+
 ## 本轮 Imagegen 尝试
 
-调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider，模型 `gpt-image-2`，质量 `high`。本轮信号层压板和磷光玻璃均以 2048x2048 请求并返回 1254x1254 PNG；磷光玻璃并发首试连接失败后使用相同模型、尺寸和质量单独重试成功，没有降级。两张采用源图通过人工内容、接缝和平铺检查并随仓库归档。此前盐蚀集热玻璃、蜡封密舱帆布、导航合金、飑云、耐火陶土、培养土、帆布和海床同样使用高质量模型。仓库没有保存 provider URL 或 API Key。
+调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider 并执行技能内置 CLI，模型 `gpt-image-2`，质量 `high`。本轮盐封打捞手套以 2048x2048 请求并返回 1254x1254 PNG；没有降级或复用密舱帆布。采用源图通过人工内容、接缝、2x2 平铺和独立 PBR 图检查并随仓库归档。此前信号层压板、磷光玻璃、盐蚀集热玻璃、蜡封密舱帆布、导航合金、飑云、耐火陶土、培养土、帆布和海床同样使用高质量模型。仓库没有保存 provider URL 或 API Key。
 
 鲨皮最终请求提示词：
 
@@ -355,7 +388,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 ## 代码原生模型与动画
 
-本轮新增的补给桶、海面剩余物资、近距聚焦环和双手钩具装配全部由代码原生形体驱动，并复用既有审定 PBR 材质；战利品、对象池、耐久和 v11 存档均不依赖视觉对象作为玩法真值。上一轮信号层压板与磷光玻璃继续使用独立 AI PBR；没有因本机软件 WebGL 复验失败而降低运行时贴图质量。
+本轮新增的补给桶、海面剩余物资、近距聚焦环和双手钩具装配全部由代码原生形体驱动；双手主体已改用独立审定的 TEX-015，掌垫、袖口、绳边与扣件继续按材质分层。战利品、对象池、耐久和 v11 存档均不依赖视觉对象作为玩法真值；没有因本机软件 WebGL 复验失败而降低运行时贴图质量。
 
 | ID | 资产 | 位置 | 当前状态 |
 | --- | --- | --- | --- |
@@ -391,7 +424,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | MOD-030 | 潮听接收台：层压机壳、斜置扫描盘、三环二十四刻度、扫描束、三信号点、参考线圈、三频段鼓轮、六电量条与阵列灯 | `src/game/art/SignalModels.ts` | 90+ 网格；断电/在线发光、扫描、调谐、频段点、电量和诊断灯由 v10 导航状态驱动 |
 | MOD-031 | 双桅定向阵列：相位箱、双桅、八组绝缘/横臂、六定向环、端帽、冠尖、四股拉索、馈线和传播环 | `src/game/art/SignalModels.ts` | 50+ 网格；桅杆风摆、相位灯和三层传播环按阵列/天气/接收台状态驱动 |
 | MOD-032 | 原创信号中继标：三密封浮筒、合金箍、三臂甲板、中央桅杆、双环转子、磷光核心和四层脉冲环 | `src/game/art/SignalModels.ts` | 25+ 网格；位于持续世界坐标，浮筒错相升沉、转子、灯和距离脉冲实时驱动 |
-| MOD-033 | 盐封打捞手套：双前臂、编织袖口、掌垫、指节护条、金属扣具、八组双段手指与双拇指 | `src/game/art/FirstPersonModels.ts` | 双手与钩具合计 40+ 网格；复用蜡封帆布/编织纤维 PBR，腕、指、导绳点和投射起点独立驱动 |
+| MOD-033 | 盐封打捞手套：双前臂、编织袖口、掌垫、指节护条、金属扣具、八组双段手指与双拇指 | `src/game/art/FirstPersonModels.ts` | 双手与钩具合计 40+ 网格；主体使用独立 TEX-015，麻编/金属/绳边分层，腕、指、导绳点和投射起点独立驱动 |
 | ANI-001 | 木筏三轴波浪升沉 | `src/game/systems/RaftSystem.ts` | 已实现 |
 | ANI-002 | 第一人称移动、镜头与木筏局部坐标 | `src/game/systems/PlayerController.ts` | 已实现基础版 |
 | ANI-003 | 双手钩具待机、蓄力、放绳跟随、受力抓握、交替回收、抛射旋转、拖回、耐久损耗与断裂恢复 | `src/game/systems/HookSystem.ts`、`src/game/presentation/hookPresentation.ts` | 代码原生腕/指关节、19 点张力绳和手持/抛出唯一所有权已接通；最终蒙皮仍待 DCC |
@@ -456,7 +489,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 - 用 Blender 或等效 DCC 建立可蒙皮的最终双手、工具、鲨鱼和生活设备资产，当前代码模型是原创近最终形体基线而非最终蒙皮资产；
 - 为木材补充经过人工修整的 normal、roughness 与 AO；鲨皮和编织纤维已使用独立派生图；
-- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005 至 TEX-014 已采用高质量输出；
+- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005 至 TEX-015 已采用高质量输出；
 - 建立同一角色比例与材质语言下的模型规范；
 - 为岛屿补充手绘沙地/草地/岩面材质组、草丛层级和更丰富的岸线小物，保持现有确定性地形与碰撞接口；
 - 为漂流箱桶、最终双手/钩具、珊瑚、海草、鱼群、水下钩具、拾风帆、强化索具/锚具、定潮舵台、接收台/阵列/中继标、高级生活设备、作物、盐翼盗鸟、研究台、通风架、熔炉和金属工具建立最终 DCC 模型、蒙皮与顶点动画，保留当前布局和领域接口；

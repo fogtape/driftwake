@@ -22,6 +22,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--normal-strength", type=float, default=1.08)
     parser.add_argument("--roughness-min", type=int, default=174)
     parser.add_argument("--roughness-max", type=int, default=238)
+    parser.add_argument(
+        "--optimize-boundary",
+        action="store_true",
+        help="Move the least-visible internal row and column transitions to the tile boundary before blending.",
+    )
     return parser.parse_args()
 
 
@@ -85,6 +90,31 @@ def internal_delta(image: Image.Image) -> tuple[float, float]:
     )
 
 
+def optimize_periodic_boundary(image: Image.Image) -> tuple[Image.Image, int, int]:
+    rgb = image.convert("RGB")
+    best_x = 0
+    best_y = 0
+    best_x_delta = float("inf")
+    best_y_delta = float("inf")
+    for x in range(rgb.width):
+        previous = (x - 1) % rgb.width
+        left = rgb.crop((previous, 0, previous + 1, rgb.height))
+        right = rgb.crop((x, 0, x + 1, rgb.height))
+        delta = sum(ImageChops.difference(left, right).convert("L").get_flattened_data()) / rgb.height
+        if delta < best_x_delta:
+            best_x = x
+            best_x_delta = delta
+    for y in range(rgb.height):
+        previous = (y - 1) % rgb.height
+        top = rgb.crop((0, previous, rgb.width, previous + 1))
+        bottom = rgb.crop((0, y, rgb.width, y + 1))
+        delta = sum(ImageChops.difference(top, bottom).convert("L").get_flattened_data()) / rgb.width
+        if delta < best_y_delta:
+            best_y = y
+            best_y_delta = delta
+    return ImageChops.offset(rgb, -best_x, -best_y), best_x, best_y
+
+
 def main() -> int:
     args = parse_args()
     if args.size < 512 or args.size % 64 != 0:
@@ -97,6 +127,10 @@ def main() -> int:
         top = (source.height - side) // 2
         source = source.crop((left, top, left + side, top + side))
     source = source.resize((args.size, args.size), Image.Resampling.LANCZOS)
+    boundary_x = 0
+    boundary_y = 0
+    if args.optimize_boundary:
+        source, boundary_x, boundary_y = optimize_periodic_boundary(source)
     albedo = make_periodic(source, args.seam_width)
     horizontal, vertical = seam_delta(albedo)
     internal_horizontal, internal_vertical = internal_delta(albedo)
@@ -118,7 +152,8 @@ def main() -> int:
     roughness.save(args.roughness, format="WEBP", quality=94, method=6)
     print(
         f"prepared {args.size}x{args.size}; seam "
-        f"x={horizontal:.2f}/{horizontal_ratio:.2f}x, y={vertical:.2f}/{vertical_ratio:.2f}x"
+        f"x={horizontal:.2f}/{horizontal_ratio:.2f}x, y={vertical:.2f}/{vertical_ratio:.2f}x; "
+        f"boundary offset=({boundary_x},{boundary_y})"
     )
     return 0
 

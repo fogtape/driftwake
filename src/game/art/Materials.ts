@@ -43,6 +43,9 @@ export interface AssetTextures {
   sealedCanvas: Texture;
   sealedCanvasNormal: Texture;
   sealedCanvasRoughness: Texture;
+  saltsealedGlove: Texture;
+  saltsealedGloveNormal: Texture;
+  saltsealedGloveRoughness: Texture;
   signalLaminate: Texture;
   signalLaminateNormal: Texture;
   signalLaminateRoughness: Texture;
@@ -81,6 +84,7 @@ export interface MaterialLibrary {
   navigationAlloy: MeshStandardMaterial;
   saltglassCollector: MeshStandardMaterial;
   sealedCanvas: MeshStandardMaterial;
+  saltsealedGlove: MeshStandardMaterial;
   signalLaminate: MeshStandardMaterial;
   phosphorGlass: MeshStandardMaterial;
   cropLeaf: MeshStandardMaterial;
@@ -124,6 +128,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     sealedCanvas,
     sealedCanvasNormal,
     sealedCanvasRoughness,
+    saltsealedGlove,
+    saltsealedGloveNormal,
+    saltsealedGloveRoughness,
     signalLaminate,
     signalLaminateNormal,
     signalLaminateRoughness,
@@ -161,6 +168,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/sealed-canvas.webp'),
     loader.loadAsync('/assets/textures/sealed-canvas-normal.webp'),
     loader.loadAsync('/assets/textures/sealed-canvas-roughness.webp'),
+    loader.loadAsync('/assets/textures/saltsealed-glove.webp'),
+    loader.loadAsync('/assets/textures/saltsealed-glove-normal.webp'),
+    loader.loadAsync('/assets/textures/saltsealed-glove-roughness.webp'),
     loader.loadAsync('/assets/textures/signal-laminate.webp'),
     loader.loadAsync('/assets/textures/signal-laminate-normal.webp'),
     loader.loadAsync('/assets/textures/signal-laminate-roughness.webp'),
@@ -269,6 +279,16 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   sealedCanvasNormal.colorSpace = NoColorSpace;
   sealedCanvasRoughness.colorSpace = NoColorSpace;
 
+  for (const texture of [saltsealedGlove, saltsealedGloveNormal, saltsealedGloveRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(2.15, 2.15);
+    texture.anisotropy = anisotropy;
+  }
+  saltsealedGlove.colorSpace = SRGBColorSpace;
+  saltsealedGloveNormal.colorSpace = NoColorSpace;
+  saltsealedGloveRoughness.colorSpace = NoColorSpace;
+
   for (const texture of [signalLaminate, signalLaminateNormal, signalLaminateRoughness]) {
     texture.wrapS = RepeatWrapping;
     texture.wrapT = RepeatWrapping;
@@ -325,6 +345,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     sealedCanvas,
     sealedCanvasNormal,
     sealedCanvasRoughness,
+    saltsealedGlove,
+    saltsealedGloveNormal,
+    saltsealedGloveRoughness,
     signalLaminate,
     signalLaminateNormal,
     signalLaminateRoughness,
@@ -465,6 +488,16 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       normalScale: new Vector2(0.72, 0.72),
       roughnessMap: textures.sealedCanvasRoughness,
       roughness: 0.98,
+      metalness: 0,
+      side: DoubleSide,
+    }),
+    saltsealedGlove: new MeshStandardMaterial({
+      color: 0xffffff,
+      map: textures.saltsealedGlove,
+      normalMap: textures.saltsealedGloveNormal,
+      normalScale: new Vector2(0.38, 0.38),
+      roughnessMap: textures.saltsealedGloveRoughness,
+      roughness: 0.9,
       metalness: 0,
       side: DoubleSide,
     }),

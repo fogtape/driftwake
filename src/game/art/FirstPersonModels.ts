@@ -40,7 +40,7 @@ function createGlove(materials: MaterialLibrary, side: 'left' | 'right'): GloveA
   root.name = `${side}-saltsealed-glove`;
   const mirror = side === 'left' ? -1 : 1;
 
-  const forearm = mesh(new CylinderGeometry(0.105, 0.145, 0.4, 12), materials.sealedCanvas, `${side}-forearm`);
+  const forearm = mesh(new CylinderGeometry(0.105, 0.145, 0.4, 12), materials.saltsealedGlove, `${side}-forearm`);
   forearm.position.y = -0.25;
   forearm.rotation.z = mirror * -0.05;
   root.add(forearm);
@@ -54,7 +54,7 @@ function createGlove(materials: MaterialLibrary, side: 'left' | 'right'): GloveA
   cuffRim.rotation.x = Math.PI / 2;
   root.add(cuffRim);
 
-  const palm = mesh(new RoundedBoxGeometry(0.25, 0.27, 0.13, 4, 0.035), materials.sealedCanvas, `${side}-palm`);
+  const palm = mesh(new RoundedBoxGeometry(0.25, 0.27, 0.13, 4, 0.035), materials.saltsealedGlove, `${side}-palm`);
   palm.position.y = 0.115;
   root.add(palm);
 
@@ -81,7 +81,7 @@ function createGlove(materials: MaterialLibrary, side: 'left' | 'right'): GloveA
     pivot.position.set(fingerXs[index], 0.245, -0.004);
     const proximal = mesh(
       new RoundedBoxGeometry(0.047, 0.12 - Math.abs(index - 1.5) * 0.009, 0.07, 3, 0.018),
-      materials.sealedCanvas,
+      materials.saltsealedGlove,
       `${side}-finger-${index}-proximal`,
     );
     proximal.position.y = 0.05;
@@ -89,7 +89,7 @@ function createGlove(materials: MaterialLibrary, side: 'left' | 'right'): GloveA
     distalPivot.position.y = 0.102;
     const distal = mesh(
       new RoundedBoxGeometry(0.045, 0.09 - Math.abs(index - 1.5) * 0.007, 0.067, 3, 0.017),
-      materials.sealedCanvas,
+      materials.saltsealedGlove,
       `${side}-finger-${index}-distal`,
     );
     distal.position.y = 0.035;
@@ -104,7 +104,7 @@ function createGlove(materials: MaterialLibrary, side: 'left' | 'right'): GloveA
   thumbPivot.name = `${side}-thumb-pivot`;
   thumbPivot.position.set(mirror * 0.132, 0.135, -0.005);
   thumbPivot.rotation.z = mirror * -0.72;
-  const thumb = mesh(new RoundedBoxGeometry(0.07, 0.16, 0.08, 3, 0.022), materials.sealedCanvas, `${side}-thumb`);
+  const thumb = mesh(new RoundedBoxGeometry(0.07, 0.16, 0.08, 3, 0.022), materials.saltsealedGlove, `${side}-thumb`);
   thumb.position.y = 0.055;
   thumbPivot.add(thumb);
   root.add(thumbPivot);
