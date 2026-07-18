@@ -31,7 +31,9 @@ import {
   canRemoveRaftStructure,
   normalizeRaftRotation,
   pruneUnsupportedRaftStructures,
+  sampleRaftWalkableSurfaces,
   type FoundationCoordinate,
+  type RaftWalkableSurface,
   type RaftRotation,
   type RaftStructureType,
   type SavedRaftStructure,
@@ -42,6 +44,7 @@ import { RAFT_TILE_X, RAFT_TILE_Z, type GridCoordinate, type RaftSystem } from '
 
 const MAX_PARTS_PER_BUCKET = MAX_RAFT_STRUCTURES * 24;
 const PLAYER_RADIUS = 0.24;
+const PLAYER_BODY_HEIGHT = 1.54;
 const WALL_HALF_THICKNESS = 0.075;
 
 type BucketKey = `${StructurePartGeometry}:${StructurePartMaterial}`;
@@ -137,6 +140,15 @@ export class RaftStructureSystem {
 
   getSavedStructures(): SavedRaftStructure[] {
     return [...this.structures.values()].map((structure) => ({ ...structure }));
+  }
+
+  getWalkableSurfaces(position: Pick<Vector3, 'x' | 'z'>): RaftWalkableSurface[] {
+    return sampleRaftWalkableSurfaces(
+      [...this.structures.values()],
+      this.raft.getTiles(),
+      position.x,
+      position.z,
+    );
   }
 
   getDiagnostics(): { focusedDoor: string | null; openDoors: number; structures: number } {
@@ -310,9 +322,12 @@ export class RaftStructureSystem {
     return target;
   }
 
-  resolvePlayerCollision(position: Vector3, previous: Vector3): void {
+  resolvePlayerCollision(position: Vector3, previous: Vector3, footHeight = 0): void {
     for (const structure of this.structures.values()) {
-      if (structure.level !== 0) continue;
+      const base = structure.level * RAFT_STRUCTURE_LEVEL_HEIGHT;
+      if (footHeight >= base + RAFT_STRUCTURE_LEVEL_HEIGHT - 0.08 || footHeight + PLAYER_BODY_HEIGHT <= base + 0.08) {
+        continue;
+      }
       if (structure.type === 'wall' || (structure.type === 'door' && !structure.open)) {
         this.resolveWallCollision(structure, position, previous);
       } else if (structure.type === 'pillar') {
@@ -414,7 +429,7 @@ export class RaftStructureSystem {
   }
 
   private setBaseTransform(structure: Pick<SavedRaftStructure, 'type' | 'x' | 'z' | 'level' | 'rotation'>): void {
-    const yaw = structure.rotation * Math.PI / 2;
+    const yaw = (structure.type === 'stairs' ? -structure.rotation : structure.rotation) * Math.PI / 2;
     let x = structure.x * RAFT_TILE_X;
     let z = structure.z * RAFT_TILE_Z;
     if (structure.type === 'wall' || structure.type === 'door') {
@@ -446,9 +461,12 @@ export class RaftStructureSystem {
       );
     }
     if (structure.type === 'stairs') {
+      const alongZ = structure.rotation % 2 === 0;
+      const halfX = alongZ ? RAFT_TILE_X * 0.43 : RAFT_TILE_X * 0.54;
+      const halfZ = alongZ ? RAFT_TILE_Z * 0.54 : RAFT_TILE_Z * 0.43;
       return target.set(
-        new Vector3(this.basePosition.x - 0.62, y, this.basePosition.z - 0.66),
-        new Vector3(this.basePosition.x + 0.62, y + RAFT_STRUCTURE_LEVEL_HEIGHT, this.basePosition.z + 0.66),
+        new Vector3(this.basePosition.x - halfX, y, this.basePosition.z - halfZ),
+        new Vector3(this.basePosition.x + halfX, y + RAFT_STRUCTURE_LEVEL_HEIGHT, this.basePosition.z + halfZ),
       );
     }
     const roofHeight = structure.type === 'roof' ? 0.48 : 0.18;

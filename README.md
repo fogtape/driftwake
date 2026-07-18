@@ -1,6 +1,6 @@
 # Driftwake
 
-原创桌面网页 3D 海上生存游戏。当前版本为 `0.14.0` 高质量纵向切片，不以基础 Demo 为完成标准。
+原创桌面网页 3D 海上生存游戏。当前版本为 `0.14.1` 高质量纵向切片，不以基础 Demo 为完成标准。
 
 ## 当前内容
 
@@ -17,6 +17,7 @@
 - 全屏失败页显示原因、实际散落清单、保留项和恢复数值；恢复会清空移动/跳跃/水流/镜头临时状态并回到筏面中央，再进入稳定暂停页；
 - 可寻址木筏筏格、邻接建造、幽灵预览、材料校验、修补、拆除与连通性保护；建造锤可选择基础筏格、墙、门、柱、楼梯、上层地板和斜顶，并切换朝向与层高；
 - 六类原创结构使用分件装配与最多七个实例批次渲染；共享边、格内、楼面占位和承重拓扑统一校验，板门可在世界中开合并参与玩家碰撞，拆除或鲨鱼咬毁筏格会阻止或级联清除失去支撑的结构；
+- 楼梯提供与旋转方向一致的连续坡面，玩家可真实上下层；基础筏格、楼梯、上层地板和斜顶共享多表面采样，支持上层墙/门/柱碰撞、离边坠落、上层跳跃落地和冷启动位置恢复；
 - 浮标抛投、鱼讯窗口、张力/收线对抗、断线、鱼体挣扎和收获；
 - 基础潮汐净水器与折铁烤架包含杯具回收、木材燃料、蒸馏、烤制、收取和过烧；
 - 研究后可建造无需燃料、五杯并行的潮镜净水器，三份食物独立火候、共享燃料的三槽烤台，以及支持容量预判、任意数量拆分、双击整组和鼠标拖放的八格密封干舱；
@@ -42,12 +43,12 @@
 - 210 秒确定性海况周期包含积云、强风暴与消散阶段；阵风会造成偏航和帆具载荷，未强化帆过载后自动泄压收紧，避险航线与强化帆可共同降低风险；
 - 原创飑云穹顶、GPU 实例化雨幕、双段闪电、风暴雾光、增幅浪高/泡沫/海色和独立风雨雷声层共同表达天气，而非仅改变 HUD 数值；
 - 未锚泊浅滩仅短暂停留，玩家离筏后显示离流预警；离流阶段不会被传送回筏，错过追筏窗口后会被留在海中；
-- v14 版本化自动存档，在既有制作队列、失败落物、工具耐久、海面剩余物资、三表面导航、信号、岛礁、筏体、设备、天气与航线状态之外保存结构布局、生命与开门状态；迁移 v1-v13 时建立并清洗拓扑有序的结构集合；
+- v15 版本化自动存档，在 v14 结构布局、生命与开门状态之外保存经真实表面校验的筏上脚底层高；v14 玩家迁移到基础层，非法或悬空高度不会进入运行时；
 - 六总线程序音频混音、随完整相机姿态更新的 HRTF 落水/打捞定位、近场绳索受力与断裂层，以及水下低通、生活/信号设备、锚帆、风雨雷声、种植、研究、礁区和生物声音；
 - 标题、HUD、背包、制作、设置、能力提示和 Playwright 截图回归流程；
 - 原创标题美术、木材、泡沫、鲨皮、编织纤维、AI 辅助海床、拼补帆布、培养土、耐火陶土、导航合金、信号层压板、磷光玻璃、盐蚀集热玻璃、蜡封帆布、盐封手套 PBR 与飑云天空材质，以及对应的独立 normal/roughness 图。
 
-当前仍不是完整游戏。楼梯实际登层与上层行走碰撞、结构自身受损/修补、更多深水生态资源、潜水装备、天气农业、大型信号目的地、无说明玩家平衡验收和最终蒙皮资产仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
+当前仍不是完整游戏。屋顶/地板下表面的头部阻挡、结构自身受损/修补、更多深水生态资源、潜水装备、天气农业、大型信号目的地、无说明玩家平衡验收和最终蒙皮资产仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
 
 ## 运行
 
@@ -68,9 +69,9 @@ npm run test:stability
 npm run capture
 ```
 
-截图脚本默认连接 `http://127.0.0.1:4173`，支持 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH`、`CAPTURE_HEIGHT`、`CAPTURE_QUALITY` 和 `CAPTURE_ONLY`。目标包括 `title`、`pause`、`game`、`hook`、`salvage`、`failure`、`pack`、`crafting`、`survival`、`durability`、`building`、`devices`、`advanced`、`signal`、种植/研究/岛屿/水下/导航各主流程、`underwater-narrow`、`narrow`、`settings` 和 `mobile`。`building` 会用真实键鼠完成板门开合、选墙、旋转、放置扣料/磨损、无支撑二层拒绝和 v14 写入，并独立检查 512×320 建造 HUD 几何；`durability`、`survival` 与 `crafting` 继续核对动作事务、补给和制作队列；其余场景覆盖打捞、失败恢复、容器与 Pointer Lock 拒绝。3D 截图使用分布式 WebGL 像素门禁，拒绝黑屏、白屏、HUD 相交和丢失的上下文。
+截图脚本默认连接 `http://127.0.0.1:4173`，支持 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH`、`CAPTURE_HEIGHT`、`CAPTURE_QUALITY` 和 `CAPTURE_ONLY`。目标包括 `title`、`pause`、`game`、`hook`、`salvage`、`failure`、`pack`、`crafting`、`survival`、`durability`、`building`、`devices`、`advanced`、`signal`、种植/研究/岛屿/水下/导航各主流程、`underwater-narrow`、`narrow`、`settings` 和 `mobile`。`building` 的 `behavior`、`visual`、`traversal` 分段分别验证建造事务、512×320 HUD 几何，以及真实上下楼、上层跳跃、v15 保存与冷启动恢复；其余场景覆盖打捞、失败恢复、容器、补给、制作和 Pointer Lock 拒绝。3D 截图使用分布式 WebGL 像素门禁，拒绝黑屏、白屏、HUD 相交和丢失的上下文。
 
-Termux Chromium 149 的纯 headless 后端会在 WebGL draw call 后首次 readback 时丢失上下文。M1 曾以 Debian Chromium 150 + Xvfb/headful GLES 完成冻结版 1200 秒软件长稳；2026-07-18 当前 Termux 的最终构建可稳定完成 `crafting`、`survival`、分段 `durability` 与 `building` 的领域/交互/v14 写入，也可完成结构窄屏 CDP 合成图；高分辨率整页 readback 仍可能长时间占用合成器。真实 GPU 的 1280x720/30、1920x1080/60、M2 十分钟手感、M3 失败页恢复画面/混音和 M4 完整两层动线仍是发布门禁。详见 [M1 验收记录](docs/M1_ACCEPTANCE.md)、[M2 验收记录](docs/M2_ACCEPTANCE.md)、[M3 验收记录](docs/M3_ACCEPTANCE.md) 与 [M4 验收记录](docs/M4_ACCEPTANCE.md)。
+Termux Chromium 149 的纯 headless 后端会在 WebGL draw call 后首次 readback 时丢失上下文。M1 曾以 Debian Chromium 150 + Xvfb/headful GLES 完成冻结版 1200 秒软件长稳；2026-07-18 当前 Termux 的最终构建可稳定完成 `crafting`、`survival`、分段 `durability` 与 `building` 的领域/交互/v15 写入，也可完成结构窄屏 CDP 合成图；高分辨率整页 readback 仍可能长时间占用合成器。真实 GPU 的 1280x720/30、1920x1080/60、M2 十分钟手感、M3 失败页恢复画面/混音和 M4 两层长时间手感仍是发布门禁。详见 [M1 验收记录](docs/M1_ACCEPTANCE.md)、[M2 验收记录](docs/M2_ACCEPTANCE.md)、[M3 验收记录](docs/M3_ACCEPTANCE.md) 与 [M4 验收记录](docs/M4_ACCEPTANCE.md)。
 
 ## 资产管线
 

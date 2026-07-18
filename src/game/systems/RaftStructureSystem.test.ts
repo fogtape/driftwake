@@ -1,7 +1,11 @@
 import { MeshBasicMaterial, MeshStandardMaterial, PerspectiveCamera, Vector3 } from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MaterialLibrary } from '../art/Materials';
-import { RAFT_STRUCTURE_DEFINITIONS, type SavedRaftStructure } from '../domain/raftStructures';
+import {
+  RAFT_STRUCTURE_DEFINITIONS,
+  RAFT_STRUCTURE_LEVEL_HEIGHT,
+  type SavedRaftStructure,
+} from '../domain/raftStructures';
 import { useGameStore } from '../../state/gameStore';
 import { RaftSystem } from './RaftSystem';
 import { RaftStructureSystem } from './RaftStructureSystem';
@@ -114,6 +118,15 @@ describe('RaftStructureSystem runtime', () => {
     openDoor.resolvePlayerCollision(open, new Vector3(0.2, 1.54, 0));
     expect(open.x).toBe(0.7);
     openDoor.dispose();
+
+    const upperWall = new RaftStructureSystem(raft, createTestMaterials(), [saved('upper', 'wall', 0, 0, 1, 1)]);
+    const below = new Vector3(0.7, 1.54, 0);
+    upperWall.resolvePlayerCollision(below, new Vector3(0.2, 1.54, 0), 0);
+    expect(below.x).toBe(0.7);
+    const upstairs = new Vector3(0.7, 3.72, 0);
+    upperWall.resolvePlayerCollision(upstairs, new Vector3(0.2, 3.72, 0), RAFT_STRUCTURE_LEVEL_HEIGHT);
+    expect(upstairs.x).toBeLessThan(0.5);
+    upperWall.dispose();
   });
 
   it('only toggles a focused door while the structure interaction owns E', () => {

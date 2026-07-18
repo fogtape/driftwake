@@ -4,7 +4,14 @@ import {
   canRemoveFoundationUnderStructures,
   canRemoveRaftStructure,
   pruneUnsupportedRaftStructures,
+  RAFT_STRUCTURE_LEVEL_HEIGHT,
+  RAFT_TILE_X,
+  RAFT_TILE_Z,
+  sampleRaftWalkableSurfaces,
   sanitizeRaftStructures,
+  sanitizeRaftFootHeight,
+  selectRaftLandingSurface,
+  selectReachableRaftSurface,
   structurePlacementKey,
   type SavedRaftStructure,
 } from './raftStructures';
@@ -86,5 +93,40 @@ describe('raft structure topology', () => {
     ], foundations);
     expect(saved.map((entry) => entry.id)).toEqual(['pillar', 'edge-wall', 'floor', 'upper']);
     expect(saved.find((entry) => entry.id === 'pillar')?.health).toBe(125);
+  });
+
+  it('samples a continuous rotated stair ramp into its destination floor', () => {
+    const stairs = structure('stairs', 'stairs', 0, 0, 0, 1);
+    const floor = structure('floor', 'floor', 1, 0, 1);
+    const bottom = sampleRaftWalkableSurfaces([stairs, floor], foundations, -RAFT_TILE_X * 0.5, 0);
+    const middle = sampleRaftWalkableSurfaces([stairs, floor], foundations, 0, 0);
+    const top = sampleRaftWalkableSurfaces([stairs, floor], foundations, RAFT_TILE_X * 0.5, 0);
+    expect(bottom.find((surface) => surface.type === 'stairs')?.height).toBeCloseTo(0);
+    expect(middle.find((surface) => surface.type === 'stairs')?.height).toBeCloseTo(RAFT_STRUCTURE_LEVEL_HEIGHT * 0.5);
+    expect(top.find((surface) => surface.type === 'stairs')?.height).toBeCloseTo(RAFT_STRUCTURE_LEVEL_HEIGHT);
+    expect(top.some((surface) => surface.type === 'floor')).toBe(true);
+  });
+
+  it('chooses only reachable layers and never lands through a floor above the player', () => {
+    const stairs = structure('stairs', 'stairs', 0, 0, 0, 0);
+    const floor = structure('floor', 'floor', 0, 0, 1);
+    const underFloor = sampleRaftWalkableSurfaces([stairs, floor], foundations, -0.68, 0);
+    expect(selectReachableRaftSurface(underFloor, 0)?.height).toBe(0);
+
+    const stairBottom = sampleRaftWalkableSurfaces([stairs, floor], foundations, 0, RAFT_TILE_Z * 0.5 - 0.06);
+    expect(selectReachableRaftSurface(stairBottom, 0)?.type).toBe('stairs');
+    expect(selectRaftLandingSurface(underFloor, 0.8)?.height).toBe(0);
+    expect(selectRaftLandingSurface(underFloor, 3)?.height).toBe(RAFT_STRUCTURE_LEVEL_HEIGHT);
+  });
+
+  it('samples a pitched roof and restores saved height to the nearest real surface', () => {
+    const roof = structure('roof', 'roof', 0, 0, 1, 0);
+    const edge = sampleRaftWalkableSurfaces([roof], foundations, RAFT_TILE_X * 0.5, 0);
+    const ridge = sampleRaftWalkableSurfaces([roof], foundations, 0, 0);
+    const edgeRoof = edge.find((surface) => surface.type === 'roof')!;
+    const ridgeRoof = ridge.find((surface) => surface.type === 'roof')!;
+    expect(ridgeRoof.height).toBeGreaterThan(edgeRoof.height + 0.2);
+    expect(sanitizeRaftFootHeight(ridge, 2.4)).toBe(ridgeRoof.height);
+    expect(sanitizeRaftFootHeight(ridge, -99)).toBe(0);
   });
 });

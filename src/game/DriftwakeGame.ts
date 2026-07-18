@@ -344,6 +344,7 @@ export class DriftwakeGame {
         save?.player.navigation,
         (surface) => this.audio.playFootstep(surface),
       );
+      this.player.setRaftSurfaceSampler((position) => this.structures?.getWalkableSurfaces(position) ?? []);
       this.setCameraMotionMode(useGameStore.getState().cameraMotionMode);
       this.island.setPlayer(this.player);
       this.underwater = new UnderwaterSystem(
@@ -438,12 +439,12 @@ export class DriftwakeGame {
       this.island.setNavigationProvider(() =>
         this.navigation?.getIslandTravel() ?? { approachRate: 0.55, dockDriftRate: 1, anchored: false },
       );
-      this.player.setCollisionResolver((position, previous) => {
-        this.structures?.resolvePlayerCollision(position, previous);
-        this.devices?.resolvePlayerCollision(position, previous);
-        this.navigation?.resolvePlayerCollision(position, previous);
-        this.planting?.resolvePlayerCollision(position, previous);
-        this.progression?.resolvePlayerCollision(position, previous);
+      this.player.setCollisionResolver((position, previous, footHeight) => {
+        this.structures?.resolvePlayerCollision(position, previous, footHeight);
+        this.devices?.resolvePlayerCollision(position, previous, footHeight);
+        this.navigation?.resolvePlayerCollision(position, previous, footHeight);
+        this.planting?.resolvePlayerCollision(position, previous, footHeight);
+        this.progression?.resolvePlayerCollision(position, previous, footHeight);
       });
       this.build = new BuildSystem(
         this.renderer,
@@ -1427,6 +1428,10 @@ export class DriftwakeGame {
     this.mount.dataset.playerJumpState = this.player?.jumpState ?? 'unavailable';
     this.mount.dataset.playerVerticalHeadY = (this.player?.verticalHeadY ?? 0).toFixed(3);
     this.mount.dataset.playerVerticalVelocityY = (this.player?.verticalVelocityY ?? 0).toFixed(3);
+    this.mount.dataset.playerRaftFootY = (this.player?.raftFootY ?? 0).toFixed(3);
+    this.mount.dataset.playerRaftSurface = this.player?.raftWalkableSurface ?? 'none';
+    this.mount.dataset.playerLocalX = (this.player?.localPosition.x ?? 0).toFixed(3);
+    this.mount.dataset.playerLocalZ = (this.player?.localPosition.z ?? 0).toFixed(3);
     this.mount.dataset.simulationTickCount = String(this.simulationTickCount);
     this.mount.dataset.cameraY = this.camera.position.y.toFixed(3);
   }

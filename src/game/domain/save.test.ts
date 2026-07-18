@@ -38,7 +38,7 @@ describe('save schema', () => {
   });
 
   it('rejects unsupported versions and provides a stable starting raft', () => {
-    expect(sanitizeSave({ version: 15 })).toBeNull();
+    expect(sanitizeSave({ version: 16 })).toBeNull();
     expect(createDefaultRaftTiles()).toHaveLength(9);
   });
 
@@ -64,7 +64,7 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v14');
+    expect(SAVE_KEY).toBe('driftwake.save.v15');
     expect(save?.version).toBe(SAVE_VERSION);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
@@ -81,14 +81,20 @@ describe('save schema', () => {
       player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 12 },
       raft: { tiles: [{ x: 0, z: 0, health: 100 }], structures: [{ id: 'ignored', type: 'pillar', x: 0, z: 0 }] },
     });
-    expect(save?.version).toBe(14);
+    expect(save?.version).toBe(SAVE_VERSION);
     expect(save?.raft.structures).toEqual([]);
   });
 
-  it('sanitizes v14 support chains before device occupancy', () => {
+  it('sanitizes v15 support chains, player height and device occupancy', () => {
     const save = sanitizeSave({
       version: SAVE_VERSION,
-      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 12 },
+      player: {
+        inventory: { hook: 1 },
+        survival: {},
+        selectedTool: 'hook',
+        playSeconds: 12,
+        navigation: { surface: 'raft', x: 0, y: 2.35, z: 0 },
+      },
       raft: {
         tiles: [
           { x: 0, z: 0, health: 100 },
@@ -111,6 +117,29 @@ describe('save schema', () => {
       'upper-wall',
     ]);
     expect(save?.raft.devices.map((device) => device.id)).toEqual(['kept']);
+    expect(save?.player.navigation).toEqual({ surface: 'raft', x: 0, y: 2.18, z: 0 });
+  });
+
+  it('keeps v14 raft players on the base layer during the v15 migration', () => {
+    const save = sanitizeSave({
+      version: 14,
+      player: {
+        inventory: { hook: 1 },
+        survival: {},
+        selectedTool: 'hook',
+        playSeconds: 12,
+        navigation: { surface: 'raft', x: 0, y: 2.18, z: 0 },
+      },
+      raft: {
+        tiles: [{ x: 0, z: 0, health: 100 }],
+        structures: [
+          { id: 'pillar', type: 'pillar', x: 0, z: 0, level: 0, rotation: 0, health: 125 },
+          { id: 'floor', type: 'floor', x: 0, z: 0, level: 1, rotation: 0, health: 90 },
+        ],
+      },
+    });
+    expect(save?.player.navigation).toEqual({ surface: 'raft', x: 0, z: 0 });
+    expect(save?.raft.structures).toHaveLength(2);
   });
 
   it('falls back to a legacy save when the current slot is corrupt', () => {

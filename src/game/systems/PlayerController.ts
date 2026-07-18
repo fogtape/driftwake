@@ -4,6 +4,12 @@ import { CAMERA_MOTION_PROFILES, type CameraMotionMode } from '../domain/setting
 import { CameraMotionFilter } from '../player/CameraMotionFilter';
 import { OPEN_WATER_FLOOR_Y, WATER_SURFACE_Y } from '../domain/underwater';
 import { RAFT_TILE_X, RAFT_TILE_Z, type RaftSystem } from './RaftSystem';
+import {
+  selectRaftLandingSurface,
+  selectReachableRaftSurface,
+  type RaftWalkableSurface,
+  type RaftWalkableSurfaceType,
+} from '../domain/raftStructures';
 import type { PhysicsSystem } from './PhysicsSystem';
 import { RaftHorizontalFrame } from '../player/RaftHorizontalFrame';
 import {
@@ -54,7 +60,8 @@ export class PlayerController {
   private readonly moveRight = new Vector3();
   private readonly moveVector = new Vector3();
   private readonly impulseDirection = new Vector3();
-  private collisionResolver: ((position: Vector3, previous: Vector3) => void) | null = null;
+  private collisionResolver: ((position: Vector3, previous: Vector3, footHeight: number) => void) | null = null;
+  private raftSurfaceSampler: ((position: Pick<Vector3, 'x' | 'z'>) => readonly RaftWalkableSurface[]) | null = null;
   private islandNavigation: IslandNavigationProvider | null = null;
   private surface: PlayerSurface;
   private moveCycle = 0;
@@ -74,6 +81,10 @@ export class PlayerController {
   private completedJumpCount = 0;
   private receivedKeyboardEventCount = 0;
   private jumpDiagnostic = 'idle';
+  private raftFootHeight = 0;
+  private raftSurfaceType: RaftWalkableSurfaceType = 'foundation';
+  private airborneLandingSurface: PlayerSurface | null = null;
+  private airborneRaftFootHeight = 0;
 
   constructor(
     private readonly camera: PerspectiveCamera,
@@ -84,7 +95,9 @@ export class PlayerController {
   ) {
     this.surface = navigation.surface;
     if (navigation.surface === 'raft') {
+      this.raftFootHeight = Number.isFinite(navigation.y) ? Math.max(0, navigation.y ?? 0) : 0;
       this.localPosition.x = navigation.x;
+      this.localPosition.y = CAMERA_HEIGHT + this.raftFootHeight;
       this.localPosition.z = navigation.z;
     } else if (navigation.surface === 'island') {
       this.islandPosition.set(navigation.x, 0, navigation.z);
@@ -196,11 +209,18 @@ export class PlayerController {
     } else if (this.surface === 'raft') {
       const profile = CAMERA_MOTION_PROFILES[this.cameraMotionMode];
       const headBob = movementActive ? Math.sin(this.moveCycle) * 0.018 * profile.headBobScale : 0;
-      this.raft.clampLocalPosition(this.localPosition);
-      this.collisionResolver?.(this.localPosition, this.previousLocalPosition);
-      this.localPosition.y = CAMERA_HEIGHT + headBob;
+      if (!this.settleGroundedRaftPosition()) {
+        this.advanceAirborne(delta, 0, 0, false);
+        this.finishCameraUpdate(delta);
+        return;
+      }
+      this.localPosition.y = this.raftFootHeight + CAMERA_HEIGHT + headBob;
       this.raft.localPointToWorld(this.localPosition, this.worldPosition);
       this.camera.position.copy(this.worldPosition);
+      this.candidateLocal.copy(this.localPosition);
+      this.candidateLocal.y = this.raftFootHeight + CAMERA_HEIGHT;
+      this.raft.localPointToWorld(this.candidateLocal, this.candidatePosition);
+      this.verticalMotion.headY = this.candidatePosition.y;
       this.cameraMotionFilter.update(this.raft.group.quaternion, delta, profile, this.filteredRaftRotation);
       this.camera.quaternion.copy(this.filteredRaftRotation).multiply(this.lookQuaternion);
     } else {
@@ -256,8 +276,20 @@ export class PlayerController {
     this.waterVelocity.addScaledVector(this.impulseDirection.normalize(), MathUtils.clamp(strength, 0, 5));
   }
 
-  setCollisionResolver(resolver: ((position: Vector3, previous: Vector3) => void) | null): void {
+  setCollisionResolver(resolver: ((position: Vector3, previous: Vector3, footHeight: number) => void) | null): void {
     this.collisionResolver = resolver;
+  }
+
+  setRaftSurfaceSampler(
+    sampler: ((position: Pick<Vector3, 'x' | 'z'>) => readonly RaftWalkableSurface[]) | null,
+  ): void {
+    this.raftSurfaceSampler = sampler;
+    if (this.surface !== 'raft' || this.verticalMotion.mode !== 'grounded') return;
+    const support = this.sampleReachableRaftSupport(this.localPosition, this.raftFootHeight, 0.5, 0.5);
+    if (!support) return;
+    this.raftFootHeight = support.height;
+    this.raftSurfaceType = support.type;
+    this.localPosition.y = this.raftFootHeight + CAMERA_HEIGHT;
   }
 
   setIslandNavigation(provider: IslandNavigationProvider | null): void {
@@ -305,6 +337,14 @@ export class PlayerController {
     return this.verticalMotion.velocityY;
   }
 
+  get raftFootY(): number {
+    return this.surface === 'raft' ? this.raftFootHeight : 0;
+  }
+
+  get raftWalkableSurface(): RaftWalkableSurfaceType | 'none' {
+    return this.surface === 'raft' ? this.raftSurfaceType : 'none';
+  }
+
   isSubmerged(): boolean {
     return this.surface === 'water' && this.getDepth() > SURFACE_BREATHING_DEPTH;
   }
@@ -326,7 +366,7 @@ export class PlayerController {
     if (this.surface === 'island') return target.copy(this.islandPosition);
     if (this.surface === 'water') return target.copy(this.waterPosition);
     this.candidateLocal.copy(this.localPosition);
-    this.candidateLocal.y = 0;
+    this.candidateLocal.y = this.raftFootHeight;
     return this.raft.localPointToWorld(this.candidateLocal, target);
   }
 
@@ -340,7 +380,12 @@ export class PlayerController {
         z: this.waterPosition.z,
       };
     }
-    return { surface: 'raft', x: this.localPosition.x, z: this.localPosition.z };
+    return {
+      surface: 'raft',
+      x: this.localPosition.x,
+      ...(this.raftFootHeight > 0.01 ? { y: Number(this.raftFootHeight.toFixed(3)) } : {}),
+      z: this.localPosition.z,
+    };
   }
 
   getForward(target = new Vector3()): Vector3 {
@@ -377,6 +422,9 @@ export class PlayerController {
     this.shake = 0;
     this.shakeTime = 0;
     this.airborneLookIsWorldSpace = false;
+    this.raftFootHeight = 0;
+    this.raftSurfaceType = 'foundation';
+    this.airborneLandingSurface = null;
     this.cameraPoseInitialized = false;
     this.update(0);
     this.present(1);
@@ -405,7 +453,7 @@ export class PlayerController {
     this.completedJumpCount += 1;
     if (this.surface === 'raft') {
       this.candidateLocal.copy(this.localPosition);
-      this.candidateLocal.y = CAMERA_HEIGHT;
+      this.candidateLocal.y = this.raftFootHeight + CAMERA_HEIGHT;
       this.raft.localPointToWorld(this.candidateLocal, this.airbornePosition);
       this.lookEuler.y = normalizeYaw(this.lookEuler.y + this.raft.getHeading());
     } else {
@@ -414,6 +462,7 @@ export class PlayerController {
       this.airbornePosition.set(this.islandPosition.x, ground + CAMERA_HEIGHT, this.islandPosition.z);
     }
     this.airborneLookIsWorldSpace = true;
+    this.airborneLandingSurface = null;
     this.verticalMotion.mode = 'grounded';
     this.verticalMotion.headY = this.airbornePosition.y;
     this.verticalMotion.velocityY = 0;
@@ -426,6 +475,7 @@ export class PlayerController {
     this.airbornePosition.copy(worldHeadPosition);
     if (this.surface === 'raft') this.lookEuler.y = normalizeYaw(this.lookEuler.y + this.raft.getHeading());
     this.airborneLookIsWorldSpace = true;
+    this.airborneLandingSurface = null;
     this.verticalMotion.mode = 'airborne';
     this.verticalMotion.headY = worldHeadPosition.y;
     this.verticalMotion.velocityY = 0;
@@ -458,10 +508,16 @@ export class PlayerController {
     this.airbornePosition.y = this.verticalMotion.headY;
 
     if (event === 'landed') {
-      if (this.raft.containsLocalPosition(this.candidateLocal, -0.08)) {
+      if (this.airborneLandingSurface === 'raft') {
         this.finishAirborneOnSurface('raft');
-        this.localPosition.set(this.candidateLocal.x, CAMERA_HEIGHT, this.candidateLocal.z);
-        this.raft.clampLocalPosition(this.localPosition);
+        this.raftFootHeight = this.airborneRaftFootHeight;
+        const landed = this.sampleReachableRaftSupport(this.candidateLocal, this.raftFootHeight, 0.12, 0.12);
+        this.raftSurfaceType = landed?.type ?? this.raftSurfaceType;
+        this.localPosition.set(
+          this.candidateLocal.x,
+          this.raftFootHeight + CAMERA_HEIGHT,
+          this.candidateLocal.z,
+        );
       } else {
         this.finishAirborneOnSurface('island');
         const ground = this.islandNavigation?.sampleGroundHeight(this.airbornePosition.x, this.airbornePosition.z) ?? 0;
@@ -478,7 +534,7 @@ export class PlayerController {
       this.camera.quaternion.copy(this.lookQuaternion);
     } else if (this.surface === 'raft') {
       this.candidateLocal.copy(this.localPosition);
-      this.candidateLocal.y = CAMERA_HEIGHT;
+      this.candidateLocal.y = this.raftFootHeight + CAMERA_HEIGHT;
       this.raft.localPointToWorld(this.candidateLocal, this.camera.position);
       const profile = CAMERA_MOTION_PROFILES[this.cameraMotionMode];
       this.cameraMotionFilter.update(this.raft.group.quaternion, delta, profile, this.filteredRaftRotation);
@@ -493,19 +549,37 @@ export class PlayerController {
   }
 
   private sampleAirborneSupport(): number | null {
+    this.airborneLandingSurface = null;
     this.raftHorizontalFrame.update(this.raft.getHeading());
     this.raftHorizontalFrame.worldToLocal(
       this.airbornePosition,
       this.raft.group.position,
       this.candidateLocal,
     );
-    if (this.raft.containsLocalPosition(this.candidateLocal, -0.08)) {
-      this.candidateLocal.y = CAMERA_HEIGHT;
+    const surfaces = this.getRaftWalkableSurfaces(this.candidateLocal);
+    this.raft.worldPointToLocal(this.airbornePosition, this.worldPosition);
+    const raftLanding = selectRaftLandingSurface(surfaces, this.worldPosition.y - CAMERA_HEIGHT);
+    let supportHeadY: number | null = null;
+    if (raftLanding) {
+      this.airborneRaftFootHeight = raftLanding.height;
+      this.candidateLocal.y = raftLanding.height + CAMERA_HEIGHT;
       this.raft.localPointToWorld(this.candidateLocal, this.candidatePosition);
-      return this.candidatePosition.y;
+      if (this.candidatePosition.y <= this.airbornePosition.y + 0.08) {
+        supportHeadY = this.candidatePosition.y;
+        this.airborneLandingSurface = 'raft';
+      }
     }
     const ground = this.islandNavigation?.sampleGroundHeight(this.airbornePosition.x, this.airbornePosition.z);
-    return ground === null || ground === undefined ? null : ground + CAMERA_HEIGHT;
+    const islandHeadY = ground === null || ground === undefined ? null : ground + CAMERA_HEIGHT;
+    if (
+      islandHeadY !== null
+      && islandHeadY <= this.airbornePosition.y + 0.08
+      && (supportHeadY === null || islandHeadY > supportHeadY)
+    ) {
+      supportHeadY = islandHeadY;
+      this.airborneLandingSurface = 'island';
+    }
+    return supportHeadY;
   }
 
   private finishAirborneOnSurface(surface: PlayerSurface): void {
@@ -520,16 +594,59 @@ export class PlayerController {
     this.islandNavigation?.onSurfaceChange?.(surface);
   }
 
+  private getRaftWalkableSurfaces(position: Pick<Vector3, 'x' | 'z'>): readonly RaftWalkableSurface[] {
+    const sampled = this.raftSurfaceSampler?.(position);
+    if (sampled) return sampled;
+    return this.raft.containsLocalPosition(position as Vector3)
+      ? [{ height: 0, type: 'foundation', structureId: null }]
+      : [];
+  }
+
+  private sampleReachableRaftSupport(
+    position: Pick<Vector3, 'x' | 'z'>,
+    currentHeight: number,
+    maxStepUp?: number,
+    maxStepDown?: number,
+  ): RaftWalkableSurface | null {
+    return selectReachableRaftSurface(
+      this.getRaftWalkableSurfaces(position),
+      currentHeight,
+      maxStepUp,
+      maxStepDown,
+    );
+  }
+
+  private settleGroundedRaftPosition(): boolean {
+    this.candidateLocal.copy(this.localPosition);
+    this.collisionResolver?.(this.candidateLocal, this.previousLocalPosition, this.raftFootHeight);
+    const support = this.sampleReachableRaftSupport(this.candidateLocal, this.raftFootHeight);
+    if (!support) {
+      this.candidateLocal.y = this.raftFootHeight + CAMERA_HEIGHT;
+      this.raft.localPointToWorld(this.candidateLocal, this.candidatePosition);
+      this.beginAirborneAt(this.candidatePosition);
+      return false;
+    }
+    this.localPosition.x = this.candidateLocal.x;
+    this.localPosition.z = this.candidateLocal.z;
+    this.raftFootHeight = support.height;
+    this.raftSurfaceType = support.type;
+    return true;
+  }
+
   private moveOnRaft(movementX: number, movementZ: number): void {
     this.candidateLocal.copy(this.localPosition);
     this.candidateLocal.x += movementX;
     this.candidateLocal.z += movementZ;
-    if (this.raft.containsLocalPosition(this.candidateLocal)) {
+    this.collisionResolver?.(this.candidateLocal, this.localPosition, this.raftFootHeight);
+    const support = this.sampleReachableRaftSupport(this.candidateLocal, this.raftFootHeight);
+    if (support) {
       this.localPosition.x = this.candidateLocal.x;
       this.localPosition.z = this.candidateLocal.z;
+      this.raftFootHeight = support.height;
+      this.raftSurfaceType = support.type;
       return;
     }
-    this.candidateLocal.y = 0;
+    this.candidateLocal.y = this.raftFootHeight;
     this.raft.localPointToWorld(this.candidateLocal, this.candidatePosition);
     const ground = this.islandNavigation?.sampleGroundHeight(this.candidatePosition.x, this.candidatePosition.z);
     if (ground !== null && ground !== undefined && Math.abs(ground - this.candidatePosition.y) <= 0.52) {
@@ -537,7 +654,7 @@ export class PlayerController {
       this.islandPosition.set(this.candidatePosition.x, ground, this.candidatePosition.z);
       return;
     }
-    this.candidateLocal.y = CAMERA_HEIGHT;
+    this.candidateLocal.y = this.raftFootHeight + CAMERA_HEIGHT;
     this.raft.localPointToWorld(this.candidateLocal, this.candidatePosition);
     this.beginAirborneAt(this.candidatePosition);
   }
@@ -556,10 +673,16 @@ export class PlayerController {
     const departingHeadY = this.islandPosition.y + CAMERA_HEIGHT;
     this.raftHorizontalFrame.update(this.raft.getHeading());
     this.raftHorizontalFrame.worldToLocal(this.candidatePosition, this.raft.group.position, this.candidateLocal);
-    if (this.raft.containsLocalPosition(this.candidateLocal)) {
+    const raftSupport = this.sampleReachableRaftSupport(this.candidateLocal, 0, 0.52, 0.52);
+    if (raftSupport) {
       this.setSurface('raft');
-      this.localPosition.set(this.candidateLocal.x, CAMERA_HEIGHT, this.candidateLocal.z);
-      this.raft.clampLocalPosition(this.localPosition);
+      this.raftFootHeight = raftSupport.height;
+      this.raftSurfaceType = raftSupport.type;
+      this.localPosition.set(
+        this.candidateLocal.x,
+        this.raftFootHeight + CAMERA_HEIGHT,
+        this.candidateLocal.z,
+      );
       return;
     }
     this.candidatePosition.y = departingHeadY;
@@ -611,6 +734,8 @@ export class PlayerController {
       return false;
     }
     this.setSurface('raft');
+    this.raftFootHeight = 0;
+    this.raftSurfaceType = 'foundation';
     this.localPosition.set(this.candidateLocal.x, CAMERA_HEIGHT, this.candidateLocal.z);
     this.raft.clampLocalPosition(this.localPosition);
     this.waterVelocity.set(0, 0, 0);
@@ -669,6 +794,8 @@ export class PlayerController {
 
   private returnToRaftFallback(): void {
     this.setSurface('raft');
+    this.raftFootHeight = 0;
+    this.raftSurfaceType = 'foundation';
     this.localPosition.set(0, CAMERA_HEIGHT, 1.08);
     this.raft.clampLocalPosition(this.localPosition);
     this.waterVelocity.set(0, 0, 0);

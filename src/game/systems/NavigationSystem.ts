@@ -337,8 +337,9 @@ export class NavigationSystem {
     return true;
   }
 
-  resolvePlayerCollision(position: Vector3, previous: Vector3): void {
+  resolvePlayerCollision(position: Vector3, previous: Vector3, footHeight = 0): void {
     for (const runtime of this.runtimes.values()) {
+      if (footHeight > 1.8 && runtime.state.type !== 'sail' && runtime.state.type !== 'antenna') continue;
       const centerX = runtime.state.x * RAFT_TILE_X;
       const centerZ = runtime.state.z * RAFT_TILE_Z;
       const radius = runtime.state.type === 'sail' ? 0.38 : runtime.state.type === 'helm' ? 0.54 : runtime.state.type === 'receiver' ? 0.5 : 0.48;

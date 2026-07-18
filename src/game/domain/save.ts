@@ -39,11 +39,17 @@ import {
   sanitizeCraftingQueue,
   type CraftingQueueState,
 } from './craftingQueue';
-import { sanitizeRaftStructures, type SavedRaftStructure } from './raftStructures';
+import {
+  sampleRaftWalkableSurfaces,
+  sanitizeRaftFootHeight,
+  sanitizeRaftStructures,
+  type FoundationCoordinate,
+  type SavedRaftStructure,
+} from './raftStructures';
 
-export const SAVE_VERSION = 14;
-export const SAVE_KEY = 'driftwake.save.v14';
-export const LEGACY_SAVE_KEYS = ['driftwake.save.v13', 'driftwake.save.v12', 'driftwake.save.v11', 'driftwake.save.v10', 'driftwake.save.v9', 'driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
+export const SAVE_VERSION = 15;
+export const SAVE_KEY = 'driftwake.save.v15';
+export const LEGACY_SAVE_KEYS = ['driftwake.save.v14', 'driftwake.save.v13', 'driftwake.save.v12', 'driftwake.save.v11', 'driftwake.save.v10', 'driftwake.save.v9', 'driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
 
 export type PlayerSurface = 'raft' | 'island' | 'water';
 
@@ -110,6 +116,9 @@ function sanitizeNavigation(
   island: SavedIslandState,
   dockZ: number,
   legacyDockLayout: boolean,
+  version: number,
+  structures: readonly SavedRaftStructure[],
+  foundations: readonly FoundationCoordinate[],
 ): SavedPlayerNavigation {
   if (!value || typeof value !== 'object') return { surface: 'raft', x: 0, z: 1.08 };
   const candidate = value as Partial<SavedPlayerNavigation>;
@@ -137,10 +146,16 @@ function sanitizeNavigation(
       };
     }
   }
+  const raftX = Math.max(-12, Math.min(12, x));
+  const raftZ = Math.max(-12, Math.min(12, z));
+  const footHeight = version >= 15
+    ? sanitizeRaftFootHeight(sampleRaftWalkableSurfaces(structures, foundations, raftX, raftZ), candidate.y)
+    : 0;
   return {
     surface: 'raft',
-    x: Math.max(-12, Math.min(12, x)),
-    z: Math.max(-12, Math.min(12, z)),
+    x: raftX,
+    ...(footHeight > 0.01 ? { y: Number(footHeight.toFixed(3)) } : {}),
+    z: raftZ,
   };
 }
 
@@ -306,6 +321,9 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
         island,
         islandDockZForRaft(stableTiles),
         legacyDockLayout,
+        version,
+        structures,
+        stableTiles,
       ),
       failure: version >= 12 ? sanitizeFailureRecord(candidate.player.failure) : null,
       crafting,

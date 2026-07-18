@@ -15,9 +15,9 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import type { SavedRaftTile } from '../domain/save';
 import type { MaterialLibrary } from '../art/Materials';
 import { sampleWave } from '../math/waves';
+import { RAFT_TILE_X, RAFT_TILE_Z } from '../domain/raftStructures';
 
-export const RAFT_TILE_X = 1.44;
-export const RAFT_TILE_Z = 1.38;
+export { RAFT_TILE_X, RAFT_TILE_Z };
 export const RAFT_TILE_MAX_HEALTH = 100;
 const MAX_TILES = 81;
 

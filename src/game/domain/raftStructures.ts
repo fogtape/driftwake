@@ -1,6 +1,10 @@
 import type { ItemBundle } from './items';
 
 export const RAFT_STRUCTURE_LEVEL_HEIGHT = 2.18;
+export const RAFT_TILE_X = 1.44;
+export const RAFT_TILE_Z = 1.38;
+export const RAFT_MAX_STEP_UP = 0.36;
+export const RAFT_MAX_STEP_DOWN = 0.42;
 export const MAX_RAFT_STRUCTURES = 96;
 export const MAX_RAFT_STRUCTURE_LEVEL = 2;
 
@@ -44,6 +48,14 @@ export interface RaftBuildPieceDefinition {
   name: string;
   shortName: string;
   cost: ItemBundle;
+}
+
+export type RaftWalkableSurfaceType = 'foundation' | 'floor' | 'stairs' | 'roof';
+
+export interface RaftWalkableSurface {
+  height: number;
+  type: RaftWalkableSurfaceType;
+  structureId: string | null;
 }
 
 export const RAFT_STRUCTURE_DEFINITIONS: Record<RaftStructureType, RaftStructureDefinition> = {
@@ -129,6 +141,141 @@ function coordinateKey(x: number, z: number): string {
 
 function foundationKeys(foundations: readonly FoundationCoordinate[]): Set<string> {
   return new Set(foundations.map((foundation) => coordinateKey(foundation.x, foundation.z)));
+}
+
+function insideTile(
+  pointX: number,
+  pointZ: number,
+  tileX: number,
+  tileZ: number,
+  margin = 0.04,
+): boolean {
+  return Math.abs(pointX - tileX * RAFT_TILE_X) <= RAFT_TILE_X * 0.5 + margin
+    && Math.abs(pointZ - tileZ * RAFT_TILE_Z) <= RAFT_TILE_Z * 0.5 + margin;
+}
+
+function stairSurfaceHeight(
+  structure: Pick<SavedRaftStructure, 'x' | 'z' | 'level' | 'rotation'>,
+  pointX: number,
+  pointZ: number,
+): number | null {
+  const dx = pointX - structure.x * RAFT_TILE_X;
+  const dz = pointZ - structure.z * RAFT_TILE_Z;
+  let run = 0;
+  let cross = 0;
+  let halfRun = RAFT_TILE_Z * 0.5;
+  let halfCross = RAFT_TILE_X * 0.41;
+  if (structure.rotation === 0) {
+    run = -dz;
+    cross = dx;
+  } else if (structure.rotation === 1) {
+    run = dx;
+    cross = dz;
+    halfRun = RAFT_TILE_X * 0.5;
+    halfCross = RAFT_TILE_Z * 0.41;
+  } else if (structure.rotation === 2) {
+    run = dz;
+    cross = dx;
+  } else {
+    run = -dx;
+    cross = dz;
+    halfRun = RAFT_TILE_X * 0.5;
+    halfCross = RAFT_TILE_Z * 0.41;
+  }
+  if (Math.abs(cross) > halfCross + 0.04 || run < -halfRun - 0.04 || run > halfRun + 0.04) return null;
+  const progress = Math.max(0, Math.min(1, (run + halfRun) / (halfRun * 2)));
+  return structure.level * RAFT_STRUCTURE_LEVEL_HEIGHT + progress * RAFT_STRUCTURE_LEVEL_HEIGHT;
+}
+
+function roofSurfaceHeight(
+  structure: Pick<SavedRaftStructure, 'x' | 'z' | 'level' | 'rotation'>,
+  pointX: number,
+  pointZ: number,
+): number | null {
+  const dx = pointX - structure.x * RAFT_TILE_X;
+  const dz = pointZ - structure.z * RAFT_TILE_Z;
+  const yaw = structure.rotation * Math.PI / 2;
+  const cosine = Math.cos(yaw);
+  const sine = Math.sin(yaw);
+  const localX = dx * cosine - dz * sine;
+  const localZ = dx * sine + dz * cosine;
+  const halfX = RAFT_TILE_X * 0.5;
+  const halfZ = RAFT_TILE_Z * 0.5;
+  if (Math.abs(localX) > halfX + 0.04 || Math.abs(localZ) > halfZ + 0.04) return null;
+  const ridge = 1 - Math.min(1, Math.abs(localX) / halfX);
+  return structure.level * RAFT_STRUCTURE_LEVEL_HEIGHT + 0.08 + ridge * 0.23;
+}
+
+export function sampleRaftWalkableSurfaces(
+  structures: readonly SavedRaftStructure[],
+  foundations: readonly FoundationCoordinate[],
+  pointX: number,
+  pointZ: number,
+): RaftWalkableSurface[] {
+  const surfaces: RaftWalkableSurface[] = [];
+  for (const foundation of foundations) {
+    if (insideTile(pointX, pointZ, foundation.x, foundation.z)) {
+      surfaces.push({ height: 0, type: 'foundation', structureId: null });
+      break;
+    }
+  }
+  for (const structure of structures) {
+    if (structure.type === 'floor' && insideTile(pointX, pointZ, structure.x, structure.z)) {
+      surfaces.push({
+        height: structure.level * RAFT_STRUCTURE_LEVEL_HEIGHT,
+        type: 'floor',
+        structureId: structure.id,
+      });
+    } else if (structure.type === 'stairs') {
+      const height = stairSurfaceHeight(structure, pointX, pointZ);
+      if (height !== null) surfaces.push({ height, type: 'stairs', structureId: structure.id });
+    } else if (structure.type === 'roof') {
+      const height = roofSurfaceHeight(structure, pointX, pointZ);
+      if (height !== null) surfaces.push({ height, type: 'roof', structureId: structure.id });
+    }
+  }
+  return surfaces.sort((a, b) => a.height - b.height || a.type.localeCompare(b.type));
+}
+
+export function selectReachableRaftSurface(
+  surfaces: readonly RaftWalkableSurface[],
+  currentHeight: number,
+  maxStepUp = RAFT_MAX_STEP_UP,
+  maxStepDown = RAFT_MAX_STEP_DOWN,
+): RaftWalkableSurface | null {
+  const current = Number.isFinite(currentHeight) ? currentHeight : 0;
+  let selected: RaftWalkableSurface | null = null;
+  for (const surface of surfaces) {
+    if (surface.height > current + maxStepUp || surface.height < current - maxStepDown) continue;
+    if (!selected || surface.height > selected.height) selected = surface;
+  }
+  return selected;
+}
+
+export function selectRaftLandingSurface(
+  surfaces: readonly RaftWalkableSurface[],
+  maximumFootHeight: number,
+): RaftWalkableSurface | null {
+  const maximum = Number.isFinite(maximumFootHeight) ? maximumFootHeight : 0;
+  let selected: RaftWalkableSurface | null = null;
+  for (const surface of surfaces) {
+    if (surface.height > maximum + 0.06) continue;
+    if (!selected || surface.height > selected.height) selected = surface;
+  }
+  return selected;
+}
+
+export function sanitizeRaftFootHeight(
+  surfaces: readonly RaftWalkableSurface[],
+  requestedHeight: unknown,
+): number {
+  if (surfaces.length === 0) return 0;
+  const requested = typeof requestedHeight === 'number' && Number.isFinite(requestedHeight)
+    ? Math.max(0, Math.min(MAX_RAFT_STRUCTURE_LEVEL * RAFT_STRUCTURE_LEVEL_HEIGHT + 0.4, requestedHeight))
+    : 0;
+  return surfaces.reduce((closest, surface) => (
+    Math.abs(surface.height - requested) < Math.abs(closest.height - requested) ? surface : closest
+  )).height;
 }
 
 export function normalizeRaftRotation(value: number): RaftRotation {

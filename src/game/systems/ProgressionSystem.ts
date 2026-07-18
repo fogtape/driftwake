@@ -235,7 +235,8 @@ export class ProgressionSystem {
     return true;
   }
 
-  resolvePlayerCollision(position: Vector3, previous: Vector3): void {
+  resolvePlayerCollision(position: Vector3, previous: Vector3, footHeight = 0): void {
+    if (footHeight > 1.8) return;
     for (const runtime of this.devices.values()) {
       const centerX = runtime.state.x * RAFT_TILE_X;
       const centerZ = runtime.state.z * RAFT_TILE_Z;
