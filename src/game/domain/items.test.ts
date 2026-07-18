@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { addItems, itemCount, preferredToolOrder, salvageLoot, usedInventorySlots, type Inventory } from './items';
+import {
+  addItems,
+  inventoryStacks,
+  itemCount,
+  preferredToolOrder,
+  salvageLoot,
+  stackTransferAmount,
+  transferInventoryItem,
+  usedInventorySlots,
+  type Inventory,
+} from './items';
 import { craftRecipe } from './recipes';
 
 describe('inventory domain', () => {
@@ -59,5 +69,46 @@ describe('inventory domain', () => {
 
   it('gives sealed barrels a smaller supply roll than full caches', () => {
     expect(salvageLoot('barrel', 0.5)).toEqual({ polymer: 2, fiber: 1, ration: 1 });
+  });
+
+  it('projects aggregate counts into stable visual stacks', () => {
+    expect(inventoryStacks({ timber: 26, rope: 12 })).toEqual([
+      { itemId: 'timber', count: 20, stackIndex: 0 },
+      { itemId: 'timber', count: 6, stackIndex: 1 },
+      { itemId: 'rope', count: 10, stackIndex: 0 },
+      { itemId: 'rope', count: 2, stackIndex: 1 },
+    ]);
+  });
+
+  it('resolves one, half and full stack transfer presets', () => {
+    expect(stackTransferAmount(7, 'one')).toBe(1);
+    expect(stackTransferAmount(7, 'half')).toBe(4);
+    expect(stackTransferAmount(7, 'all')).toBe(7);
+    expect(stackTransferAmount(Number.NaN, 'half')).toBe(0);
+  });
+
+  it('moves an exact partial stack without mutating either input', () => {
+    const source: Inventory = { timber: 26, hook: 1 };
+    const target: Inventory = { timber: 8 };
+    const result = transferInventoryItem(source, target, 'timber', 6, 8);
+    expect(result).toMatchObject({ requested: 6, attempted: 6, moved: 6, reason: 'moved' });
+    expect(result.source).toEqual({ timber: 20, hook: 1 });
+    expect(result.target).toEqual({ timber: 14 });
+    expect(source).toEqual({ timber: 26, hook: 1 });
+    expect(target).toEqual({ timber: 8 });
+  });
+
+  it('previews a capacity-limited transfer with the same result used for commit', () => {
+    const result = transferInventoryItem({ timber: 8 }, { timber: 18 }, 'timber', 6, 1);
+    expect(result).toMatchObject({ requested: 6, attempted: 6, moved: 2, reason: 'partial' });
+    expect(result.source).toEqual({ timber: 6 });
+    expect(result.target).toEqual({ timber: 20 });
+  });
+
+  it('leaves both containers unchanged when the target has no compatible space', () => {
+    const result = transferInventoryItem({ polymer: 4 }, { timber: 20 }, 'polymer', 4, 1);
+    expect(result).toMatchObject({ moved: 0, reason: 'target-full' });
+    expect(result.source).toEqual({ polymer: 4 });
+    expect(result.target).toEqual({ timber: 20 });
   });
 });

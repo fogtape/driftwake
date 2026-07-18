@@ -58,7 +58,7 @@ import { NavigationSystem } from './systems/NavigationSystem';
 import { PlantingSystem } from './systems/PlantingSystem';
 import { ProgressionSystem } from './systems/ProgressionSystem';
 import { StormSystem } from './systems/StormSystem';
-import { FixedStepScheduler, isSimulationActive } from './runtime/runtime';
+import { FixedStepScheduler, isSimulationActive, shouldRenderPresentation } from './runtime/runtime';
 import {
   createDynamicResolutionState,
   stepDynamicResolution,
@@ -167,6 +167,7 @@ export class DriftwakeGame {
   private contextLost = false;
   private disposed = false;
   private lastNativeFrameAt = performance.now();
+  private lastPausedRenderCompletedAt = Number.NEGATIVE_INFINITY;
   private frameWatchdog: number | null = null;
   private pointerLockTimer: number | null = null;
 
@@ -544,8 +545,8 @@ export class DriftwakeGame {
     this.audio.playCollect();
   }
 
-  transferStorage(itemId: ItemId, direction: 'to-storage' | 'to-pack'): boolean {
-    return this.devices?.transferStorage(itemId, direction) ?? false;
+  transferStorage(itemId: ItemId, direction: 'to-storage' | 'to-pack', amount?: number): boolean {
+    return this.devices?.transferStorage(itemId, direction, amount) ?? false;
   }
 
   closeStorage(): void {
@@ -730,6 +731,18 @@ export class DriftwakeGame {
     });
     this.setSimulationActive(active);
 
+    if (state.phase === 'playing') this.saveElapsed += frameDelta;
+    if (state.phase === 'playing' && this.saveElapsed >= 12) {
+      this.saveElapsed = 0;
+      this.saveNow();
+    }
+    this.updateFrameTiming(frameDelta, active);
+
+    if (!shouldRenderPresentation(active, performance.now(), this.lastPausedRenderCompletedAt)) {
+      this.mount.dataset.presentationRate = 'paused-4fps';
+      return;
+    }
+
     let renderTime = this.fixedStep.simulationSeconds;
     let alpha = 0;
     if (active) {
@@ -741,14 +754,9 @@ export class DriftwakeGame {
     this.player?.present(alpha);
     this.ocean?.update(renderTime);
     this.updateEnvironment(frameDelta, this.currentStormIntensity, this.currentLightning);
-
-    if (state.phase === 'playing') this.saveElapsed += frameDelta;
-    if (state.phase === 'playing' && this.saveElapsed >= 12) {
-      this.saveElapsed = 0;
-      this.saveNow();
-    }
-    this.updateFrameTiming(frameDelta, active);
     this.renderer.render(this.scene, this.camera);
+    this.mount.dataset.presentationRate = active ? 'native' : 'paused-4fps';
+    this.lastPausedRenderCompletedAt = active ? Number.NEGATIVE_INFINITY : performance.now();
   };
 
   private readonly onAnimationFrame = (): void => {

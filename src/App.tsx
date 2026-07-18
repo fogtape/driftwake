@@ -274,6 +274,7 @@ export function App() {
         visible={phase === 'playing'}
         ready={ready}
         pointerLocked={pointerLocked}
+        overlayOpen={overlayPanel !== null}
         pointerLockDenied={pointerLockDenied}
         audioEnabled={audioEnabled}
         selectedTool={selectedTool}
@@ -326,7 +327,7 @@ export function App() {
         onPlace={placeDevice}
         onResearch={researchSample}
         onLearn={learnProject}
-        onStorageTransfer={(itemId, direction) => gameRef.current?.transferStorage(itemId, direction) ?? false}
+        onStorageTransfer={(itemId, direction, amount) => gameRef.current?.transferStorage(itemId, direction, amount) ?? false}
         onClose={() => {
           gameRef.current?.closeStorage();
           useGameStore.getState().setOverlayPanel(null);

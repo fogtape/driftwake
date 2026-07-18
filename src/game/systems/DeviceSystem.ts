@@ -53,6 +53,7 @@ import {
   hasItems,
   itemCount,
   removeItems,
+  transferInventoryItem,
   usedInventorySlots,
   type ItemBundle,
   type ItemId,
@@ -206,7 +207,11 @@ export class DeviceSystem {
     useGameStore.getState().setStorage(null);
   }
 
-  transferStorage(itemId: ItemId, direction: 'to-storage' | 'to-pack'): boolean {
+  transferStorage(
+    itemId: ItemId,
+    direction: 'to-storage' | 'to-pack',
+    amount: number = ITEM_DEFINITIONS[itemId].maxStack,
+  ): boolean {
     const runtime = this.activeStorageId ? this.devices.get(this.activeStorageId) : null;
     if (!runtime || runtime.state.type !== 'locker') return false;
     const store = useGameStore.getState();
@@ -216,28 +221,53 @@ export class DeviceSystem {
         this.showNotice('打捞钩需要留在随身工具位');
         return false;
       }
-      const requested = Math.min(itemCount(store.inventory, itemId), ITEM_DEFINITIONS[itemId].maxStack);
-      const result = addItems(runtime.state.storage, { [itemId]: requested }, LOCKER_SLOT_CAPACITY);
-      const accepted = itemCount(result.accepted, itemId);
-      if (accepted <= 0 || !store.spendItems({ [itemId]: accepted })) {
+      const result = transferInventoryItem(
+        store.inventory,
+        runtime.state.storage,
+        itemId,
+        amount,
+        LOCKER_SLOT_CAPACITY,
+      );
+      if (result.moved <= 0 || !store.spendItems({ [itemId]: result.moved })) {
         this.audio.playDenied();
         this.showNotice('干舱储物格已满');
         return false;
       }
-      runtime.state = { ...runtime.state, storage: result.inventory };
+      runtime.state = { ...runtime.state, storage: result.target };
+      this.showNotice(
+        result.reason === 'partial'
+          ? `${ITEM_DEFINITIONS[itemId].shortName}存入 ${result.moved}/${result.attempted} · 干舱已满`
+          : `${ITEM_DEFINITIONS[itemId].shortName} ×${result.moved} 已存入`,
+      );
     } else {
-      const requested = Math.min(itemCount(runtime.state.storage, itemId), ITEM_DEFINITIONS[itemId].maxStack);
-      const result = addItems(store.inventory, { [itemId]: requested }, INVENTORY_SLOT_CAPACITY);
-      const accepted = itemCount(result.accepted, itemId);
+      const result = transferInventoryItem(
+        runtime.state.storage,
+        store.inventory,
+        itemId,
+        amount,
+        INVENTORY_SLOT_CAPACITY,
+      );
+      if (result.moved <= 0) {
+        this.audio.playDenied();
+        this.showNotice('背包没有空位');
+        return false;
+      }
+      const accepted = itemCount(store.addItemBundle({ [itemId]: result.moved }), itemId);
       if (accepted <= 0) {
         this.audio.playDenied();
         this.showNotice('背包没有空位');
         return false;
       }
-      const storage = removeItems(runtime.state.storage, { [itemId]: accepted });
+      const storage = accepted === result.moved
+        ? result.source
+        : removeItems(runtime.state.storage, { [itemId]: accepted });
       if (!storage) return false;
-      store.addItemBundle({ [itemId]: accepted });
       runtime.state = { ...runtime.state, storage };
+      this.showNotice(
+        result.reason === 'partial'
+          ? `${ITEM_DEFINITIONS[itemId].shortName}取回 ${accepted}/${result.attempted} · 背包已满`
+          : `${ITEM_DEFINITIONS[itemId].shortName} ×${accepted} 已取回`,
+      );
     }
     this.audio.playStorageTransfer(direction === 'to-storage');
     this.publishStorage(runtime);

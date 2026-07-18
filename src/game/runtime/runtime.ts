@@ -28,6 +28,7 @@ export interface SimulationGateState {
 const DEFAULT_STEP_SECONDS = 1 / 60;
 const DEFAULT_MAX_FRAME_SECONDS = 0.2;
 const DEFAULT_MAX_SUB_STEPS = 12;
+export const PAUSED_RENDER_INTERVAL_MS = 250;
 
 export class FixedStepScheduler {
   readonly stepSeconds: number;
@@ -101,6 +102,18 @@ export function isSimulationActive(state: SimulationGateState): boolean {
     && state.documentVisible
     && state.windowFocused
     && state.contextHealthy;
+}
+
+export function shouldRenderPresentation(
+  simulationActive: boolean,
+  nowMs: number,
+  lastPausedRenderCompletedAtMs: number,
+  pausedIntervalMs = PAUSED_RENDER_INTERVAL_MS,
+): boolean {
+  if (simulationActive) return true;
+  if (!Number.isFinite(nowMs) || !Number.isFinite(lastPausedRenderCompletedAtMs)) return true;
+  const interval = Number.isFinite(pausedIntervalMs) ? Math.max(0, pausedIntervalMs) : PAUSED_RENDER_INTERVAL_MS;
+  return nowMs < lastPausedRenderCompletedAtMs || nowMs - lastPausedRenderCompletedAtMs >= interval;
 }
 
 function requirePositiveFinite(value: number, label: string): number {

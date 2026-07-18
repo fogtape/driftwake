@@ -1,8 +1,8 @@
 # M3 背包、合成与生存验收记录
 
 > 当前状态：`DOING`
-> 本次切片：死亡、物资散落与恢复
-> 版本：`0.13.0`
+> 本次切片：失败恢复；堆叠拆分、拖放与容器转移
+> 版本：`0.13.1`
 > 日期：2026-07-18
 
 ## 已形成的闭环
@@ -17,6 +17,12 @@
 - 恢复后生命/水分/饱食/氧气为 `62/44/48/100`，筏体、设备、研究和世界掉落保持原状；
 - 恢复先进入稳定暂停页，再由“继续漂流”单独申请 Pointer Lock；
 - 失败与恢复具有独立程序音效层，鲨鱼致命伤保留明确死因。
+- 聚合库存继续作为 v12 真值，新增确定性堆叠投影，不修改存档结构或配方消费语义；
+- 通用不可变转移函数同时负责容量预判与提交结果，返回请求量、尝试量、实际移动量以及目标已满/部分容纳原因；
+- 干舱支持一个、半组、整组、逐个增减、双击整组和鼠标拖放，背包与干舱共用同一条显式数量转移链；
+- 打捞钩仍被强制保留在随身工具位，目标无容量时提交禁用，部分容量时显示实际可容数量；
+- 打开背包、研究台或干舱时不再同时渲染暂停模态层；模拟暂停后的 3D 呈现限制为 4 FPS，为低端设备和 DOM 交互保留主线程预算；
+- 980×680、640×720 和 320×720 三档布局均无横向溢出，极窄视口使用四列物品格与纵向滚动。
 
 ## 自动验证
 
@@ -25,12 +31,17 @@ npm test -- --run
 npm run build
 CAPTURE_ONLY=failure CAPTURE_FAST=1 CAPTURE_QUALITY=low \
   DRIFTWAKE_URL=http://127.0.0.1:4180 npm run capture
+CAPTURE_ONLY=advanced CAPTURE_FAST=1 CAPTURE_QUALITY=low \
+  DRIFTWAKE_URL=http://127.0.0.1:4180 npm run capture
 ```
 
 2026-07-18 结果：
 
-- 31 个测试文件、159 项测试通过；
+- 31 个测试文件、167 项测试通过；
 - TypeScript 与生产构建通过；
+- 领域测试覆盖稳定堆叠投影、奇数半组、精确部分转移、容量限制、不变性和源/目标守恒；运行时测试覆盖暂停呈现间隔；
+- `advanced` 最终构建浏览器场景实际把 6 个漂木拆半存入 3 个、拖放 20 个、再取回 1 个，最终背包为 4，干舱为 `20 + 10`，容量从 7/8 变为 8/8；满舱时废铁正确预判仅可容 2 个，无既有堆叠的生鱼提交被禁用；
+- 干舱打开后一秒内始终只有一个 `aria-modal` 对话框、无暂停页重叠、`contextHealthy=true`；桌面面板 980×680，两侧无横向溢出，640×720 面板边界保持在视口内；
 - 最终构建的浏览器场景稳定验证失败阶段 `simulationActive=false`、无 Pointer Lock；
 - 最终构建的 v12 将 `3 漂木 + 2 聚合片 + 1 应急水` 结算为一份右舷回收包，`dropPending` 只从 `true` 变为 `false` 一次；
 - Store 与存档测试验证恢复后失败记录清空、玩家回到筏面、恢复值正确且世界回收包仍存在；
@@ -41,6 +52,8 @@ CAPTURE_ONLY=failure CAPTURE_FAST=1 CAPTURE_QUALITY=low \
 ```sh
 CAPTURE_ONLY=failure CAPTURE_QUALITY=high npm run capture
 CAPTURE_ONLY=failure CAPTURE_QUALITY=low npm run capture
+CAPTURE_ONLY=advanced CAPTURE_QUALITY=high npm run capture
+CAPTURE_ONLY=advanced CAPTURE_QUALITY=low npm run capture
 ```
 
 人工连续检查：
@@ -52,14 +65,14 @@ CAPTURE_ONLY=failure CAPTURE_QUALITY=low npm run capture
 5. 失败低频、原因噪声、恢复提示和随后暂停音景的响度衔接自然；
 6. 失败时刷新、恢复前刷新、恢复后刷新均不会复制或删除散落物；
 7. 920x1600 桌面模式与 1280x720 低画质下内容仍完整，不与浏览器安全区重叠。
+8. 拆分、双击和拖放在 30/60 FPS 下均只提交一次，容量不足反馈与真实移动量一致，转移音效方向明确。
 
 ## 当前环境限制
 
-Termux Chromium 可稳定完成失败结算、DOM、v12 一次性落物与恢复领域测试；恢复点击阶段或含 WebGL 的整页 `ReadPixels` 会随机丢失 Context、将 `ready` 置为 `false` 或结束 GLES 渲染进程。本记录不把该环境生成失败的恢复画面或合成截图视为视觉验收通过。
+Termux Chromium 可稳定完成失败结算、DOM、v12 一次性落物、恢复领域测试及 `advanced` 的真实拆分/拖放/取回闭环。暂停呈现限频后，软件 GLES 下的容器 DOM 不再被连续 3D 帧饿死；含 WebGL 的整页截图或 `ReadPixels` 仍可能丢失 Context、卡住合成器或结束 GLES 进程。本记录不把该环境生成失败的 3D 合成截图视为视觉验收通过。
 
 ## M3 剩余工作
 
-- 背包堆叠拆分、鼠标拖放、容量预判和通用容器转移；
 - 连续制作数量、队列、取消返还和存档边界；
 - 30 至 60 分钟缺水、饥饿、失败与回收节奏的无说明玩家验收；
 - 锤、矛、钓竿和斧的实际动作耐久接线；

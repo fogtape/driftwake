@@ -475,6 +475,30 @@ export interface InventoryMutation {
   rejected: ItemBundle;
 }
 
+export interface InventoryStack {
+  itemId: ItemId;
+  count: number;
+  stackIndex: number;
+}
+
+export type InventoryTransferReason =
+  | 'moved'
+  | 'partial'
+  | 'invalid-amount'
+  | 'source-empty'
+  | 'target-full';
+
+export interface InventoryTransferResult {
+  source: Inventory;
+  target: Inventory;
+  requested: number;
+  attempted: number;
+  moved: number;
+  reason: InventoryTransferReason;
+}
+
+export type StackTransferPreset = 'one' | 'half' | 'all';
+
 function cleanCount(value: number | undefined): number {
   return Number.isFinite(value) ? Math.max(0, Math.floor(value ?? 0)) : 0;
 }
@@ -490,6 +514,26 @@ export function normalizeInventory(inventory: Inventory): Inventory {
 
 export function itemCount(inventory: Inventory, id: ItemId): number {
   return cleanCount(inventory[id]);
+}
+
+export function inventoryStacks(inventory: Inventory): InventoryStack[] {
+  return (Object.keys(ITEM_DEFINITIONS) as ItemId[]).flatMap((itemId) => {
+    const count = itemCount(inventory, itemId);
+    const maxStack = ITEM_DEFINITIONS[itemId].maxStack;
+    return Array.from({ length: Math.ceil(count / maxStack) }, (_, stackIndex) => ({
+      itemId,
+      count: Math.min(maxStack, count - stackIndex * maxStack),
+      stackIndex,
+    }));
+  });
+}
+
+export function stackTransferAmount(stackCount: number, preset: StackTransferPreset): number {
+  const count = cleanCount(stackCount);
+  if (count === 0) return 0;
+  if (preset === 'one') return 1;
+  if (preset === 'half') return Math.ceil(count / 2);
+  return count;
 }
 
 export function usedInventorySlots(inventory: Inventory): number {
@@ -545,6 +589,45 @@ export function removeItems(current: Inventory, bundle: ItemBundle): Inventory |
     else delete inventory[id];
   }
   return inventory;
+}
+
+export function transferInventoryItem(
+  currentSource: Inventory,
+  currentTarget: Inventory,
+  itemId: ItemId,
+  amount: number,
+  targetCapacity: number,
+): InventoryTransferResult {
+  const source = normalizeInventory(currentSource);
+  const target = normalizeInventory(currentTarget);
+  const requested = cleanCount(amount);
+  if (requested === 0) {
+    return { source, target, requested, attempted: 0, moved: 0, reason: 'invalid-amount' };
+  }
+
+  const attempted = Math.min(requested, itemCount(source, itemId));
+  if (attempted === 0) {
+    return { source, target, requested, attempted, moved: 0, reason: 'source-empty' };
+  }
+
+  const added = addItems(target, { [itemId]: attempted }, targetCapacity);
+  const moved = itemCount(added.accepted, itemId);
+  if (moved === 0) {
+    return { source, target, requested, attempted, moved, reason: 'target-full' };
+  }
+
+  const nextSource = removeItems(source, { [itemId]: moved });
+  if (!nextSource) {
+    return { source, target, requested, attempted, moved: 0, reason: 'source-empty' };
+  }
+  return {
+    source: nextSource,
+    target: added.inventory,
+    requested,
+    attempted,
+    moved,
+    reason: moved < attempted ? 'partial' : 'moved',
+  };
 }
 
 export function salvageLoot(kind: SalvageKind, roll = 0.5): ItemBundle {

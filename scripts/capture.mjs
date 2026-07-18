@@ -534,7 +534,7 @@ const advancedStorageSave = {
         x: 0,
         z: 0,
         rotation: 0,
-        storage: { timber: 8, polymer: 6, rope: 3, cookedFish: 2 },
+        storage: { timber: 8, polymer: 6, rope: 3, cookedFish: 2, scrap: 10, fiber: 20, stone: 16 },
       },
     ],
   },
@@ -1030,12 +1030,14 @@ async function captureDevices() {
 }
 
 async function captureAdvancedDevices() {
-  const { context: showcaseContext, page: showcasePage } = await openDesktopPage('advanced-devices', { seedSave: true, advancedStart: true });
-  await enterGame(showcasePage);
-  await showcasePage.waitForTimeout(1200);
-  await inspectCanvasPixels(showcasePage, 'advanced-devices');
-  await showcasePage.screenshot({ path: new URL('advanced-devices-desktop.png', outputDir).pathname });
-  await showcaseContext.close();
+  if (process.env.CAPTURE_FAST !== '1') {
+    const { context: showcaseContext, page: showcasePage } = await openDesktopPage('advanced-devices', { seedSave: true, advancedStart: true });
+    await enterGame(showcasePage);
+    await showcasePage.waitForTimeout(1200);
+    await inspectCanvasPixels(showcasePage, 'advanced-devices');
+    await showcasePage.screenshot({ path: new URL('advanced-devices-desktop.png', outputDir).pathname });
+    await showcaseContext.close();
+  }
 
   const { context, page } = await openDesktopPage('advanced-storage', { seedSave: true, advancedStorageStart: true });
   await enterGame(page);
@@ -1051,29 +1053,179 @@ async function captureAdvancedDevices() {
   }
   console.log(`Advanced interaction prompt: ${storagePrompt}`);
   await page.keyboard.press('KeyE');
-  await page.waitForTimeout(350);
+  const storageTimeline = await page.evaluate(async () => {
+    const samples = [];
+    let previous = '';
+    for (let index = 0; index < 20; index += 1) {
+      const mount = document.querySelector('.game-mount');
+      const sample = {
+        ms: index * 50,
+        dialog: Boolean(document.querySelector('.field-pack')),
+        focusPrompt: Boolean(document.querySelector('.focus-prompt')),
+        contextHealthy: mount?.dataset.contextHealthy ?? null,
+        presentationRate: mount?.dataset.presentationRate ?? null,
+        pointerLocked: Boolean(document.pointerLockElement),
+        activeElement: document.activeElement?.getAttribute('class') ?? document.activeElement?.tagName ?? null,
+      };
+      const signature = JSON.stringify({ ...sample, ms: 0 });
+      if (signature !== previous) samples.push(sample);
+      previous = signature;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return samples;
+  });
+  console.log(`Advanced storage timeline: ${JSON.stringify(storageTimeline)}`);
+  const settledStorageSample = storageTimeline[storageTimeline.length - 1];
+  if (
+    storageTimeline.some((sample) => !sample.dialog || sample.focusPrompt || sample.contextHealthy !== 'true' || sample.pointerLocked)
+    || settledStorageSample?.presentationRate !== 'paused-4fps'
+  ) {
+    throw new Error(`Advanced storage overlay was not stable: ${JSON.stringify(storageTimeline)}`);
+  }
   console.log(`Advanced storage DOM: ${JSON.stringify(await page.evaluate(() => ({
     dialog: document.querySelector('.field-pack')?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 120) ?? null,
     prompt: document.querySelector('.interaction-prompt')?.textContent?.trim() ?? null,
     pointerLocked: Boolean(document.pointerLockElement),
   })))}`);
-  const dialog = page.getByRole('dialog', { name: '干舱储物柜' });
-  await dialog.waitFor({ timeout: 8_000 });
+  const dialog = page.locator('.field-pack');
+  await dialog.waitFor({ state: 'visible', timeout: 8_000 });
+  const dialogSemantics = await dialog.evaluate((element) => ({
+    role: element.getAttribute('role'),
+    labelledBy: element.getAttribute('aria-labelledby'),
+    heading: element.querySelector('#field-pack-heading')?.textContent?.trim() ?? null,
+    modalCount: document.querySelectorAll('[role="dialog"][aria-modal="true"]').length,
+  }));
+  if (
+    dialogSemantics.role !== 'dialog'
+    || dialogSemantics.labelledBy !== 'field-pack-heading'
+    || dialogSemantics.heading !== '干舱储物柜'
+    || dialogSemantics.modalCount !== 1
+  ) {
+    throw new Error(`Advanced storage dialog semantics invalid: ${JSON.stringify(dialogSemantics)}`);
+  }
   const layout = await dialog.evaluate((element) => {
     const panes = [...element.querySelectorAll('.storage-inventory')].map((pane) => {
       const rect = pane.getBoundingClientRect();
       return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, scrollWidth: pane.scrollWidth, clientWidth: pane.clientWidth };
     });
     const rect = element.getBoundingClientRect();
-    return { rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }, panes };
+    const style = getComputedStyle(element);
+    return {
+      rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height },
+      style: { display: style.display, visibility: style.visibility, opacity: style.opacity },
+      panes,
+    };
   });
-  if (layout.panes.length !== 2 || layout.panes.some((pane) => pane.scrollWidth > pane.clientWidth + 2)) {
+  if (
+    layout.rect.width < 600
+    || layout.rect.height < 400
+    || layout.style.display === 'none'
+    || layout.style.visibility !== 'visible'
+    || Number(layout.style.opacity) < 0.95
+    || layout.panes.length !== 2
+    || layout.panes.some((pane) => pane.scrollWidth > pane.clientWidth + 2)
+  ) {
     throw new Error(`Advanced storage layout overflow: ${JSON.stringify(layout)}`);
   }
-  await page.getByRole('button', { name: /将盐蚀漂木移入干舱/ }).first().click();
-  await page.waitForFunction(() => document.querySelector('.field-pack__status')?.textContent?.includes('干舱 5/8'));
+  const pointerCenter = async (locator, label) => {
+    const point = await locator.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        width: rect.width,
+        height: rect.height,
+      };
+    });
+    if (point.width < 1 || point.height < 1) throw new Error(`${label} has no pointer target: ${JSON.stringify(point)}`);
+    return point;
+  };
+  const clickWithPointer = async (locator, label) => {
+    const point = await pointerCenter(locator, label);
+    await page.mouse.click(point.x, point.y);
+  };
+  const dragWithPointer = async (source, target, label) => {
+    const start = await pointerCenter(source, `${label} source`);
+    const end = await pointerCenter(target, `${label} target`);
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(end.x, end.y, { steps: 12 });
+    await page.mouse.up();
+  };
+  const packTimber = dialog.locator('button[aria-label^="随身背包：盐蚀漂木"]');
+  if (await packTimber.count() !== 2) {
+    throw new Error(`Advanced storage expected two timber stacks, got ${await packTimber.count()}`);
+  }
+  await clickWithPointer(packTimber.nth(1), 'partial timber stack');
+  await clickWithPointer(dialog.locator('button[aria-label="转移半组"]'), 'half-stack preset');
+  await page.waitForFunction(() => document.querySelector('output[aria-label="当前转移数量"]')?.textContent === '3');
+  await clickWithPointer(
+    dialog.locator('button[aria-label="向密封干舱转移 3 个盐蚀漂木"]'),
+    'partial transfer commit',
+  );
+  await page.waitForFunction(() => Boolean(
+    document.querySelector('button[aria-label="随身背包：盐蚀漂木，3 个"]')
+    && document.querySelector('button[aria-label="密封干舱：盐蚀漂木，11 个"]'),
+  ));
+
+  await dragWithPointer(
+    dialog.locator('button[aria-label="随身背包：盐蚀漂木，20 个"]'),
+    dialog.locator('.inventory-grid--locker'),
+    'full timber stack drag',
+  );
+  await page.waitForFunction(() => Boolean(
+    document.querySelector('.field-pack__status')?.textContent?.includes('干舱 8/8')
+    && document.querySelector('button[aria-label="密封干舱：盐蚀漂木，11 个"]'),
+  ));
+
+  await clickWithPointer(
+    dialog.locator('button[aria-label="密封干舱：盐蚀漂木，11 个"]'),
+    'storage timber remainder',
+  );
+  await clickWithPointer(dialog.locator('button[aria-label="转移一个"]'), 'single-item preset');
+  await clickWithPointer(
+    dialog.locator('button[aria-label="向随身背包转移 1 个盐蚀漂木"]'),
+    'single-item return commit',
+  );
+  await page.waitForFunction(() => Boolean(
+    document.querySelector('button[aria-label="随身背包：盐蚀漂木，4 个"]')
+    && document.querySelector('button[aria-label="密封干舱：盐蚀漂木，10 个"]'),
+  ));
+  await clickWithPointer(
+    dialog.locator('button[aria-label="随身背包：氧化废铁，8 个"]'),
+    'capacity-limited scrap stack',
+  );
+  await page.waitForFunction(() => Boolean(
+    document.querySelector('button[aria-label="向密封干舱转移 2 个氧化废铁"]:not(:disabled)')
+    && document.querySelector('.storage-transfer-axis > small.is-limited')?.textContent?.trim() === '可容 2',
+  ));
+  await clickWithPointer(
+    dialog.locator('button[aria-label="随身背包：银脊鱼，4 个"]'),
+    'capacity-blocked fish stack',
+  );
+  await page.waitForFunction(() => Boolean(
+    document.querySelector('button[aria-label="密封干舱已满"]:disabled')
+    && document.querySelector('.storage-transfer-axis > small.is-limited')?.textContent?.trim() === '已满',
+  ));
+  const capacityState = await dialog.evaluate((element) => ({
+    status: element.querySelector('.field-pack__status')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+    commit: element.querySelector('.storage-transfer-commit')?.getAttribute('aria-label') ?? null,
+    disabled: element.querySelector('.storage-transfer-commit')?.hasAttribute('disabled') ?? null,
+    capacity: element.querySelector('.storage-transfer-axis > small')?.textContent?.trim() ?? null,
+  }));
+  console.log(`Advanced storage capacity state: ${JSON.stringify(capacityState)}`);
+  const transferState = await dialog.evaluate((element) => ({
+    packTimber: [...element.querySelectorAll('button[aria-label^="随身背包：盐蚀漂木"]')]
+      .map((node) => node.getAttribute('aria-label')),
+    storageTimber: [...element.querySelectorAll('button[aria-label^="密封干舱：盐蚀漂木"]')]
+      .map((node) => node.getAttribute('aria-label')),
+    storageStatus: element.querySelector('.field-pack__status')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+  }));
+  console.log(`Advanced storage transfer state: ${JSON.stringify(transferState)}`);
   console.log(`Advanced storage layout: ${JSON.stringify(layout)}`);
-  await page.screenshot({ path: new URL('advanced-storage-desktop.png', outputDir).pathname });
+  if (process.env.CAPTURE_FAST !== '1') {
+    await page.screenshot({ path: new URL('advanced-storage-desktop.png', outputDir).pathname });
+  }
 
   await page.setViewportSize({ width: 640, height: 720 });
   await page.waitForTimeout(250);
@@ -1093,7 +1245,9 @@ async function captureAdvancedDevices() {
     throw new Error(`Advanced storage narrow overflow: ${JSON.stringify(narrowLayout)}`);
   }
   console.log(`Advanced storage narrow layout: ${JSON.stringify(narrowLayout)}`);
-  await page.screenshot({ path: new URL('advanced-storage-narrow.png', outputDir).pathname });
+  if (process.env.CAPTURE_FAST !== '1') {
+    await page.screenshot({ path: new URL('advanced-storage-narrow.png', outputDir).pathname });
+  }
   await context.close();
 }
 

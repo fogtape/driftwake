@@ -1,25 +1,34 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowRightLeft,
   Backpack,
   Check,
   ChevronRight,
   FlaskConical,
   Hammer,
   HeartPulse,
+  Layers3,
   LockKeyhole,
   MapPin,
   Microscope,
+  Minus,
   MoveLeft,
   MoveRight,
   PackageOpen,
+  Plus,
+  Scissors,
   ShieldCheck,
   X,
 } from 'lucide-react';
 import {
   INVENTORY_SLOT_CAPACITY,
   ITEM_DEFINITIONS,
+  inventoryStacks,
   itemCount,
+  stackTransferAmount,
+  transferInventoryItem,
   type Inventory,
+  type InventoryStack,
   type ItemId,
   type ToolId,
 } from '../game/domain/items';
@@ -57,8 +66,24 @@ interface FieldPackPanelProps {
   onPlace: (deviceType: PlacementType) => void;
   onResearch: (sample: ResearchSampleId) => ResearchSampleResult;
   onLearn: (projectId: ResearchProjectId) => boolean;
-  onStorageTransfer: (itemId: ItemId, direction: 'to-storage' | 'to-pack') => boolean;
+  onStorageTransfer: (itemId: ItemId, direction: 'to-storage' | 'to-pack', amount: number) => boolean;
   onClose: () => void;
+}
+
+type StorageSide = 'pack' | 'storage';
+
+interface StorageStackSelection {
+  side: StorageSide;
+  itemId: ItemId;
+  stackIndex: number;
+}
+
+interface DraggedStorageStack extends StorageStackSelection {
+  amount: number;
+}
+
+function selectionKey(selection: StorageStackSelection): string {
+  return `${selection.side}-${selection.itemId}-${selection.stackIndex}`;
 }
 
 const CONSUMABLES = new Set<ItemId>([
@@ -117,42 +142,134 @@ export function FieldPackPanel({
     () => (Object.keys(ITEM_DEFINITIONS) as ItemId[]).filter((id) => itemCount(inventory, id) > 0),
     [inventory],
   );
-  const stacks = useMemo(
-    () =>
-      itemIds.flatMap((itemId) => {
-        const maxStack = ITEM_DEFINITIONS[itemId].maxStack;
-        const count = itemCount(inventory, itemId);
-        return Array.from({ length: Math.ceil(count / maxStack) }, (_, index) => ({
-          itemId,
-          count: Math.min(maxStack, count - index * maxStack),
-          stackIndex: index,
-        }));
-      }),
-    [inventory, itemIds],
-  );
+  const stacks = useMemo(() => inventoryStacks(inventory), [inventory]);
   const [selectedItem, setSelectedItem] = useState<ItemId>('hook');
-  const storageItemIds = useMemo(
-    () => storage ? (Object.keys(ITEM_DEFINITIONS) as ItemId[]).filter((id) => itemCount(storage.inventory, id) > 0) : [],
+  const storageStacks = useMemo(
+    () => storage ? inventoryStacks(storage.inventory) : [],
     [storage],
   );
-  const storageStacks = useMemo(
-    () => storageItemIds.flatMap((itemId) => {
-      const maxStack = ITEM_DEFINITIONS[itemId].maxStack;
-      const count = storage ? itemCount(storage.inventory, itemId) : 0;
-      return Array.from({ length: Math.ceil(count / maxStack) }, (_, index) => ({
-        itemId,
-        count: Math.min(maxStack, count - index * maxStack),
-        stackIndex: index,
-      }));
-    }),
-    [storage, storageItemIds],
-  );
+  const [transferSelection, setTransferSelection] = useState<StorageStackSelection | null>(null);
+  const [transferAmount, setTransferAmount] = useState(1);
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<StorageSide | null>(null);
+  const draggedStackRef = useRef<DraggedStorageStack | null>(null);
+
+  const selectedTransferStack = transferSelection
+    ? (transferSelection.side === 'pack' ? stacks : storageStacks).find(
+      (stack) => stack.itemId === transferSelection.itemId && stack.stackIndex === transferSelection.stackIndex,
+    ) ?? null
+    : null;
 
   useEffect(() => {
     if (itemCount(inventory, selectedItem) <= 0 && itemIds[0]) setSelectedItem(itemIds[0]);
   }, [inventory, itemIds, selectedItem]);
 
+  useEffect(() => {
+    setTransferSelection(null);
+    setTransferAmount(1);
+    setDraggingKey(null);
+    setDropTarget(null);
+    draggedStackRef.current = null;
+  }, [panel, storage?.deviceId]);
+
+  useEffect(() => {
+    if (!transferSelection) return;
+    if (!selectedTransferStack) {
+      setTransferSelection(null);
+      setTransferAmount(1);
+      return;
+    }
+    setTransferAmount((current) => Math.max(1, Math.min(selectedTransferStack.count, current)));
+  }, [selectedTransferStack, transferSelection]);
+
+  const transferPreview = useMemo(() => {
+    if (!storage || !transferSelection || !selectedTransferStack) return null;
+    const source = transferSelection.side === 'pack' ? inventory : storage.inventory;
+    const target = transferSelection.side === 'pack' ? storage.inventory : inventory;
+    const capacity = transferSelection.side === 'pack' ? storage.capacity : INVENTORY_SLOT_CAPACITY;
+    return transferInventoryItem(
+      source,
+      target,
+      transferSelection.itemId,
+      Math.min(transferAmount, selectedTransferStack.count),
+      capacity,
+    );
+  }, [inventory, selectedTransferStack, storage, transferAmount, transferSelection]);
+
   if (!panel || (panel === 'storage' && !storage)) return null;
+
+  const previewStorageTransfer = (payload: DraggedStorageStack) => {
+    if (!storage) return null;
+    const source = payload.side === 'pack' ? inventory : storage.inventory;
+    const target = payload.side === 'pack' ? storage.inventory : inventory;
+    const capacity = payload.side === 'pack' ? storage.capacity : INVENTORY_SLOT_CAPACITY;
+    return transferInventoryItem(source, target, payload.itemId, payload.amount, capacity);
+  };
+
+  const commitStorageTransfer = (payload: DraggedStorageStack): boolean => {
+    const preview = previewStorageTransfer(payload);
+    if (!preview || preview.moved <= 0 || (payload.side === 'pack' && payload.itemId === 'hook')) return false;
+    return onStorageTransfer(
+      payload.itemId,
+      payload.side === 'pack' ? 'to-storage' : 'to-pack',
+      payload.amount,
+    );
+  };
+
+  const selectStorageStack = (side: StorageSide, stack: InventoryStack, amount = stack.count) => {
+    if (side === 'pack' && stack.itemId === 'hook') return;
+    setTransferSelection({ side, itemId: stack.itemId, stackIndex: stack.stackIndex });
+    setTransferAmount(Math.max(1, Math.min(stack.count, amount)));
+  };
+
+  const handleStorageDragStart = (
+    event: React.DragEvent<HTMLButtonElement>,
+    side: StorageSide,
+    stack: InventoryStack,
+  ) => {
+    const selection = { side, itemId: stack.itemId, stackIndex: stack.stackIndex };
+    const selectedAmount = transferSelection && selectionKey(transferSelection) === selectionKey(selection)
+      ? transferAmount
+      : stack.count;
+    const amount = event.shiftKey
+      ? stackTransferAmount(stack.count, 'half')
+      : Math.max(1, Math.min(stack.count, selectedAmount));
+    const payload = { ...selection, amount };
+    draggedStackRef.current = payload;
+    setDraggingKey(selectionKey(selection));
+    setTransferSelection(selection);
+    setTransferAmount(amount);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', selectionKey(selection));
+  };
+
+  const handleStorageDragOver = (event: React.DragEvent<HTMLElement>, target: StorageSide) => {
+    const payload = draggedStackRef.current;
+    if (!payload || payload.side === target || previewStorageTransfer(payload)?.moved === 0) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDropTarget(target);
+  };
+
+  const handleStorageDragLeave = (event: React.DragEvent<HTMLElement>, target: StorageSide) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setDropTarget((current) => current === target ? null : current);
+  };
+
+  const finishStorageDrag = () => {
+    draggedStackRef.current = null;
+    setDraggingKey(null);
+    setDropTarget(null);
+  };
+
+  const handleStorageDrop = (event: React.DragEvent<HTMLElement>, target: StorageSide) => {
+    const payload = draggedStackRef.current;
+    if (!payload || payload.side === target) return;
+    event.preventDefault();
+    commitStorageTransfer(payload);
+    finishStorageDrag();
+  };
+
   const selectedDefinition = ITEM_DEFINITIONS[selectedItem];
   const selectedTool = selectedDefinition.category === 'tool' ? selectedItem as ToolId : null;
   const selectedDurability = selectedTool
@@ -162,11 +279,17 @@ export function FieldPackPanel({
     ? toolDurabilityRatio({ [selectedTool]: selectedDurability }, selectedTool)
     : 0;
   const emptySlots = Math.max(0, INVENTORY_SLOT_CAPACITY - stacks.length);
+  const resolvedTransferAmount = selectedTransferStack
+    ? Math.max(1, Math.min(selectedTransferStack.count, transferAmount))
+    : 1;
+  const transferDefinition = transferSelection ? ITEM_DEFINITIONS[transferSelection.itemId] : null;
+  const transferTargetLabel = transferSelection?.side === 'pack' ? '密封干舱' : '随身背包';
+  const transferMoved = transferPreview?.moved ?? 0;
 
   return (
     <div className="modal-layer field-pack-layer" role="presentation">
       <section className="field-pack" role="dialog" aria-modal="true" aria-labelledby="field-pack-heading">
-        <header className="field-pack__header">
+        <header className={`field-pack__header ${panel === 'research' || panel === 'storage' ? 'field-pack__header--single' : ''}`}>
           <div className="field-pack__identity">
             {panel === 'research' ? <Microscope size={22} /> : panel === 'storage' ? <PackageOpen size={22} /> : <Backpack size={22} />}
             <div>
@@ -200,7 +323,13 @@ export function FieldPackPanel({
 
         {panel === 'storage' && storage ? (
           <div className="field-pack__body field-pack__body--storage">
-            <section className="storage-inventory" aria-labelledby="storage-pack-heading">
+            <section
+              className={`storage-inventory ${dropTarget === 'pack' ? 'is-drop-target' : ''}`}
+              aria-labelledby="storage-pack-heading"
+              onDragOver={(event) => handleStorageDragOver(event, 'pack')}
+              onDragLeave={(event) => handleStorageDragLeave(event, 'pack')}
+              onDrop={(event) => handleStorageDrop(event, 'pack')}
+            >
               <div className="crafting-heading">
                 <div><Backpack size={20} /><span id="storage-pack-heading">随身背包</span></div>
                 <small>{inventorySlots}/{INVENTORY_SLOT_CAPACITY}</small>
@@ -208,16 +337,24 @@ export function FieldPackPanel({
               <div className="inventory-grid inventory-grid--storage" aria-label="可存入的背包物品">
                 {stacks.map(({ itemId, count, stackIndex }) => {
                   const definition = ITEM_DEFINITIONS[itemId];
+                  const selection = { side: 'pack' as const, itemId, stackIndex };
+                  const key = selectionKey(selection);
+                  const selected = transferSelection ? selectionKey(transferSelection) === key : false;
                   return (
                     <button
                       key={`pack-${itemId}-${stackIndex}`}
-                      className="inventory-slot storage-transfer-slot"
+                      className={`inventory-slot storage-transfer-slot ${selected ? 'is-selected' : ''} ${draggingKey === key ? 'is-dragging' : ''}`}
                       type="button"
                       disabled={itemId === 'hook'}
-                      onClick={() => onStorageTransfer(itemId, 'to-storage')}
+                      draggable={itemId !== 'hook'}
+                      onClick={() => selectStorageStack('pack', { itemId, count, stackIndex })}
+                      onDoubleClick={() => commitStorageTransfer({ ...selection, amount: count })}
+                      onDragStart={(event) => handleStorageDragStart(event, 'pack', { itemId, count, stackIndex })}
+                      onDragEnd={finishStorageDrag}
                       style={{ '--item-tone': definition.tone } as React.CSSProperties}
-                      aria-label={`将${definition.name}移入干舱`}
-                      title={itemId === 'hook' ? '打捞钩保留在随身工具位' : '移入干舱'}
+                      aria-label={`随身背包：${definition.name}，${count} 个`}
+                      aria-pressed={selected}
+                      title={itemId === 'hook' ? '打捞钩保留在随身工具位' : definition.name}
                     >
                       <ItemIcon itemId={itemId} size={27} strokeWidth={1.8} />
                       <strong>{count}</strong>
@@ -231,9 +368,85 @@ export function FieldPackPanel({
               </div>
             </section>
 
-            <div className="storage-transfer-axis" aria-hidden="true"><MoveRight size={18} /><MoveLeft size={18} /></div>
+            <div className={`storage-transfer-axis ${transferSelection ? 'has-selection' : ''}`} aria-label="物资转移控制">
+              {transferSelection && selectedTransferStack && transferDefinition ? (
+                <>
+                  <div
+                    className="storage-transfer-axis__item"
+                    style={{ '--item-tone': transferDefinition.tone } as React.CSSProperties}
+                  >
+                    <ItemIcon itemId={transferSelection.itemId} size={23} strokeWidth={1.8} />
+                    <span>{transferDefinition.shortName}</span>
+                  </div>
+                  <div className="storage-transfer-stepper" role="group" aria-label="转移数量">
+                    <button
+                      type="button"
+                      onClick={() => setTransferAmount((amount) => Math.max(1, amount - 1))}
+                      disabled={resolvedTransferAmount <= 1}
+                      aria-label="减少转移数量"
+                      title="减少"
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <output aria-label="当前转移数量" aria-live="polite">{resolvedTransferAmount}</output>
+                    <button
+                      type="button"
+                      onClick={() => setTransferAmount((amount) => Math.min(selectedTransferStack.count, amount + 1))}
+                      disabled={resolvedTransferAmount >= selectedTransferStack.count}
+                      aria-label="增加转移数量"
+                      title="增加"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                  <div className="storage-transfer-presets" role="group" aria-label="数量预设">
+                    <button
+                      type="button"
+                      onClick={() => setTransferAmount(stackTransferAmount(selectedTransferStack.count, 'one'))}
+                      aria-label="转移一个"
+                      title="一个"
+                    >1</button>
+                    <button
+                      type="button"
+                      onClick={() => setTransferAmount(stackTransferAmount(selectedTransferStack.count, 'half'))}
+                      aria-label="转移半组"
+                      title="半组"
+                    ><Scissors size={13} /></button>
+                    <button
+                      type="button"
+                      onClick={() => setTransferAmount(stackTransferAmount(selectedTransferStack.count, 'all'))}
+                      aria-label="转移整组"
+                      title="整组"
+                    ><Layers3 size={13} /></button>
+                  </div>
+                  <button
+                    className={`storage-transfer-commit ${transferMoved < resolvedTransferAmount ? 'is-limited' : ''}`}
+                    type="button"
+                    disabled={transferMoved <= 0}
+                    onClick={() => commitStorageTransfer({ ...transferSelection, amount: resolvedTransferAmount })}
+                    aria-label={transferMoved > 0
+                      ? `向${transferTargetLabel}转移 ${transferMoved} 个${transferDefinition.name}`
+                      : `${transferTargetLabel}已满`}
+                    title={transferMoved > 0 ? `转移到${transferTargetLabel}` : `${transferTargetLabel}已满`}
+                  >
+                    {transferSelection.side === 'pack' ? <MoveRight size={18} /> : <MoveLeft size={18} />}
+                  </button>
+                  <small className={transferMoved < resolvedTransferAmount ? 'is-limited' : ''} aria-live="polite">
+                    {transferMoved <= 0 ? '已满' : transferMoved < resolvedTransferAmount ? `可容 ${transferMoved}` : transferTargetLabel}
+                  </small>
+                </>
+              ) : (
+                <ArrowRightLeft className="storage-transfer-axis__idle" size={20} aria-hidden="true" />
+              )}
+            </div>
 
-            <section className="storage-inventory" aria-labelledby="storage-hold-heading">
+            <section
+              className={`storage-inventory ${dropTarget === 'storage' ? 'is-drop-target' : ''}`}
+              aria-labelledby="storage-hold-heading"
+              onDragOver={(event) => handleStorageDragOver(event, 'storage')}
+              onDragLeave={(event) => handleStorageDragLeave(event, 'storage')}
+              onDrop={(event) => handleStorageDrop(event, 'storage')}
+            >
               <div className="crafting-heading">
                 <div><PackageOpen size={20} /><span id="storage-hold-heading">密封干舱</span></div>
                 <small>{storage.slots}/{storage.capacity}</small>
@@ -241,15 +454,23 @@ export function FieldPackPanel({
               <div className="inventory-grid inventory-grid--storage inventory-grid--locker" aria-label="干舱物品">
                 {storageStacks.map(({ itemId, count, stackIndex }) => {
                   const definition = ITEM_DEFINITIONS[itemId];
+                  const selection = { side: 'storage' as const, itemId, stackIndex };
+                  const key = selectionKey(selection);
+                  const selected = transferSelection ? selectionKey(transferSelection) === key : false;
                   return (
                     <button
                       key={`hold-${itemId}-${stackIndex}`}
-                      className="inventory-slot storage-transfer-slot"
+                      className={`inventory-slot storage-transfer-slot ${selected ? 'is-selected' : ''} ${draggingKey === key ? 'is-dragging' : ''}`}
                       type="button"
-                      onClick={() => onStorageTransfer(itemId, 'to-pack')}
+                      draggable
+                      onClick={() => selectStorageStack('storage', { itemId, count, stackIndex })}
+                      onDoubleClick={() => commitStorageTransfer({ ...selection, amount: count })}
+                      onDragStart={(event) => handleStorageDragStart(event, 'storage', { itemId, count, stackIndex })}
+                      onDragEnd={finishStorageDrag}
                       style={{ '--item-tone': definition.tone } as React.CSSProperties}
-                      aria-label={`将${definition.name}移回背包`}
-                      title="移回背包"
+                      aria-label={`密封干舱：${definition.name}，${count} 个`}
+                      aria-pressed={selected}
+                      title={definition.name}
                     >
                       <ItemIcon itemId={itemId} size={27} strokeWidth={1.8} />
                       <strong>{count}</strong>

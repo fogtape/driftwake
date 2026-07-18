@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { FixedStepScheduler, isSimulationActive } from './runtime';
+import { FixedStepScheduler, isSimulationActive, shouldRenderPresentation } from './runtime';
 
 describe('FixedStepScheduler', () => {
   it('turns variable frames into deterministic simulation steps and exposes interpolation', () => {
@@ -79,5 +79,21 @@ describe('isSimulationActive', () => {
     ]) {
       expect(isSimulationActive({ ...active, ...patch })).toBe(false);
     }
+  });
+});
+
+describe('shouldRenderPresentation', () => {
+  it('keeps active gameplay on the native presentation cadence', () => {
+    expect(shouldRenderPresentation(true, 101, 100)).toBe(true);
+  });
+
+  it('leaves a stable UI window between paused 3D presentations', () => {
+    expect(shouldRenderPresentation(false, 349, 100)).toBe(false);
+    expect(shouldRenderPresentation(false, 350, 100)).toBe(true);
+  });
+
+  it('renders immediately after initialization or a clock reset', () => {
+    expect(shouldRenderPresentation(false, 100, Number.NEGATIVE_INFINITY)).toBe(true);
+    expect(shouldRenderPresentation(false, 50, 100)).toBe(true);
   });
 });
