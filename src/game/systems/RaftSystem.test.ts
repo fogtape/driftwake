@@ -88,7 +88,7 @@ describe('RaftSystem topology', () => {
     expect(raft.tileCount).toBe(3);
   });
 
-  it('keeps the final foundation alive until a death flow exists', () => {
+  it('keeps the final foundation alive as the failure recovery anchor', () => {
     const raft = new RaftSystem(createTestMaterials(), [{ x: 0, z: 0, health: 20 }]);
     const result = raft.damageTile({ x: 0, z: 0 }, 100);
     expect(result.destroyed).toBe(false);

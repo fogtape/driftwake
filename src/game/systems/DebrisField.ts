@@ -214,7 +214,7 @@ export class DebrisField {
     if (bundleHasItems(rejected)) this.spawnWorldDrop(rejected, position);
   }
 
-  spawnWorldDrop(bundle: ItemBundle, position: Vector3): WorldDrop | null {
+  spawnWorldDrop(bundle: ItemBundle, position: Vector3, relocateOnMerge = false): WorldDrop | null {
     if (!bundleHasItems(bundle)) return null;
     const inactive = this.worldDrops.find((drop) => !drop.active);
     if (!inactive) {
@@ -222,6 +222,13 @@ export class DebrisField {
         drop.model.position.distanceToSquared(position) < best.model.position.distanceToSquared(position) ? drop : best,
       );
       nearest.loot = mergeBundles(nearest.loot, bundle);
+      if (relocateOnMerge) {
+        nearest.latched = false;
+        nearest.model.visible = true;
+        nearest.model.position.copy(position);
+        nearest.model.position.x += randomRange(this.random, -0.24, 0.24);
+        nearest.model.position.z += randomRange(this.random, -0.18, 0.18);
+      }
       return nearest;
     }
     inactive.loot = { ...bundle };

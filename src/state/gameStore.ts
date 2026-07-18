@@ -18,6 +18,14 @@ import {
 } from '../game/domain/items';
 import { RECIPES, craftRecipe, type CraftResult, type RecipeId } from '../game/domain/recipes';
 import { INITIAL_SURVIVAL, advanceSurvival, consumeItem, type SurvivalState } from '../game/domain/survival';
+import {
+  RECOVERY_SURVIVAL,
+  createFailureRecord,
+  detectFailureCause,
+  partitionInventoryForFailure,
+  type FailureCause,
+  type FailureRecord,
+} from '../game/domain/failure';
 import type { DeviceType } from '../game/domain/devices';
 import type { IslandPhase } from '../game/domain/island';
 import type { NavigationDeviceType, NavigationRouteMode, NavigationWeatherPhase, SignalArrayStatus } from '../game/domain/navigation';
@@ -41,7 +49,7 @@ import {
   type ResearchSampleId,
 } from '../game/domain/progression';
 
-export type GamePhase = 'title' | 'playing';
+export type GamePhase = 'title' | 'playing' | 'failed';
 export type QualityPreset = 'low' | 'high';
 export type OverlayPanel = 'pack' | 'crafting' | 'research' | 'storage' | null;
 export type FishingPhase = 'idle' | 'casting' | 'waiting' | 'nibble' | 'hooked' | 'caught' | 'lost';
@@ -184,6 +192,7 @@ export interface PlayerSaveSnapshot {
   survival: SurvivalState;
   selectedTool: ToolId;
   playSeconds: number;
+  failure: FailureRecord | null;
 }
 
 interface GameState {
@@ -206,6 +215,7 @@ interface GameState {
   toolDurability: ToolDurability;
   inventorySlots: number;
   survival: SurvivalState;
+  failure: FailureRecord | null;
   player: PlayerFeedback;
   fishing: FishingFeedback;
   shark: SharkFeedback;
@@ -247,7 +257,10 @@ interface GameState {
   craft: (recipeId: RecipeId) => CraftResult;
   useItem: (itemId: ItemId) => boolean;
   tickSurvival: (seconds: number, submerged?: boolean) => void;
-  damagePlayer: (amount: number) => void;
+  damagePlayer: (amount: number, cause?: FailureCause) => void;
+  triggerFailure: (cause: FailureCause) => boolean;
+  markFailureDropSpawned: () => void;
+  recoverPlayer: () => boolean;
   setPlayer: (feedback: PlayerFeedback) => void;
   setFishing: (feedback: Partial<FishingFeedback>) => void;
   setShark: (feedback: Partial<SharkFeedback>) => void;
@@ -371,6 +384,41 @@ function clampAudioMix(current: AudioMix, patch: Partial<AudioMix>): AudioMix {
   };
 }
 
+function createFailurePatch(
+  state: Pick<
+    GameState,
+    'phase' | 'failure' | 'inventory' | 'toolDurability' | 'selectedTool' | 'playSeconds'
+  >,
+  cause: FailureCause,
+  survival: SurvivalState,
+): Partial<GameState> | null {
+  if (state.phase !== 'playing' || state.failure || survival.health > 0) return null;
+  const { retained, dropped } = partitionInventoryForFailure(state.inventory);
+  const selectedTool = itemCount(retained, state.selectedTool) > 0
+    ? state.selectedTool
+    : preferredToolOrder(retained).find((tool) => itemCount(retained, tool) > 0) ?? 'hook';
+  return {
+    phase: 'failed',
+    failure: createFailureRecord(cause, dropped, state.playSeconds),
+    survival,
+    inventory: retained,
+    inventorySlots: usedInventorySlots(retained),
+    selectedTool,
+    toolDurability: normalizeToolDurability(retained, state.toolDurability),
+    pointerLocked: false,
+    pointerLockDenied: false,
+    settingsOpen: false,
+    overlayPanel: null,
+    placementDevice: null,
+    storage: null,
+    hookCharge: 0,
+    fishing: defaultFishing(),
+    interaction: null,
+    interactionOwner: null,
+    notice: null,
+  };
+}
+
 export const useGameStore = create<GameState>((set, get) => ({
   phase: 'title',
   ready: false,
@@ -391,6 +439,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   toolDurability: normalizeToolDurability(STARTING_INVENTORY, null),
   inventorySlots: usedInventorySlots(STARTING_INVENTORY),
   survival: { ...INITIAL_SURVIVAL },
+  failure: null,
   player: defaultPlayer(),
   fishing: defaultFishing(),
   shark: defaultShark(),
@@ -531,14 +580,55 @@ export const useGameStore = create<GameState>((set, get) => ({
     return true;
   },
   tickSurvival: (seconds, submerged = false) =>
-    set((state) => ({ survival: advanceSurvival(state.survival, seconds, submerged) })),
-  damagePlayer: (amount) =>
-    set((state) => ({
-      survival: {
+    set((state) => {
+      const survival = advanceSurvival(state.survival, seconds, submerged);
+      const cause = detectFailureCause(survival, submerged);
+      return cause ? createFailurePatch(state, cause, survival) ?? { survival } : { survival };
+    }),
+  damagePlayer: (amount, directCause = 'injury') =>
+    set((state) => {
+      const survival = {
         ...state.survival,
         health: Math.max(0, state.survival.health - Math.max(0, Number.isFinite(amount) ? amount : 0)),
-      },
-    })),
+      };
+      const cause = detectFailureCause(survival, state.player.submerged, directCause);
+      return cause ? createFailurePatch(state, cause, survival) ?? { survival } : { survival };
+    }),
+  triggerFailure: (cause) => {
+    const state = get();
+    const survival = { ...state.survival, health: 0 };
+    const patch = createFailurePatch(state, cause, survival);
+    if (!patch) return false;
+    set(patch);
+    return true;
+  },
+  markFailureDropSpawned: () =>
+    set((state) => state.failure?.dropPending
+      ? { failure: { ...state.failure, dropPending: false } }
+      : state),
+  recoverPlayer: () => {
+    const state = get();
+    if (!state.failure || state.failure.dropPending) return false;
+    set({
+      phase: 'playing',
+      failure: null,
+      survival: { ...RECOVERY_SURVIVAL },
+      player: defaultPlayer(),
+      fishing: defaultFishing(),
+      shark: defaultShark(),
+      hookCharge: 0,
+      pointerLocked: false,
+      pointerLockDenied: false,
+      settingsOpen: false,
+      overlayPanel: null,
+      placementDevice: null,
+      storage: null,
+      interaction: null,
+      interactionOwner: null,
+      notice: '你在木筏中央醒来，右舷还能找回散落物资',
+    });
+    return true;
+  },
   setPlayer: (player) =>
     set((state) =>
       state.player.surface === player.surface &&
@@ -629,6 +719,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       toolDurability: snapshot.toolDurability,
       inventorySlots: usedInventorySlots(snapshot.inventory),
       survival: snapshot.survival,
+      failure: snapshot.failure,
       selectedTool: snapshot.selectedTool,
       playSeconds: snapshot.playSeconds,
       fishing: defaultFishing(),
@@ -650,6 +741,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       survival: state.survival,
       selectedTool: state.selectedTool,
       playSeconds: state.playSeconds,
+      failure: state.failure,
     };
   },
 }));

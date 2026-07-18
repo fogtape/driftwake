@@ -364,6 +364,24 @@ export class PlayerController {
     this.camera.position.z += deltaZ;
   }
 
+  respawnOnRaft(): void {
+    this.setEnabled(false);
+    this.returnToRaftFallback();
+    this.lookEuler.set(0, 0, 0, 'YXZ');
+    this.lookQuaternion.identity();
+    this.keys.clear();
+    this.jumpQueued = false;
+    this.jumpDiagnostic = 'respawned';
+    this.moveCycle = 0;
+    this.stepDistance = 0;
+    this.shake = 0;
+    this.shakeTime = 0;
+    this.airborneLookIsWorldSpace = false;
+    this.cameraPoseInitialized = false;
+    this.update(0);
+    this.present(1);
+  }
+
   dispose(): void {
     document.removeEventListener('mousemove', this.onMouseMove);
   }

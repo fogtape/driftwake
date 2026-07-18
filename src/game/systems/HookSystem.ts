@@ -103,7 +103,7 @@ export class HookSystem {
 
   setEquipped(equipped: boolean): void {
     this.equipped = equipped;
-    if (!equipped && this.state === 'charging') this.reset();
+    if (!equipped && this.state !== 'idle') this.reset();
     else this.syncHeldVisibility();
   }
 

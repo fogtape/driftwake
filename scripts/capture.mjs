@@ -608,6 +608,37 @@ const signalNetworkSave = {
   },
 };
 
+const failureSave = {
+  ...seededSave,
+  version: 12,
+  player: {
+    ...seededSave.player,
+    inventory: {
+      hook: 1,
+      hammer: 1,
+      timber: 7,
+      polymer: 5,
+      emergencyWater: 1,
+      ration: 1,
+      emptyCup: 1,
+    },
+    survival: { health: 0, thirst: 24, hunger: 37, oxygen: 100 },
+    selectedTool: 'hook',
+    playSeconds: 246,
+    navigation: { surface: 'raft', x: 0.36, z: 0.72 },
+    failure: {
+      cause: 'shark',
+      dropped: { timber: 3, polymer: 2, emergencyWater: 1 },
+      occurredAt: 246,
+      dropPending: true,
+    },
+  },
+  world: {
+    ...seededSave.world,
+    drops: [],
+  },
+};
+
 await mkdir(outputDir, { recursive: true });
 
 const browserRuntime = await launchDriftwakeChromium(chromium, {
@@ -657,7 +688,7 @@ async function openDesktopPage(label, options = {}) {
   if (options.seedSave) {
     await context.addInitScript((save) => {
       localStorage.setItem(`driftwake.save.v${save.version}`, JSON.stringify(save));
-    }, options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
+    }, options.failureStart ? failureSave : options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
   }
   const page = await context.newPage();
   monitorPage(page, label);
@@ -1892,6 +1923,140 @@ async function captureSalvage() {
   await context.close();
 }
 
+async function captureFailureRecovery() {
+  const { context, page } = await openDesktopPage('failure', { seedSave: true, failureStart: true });
+  await page.getByRole('button', { name: '开始漂流', exact: true }).click();
+  await page.locator('.failure-screen.is-visible').waitFor({ timeout: 45_000 });
+  await page.waitForFunction(
+    () => document.querySelector('.game-mount')?.dataset.failureDropPending === 'false',
+    null,
+    { timeout: 8_000 },
+  );
+  const failed = await page.evaluate(() => {
+    const mount = document.querySelector('.game-mount');
+    const content = document.querySelector('.failure-screen__content')?.getBoundingClientRect();
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v12') ?? 'null');
+    return {
+      pointerLocked: Boolean(document.pointerLockElement),
+      simulationActive: mount?.dataset.simulationActive,
+      cause: mount?.dataset.failureCause,
+      pending: mount?.dataset.failureDropPending,
+      dropCount: mount?.dataset.failureDropCount,
+      worldDropCount: mount?.dataset.worldDropCount,
+      content: content ? { left: content.left, top: content.top, right: content.right, bottom: content.bottom } : null,
+      viewport: { width: innerWidth, height: innerHeight },
+      saved,
+    };
+  });
+  const savedDrop = failed.saved?.world?.drops?.[0];
+  if (
+    failed.pointerLocked
+    || failed.simulationActive !== 'false'
+    || failed.cause !== 'shark'
+    || failed.pending !== 'false'
+    || failed.dropCount !== '6'
+    || failed.worldDropCount !== '1'
+    || failed.saved?.player?.failure?.dropPending !== false
+    || savedDrop?.loot?.timber !== 3
+    || savedDrop?.loot?.polymer !== 2
+    || savedDrop?.loot?.emergencyWater !== 1
+  ) {
+    throw new Error(`Failure settlement gate failed: ${JSON.stringify(failed)}`);
+  }
+  if (
+    !failed.content
+    || failed.content.left < 0
+    || failed.content.top < 0
+    || failed.content.right > failed.viewport.width
+    || failed.content.bottom > failed.viewport.height
+  ) {
+    throw new Error(`Failure controls overflow the viewport: ${JSON.stringify(failed)}`);
+  }
+  await page.getByText('工具、筏体设备与研究进度均已保留', { exact: true }).waitFor();
+  await page.getByText('已生成可打捞标记', { exact: true }).waitFor();
+  console.log(`Failure settlement: ${JSON.stringify({
+    cause: failed.cause,
+    dropCount: failed.dropCount,
+    worldDropCount: failed.worldDropCount,
+    savedDrop,
+  })}`);
+  if (process.env.CAPTURE_FAST !== '1') {
+    await page.screenshot({ path: new URL('failure-desktop.png', outputDir).pathname, timeout: 90_000 });
+  }
+
+  const recoveryCommand = await page.evaluate(() => {
+    const button = [...document.querySelectorAll('button')]
+      .find((candidate) => candidate.textContent?.trim() === '回到木筏');
+    return {
+      found: button instanceof HTMLButtonElement,
+      disabled: button instanceof HTMLButtonElement ? button.disabled : true,
+      contextHealthy: document.querySelector('.game-mount')?.dataset.contextHealthy ?? 'missing',
+    };
+  });
+  if (!recoveryCommand.found || recoveryCommand.disabled || recoveryCommand.contextHealthy !== 'true') {
+    throw new Error(`Recovery command unavailable before activation: ${JSON.stringify(recoveryCommand)}`);
+  }
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('button')]
+      .find((candidate) => candidate.textContent?.trim() === '回到木筏');
+    if (!(button instanceof HTMLButtonElement)) throw new Error('Recovery command is missing');
+    button.click();
+  });
+  try {
+    await page.locator('.failure-screen').waitFor({ state: 'detached', timeout: 8_000 });
+    await page.waitForFunction(() => {
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v12') ?? 'null');
+      return saved?.player?.failure === null && saved?.player?.navigation?.surface === 'raft';
+    }, null, { timeout: 8_000 });
+  } catch (error) {
+    const diagnostic = await page.evaluate(() => {
+      const mount = document.querySelector('.game-mount');
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v12') ?? 'null');
+      return {
+        contextHealthy: mount?.dataset.contextHealthy,
+        simulationActive: mount?.dataset.simulationActive,
+        failureVisible: document.querySelector('.failure-screen')?.classList.contains('is-visible') ?? false,
+        recoveryText: [...document.querySelectorAll('button')]
+          .find((button) => button.textContent?.includes('木筏') || button.textContent?.includes('海况'))
+          ?.textContent?.trim() ?? 'missing',
+        savedFailure: saved?.player?.failure ?? 'missing',
+        savedNavigation: saved?.player?.navigation ?? 'missing',
+      };
+    }).catch(() => ({ rendererExited: true }));
+    throw new Error(`Recovery transition failed: ${JSON.stringify(diagnostic)}`, { cause: error });
+  }
+  const recovered = await page.evaluate(() => {
+    const mount = document.querySelector('.game-mount');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v12') ?? 'null');
+    return {
+      failureCause: mount?.dataset.failureCause,
+      worldDropCount: mount?.dataset.worldDropCount,
+      survival: saved?.player?.survival,
+      navigation: saved?.player?.navigation,
+      dropped: saved?.world?.drops?.[0]?.loot,
+    };
+  });
+  if (
+    recovered.failureCause !== 'none'
+    || recovered.worldDropCount !== '1'
+    || recovered.survival?.health !== 62
+    || recovered.survival?.thirst !== 44
+    || recovered.survival?.hunger !== 48
+    || recovered.navigation?.surface !== 'raft'
+    || Math.abs(recovered.navigation?.x ?? 99) > 0.01
+    || Math.abs((recovered.navigation?.z ?? 99) - 1.08) > 0.01
+    || recovered.dropped?.timber !== 3
+  ) {
+    throw new Error(`Failure recovery gate failed: ${JSON.stringify(recovered)}`);
+  }
+  await page.getByRole('button', { name: '继续漂流', exact: true }).waitFor({ timeout: 8_000 });
+  if (process.env.CAPTURE_FAST !== '1') {
+    await page.screenshot({ path: new URL('failure-recovered-desktop.png', outputDir).pathname, timeout: 90_000 });
+  }
+  console.log(`Failure recovery: ${JSON.stringify(recovered)}`);
+  await context.close();
+}
+
 async function captureMobile() {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -1912,6 +2077,7 @@ try {
   if (captureOnly === 'all' || captureOnly === 'pause') await capturePause();
   if (captureOnly === 'all' || captureOnly === 'hook') await captureHook();
   if (captureOnly === 'all' || captureOnly === 'salvage') await captureSalvage();
+  if (captureOnly === 'all' || captureOnly === 'failure') await captureFailureRecovery();
   if (captureOnly === 'all' || captureOnly === 'pack') await capturePack();
   if (captureOnly === 'all' || captureOnly === 'crafting') await captureCrafting();
   if (captureOnly === 'all' || captureOnly === 'settings') await captureSettings();

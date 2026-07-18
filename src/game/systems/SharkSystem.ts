@@ -272,7 +272,7 @@ export class SharkSystem {
 
   private performPlayerBite(): void {
     const store = useGameStore.getState();
-    store.damagePlayer(18);
+    store.damagePlayer(18, 'shark');
     this.audio.playPlayerBite();
     this.splashes.spawnImpact(this.playerWorld, 0xb74f45, 28);
     this.player.applyWaterImpulse(this.model.position, 2.65);

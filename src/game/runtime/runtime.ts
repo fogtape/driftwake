@@ -15,7 +15,7 @@ export interface FixedStepResult {
 }
 
 export interface SimulationGateState {
-  phase: 'title' | 'playing';
+  phase: 'title' | 'playing' | 'failed';
   ready: boolean;
   pointerLocked: boolean;
   settingsOpen: boolean;

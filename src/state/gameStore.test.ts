@@ -7,6 +7,8 @@ describe('game store item use', () => {
   beforeEach(() => {
     const inventory = { freshWaterCup: 1 } as const;
     useGameStore.setState({
+      phase: 'playing',
+      failure: null,
       inventory,
       toolDurability: normalizeToolDurability(inventory, null),
       inventorySlots: usedInventorySlots(inventory),
@@ -30,6 +32,41 @@ describe('game store item use', () => {
     expect(useGameStore.getState().survival.oxygen).toBeCloseTo(94.9);
     useGameStore.getState().damagePlayer(18);
     expect(useGameStore.getState().survival.health).toBe(52);
+  });
+
+  it('settles a shark failure once and only recovers after the world drop exists', () => {
+    const inventory = { hook: 1, hammer: 1, timber: 10, emergencyWater: 2, ration: 1 } as const;
+    useGameStore.setState({
+      inventory,
+      inventorySlots: usedInventorySlots(inventory),
+      toolDurability: normalizeToolDurability(inventory, null),
+      selectedTool: 'hook',
+      survival: { health: 12, thirst: 40, hunger: 50, oxygen: 100 },
+      playSeconds: 91,
+    });
+
+    useGameStore.getState().damagePlayer(20, 'shark');
+    let state = useGameStore.getState();
+    expect(state.phase).toBe('failed');
+    expect(state.failure).toEqual({
+      cause: 'shark',
+      dropped: { timber: 3, emergencyWater: 1 },
+      occurredAt: 91,
+      dropPending: true,
+    });
+    expect(state.inventory).toEqual({ hook: 1, hammer: 1, timber: 7, emergencyWater: 1, ration: 1 });
+    expect(state.recoverPlayer()).toBe(false);
+
+    state.markFailureDropSpawned();
+    expect(useGameStore.getState().failure?.dropPending).toBe(false);
+    expect(useGameStore.getState().recoverPlayer()).toBe(true);
+    state = useGameStore.getState();
+    expect(state).toMatchObject({
+      phase: 'playing',
+      failure: null,
+      survival: { health: 62, thirst: 44, hunger: 48, oxygen: 100 },
+      player: { surface: 'raft', depth: 0, submerged: false },
+    });
   });
 
   it('prevents an inactive system from clearing another system interaction', () => {

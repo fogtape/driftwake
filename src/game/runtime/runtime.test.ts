@@ -68,6 +68,7 @@ describe('isSimulationActive', () => {
     expect(isSimulationActive(active)).toBe(true);
     for (const patch of [
       { phase: 'title' as const },
+      { phase: 'failed' as const },
       { ready: false },
       { pointerLocked: false },
       { settingsOpen: true },

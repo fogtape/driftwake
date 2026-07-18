@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CapabilityScreen } from './components/CapabilityScreen';
 import { FieldPackPanel } from './components/FieldPackPanel';
+import { FailureScreen } from './components/FailureScreen';
 import { Hud } from './components/Hud';
 import { SettingsPanel } from './components/SettingsPanel';
 import { TitleScreen } from './components/TitleScreen';
@@ -45,6 +46,7 @@ export function App() {
   const toolDurability = useGameStore((state) => state.toolDurability);
   const inventorySlots = useGameStore((state) => state.inventorySlots);
   const survival = useGameStore((state) => state.survival);
+  const failure = useGameStore((state) => state.failure);
   const player = useGameStore((state) => state.player);
   const fishing = useGameStore((state) => state.fishing);
   const shark = useGameStore((state) => state.shark);
@@ -121,6 +123,10 @@ export function App() {
   const begin = async () => {
     const store = useGameStore.getState();
     if (gameRef.current) {
+      if (store.failure) {
+        store.setPhase('failed');
+        return;
+      }
       store.setPhase('playing');
       if (store.ready) gameRef.current.begin();
       else store.showNotice('图形上下文仍在恢复');
@@ -140,7 +146,8 @@ export function App() {
       await game.initialize();
       if (!mountedRef.current || gameRef.current !== game) return;
       if (!useGameStore.getState().ready) throw new Error('game initialization completed without becoming ready');
-      useGameStore.getState().setPhase('playing');
+      const initializedStore = useGameStore.getState();
+      initializedStore.setPhase(initializedStore.failure ? 'failed' : 'playing');
     } catch (error) {
       console.error('Failed to load Driftwake game module', error);
       game?.dispose();
@@ -242,6 +249,15 @@ export function App() {
     showTransientNotice(learned ? `${RESEARCH_PROJECTS[projectId].name} 已写入制作记录` : '研究样本尚未齐全');
     return learned;
   };
+  const recoverFromFailure = () => {
+    const game = gameRef.current;
+    if (!game) return;
+    const recovered = game.recoverFromFailure();
+    if (!recovered) {
+      game.playUi(false);
+      return;
+    }
+  };
 
   return (
     <main className="app-shell">
@@ -284,6 +300,13 @@ export function App() {
         onToggleAudio={() => changeAudio(!audioEnabled)}
         onSelectTool={selectTool}
         onOpenPack={() => openPack('pack')}
+      />
+      <FailureScreen
+        visible={phase === 'failed' && !settingsOpen}
+        ready={ready}
+        failure={failure}
+        onRecover={recoverFromFailure}
+        onSettings={openSettings}
       />
       <FieldPackPanel
         panel={overlayPanel}

@@ -1064,6 +1064,259 @@ button:focus-visible {
   font-weight: 600;
 }
 
+.failure-screen {
+  --failure-accent: #df795f;
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  overflow: hidden;
+  color: #edf5f1;
+  background: rgba(3, 13, 17, 0.36);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  backdrop-filter: blur(2px) saturate(0.72);
+  transition: opacity 360ms ease, visibility 0s linear 360ms;
+}
+
+.failure-screen--drowning { --failure-accent: #6fc2ca; }
+.failure-screen--dehydration { --failure-accent: #72b7c7; }
+.failure-screen--starvation { --failure-accent: #d4ad63; }
+.failure-screen--shark { --failure-accent: #e56d55; }
+
+.failure-screen.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 360ms ease;
+}
+
+.failure-screen__wash {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(3, 13, 17, 0.94) 0%, rgba(3, 13, 17, 0.84) 34%, rgba(3, 13, 17, 0.24) 72%, rgba(3, 13, 17, 0.36) 100%),
+    linear-gradient(0deg, rgba(3, 13, 17, 0.82) 0%, rgba(3, 13, 17, 0) 48%);
+  box-shadow: inset 0 0 190px rgba(2, 8, 11, 0.5);
+}
+
+.failure-screen__header {
+  position: absolute;
+  top: max(22px, env(safe-area-inset-top));
+  right: max(26px, env(safe-area-inset-right));
+  left: max(30px, env(safe-area-inset-left));
+  display: flex;
+  height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  color: rgba(218, 233, 228, 0.66);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.failure-screen__header > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.failure-screen__header > span svg { color: var(--failure-accent); }
+
+.failure-screen__header button {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  color: #d8e6e2;
+  border: 1px solid rgba(218, 233, 228, 0.28);
+  border-radius: 4px;
+  background: rgba(7, 27, 32, 0.72);
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease;
+}
+
+.failure-screen__header button:hover {
+  color: #fff1c9;
+  border-color: rgba(239, 195, 92, 0.58);
+  background: rgba(17, 45, 50, 0.9);
+}
+
+.failure-screen__content {
+  position: absolute;
+  top: 50%;
+  left: max(7%, env(safe-area-inset-left));
+  display: grid;
+  width: min(570px, calc(100% - 64px));
+  transform: translateY(-48%);
+}
+
+.failure-screen__cause {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 18px;
+  place-items: center;
+  color: var(--failure-accent);
+  border: 1px solid color-mix(in srgb, var(--failure-accent) 58%, transparent);
+  border-radius: 4px;
+  background: rgba(8, 25, 29, 0.72);
+  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--failure-accent) 72%, transparent), 0 10px 28px rgba(0, 0, 0, 0.24);
+}
+
+.failure-screen__eyebrow {
+  margin: 0 0 6px;
+  color: var(--failure-accent);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.failure-screen h1 {
+  margin: 0;
+  color: #f5f7f3;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 52px;
+  font-weight: 700;
+  line-height: 0.98;
+  text-shadow: 0 6px 28px rgba(0, 0, 0, 0.52);
+}
+
+.failure-screen__detail {
+  max-width: 520px;
+  margin: 13px 0 0;
+  color: #b7c9c4;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.failure-screen__rule {
+  width: 100%;
+  height: 1px;
+  margin: 21px 0 16px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--failure-accent) 70%, transparent), rgba(208, 227, 221, 0.14) 45%, transparent);
+}
+
+.failure-screen__salvage { display: grid; gap: 11px; }
+
+.failure-screen__salvage > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.failure-screen__salvage > header > svg { color: var(--failure-accent); }
+.failure-screen__salvage > header > div { display: grid; gap: 1px; }
+.failure-screen__salvage h2 {
+  margin: 0;
+  color: #e7efeb;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+}
+.failure-screen__salvage header span { color: #839c98; font-size: 10px; }
+
+.failure-screen__loot {
+  display: flex;
+  min-height: 44px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.failure-loot {
+  display: grid;
+  min-width: 126px;
+  height: 42px;
+  grid-template-columns: 25px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  color: var(--failure-item-tone);
+  border-left: 2px solid var(--failure-item-tone);
+  border-radius: 2px;
+  background: rgba(8, 29, 34, 0.76);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.16);
+}
+
+.failure-loot span {
+  overflow: hidden;
+  color: #becdc8;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.failure-loot strong { color: #f1ddaa; font-family: 'Barlow Condensed', sans-serif; font-size: 13px; }
+.failure-screen__no-loss { color: #a3b8b3; font-size: 12px; }
+
+.failure-screen__retained {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 13px;
+  color: #9fc7b4;
+  font-size: 11px;
+}
+
+.failure-screen__retained svg { flex: 0 0 auto; color: #73c39e; }
+
+.failure-screen__recovery {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-top: 18px;
+  color: #a6b9b5;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px;
+}
+
+.failure-screen__recovery > span {
+  padding-right: 13px;
+  border-right: 1px solid rgba(218, 233, 228, 0.18);
+  color: #7f9995;
+}
+
+.failure-screen__recovery strong { color: #d9e6e2; font-size: 12px; font-weight: 600; }
+
+.failure-screen__recover {
+  display: inline-flex;
+  width: 190px;
+  height: 50px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 21px;
+  color: #102024;
+  border: 0;
+  border-radius: 4px;
+  background: var(--failure-accent);
+  font-weight: 800;
+  cursor: pointer;
+  transition: filter 150ms ease, transform 150ms ease;
+}
+
+.failure-screen__recover:hover:not(:disabled) { filter: brightness(1.12); transform: translateY(-1px); }
+.failure-screen__recover:disabled { color: rgba(225, 237, 232, 0.58); background: #52635f; cursor: wait; }
+
+.failure-screen__footer {
+  position: absolute;
+  right: max(28px, env(safe-area-inset-right));
+  bottom: max(22px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: rgba(211, 226, 221, 0.46);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.failure-screen__footer i { width: 3px; height: 3px; border-radius: 50%; background: var(--failure-accent); }
+
 .modal-layer {
   position: absolute;
   inset: 0;
@@ -1601,6 +1854,18 @@ button:focus-visible {
 }
 
 @media (max-width: 640px) {
+  .failure-screen__wash {
+    background: linear-gradient(0deg, rgba(3, 13, 17, 0.88) 0%, rgba(3, 13, 17, 0.66) 100%);
+  }
+  .failure-screen__header { right: 14px; left: 14px; }
+  .failure-screen__header > span { font-size: 10px; }
+  .failure-screen__content { left: 20px; width: calc(100% - 40px); }
+  .failure-screen h1 { font-size: 40px; }
+  .failure-screen__detail { font-size: 13px; }
+  .failure-loot { min-width: 112px; }
+  .failure-screen__recovery { gap: 8px; }
+  .failure-screen__recovery > span { padding-right: 8px; }
+  .failure-screen__footer { display: none; }
   .resource-strip { top: 12px; left: 12px; height: 40px; }
   .resource-readout { min-width: 49px; gap: 5px; padding: 0 6px; }
   .resource-pack-button { width: 40px; }
@@ -1674,6 +1939,14 @@ button:focus-visible {
   .focus-prompt__mark { width: 40px; height: 40px; margin-bottom: 12px; }
   .focus-prompt__content h2 { font-size: 36px; }
   .focus-prompt__actions { margin-top: 18px; }
+  .failure-screen__content { transform: translateY(-45%); }
+  .failure-screen__cause { width: 40px; height: 40px; margin-bottom: 10px; }
+  .failure-screen h1 { font-size: 38px; }
+  .failure-screen__detail { margin-top: 8px; line-height: 1.4; }
+  .failure-screen__rule { margin: 13px 0 10px; }
+  .failure-screen__retained { margin-top: 8px; }
+  .failure-screen__recovery { margin-top: 10px; }
+  .failure-screen__recover { height: 44px; margin-top: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

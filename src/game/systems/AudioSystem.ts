@@ -4,6 +4,7 @@ import type { HarvestNodeType } from '../domain/island';
 import type { PlayerSurface } from '../domain/save';
 import type { ReefNodeType } from '../domain/underwater';
 import type { DebrisKind } from '../art/ProceduralModels';
+import type { FailureCause } from '../domain/failure';
 
 export interface AudioPosition {
   x: number;
@@ -1084,6 +1085,51 @@ export class AudioSystem {
     oscillator.connect(gain).connect(this.creatures);
     oscillator.start(now);
     oscillator.stop(now + 0.25);
+  }
+
+  playFailure(cause: FailureCause): void {
+    if (!this.context || !this.effects) return;
+    const target = cause === 'shark' ? this.creatures ?? this.effects : this.effects;
+    const underwater = cause === 'drowning';
+    this.noiseBurstTo(underwater ? 1.15 : 0.72, underwater ? 210 : 430, underwater ? 0.075 : 0.055, 'lowpass', target);
+    if (cause === 'dehydration' || cause === 'starvation') {
+      this.noiseBurstTo(0.46, cause === 'dehydration' ? 1120 : 690, 0.028, 'bandpass', this.effects);
+    }
+    const now = this.context.currentTime;
+    [0, 0.2].forEach((offset, index) => {
+      const oscillator = this.context!.createOscillator();
+      const filter = this.context!.createBiquadFilter();
+      const gain = this.context!.createGain();
+      oscillator.type = index === 0 ? 'triangle' : 'sine';
+      oscillator.frequency.setValueAtTime(index === 0 ? 112 : 226, now + offset);
+      oscillator.frequency.exponentialRampToValueAtTime(index === 0 ? 39 : 84, now + 1.08 + offset);
+      filter.type = 'lowpass';
+      filter.frequency.value = underwater ? 280 : 520;
+      gain.gain.setValueAtTime(index === 0 ? 0.07 : 0.025, now + offset);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.12 + offset);
+      oscillator.connect(filter).connect(gain).connect(target);
+      oscillator.start(now + offset);
+      oscillator.stop(now + 1.15 + offset);
+    });
+  }
+
+  playRecovery(): void {
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    [196, 294, 440].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + index * 0.11;
+      oscillator.type = index === 2 ? 'sine' : 'triangle';
+      oscillator.frequency.setValueAtTime(frequency, start);
+      oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.08, start + 0.3);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.034, start + 0.035);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.44);
+      oscillator.connect(gain).connect(this.effects!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.46);
+    });
   }
 
   dispose(): void {

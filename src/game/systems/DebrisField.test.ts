@@ -62,6 +62,19 @@ describe('DebrisField salvage settlement', () => {
     expect(totalTimber).toBe(9);
   });
 
+  it('relocates a recovery merge so full pools still leave failure loot at the marked position', () => {
+    const field = new DebrisField(new Scene(), createSalvageMaterials(), 0);
+    for (let index = 0; index < 8; index += 1) {
+      field.spawnWorldDrop({ polymer: 1 }, new Vector3(index * 2, 0, -8));
+    }
+    const recovery = field.spawnWorldDrop({ timber: 3 }, new Vector3(30, 0.2, 4), true);
+    expect(recovery?.loot).toMatchObject({ polymer: 1, timber: 3 });
+    expect(recovery?.model.position.x).toBeGreaterThan(29.7);
+    expect(recovery?.model.position.x).toBeLessThan(30.3);
+    expect(recovery?.model.position.z).toBeGreaterThan(3.7);
+    expect(recovery?.model.position.z).toBeLessThan(4.3);
+  });
+
   it('keeps a full debris pool finite through 600 simulated seconds', () => {
     const field = new DebrisField(new Scene(), createSalvageMaterials(), 30);
     const step = 1 / 60;

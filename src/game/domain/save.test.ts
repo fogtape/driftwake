@@ -37,7 +37,7 @@ describe('save schema', () => {
   });
 
   it('rejects unsupported versions and provides a stable starting raft', () => {
-    expect(sanitizeSave({ version: 12 })).toBeNull();
+    expect(sanitizeSave({ version: 13 })).toBeNull();
     expect(createDefaultRaftTiles()).toHaveLength(9);
   });
 
@@ -63,8 +63,8 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v11');
-    expect(save?.version).toBe(11);
+    expect(SAVE_KEY).toBe('driftwake.save.v12');
+    expect(save?.version).toBe(12);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
     expect(save?.world.island.phase).toBe('approaching');
@@ -393,7 +393,7 @@ describe('save schema', () => {
         },
       },
     });
-    expect(save?.version).toBe(11);
+    expect(save?.version).toBe(12);
     expect(save?.raft.navigation).toMatchObject({
       worldX: 123.5,
       worldZ: -88.25,
@@ -429,5 +429,31 @@ describe('save schema', () => {
     expect(save?.world.drops).toEqual([
       { loot: { timber: 2, polymer: 1 }, x: 36, y: -4, z: -120 },
     ]);
+    expect(save?.player.failure).toBeNull();
+  });
+
+  it('restores a v12 failure once and sanitizes its recoverable loot', () => {
+    const save = sanitizeSave({
+      version: 12,
+      player: {
+        inventory: { hook: 1, ration: 1 },
+        survival: { health: 0, thirst: 9, hunger: 20, oxygen: 100 },
+        selectedTool: 'hook',
+        playSeconds: 44,
+        failure: {
+          cause: 'shark',
+          dropped: { timber: 2.9, polymer: 1, madeUp: 20 },
+          occurredAt: 43.8,
+          dropPending: true,
+        },
+      },
+      raft: { tiles: [{ x: 0, z: 0, health: 100 }], devices: [] },
+    });
+    expect(save?.player.failure).toEqual({
+      cause: 'shark',
+      dropped: { timber: 2, polymer: 1 },
+      occurredAt: 43,
+      dropPending: true,
+    });
   });
 });

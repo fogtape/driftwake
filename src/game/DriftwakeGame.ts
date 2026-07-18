@@ -36,6 +36,7 @@ import { createDefaultUnderwaterState } from './domain/underwater';
 import { createDefaultNavigationState } from './domain/navigation';
 import { createDefaultPlantingState } from './domain/planting';
 import { createDefaultProgressionState, type ProgressionDeviceType } from './domain/progression';
+import type { FailureRecord } from './domain/failure';
 import type { CameraMotionMode } from './domain/settings';
 import { AudioSystem } from './systems/AudioSystem';
 import { BuildSystem } from './systems/BuildSystem';
@@ -47,7 +48,7 @@ import { IslandSystem } from './systems/IslandSystem';
 import { OceanSystem } from './systems/OceanSystem';
 import { PhysicsSystem } from './systems/PhysicsSystem';
 import { PlayerController } from './systems/PlayerController';
-import { RaftSystem } from './systems/RaftSystem';
+import { RAFT_TILE_X, RAFT_TILE_Z, RaftSystem } from './systems/RaftSystem';
 import { SalvageSystem } from './systems/SalvageSystem';
 import { SharkSystem } from './systems/SharkSystem';
 import { SpearSystem } from './systems/SpearSystem';
@@ -66,6 +67,7 @@ import {
   type DynamicResolutionState,
 } from './runtime/dynamicResolution';
 import { sampleDayCycle, sampleEnvironmentLighting } from './environment/environment';
+import { sampleWaveHeight } from './math/waves';
 
 const DYNAMIC_RESOLUTION_POLICIES: Record<QualityPreset, DynamicResolutionPolicy> = {
   high: {
@@ -141,6 +143,8 @@ export class DriftwakeGame {
   private readonly audioForward = new Vector3();
   private readonly audioUp = new Vector3();
   private readonly audioQuaternion = new Quaternion();
+  private readonly failureDropLocal = new Vector3();
+  private readonly failureDropWorld = new Vector3();
   private environmentBlend = 0;
   private stormBlend = 0;
   private elapsed = 0;
@@ -191,6 +195,9 @@ export class DriftwakeGame {
     this.mount.dataset.hookRopeSag = '0';
     this.mount.dataset.salvageFocus = 'none';
     this.mount.dataset.worldDropCount = '0';
+    this.mount.dataset.failureCause = 'none';
+    this.mount.dataset.failureDropPending = 'false';
+    this.mount.dataset.failureDropCount = '0';
     this.mount.dataset.sailAttachment = 'missing';
     this.mount.dataset.islandRaftClearance = '0';
     this.audio.setMix(useGameStore.getState().audioMix);
@@ -422,6 +429,16 @@ export class DriftwakeGame {
           if (state.selectedTool !== previous.selectedTool) this.audio.playEquip();
           this.syncEquipment();
         }
+        if (state.phase === 'failed' && previous.phase !== 'failed' && state.failure) {
+          this.pauseInput();
+          if (state.audioEnabled) {
+            void this.audio.begin().then(() => this.audio.playFailure(state.failure!.cause)).catch(() => undefined);
+          }
+        }
+        if (state.failure !== previous.failure) {
+          this.syncFailureDiagnostics(state.failure);
+          if (this.initialized && state.failure?.dropPending) this.settlePendingFailureDrop(state.failure);
+        }
       });
       this.syncEquipment();
 
@@ -444,6 +461,8 @@ export class DriftwakeGame {
       this.initialized = true;
       store.setReady(!this.contextLost);
       store.setLoadingLabel('海况稳定');
+      this.syncFailureDiagnostics(useGameStore.getState().failure);
+      this.settlePendingFailureDrop(useGameStore.getState().failure);
     } catch (error) {
       console.error('Failed to initialize Driftwake', error);
       store.setLoadingLabel('初始化失败');
@@ -452,7 +471,7 @@ export class DriftwakeGame {
   }
 
   begin(): void {
-    if (!useGameStore.getState().ready) return;
+    if (!useGameStore.getState().ready || useGameStore.getState().phase === 'failed') return;
     this.devices?.closeStorage();
     useGameStore.getState().setOverlayPanel(null);
     useGameStore.getState().setSettingsOpen(false);
@@ -461,6 +480,18 @@ export class DriftwakeGame {
     this.syncAudioFocusMuted();
     void this.audio.begin();
     this.requestInputLock();
+  }
+
+  recoverFromFailure(): boolean {
+    const store = useGameStore.getState();
+    if (!store.ready || !store.failure || store.failure.dropPending || !this.player) return false;
+    this.pauseInput();
+    if (!store.recoverPlayer()) return false;
+    this.player.respawnOnRaft();
+    this.syncEquipment();
+    if (store.audioEnabled) void this.audio.begin().then(() => this.audio.playRecovery()).catch(() => undefined);
+    this.saveNow();
+    return true;
   }
 
   pauseInput(): void {
@@ -628,6 +659,7 @@ export class DriftwakeGame {
   }
 
   private readonly stepSimulation = (stepSeconds: number, simulationSeconds: number): void => {
+    if (useGameStore.getState().phase !== 'playing') return;
     this.simulationTickCount += 1;
     this.elapsed = simulationSeconds;
     this.raft?.update(simulationSeconds, stepSeconds);
@@ -938,6 +970,7 @@ export class DriftwakeGame {
     const state = useGameStore.getState();
     const inputEnabled =
       state.phase === 'playing' && state.pointerLocked && !state.settingsOpen && state.overlayPanel === null;
+    const equipmentVisible = state.phase === 'playing';
     const placingDevice = state.placementDevice !== null;
     const onRaft = this.player?.isOnRaft() ?? true;
     const surface = this.player?.getSurface() ?? 'raft';
@@ -972,21 +1005,54 @@ export class DriftwakeGame {
     this.progression?.setPlacementType(progressionPlacement);
     this.progression?.setInputEnabled(inputEnabled && onRaft);
     this.salvage?.setInputEnabled(inputEnabled && !placingDevice && (onRaft || (inWater && !(this.player?.isSubmerged() ?? false))));
-    this.hook?.setEquipped(selectedToolAvailable && onRaft && !placingDevice && state.selectedTool === 'hook');
+    this.hook?.setEquipped(equipmentVisible && selectedToolAvailable && onRaft && !placingDevice && state.selectedTool === 'hook');
     this.hook?.setEnabled(selectedToolAvailable && inputEnabled && onRaft && !placingDevice && state.selectedTool === 'hook');
-    this.underwater?.setHookEquipped(selectedToolAvailable && inWater && !placingDevice && state.selectedTool === 'hook');
-    this.build?.setEquipped(selectedToolAvailable && onRaft && !placingDevice && state.selectedTool === 'hammer');
+    this.underwater?.setHookEquipped(equipmentVisible && selectedToolAvailable && inWater && !placingDevice && state.selectedTool === 'hook');
+    this.build?.setEquipped(equipmentVisible && selectedToolAvailable && onRaft && !placingDevice && state.selectedTool === 'hammer');
     this.build?.setInputEnabled(selectedToolAvailable && inputEnabled && onRaft && !placingDevice && state.selectedTool === 'hammer');
-    this.fishing?.setEquipped(selectedToolAvailable && onRaft && !placingDevice && state.selectedTool === 'fishingRod');
+    this.fishing?.setEquipped(equipmentVisible && selectedToolAvailable && onRaft && !placingDevice && state.selectedTool === 'fishingRod');
     this.fishing?.setInputEnabled(selectedToolAvailable && inputEnabled && onRaft && !placingDevice && state.selectedTool === 'fishingRod');
     const spearEquipped = selectedToolAvailable && (state.selectedTool === 'spear' || state.selectedTool === 'metalSpear');
     const axeEquipped = selectedToolAvailable && (state.selectedTool === 'axe' || state.selectedTool === 'metalAxe');
-    this.spear?.setEquipped((onRaft || inWater) && !placingDevice && spearEquipped, state.selectedTool === 'metalSpear');
+    this.spear?.setEquipped(equipmentVisible && (onRaft || inWater) && !placingDevice && spearEquipped, state.selectedTool === 'metalSpear');
     this.spear?.setInputEnabled(inputEnabled && (onRaft || inWater) && !placingDevice && spearEquipped);
-    this.island?.setAxeEquipped(onIsland && !placingDevice && axeEquipped, state.selectedTool === 'metalAxe');
+    this.island?.setAxeEquipped(equipmentVisible && onIsland && !placingDevice && axeEquipped, state.selectedTool === 'metalAxe');
     this.island?.setInputEnabled(inputEnabled);
     this.underwater?.setInputEnabled(inputEnabled);
     this.player?.setEnabled(inputEnabled);
+  }
+
+  private syncFailureDiagnostics(failure: FailureRecord | null): void {
+    this.mount.dataset.failureCause = failure?.cause ?? 'none';
+    this.mount.dataset.failureDropPending = String(failure?.dropPending ?? false);
+    this.mount.dataset.failureDropCount = String(
+      failure ? Object.values(failure.dropped).reduce((total, amount) => total + (amount ?? 0), 0) : 0,
+    );
+  }
+
+  private settlePendingFailureDrop(failure: FailureRecord | null): void {
+    if (!failure?.dropPending || !this.raft || !this.debris) return;
+    const tiles = this.raft.getTiles();
+    if (tiles.length === 0) return;
+    const rightmost = tiles.reduce((best, tile) => {
+      if (tile.x !== best.x) return tile.x > best.x ? tile : best;
+      return Math.abs(tile.z) < Math.abs(best.z) ? tile : best;
+    });
+    this.failureDropLocal.set(
+      rightmost.x * RAFT_TILE_X + RAFT_TILE_X * 0.92,
+      0,
+      rightmost.z * RAFT_TILE_Z,
+    );
+    this.raft.localPointToWorld(this.failureDropLocal, this.failureDropWorld);
+    this.failureDropWorld.y = sampleWaveHeight(
+      this.failureDropWorld.x,
+      this.failureDropWorld.z,
+      this.fixedStep.simulationSeconds,
+    ) + 0.09;
+    if (!this.debris.spawnWorldDrop(failure.dropped, this.failureDropWorld, true)) return;
+    useGameStore.getState().markFailureDropSpawned();
+    this.mount.dataset.worldDropCount = String(this.debris.activeWorldDropCount);
+    this.saveNow();
   }
 
   private saveNow(): void {
