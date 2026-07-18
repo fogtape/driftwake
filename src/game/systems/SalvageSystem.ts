@@ -137,7 +137,7 @@ export class SalvageSystem {
       this.showNotice('背包已满，物资仍留在水面');
       return;
     }
-    this.audio.playSalvagePickup(result.kind);
+    this.audio.playSalvagePickup(result.kind, this.targetPosition);
     this.splashes.spawnImpact(this.targetPosition, result.kind === 'cache' ? 0xefc35c : 0x83d8ca, result.kind === 'cache' ? 18 : 10);
     this.showNotice(rejected ? `${acceptedLabel} · 剩余物资留在水面` : acceptedLabel);
     this.focused = null;

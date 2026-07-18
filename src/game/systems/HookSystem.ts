@@ -11,22 +11,33 @@ import {
   type WebGLRenderer,
 } from 'three';
 import type { MaterialLibrary } from '../art/Materials';
-import { createHookModel, type DebrisKind } from '../art/ProceduralModels';
+import { createSalvageHandsRig, type SalvageHandsRig } from '../art/FirstPersonModels';
 import { bundleLabel } from '../domain/items';
 import { sampleWaveHeight } from '../math/waves';
+import {
+  HOOK_ROPE_SEGMENTS,
+  createHookHandPose,
+  sampleHookHandPose,
+  sampleHookRopeTension,
+  writeHookRopeCurve,
+  type HookPresentationState,
+} from '../presentation/hookPresentation';
 import { useGameStore } from '../../state/gameStore';
 import type { AudioSystem } from './AudioSystem';
 import type { DebrisField, SalvageTarget } from './DebrisField';
 import { claimSalvageTarget } from './SalvageSystem';
 import type { SplashSystem } from './SplashSystem';
 
-export type HookState = 'idle' | 'charging' | 'flying' | 'latched' | 'retracting';
+export type HookState = HookPresentationState;
 
 export interface HookVisualState {
   state: HookState;
   heldVisible: boolean;
+  handsVisible: boolean;
   projectileVisible: boolean;
   ropeVisible: boolean;
+  ropeTension: number;
+  ropeSag: number;
 }
 
 export function shouldShowHeldHook(state: HookState, equipped: boolean): boolean {
@@ -34,7 +45,7 @@ export function shouldShowHeldHook(state: HookState, equipped: boolean): boolean
 }
 
 export class HookSystem {
-  private readonly viewModel: Group;
+  private readonly handsRig: SalvageHandsRig;
   private readonly projectile: Group;
   private readonly ropeGeometry = new BufferGeometry();
   private readonly rope: Line<BufferGeometry, LineBasicMaterial>;
@@ -43,9 +54,13 @@ export class HookSystem {
   private readonly origin = new Vector3();
   private readonly target = new Vector3();
   private readonly forward = new Vector3();
-  private readonly ropePositions = new Float32Array(6);
+  private readonly ropePositions = new Float32Array((HOOK_ROPE_SEGMENTS + 1) * 3);
+  private readonly handPose = createHookHandPose();
   private state: HookState = 'idle';
   private charge = 0;
+  private castAge = 0;
+  private ropeTension = 0;
+  private ropeSag = 0;
   private latchedItem: SalvageTarget | null = null;
   private noticeTimer: number | null = null;
   private enabled = false;
@@ -60,15 +75,12 @@ export class HookSystem {
     private readonly audio: AudioSystem,
     private readonly splashes: SplashSystem,
   ) {
-    this.viewModel = createHookModel(materials);
-    this.viewModel.name = 'first-person-hook';
-    this.viewModel.scale.setScalar(0.72);
-    this.viewModel.position.set(0.47, -0.64, -0.83);
-    this.viewModel.rotation.set(-0.2, -0.25, -0.22);
-    this.viewModel.visible = false;
-    this.camera.add(this.viewModel);
+    this.handsRig = createSalvageHandsRig(materials);
+    this.handsRig.root.visible = false;
+    this.camera.add(this.handsRig.root);
+    this.handsRig.applyPose(this.handPose);
 
-    this.projectile = this.viewModel.clone(true);
+    this.projectile = this.handsRig.heldHook.clone(true);
     this.projectile.name = 'thrown-hook';
     this.projectile.scale.setScalar(0.28);
     this.projectile.visible = false;
@@ -98,13 +110,17 @@ export class HookSystem {
   getVisualState(): HookVisualState {
     return {
       state: this.state,
-      heldVisible: this.viewModel.visible,
+      heldVisible: this.handsRig.root.visible && this.handsRig.heldHook.visible,
+      handsVisible: this.handsRig.root.visible,
       projectileVisible: this.projectile.visible,
       ropeVisible: this.rope.visible,
+      ropeTension: this.ropeTension,
+      ropeSag: this.ropeSag,
     };
   }
 
   update(time: number, delta: number): void {
+    if (this.state === 'flying' || this.state === 'latched' || this.state === 'retracting') this.castAge += delta;
     if (this.state === 'charging') {
       this.charge = Math.min(1, this.charge + delta / 1.05);
       useGameStore.getState().setHookCharge(this.charge);
@@ -118,18 +134,18 @@ export class HookSystem {
         this.debris.latch(hit);
         this.latchedItem = hit;
         this.state = 'latched';
-        this.audio.playSplash();
+        this.audio.playSplash(this.hookPosition);
       } else {
         const surface = sampleWaveHeight(this.hookPosition.x, this.hookPosition.z, time);
         if (this.hookPosition.y <= surface + 0.03 || this.hookPosition.distanceTo(this.camera.position) > 31) {
           this.hookPosition.y = Math.max(this.hookPosition.y, surface);
           this.splashes.spawn(this.hookPosition);
-          this.audio.playSplash();
+          this.audio.playSplash(this.hookPosition);
           this.state = 'retracting';
         }
       }
     } else if (this.state === 'latched' && this.latchedItem) {
-      this.getHandWorldPosition(this.target);
+      this.getRopeGuideWorldPosition(this.target);
       const itemPosition = this.latchedItem.model.position;
       const distance = itemPosition.distanceTo(this.target);
       const step = Math.min(distance, delta * (5.2 + Math.max(0, 9 - distance) * 0.28));
@@ -138,25 +154,26 @@ export class HookSystem {
       this.projectile.position.copy(itemPosition);
       if (distance < 0.72) this.completeCollection(this.latchedItem);
     } else if (this.state === 'retracting') {
-      this.getHandWorldPosition(this.target);
+      this.getRopeGuideWorldPosition(this.target);
       const distance = this.hookPosition.distanceTo(this.target);
       this.hookPosition.lerp(this.target, distance > 0 ? Math.min(1, (delta * 13) / distance) : 1);
       this.projectile.position.copy(this.hookPosition);
       if (distance < 0.35) this.reset();
     }
 
-    const sway = this.state === 'idle' ? Math.sin(time * 1.7) * 0.012 : 0;
-    const chargePull = this.state === 'charging' ? this.charge : 0;
-    this.viewModel.position.set(0.47 + sway, -0.64 - chargePull * 0.045, -0.83 + chargePull * 0.14);
-    this.viewModel.rotation.set(-0.2 - chargePull * 0.22, -0.25, -0.22 + chargePull * 0.35);
-    this.updateRope();
+    const ropeDistance = this.rope.visible ? this.hookPosition.distanceTo(this.camera.position) : 0;
+    this.ropeTension = sampleHookRopeTension(this.state, ropeDistance);
+    sampleHookHandPose(this.state, this.charge, time, this.castAge, this.ropeTension, this.handPose);
+    this.handsRig.applyPose(this.handPose);
+    this.updateRope(time);
+    if (this.state === 'latched' || this.state === 'retracting') this.audio.playHookRope(this.ropeTension);
   }
 
   dispose(scene: Scene): void {
     this.renderer.domElement.removeEventListener('mousedown', this.onPointerDown);
     document.removeEventListener('mouseup', this.onPointerUp);
     if (this.noticeTimer !== null) window.clearTimeout(this.noticeTimer);
-    this.camera.remove(this.viewModel);
+    this.camera.remove(this.handsRig.root);
     scene.remove(this.projectile, this.rope);
     this.ropeGeometry.dispose();
     this.rope.material.dispose();
@@ -164,8 +181,9 @@ export class HookSystem {
 
   private cast(): void {
     this.state = 'flying';
+    this.castAge = 0;
     this.syncHeldVisibility();
-    this.getHandWorldPosition(this.hookPosition);
+    this.getCastWorldPosition(this.hookPosition);
     this.camera.getWorldDirection(this.forward);
     const strength = 12.5 + this.charge * 12.5;
     this.hookVelocity.copy(this.forward).multiplyScalar(strength);
@@ -176,11 +194,15 @@ export class HookSystem {
     this.rope.visible = true;
     this.audio.playCast(this.charge);
     const wear = useGameStore.getState().damageTool('hook');
-    if (wear.broken) this.showNotice('打捞钩断裂 · 可近距拾取物资制作替代钩', 2600);
+    if (wear.broken) {
+      this.audio.playHookBreak();
+      this.showNotice('打捞钩断裂 · 可近距拾取物资制作替代钩', 2600);
+    }
     useGameStore.getState().setHookCharge(0);
   }
 
   private completeCollection(item: SalvageTarget): void {
+    this.target.copy(item.model.position);
     const result = claimSalvageTarget(item, this.debris);
     this.latchedItem = null;
     const accepted = bundleLabel(result.accepted);
@@ -191,7 +213,7 @@ export class HookSystem {
       this.reset();
       return;
     }
-    this.audio.playSalvagePickup(result.kind);
+    this.audio.playSalvagePickup(result.kind, this.target);
     this.showNotice(rejected ? `${accepted} · 剩余物资留在水面` : accepted);
     this.reset();
   }
@@ -209,6 +231,9 @@ export class HookSystem {
     this.latchedItem = null;
     this.state = 'idle';
     this.charge = 0;
+    this.castAge = 0;
+    this.ropeTension = 0;
+    this.ropeSag = 0;
     this.projectile.visible = false;
     this.rope.visible = false;
     this.syncHeldVisibility();
@@ -216,26 +241,31 @@ export class HookSystem {
   }
 
   private syncHeldVisibility(): void {
-    this.viewModel.visible = shouldShowHeldHook(this.state, this.equipped);
+    this.handsRig.root.visible = this.equipped;
+    this.handsRig.heldHook.visible = shouldShowHeldHook(this.state, this.equipped);
   }
 
-  private getHandWorldPosition(target: Vector3): Vector3 {
-    target.set(0.42, -0.34, -0.72);
-    return this.camera.localToWorld(target);
+  private getRopeGuideWorldPosition(target: Vector3): Vector3 {
+    return this.handsRig.ropeGuide.getWorldPosition(target);
   }
 
-  private updateRope(): void {
+  private getCastWorldPosition(target: Vector3): Vector3 {
+    return this.handsRig.castOrigin.getWorldPosition(target);
+  }
+
+  private updateRope(time: number): void {
     if (!this.rope.visible) return;
-    this.getHandWorldPosition(this.origin);
-    this.ropePositions[0] = this.origin.x;
-    this.ropePositions[1] = this.origin.y;
-    this.ropePositions[2] = this.origin.z;
-    this.ropePositions[3] = this.hookPosition.x;
-    this.ropePositions[4] = this.hookPosition.y;
-    this.ropePositions[5] = this.hookPosition.z;
+    this.getRopeGuideWorldPosition(this.origin);
+    const distance = this.origin.distanceTo(this.hookPosition);
+    this.ropeTension = sampleHookRopeTension(this.state, distance);
+    this.ropeSag = writeHookRopeCurve(this.ropePositions, this.origin, this.hookPosition, this.ropeTension, time);
+    this.rope.material.color.setRGB(
+      MathUtils.lerp(0.62, 0.94, this.ropeTension),
+      MathUtils.lerp(0.42, 0.7, this.ropeTension),
+      MathUtils.lerp(0.24, 0.38, this.ropeTension),
+    );
     const attribute = this.ropeGeometry.getAttribute('position') as BufferAttribute;
     attribute.needsUpdate = true;
-    this.ropeGeometry.computeBoundingSphere();
   }
 
   private readonly onPointerDown = (event: MouseEvent): void => {

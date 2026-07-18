@@ -715,8 +715,11 @@ async function assertHookVisualOwnership(page, label, expected = 'any') {
     return {
       state: data?.hookState ?? 'missing',
       heldVisible: data?.hookHeldVisible === 'true',
+      handsVisible: data?.hookHandsVisible === 'true',
       projectileVisible: data?.hookProjectileVisible === 'true',
       ropeVisible: data?.hookRopeVisible === 'true',
+      ropeTension: Number(data?.hookRopeTension ?? Number.NaN),
+      ropeSag: Number(data?.hookRopeSag ?? Number.NaN),
     };
   });
   if (state.state === 'missing' || state.state === 'uninitialized') {
@@ -725,10 +728,28 @@ async function assertHookVisualOwnership(page, label, expected = 'any') {
   if (state.heldVisible && (state.projectileVisible || state.ropeVisible)) {
     throw new Error(`${label} rendered both held and deployed hooks: ${JSON.stringify(state)}`);
   }
-  if (expected === 'held' && (state.state !== 'idle' || !state.heldVisible || state.projectileVisible || state.ropeVisible)) {
+  if (!Number.isFinite(state.ropeTension) || state.ropeTension < 0 || state.ropeTension > 1) {
+    throw new Error(`${label} reported invalid rope tension: ${JSON.stringify(state)}`);
+  }
+  if (!Number.isFinite(state.ropeSag) || state.ropeSag < 0 || state.ropeSag > 1.25) {
+    throw new Error(`${label} reported invalid rope sag: ${JSON.stringify(state)}`);
+  }
+  if (expected === 'held' && (
+    state.state !== 'idle'
+    || !state.heldVisible
+    || !state.handsVisible
+    || state.projectileVisible
+    || state.ropeVisible
+  )) {
     throw new Error(`${label} did not retain a single idle held hook: ${JSON.stringify(state)}`);
   }
-  if (expected === 'deployed' && (state.heldVisible || !state.projectileVisible || !state.ropeVisible)) {
+  if (expected === 'deployed' && (
+    state.heldVisible
+    || !state.handsVisible
+    || !state.projectileVisible
+    || !state.ropeVisible
+    || state.ropeTension <= 0
+  )) {
     throw new Error(`${label} did not transfer ownership to the deployed hook: ${JSON.stringify(state)}`);
   }
   console.log(`${label} hook ownership: ${JSON.stringify(state)}`);

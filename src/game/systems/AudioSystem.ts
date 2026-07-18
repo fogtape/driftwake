@@ -5,6 +5,12 @@ import type { PlayerSurface } from '../domain/save';
 import type { ReefNodeType } from '../domain/underwater';
 import type { DebrisKind } from '../art/ProceduralModels';
 
+export interface AudioPosition {
+  x: number;
+  y: number;
+  z: number;
+}
+
 export class AudioSystem {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -24,6 +30,8 @@ export class AudioSystem {
   private nextCreakAt = 4;
   private nextBirdAt = 6;
   private nextReelAt = 0;
+  private nextHookRopeAt = 0;
+  private readonly spatialDisconnectTimers = new Set<number>();
   private readonly random = createSeededRandom(0xa0d10);
   private enabled = true;
   private focusMuted = false;
@@ -114,6 +122,30 @@ export class AudioSystem {
     }
   }
 
+  setListenerPose(position: AudioPosition, forward: AudioPosition, up?: AudioPosition): void {
+    if (!this.context) return;
+    const listener = this.context.listener;
+    const now = this.context.currentTime;
+    if (listener.positionX && listener.forwardX) {
+      listener.positionX.setValueAtTime(position.x, now);
+      listener.positionY.setValueAtTime(position.y, now);
+      listener.positionZ.setValueAtTime(position.z, now);
+      listener.forwardX.setValueAtTime(forward.x, now);
+      listener.forwardY.setValueAtTime(forward.y, now);
+      listener.forwardZ.setValueAtTime(forward.z, now);
+      listener.upX.setValueAtTime(up?.x ?? 0, now);
+      listener.upY.setValueAtTime(up?.y ?? 1, now);
+      listener.upZ.setValueAtTime(up?.z ?? 0, now);
+      return;
+    }
+    const legacyListener = listener as AudioListener & {
+      setPosition?: (x: number, y: number, z: number) => void;
+      setOrientation?: (x: number, y: number, z: number, upX: number, upY: number, upZ: number) => void;
+    };
+    legacyListener.setPosition?.(position.x, position.y, position.z);
+    legacyListener.setOrientation?.(forward.x, forward.y, forward.z, up?.x ?? 0, up?.y ?? 1, up?.z ?? 0);
+  }
+
   private effectiveMasterGain(): number {
     return this.enabled && !this.focusMuted ? this.mix.master : 0;
   }
@@ -154,9 +186,12 @@ export class AudioSystem {
     oscillator.stop(now + 0.19);
   }
 
-  playSplash(): void {
-    this.noiseBurst(0.42, 980, 0.18, 'lowpass');
-    this.noiseBurst(0.14, 2400, 0.08, 'bandpass');
+  playSplash(position?: AudioPosition): void {
+    const spatialTarget = position ? this.createSpatialTarget(position) : null;
+    const target = spatialTarget ?? this.effects;
+    this.noiseBurstTo(0.42, 980, 0.18, 'lowpass', target);
+    this.noiseBurstTo(0.14, 2400, 0.08, 'bandpass', target);
+    if (spatialTarget) this.releaseSpatialTarget(spatialTarget, 540);
   }
 
   playCollect(): void {
@@ -175,12 +210,60 @@ export class AudioSystem {
     });
   }
 
-  playSalvagePickup(kind: DebrisKind): void {
-    if (kind === 'cache' || kind === 'barrel') {
-      this.playWoodKnock(kind === 'cache' ? 0.09 : 0.065, kind === 'cache' ? 0.12 : 0.085);
-      this.noiseBurst(kind === 'cache' ? 0.16 : 0.11, 1480, 0.045, 'bandpass');
+  playSalvagePickup(kind: DebrisKind, position?: AudioPosition): void {
+    const spatialTarget = position ? this.createSpatialTarget(position) : null;
+    const target = spatialTarget ?? this.effects;
+    if (kind === 'cache' || kind === 'barrel' || kind === 'timber') {
+      const heavy = kind === 'cache';
+      this.playWoodKnockTo(heavy ? 0.09 : kind === 'barrel' ? 0.065 : 0.045, heavy ? 0.12 : 0.085, target);
+      this.noiseBurstTo(heavy ? 0.16 : 0.1, heavy ? 1480 : 1180, heavy ? 0.045 : 0.032, 'bandpass', target);
+    } else if (kind === 'polymer') {
+      this.noiseBurstTo(0.11, 2250, 0.05, 'bandpass', target);
+      this.noiseBurstTo(0.055, 4800, 0.024, 'highpass', target);
+    } else {
+      this.noiseBurstTo(0.18, 3100, 0.042, 'highpass', target);
+      this.noiseBurstTo(0.09, 840, 0.024, 'bandpass', target);
     }
+    if (spatialTarget) this.releaseSpatialTarget(spatialTarget, 360);
     this.playCollect();
+  }
+
+  playHookRope(tension: number): void {
+    if (!this.context || !this.effects || this.context.currentTime < this.nextHookRopeAt) return;
+    const normalized = Math.max(0, Math.min(1, tension));
+    const now = this.context.currentTime;
+    this.nextHookRopeAt = now + 0.14 - normalized * 0.035;
+    const oscillator = this.context.createOscillator();
+    const filter = this.context.createBiquadFilter();
+    const gain = this.context.createGain();
+    oscillator.type = normalized > 0.82 ? 'sawtooth' : 'triangle';
+    oscillator.frequency.setValueAtTime(72 + normalized * 64, now);
+    oscillator.frequency.exponentialRampToValueAtTime(48 + normalized * 34, now + 0.06);
+    filter.type = 'bandpass';
+    filter.frequency.value = 460 + normalized * 620;
+    filter.Q.value = 1.1;
+    gain.gain.setValueAtTime(0.007 + normalized * 0.015, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.065);
+    oscillator.connect(filter).connect(gain).connect(this.effects);
+    oscillator.start(now);
+    oscillator.stop(now + 0.07);
+  }
+
+  playHookBreak(): void {
+    this.noiseBurst(0.16, 3350, 0.095, 'highpass');
+    this.noiseBurst(0.09, 620, 0.065, 'bandpass');
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = 'square';
+    oscillator.frequency.setValueAtTime(220, now);
+    oscillator.frequency.exponentialRampToValueAtTime(68, now + 0.12);
+    gain.gain.setValueAtTime(0.04, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
+    oscillator.connect(gain).connect(this.effects);
+    oscillator.start(now);
+    oscillator.stop(now + 0.14);
   }
 
   playEquip(): void {
@@ -1004,6 +1087,8 @@ export class AudioSystem {
   }
 
   dispose(): void {
+    this.spatialDisconnectTimers.forEach((timer) => window.clearTimeout(timer));
+    this.spatialDisconnectTimers.clear();
     void this.context?.close();
     this.context = null;
     this.master = null;
@@ -1319,7 +1404,11 @@ export class AudioSystem {
   }
 
   private playWoodKnock(volume: number, duration: number): void {
-    if (!this.context || !this.effects) return;
+    this.playWoodKnockTo(volume, duration, this.effects);
+  }
+
+  private playWoodKnockTo(volume: number, duration: number, target: AudioNode | null): void {
+    if (!this.context || !target) return;
     const now = this.context.currentTime;
     const oscillator = this.context.createOscillator();
     const filter = this.context.createBiquadFilter();
@@ -1332,10 +1421,10 @@ export class AudioSystem {
     filter.Q.value = 0.75;
     gain.gain.setValueAtTime(volume, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-    oscillator.connect(filter).connect(gain).connect(this.effects);
+    oscillator.connect(filter).connect(gain).connect(target);
     oscillator.start(now);
     oscillator.stop(now + duration + 0.01);
-    this.noiseBurst(duration * 0.65, 740, volume * 0.35, 'bandpass');
+    this.noiseBurstTo(duration * 0.65, 740, volume * 0.35, 'bandpass', target);
   }
 
   private noiseBurstTo(
@@ -1343,7 +1432,7 @@ export class AudioSystem {
     frequency: number,
     volume: number,
     type: BiquadFilterType,
-    target: GainNode | null,
+    target: AudioNode | null,
   ): void {
     if (!this.context || !target) return;
     const sampleRate = this.context.sampleRate;
@@ -1363,5 +1452,35 @@ export class AudioSystem {
     source.buffer = buffer;
     source.connect(filter).connect(gain).connect(target);
     source.start();
+  }
+
+  private createSpatialTarget(position: AudioPosition): PannerNode | null {
+    if (!this.context || !this.effects) return null;
+    const panner = this.context.createPanner();
+    panner.panningModel = 'HRTF';
+    panner.distanceModel = 'inverse';
+    panner.refDistance = 1.6;
+    panner.maxDistance = 42;
+    panner.rolloffFactor = 1.35;
+    panner.coneInnerAngle = 360;
+    const now = this.context.currentTime;
+    if (panner.positionX) {
+      panner.positionX.setValueAtTime(position.x, now);
+      panner.positionY.setValueAtTime(position.y, now);
+      panner.positionZ.setValueAtTime(position.z, now);
+    } else {
+      const legacyPanner = panner as PannerNode & { setPosition?: (x: number, y: number, z: number) => void };
+      legacyPanner.setPosition?.(position.x, position.y, position.z);
+    }
+    panner.connect(this.effects);
+    return panner;
+  }
+
+  private releaseSpatialTarget(target: PannerNode, afterMs: number): void {
+    const timer = window.setTimeout(() => {
+      target.disconnect();
+      this.spatialDisconnectTimers.delete(timer);
+    }, afterMs);
+    this.spatialDisconnectTimers.add(timer);
   }
 }

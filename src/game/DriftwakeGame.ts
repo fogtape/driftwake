@@ -9,6 +9,7 @@ import {
   MathUtils,
   PerspectiveCamera,
   PCFSoftShadowMap,
+  Quaternion,
   Scene,
   SRGBColorSpace,
   Vector3,
@@ -136,6 +137,10 @@ export class DriftwakeGame {
   private readonly sunPosition = new Vector3(0.56, 0.72, 0.4).normalize();
   private readonly keyLightPosition = new Vector3();
   private readonly environmentColor = new Color();
+  private readonly audioPosition = new Vector3();
+  private readonly audioForward = new Vector3();
+  private readonly audioUp = new Vector3();
+  private readonly audioQuaternion = new Quaternion();
   private environmentBlend = 0;
   private stormBlend = 0;
   private elapsed = 0;
@@ -179,8 +184,11 @@ export class DriftwakeGame {
     this.mount.dataset.raftTileCount = '0';
     this.mount.dataset.hookState = 'uninitialized';
     this.mount.dataset.hookHeldVisible = 'false';
+    this.mount.dataset.hookHandsVisible = 'false';
     this.mount.dataset.hookProjectileVisible = 'false';
     this.mount.dataset.hookRopeVisible = 'false';
+    this.mount.dataset.hookRopeTension = '0';
+    this.mount.dataset.hookRopeSag = '0';
     this.mount.dataset.salvageFocus = 'none';
     this.mount.dataset.worldDropCount = '0';
     this.mount.dataset.sailAttachment = 'missing';
@@ -626,14 +634,22 @@ export class DriftwakeGame {
     this.syncRaftPhysics();
     this.physics.step(stepSeconds);
     this.player?.update(stepSeconds);
+    this.camera.getWorldPosition(this.audioPosition);
+    this.camera.getWorldDirection(this.audioForward);
+    this.camera.getWorldQuaternion(this.audioQuaternion);
+    this.audioUp.set(0, 1, 0).applyQuaternion(this.audioQuaternion);
+    this.audio.setListenerPose(this.audioPosition, this.audioForward, this.audioUp);
     this.debris?.update(simulationSeconds, stepSeconds);
     this.hook?.update(simulationSeconds, stepSeconds);
     const hookVisual = this.hook?.getVisualState();
     if (hookVisual) {
       this.mount.dataset.hookState = hookVisual.state;
       this.mount.dataset.hookHeldVisible = String(hookVisual.heldVisible);
+      this.mount.dataset.hookHandsVisible = String(hookVisual.handsVisible);
       this.mount.dataset.hookProjectileVisible = String(hookVisual.projectileVisible);
       this.mount.dataset.hookRopeVisible = String(hookVisual.ropeVisible);
+      this.mount.dataset.hookRopeTension = hookVisual.ropeTension.toFixed(3);
+      this.mount.dataset.hookRopeSag = hookVisual.ropeSag.toFixed(3);
     }
     this.build?.update(simulationSeconds, stepSeconds);
     this.fishing?.update(simulationSeconds, stepSeconds);

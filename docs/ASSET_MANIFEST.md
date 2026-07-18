@@ -355,7 +355,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 ## 代码原生模型与动画
 
-本轮新增的补给桶、海面剩余物资和近距聚焦环全部由代码原生形体驱动，并复用既有审定 PBR 材质；战利品、对象池、耐久和 v11 存档均不依赖视觉对象作为玩法真值。上一轮信号层压板与磷光玻璃继续使用独立 AI PBR；没有因本机软件 WebGL 复验失败而降低运行时贴图质量。
+本轮新增的补给桶、海面剩余物资、近距聚焦环和双手钩具装配全部由代码原生形体驱动，并复用既有审定 PBR 材质；战利品、对象池、耐久和 v11 存档均不依赖视觉对象作为玩法真值。上一轮信号层压板与磷光玻璃继续使用独立 AI PBR；没有因本机软件 WebGL 复验失败而降低运行时贴图质量。
 
 | ID | 资产 | 位置 | 当前状态 |
 | --- | --- | --- | --- |
@@ -391,9 +391,10 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | MOD-030 | 潮听接收台：层压机壳、斜置扫描盘、三环二十四刻度、扫描束、三信号点、参考线圈、三频段鼓轮、六电量条与阵列灯 | `src/game/art/SignalModels.ts` | 90+ 网格；断电/在线发光、扫描、调谐、频段点、电量和诊断灯由 v10 导航状态驱动 |
 | MOD-031 | 双桅定向阵列：相位箱、双桅、八组绝缘/横臂、六定向环、端帽、冠尖、四股拉索、馈线和传播环 | `src/game/art/SignalModels.ts` | 50+ 网格；桅杆风摆、相位灯和三层传播环按阵列/天气/接收台状态驱动 |
 | MOD-032 | 原创信号中继标：三密封浮筒、合金箍、三臂甲板、中央桅杆、双环转子、磷光核心和四层脉冲环 | `src/game/art/SignalModels.ts` | 25+ 网格；位于持续世界坐标，浮筒错相升沉、转子、灯和距离脉冲实时驱动 |
+| MOD-033 | 盐封打捞手套：双前臂、编织袖口、掌垫、指节护条、金属扣具、八组双段手指与双拇指 | `src/game/art/FirstPersonModels.ts` | 双手与钩具合计 40+ 网格；复用蜡封帆布/编织纤维 PBR，腕、指、导绳点和投射起点独立驱动 |
 | ANI-001 | 木筏三轴波浪升沉 | `src/game/systems/RaftSystem.ts` | 已实现 |
 | ANI-002 | 第一人称移动、镜头与木筏局部坐标 | `src/game/systems/PlayerController.ts` | 已实现基础版 |
-| ANI-003 | 钩具蓄力、抛射、旋转、拖回、收起、耐久损耗与断裂恢复 | `src/game/systems/HookSystem.ts` | 手持/抛出模型唯一所有权、48 次耐久和替代钩制作已接通；最终双手蒙皮待 DCC |
+| ANI-003 | 双手钩具待机、蓄力、放绳跟随、受力抓握、交替回收、抛射旋转、拖回、耐久损耗与断裂恢复 | `src/game/systems/HookSystem.ts`、`src/game/presentation/hookPresentation.ts` | 代码原生腕/指关节、19 点张力绳和手持/抛出唯一所有权已接通；最终蒙皮仍待 DCC |
 | ANI-004 | 建造锤挥击、筏格预览、放置、修补与拆除 | `src/game/systems/BuildSystem.ts` | 已实现交互切片 |
 | ANI-005 | 钓竿抛投、浮标升沉、鱼体绕线、张力和收杆 | `src/game/systems/FishingSystem.ts` | 已实现完整单次循环 |
 | ANI-006 | 鲨鱼尾摆、巡游、逼近、扑咬、受击、撤退与下潜 | `src/game/systems/SharkSystem.ts` | 已实现第一轮威胁循环 |
@@ -436,7 +437,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | AMB-ISLAND | 距离驱动的叶冠风层和稀疏双音鸟鸣 | `src/game/systems/AudioSystem.ts` |
 | AMB-UNDERWATER | 世界总线动态低通、水体低频脉动和呼吸警告；UI 总线保持清晰 | `src/game/systems/AudioSystem.ts` |
 | AMB-STORM | 独立低通风压、带通雨噪、慢速阵风幅度变化，以及双段闪光触发的雷声簇 | `src/game/systems/AudioSystem.ts` |
-| SFX-HOOK/BUILD | 抛钩、落水、木/聚合/纤维收获、箱桶木铁双层拾取、木击、修补、拆除与拒绝反馈 | `src/game/systems/AudioSystem.ts` |
+| SFX-HOOK/BUILD | 抛钩、HRTF 空间落水、五类物资方位碰撞、居中背包确认、近场受力收绳、断钩、木击、修补、拆除与拒绝反馈 | `src/game/systems/AudioSystem.ts` |
 | SFX-FISHING | 抛线、浮标、三连鱼讯、卷线、捕获与断线 | `src/game/systems/AudioSystem.ts` |
 | SFX-DEVICE | 放置木/铁冲击、五联海水装填、三槽食物位、干舱开合/物资双向转移、点火、完成、焦糊、持续火焰和蒸汽层 | `src/game/systems/AudioSystem.ts` |
 | SFX-ISLAND | 木筏/沙地脚步、石斧破风、入木、倒树、枝料/石料/植被拾取 | `src/game/systems/AudioSystem.ts` |
@@ -449,7 +450,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | CREATURE | 鲨鱼低频预兆、扑咬冲击与武器命中；盐翼盗鸟警报、啄食和惊飞 | `src/game/systems/AudioSystem.ts` |
 | UI | 短促确认、拒绝和工具切换 | `src/game/systems/AudioSystem.ts` |
 
-设置界面分别控制 `master`、`music`、`ambience`、`effects`、`creatures` 和 `ui` 六个增益总线，偏好写入独立版本化配置。
+设置界面分别控制 `master`、`music`、`ambience`、`effects`、`creatures` 和 `ui` 六个增益总线，偏好写入独立版本化配置。世界音效经过随相机世界位置、前向和上方向更新的监听器；M2 打捞事件使用 HRTF 反距离定位，UI 确认不进入空间节点。
 
 ## 后续硬任务
 
