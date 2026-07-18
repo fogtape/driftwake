@@ -29,6 +29,17 @@ describe('game store item use', () => {
     expect(state.inventorySlots).toBe(1);
   });
 
+  it('does not consume a supply when all of its positive effects are full', () => {
+    const inventory = { emergencyWater: 1 } as const;
+    useGameStore.setState({
+      inventory,
+      inventorySlots: usedInventorySlots(inventory),
+      survival: { health: 100, thirst: 100, hunger: 100, oxygen: 100 },
+    });
+    expect(useGameStore.getState().useItem('emergencyWater')).toBe(false);
+    expect(useGameStore.getState().inventory).toEqual(inventory);
+  });
+
   it('applies underwater oxygen loss and direct creature damage independently', () => {
     useGameStore.getState().tickSurvival(2, true);
     expect(useGameStore.getState().survival.oxygen).toBeCloseTo(94.9);

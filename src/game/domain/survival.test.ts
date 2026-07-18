@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { advanceSurvival, consumeItem } from './survival';
+import {
+  INITIAL_SURVIVAL,
+  advanceSurvival,
+  consumeItem,
+  survivalBand,
+  survivalNeedRunwaySeconds,
+} from './survival';
+import { STARTING_INVENTORY } from './items';
 
 describe('survival domain', () => {
   it('drains needs deterministically and only damages health after deprivation', () => {
@@ -31,5 +38,21 @@ describe('survival domain', () => {
     expect(freshWater.survival).toEqual({ health: 76, thirst: 62, hunger: 30, oxygen: 64 });
     const fruit = consumeItem({ health: 70, thirst: 40, hunger: 40, oxygen: 64 }, 'palmFruit');
     expect(fruit.survival).toEqual({ health: 71, thirst: 52, hunger: 58, oxygen: 64 });
+  });
+
+  it('prevents wasting supplies when none of their positive effects can apply', () => {
+    const full = { health: 100, thirst: 100, hunger: 100, oxygen: 100 };
+    expect(consumeItem(full, 'emergencyWater')).toMatchObject({ usable: false, reason: 'not-needed', survival: full });
+    expect(consumeItem(full, 'ration')).toMatchObject({ usable: false, reason: 'not-needed', survival: full });
+    expect(consumeItem(full, 'rawFish')).toMatchObject({ usable: false, reason: 'not-needed', survival: full });
+  });
+
+  it('classifies pressure consistently and forecasts optimal carried-supply runway', () => {
+    expect(survivalBand('thirst', 31)).toBe('stable');
+    expect(survivalBand('thirst', 30)).toBe('low');
+    expect(survivalBand('thirst', 15)).toBe('critical');
+    expect(survivalBand('thirst', 0)).toBe('depleted');
+    expect(survivalNeedRunwaySeconds(INITIAL_SURVIVAL, STARTING_INVENTORY, 'thirst') / 60).toBeCloseTo(37.18, 1);
+    expect(survivalNeedRunwaySeconds(INITIAL_SURVIVAL, STARTING_INVENTORY, 'hunger') / 60).toBeCloseTo(53.13, 1);
   });
 });

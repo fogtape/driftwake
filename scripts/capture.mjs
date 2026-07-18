@@ -639,6 +639,21 @@ const failureSave = {
   },
 };
 
+const survivalPressureSave = {
+  ...seededSave,
+  version: 13,
+  player: {
+    ...seededSave.player,
+    inventory: { hook: 1, emergencyWater: 1, ration: 1 },
+    survival: { health: 74, thirst: 14, hunger: 26, oxygen: 100 },
+    selectedTool: 'hook',
+    playSeconds: 960,
+    crafting: { entries: [], nextSerial: 1 },
+    failure: null,
+    navigation: { surface: 'raft', x: 0, z: 1.08 },
+  },
+};
+
 await mkdir(outputDir, { recursive: true });
 
 const browserRuntime = await launchDriftwakeChromium(chromium, {
@@ -688,7 +703,7 @@ async function openDesktopPage(label, options = {}) {
   if (options.seedSave) {
     await context.addInitScript((save) => {
       localStorage.setItem(`driftwake.save.v${save.version}`, JSON.stringify(save));
-    }, options.failureStart ? failureSave : options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
+    }, options.failureStart ? failureSave : options.survivalPressureStart ? survivalPressureSave : options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
   }
   const page = await context.newPage();
   monitorPage(page, label);
@@ -1119,6 +1134,120 @@ async function captureCrafting() {
     throw new Error(`Crafting completion/save gate failed: ${JSON.stringify(completedState)}`);
   }
   console.log(`Crafting completion/save gate: ${JSON.stringify(completedState)}`);
+  await context.close();
+}
+
+async function captureSurvivalPressure() {
+  const { context, page } = await openDesktopPage('survival-pressure', { seedSave: true, survivalPressureStart: true });
+  await page.evaluate(() => {
+    globalThis.__driftwakeCaptureNotices = [];
+    const recordNotice = () => {
+      const text = document.querySelector('.loot-notice.is-visible')?.textContent?.trim();
+      if (text && globalThis.__driftwakeCaptureNotices.at(-1) !== text) {
+        globalThis.__driftwakeCaptureNotices.push(text);
+      }
+    };
+    new MutationObserver(recordNotice).observe(document.body, {
+      attributes: true,
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+    recordNotice();
+  });
+  await enterGame(page);
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.survivalThirstBand === 'critical' && data?.survivalHungerBand === 'low';
+  }, 10_000);
+  await page.waitForFunction(
+    () => globalThis.__driftwakeCaptureNotices?.includes('严重缺水'),
+    undefined,
+    { timeout: 3_000 },
+  );
+  const pressureState = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const cluster = document.querySelector('.survival-cluster')?.getBoundingClientRect();
+    const hotbar = document.querySelector('.hotbar')?.getBoundingClientRect();
+    return {
+      thirstBand: data?.survivalThirstBand,
+      hungerBand: data?.survivalHungerBand,
+      thirstRunway: Number(data?.thirstRunwaySeconds),
+      hungerRunway: Number(data?.hungerRunwaySeconds),
+      noticeHistory: globalThis.__driftwakeCaptureNotices ?? [],
+      thirstCritical: Boolean(document.querySelector('.survival-gauge--thirst.is-critical')),
+      hungerLow: Boolean(document.querySelector('.survival-gauge--hunger.is-low')),
+      cluster: cluster ? { left: cluster.left, top: cluster.top, right: cluster.right, bottom: cluster.bottom } : null,
+      hotbar: hotbar ? { left: hotbar.left, top: hotbar.top, right: hotbar.right, bottom: hotbar.bottom } : null,
+      viewport: { width: innerWidth, height: innerHeight },
+    };
+  });
+  if (
+    !pressureState.thirstCritical
+    || !pressureState.hungerLow
+    || !pressureState.noticeHistory.includes('严重缺水')
+    || pressureState.noticeHistory.includes('饱食偏低')
+    || pressureState.thirstRunway < 850
+    || pressureState.hungerRunway < 1600
+    || !pressureState.cluster
+    || !pressureState.hotbar
+    || pressureState.cluster.right > pressureState.hotbar.left - 4
+    || pressureState.cluster.left < 0
+    || pressureState.cluster.bottom > pressureState.viewport.height
+  ) {
+    throw new Error(`Survival pressure HUD gate failed: ${JSON.stringify(pressureState)}`);
+  }
+  console.log(`Survival pressure HUD gate: ${JSON.stringify(pressureState)}`);
+  if (process.env.CAPTURE_FAST !== '1') {
+    await captureCompositedPage(page, new URL('survival-pressure-desktop.png', outputDir).pathname);
+  }
+
+  await page.keyboard.press('KeyI');
+  const dialog = page.getByRole('dialog', { name: '野外背包' });
+  await dialog.waitFor();
+  await dialog.getByRole('button', { name: '密封淡水 1' }).click({ force: true });
+  await dialog.getByRole('button', { name: '饮用' }).click({ force: true });
+  await page.waitForFunction(() => document.querySelector('.field-pack__feedback')?.textContent?.includes('淡水 · 水分 +34'));
+  await dialog.getByRole('button', { name: '海员口粮 1' }).click({ force: true });
+  await dialog.getByRole('button', { name: '食用' }).click({ force: true });
+  await page.waitForFunction(() => document.querySelector('.field-pack__feedback')?.textContent?.includes('口粮 · 水分 -2 · 饱食 +28'));
+
+  const recoveryState = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v13') ?? 'null');
+    const dialog = document.querySelector('.field-pack')?.getBoundingClientRect();
+    const feedback = document.querySelector('.field-pack__feedback')?.getBoundingClientRect();
+    return {
+      thirstBand: data?.survivalThirstBand,
+      hungerBand: data?.survivalHungerBand,
+      survival: saved?.player?.survival,
+      inventory: saved?.player?.inventory,
+      feedbackText: document.querySelector('.field-pack__feedback')?.textContent?.trim(),
+      feedbackVisible: document.querySelector('.field-pack__feedback')?.classList.contains('is-visible'),
+      feedbackInDialog: Boolean(
+        dialog && feedback
+        && feedback.left >= dialog.left
+        && feedback.right <= dialog.right
+        && feedback.top >= dialog.top
+        && feedback.bottom <= dialog.bottom
+      ),
+    };
+  });
+  if (
+    recoveryState.thirstBand !== 'stable'
+    || recoveryState.hungerBand !== 'stable'
+    || recoveryState.survival?.thirst < 45
+    || recoveryState.survival?.thirst > 49
+    || recoveryState.survival?.hunger < 53
+    || recoveryState.survival?.hunger > 55
+    || recoveryState.inventory?.emergencyWater
+    || recoveryState.inventory?.ration
+    || !recoveryState.feedbackVisible
+    || !recoveryState.feedbackInDialog
+  ) {
+    throw new Error(`Survival supply recovery/save gate failed: ${JSON.stringify(recoveryState)}`);
+  }
+  console.log(`Survival supply recovery/save gate: ${JSON.stringify(recoveryState)}`);
   await context.close();
 }
 
@@ -2348,6 +2477,7 @@ try {
   if (captureOnly === 'all' || captureOnly === 'failure') await captureFailureRecovery();
   if (captureOnly === 'all' || captureOnly === 'pack') await capturePack();
   if (captureOnly === 'all' || captureOnly === 'crafting') await captureCrafting();
+  if (captureOnly === 'all' || captureOnly === 'survival') await captureSurvivalPressure();
   if (captureOnly === 'all' || captureOnly === 'settings') await captureSettings();
   if (captureOnly === 'all' || captureOnly === 'devices') await captureDevices();
   if (captureOnly === 'all' || captureOnly === 'advanced') await captureAdvancedDevices();

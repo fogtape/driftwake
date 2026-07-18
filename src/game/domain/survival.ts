@@ -1,4 +1,4 @@
-import type { ItemId } from './items';
+import { itemCount, type Inventory, type ItemId } from './items';
 
 export interface SurvivalState {
   health: number;
@@ -12,6 +12,26 @@ export const INITIAL_SURVIVAL: SurvivalState = { health: 100, thirst: 82, hunger
 export const OXYGEN_DRAIN_PER_SECOND = 2.55;
 export const OXYGEN_RECOVERY_PER_SECOND = 18;
 export const DROWNING_DAMAGE_PER_SECOND = 5.5;
+export const THIRST_DRAIN_PER_SECOND = 0.052;
+export const HUNGER_DRAIN_PER_SECOND = 0.032;
+
+export type SurvivalMetric = keyof SurvivalState;
+export type SurvivalBand = 'stable' | 'low' | 'critical' | 'depleted';
+
+export const SURVIVAL_THRESHOLDS: Record<SurvivalMetric, { low: number; critical: number }> = {
+  health: { low: 40, critical: 20 },
+  thirst: { low: 30, critical: 15 },
+  hunger: { low: 30, critical: 15 },
+  oxygen: { low: 50, critical: 28 },
+};
+
+export function survivalBand(metric: SurvivalMetric, value: number): SurvivalBand {
+  const normalized = clampStat(Number.isFinite(value) ? value : 0);
+  if (normalized <= 0) return 'depleted';
+  if (normalized <= SURVIVAL_THRESHOLDS[metric].critical) return 'critical';
+  if (normalized <= SURVIVAL_THRESHOLDS[metric].low) return 'low';
+  return 'stable';
+}
 
 function clampStat(value: number): number {
   return Math.max(0, Math.min(100, value));
@@ -28,8 +48,8 @@ export function normalizeSurvival(value: Partial<SurvivalState> | null | undefin
 
 export function advanceSurvival(current: SurvivalState, seconds: number, submerged = false): SurvivalState {
   const elapsed = Math.max(0, Math.min(seconds, 60));
-  const thirst = clampStat(current.thirst - elapsed * 0.052);
-  const hunger = clampStat(current.hunger - elapsed * 0.032);
+  const thirst = clampStat(current.thirst - elapsed * THIRST_DRAIN_PER_SECOND);
+  const hunger = clampStat(current.hunger - elapsed * HUNGER_DRAIN_PER_SECOND);
   const oxygen = clampStat(
     submerged
       ? current.oxygen - elapsed * OXYGEN_DRAIN_PER_SECOND
@@ -53,12 +73,15 @@ export function advanceSurvival(current: SurvivalState, seconds: number, submerg
 export interface ConsumableResult {
   survival: SurvivalState;
   usable: boolean;
+  reason: 'consumed' | 'not-consumable' | 'not-needed';
   healthDelta: number;
   thirstDelta: number;
   hungerDelta: number;
 }
 
-const CONSUMABLE_EFFECTS: Partial<Record<ItemId, Omit<ConsumableResult, 'survival' | 'usable'>>> = {
+export const CONSUMABLE_EFFECTS: Partial<
+  Record<ItemId, Pick<ConsumableResult, 'healthDelta' | 'thirstDelta' | 'hungerDelta'>>
+> = {
   emergencyWater: { healthDelta: 0, thirstDelta: 34, hungerDelta: 0 },
   freshWaterCup: { healthDelta: 1, thirstDelta: 42, hungerDelta: 0 },
   ration: { healthDelta: 0, thirstDelta: -2, hungerDelta: 28 },
@@ -68,13 +91,51 @@ const CONSUMABLE_EFFECTS: Partial<Record<ItemId, Omit<ConsumableResult, 'surviva
   burntFish: { healthDelta: -3, thirstDelta: -4, hungerDelta: 12 },
 };
 
+export function canBenefitFromConsumable(current: SurvivalState, itemId: ItemId): boolean {
+  const effect = CONSUMABLE_EFFECTS[itemId];
+  if (!effect) return false;
+  return (effect.healthDelta > 0 && current.health < 100)
+    || (effect.thirstDelta > 0 && current.thirst < 100)
+    || (effect.hungerDelta > 0 && current.hunger < 100);
+}
+
+export function survivalNeedRunwaySeconds(
+  current: SurvivalState,
+  inventory: Inventory,
+  need: 'thirst' | 'hunger',
+): number {
+  const deltaKey = need === 'thirst' ? 'thirstDelta' : 'hungerDelta';
+  const stored = (Object.entries(CONSUMABLE_EFFECTS) as [ItemId, NonNullable<(typeof CONSUMABLE_EFFECTS)[ItemId]>][])
+    .reduce((total, [itemId, effect]) => total + itemCount(inventory, itemId) * Math.max(0, effect[deltaKey]), 0);
+  const rate = need === 'thirst' ? THIRST_DRAIN_PER_SECOND : HUNGER_DRAIN_PER_SECOND;
+  return (clampStat(current[need]) + stored) / rate;
+}
+
 export function consumeItem(current: SurvivalState, itemId: ItemId): ConsumableResult {
   const effect = CONSUMABLE_EFFECTS[itemId];
   if (!effect) {
-    return { survival: current, usable: false, healthDelta: 0, thirstDelta: 0, hungerDelta: 0 };
+    return {
+      survival: current,
+      usable: false,
+      reason: 'not-consumable',
+      healthDelta: 0,
+      thirstDelta: 0,
+      hungerDelta: 0,
+    };
+  }
+  if (!canBenefitFromConsumable(current, itemId)) {
+    return {
+      survival: current,
+      usable: false,
+      reason: 'not-needed',
+      healthDelta: 0,
+      thirstDelta: 0,
+      hungerDelta: 0,
+    };
   }
   return {
     usable: true,
+    reason: 'consumed',
     ...effect,
     survival: {
       health: clampStat(current.health + effect.healthDelta),

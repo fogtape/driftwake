@@ -580,9 +580,9 @@ button:focus-visible {
 
 .survival-gauge {
   display: grid;
-  grid-template-columns: 24px 1fr;
+  grid-template-columns: 24px minmax(0, 1fr) 24px;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .survival-gauge__icon {
@@ -606,6 +606,31 @@ button:focus-visible {
   display: block;
   height: 100%;
   transform-origin: left center;
+}
+
+.survival-gauge > strong {
+  color: rgba(230, 241, 237, 0.5);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+  opacity: 0;
+  transition: color 160ms ease, opacity 160ms ease;
+}
+.survival-gauge.is-low > strong,
+.survival-gauge.is-critical > strong,
+.survival-gauge.is-depleted > strong { opacity: 1; }
+.survival-gauge.is-low .survival-gauge__track { border-color: currentColor; }
+.survival-gauge.is-critical > strong,
+.survival-gauge.is-depleted > strong { color: currentColor; }
+.survival-gauge.is-critical .survival-gauge__icon,
+.survival-gauge.is-depleted .survival-gauge__icon { animation: survival-critical-pulse 1.1s ease-in-out infinite; }
+.survival-gauge.is-critical .survival-gauge__track,
+.survival-gauge.is-depleted .survival-gauge__track { border-color: currentColor; box-shadow: 0 0 9px color-mix(in srgb, currentColor 35%, transparent); }
+
+@keyframes survival-critical-pulse {
+  0%, 100% { opacity: 0.62; transform: scale(0.92); }
+  50% { opacity: 1; transform: scale(1); }
 }
 
 .survival-gauge--health { color: var(--coral); }
@@ -1334,6 +1359,7 @@ button:focus-visible {
 }
 
 .field-pack {
+  position: relative;
   display: grid;
   width: min(980px, 100%);
   height: min(680px, calc(100dvh - 40px));
@@ -1345,6 +1371,30 @@ button:focus-visible {
   background: #0b242a;
   box-shadow: 0 22px 65px rgba(0, 0, 0, 0.46);
 }
+
+.field-pack__feedback {
+  position: absolute;
+  z-index: 4;
+  bottom: 18px;
+  left: 50%;
+  max-width: calc(100% - 36px);
+  overflow: hidden;
+  padding: 7px 11px;
+  color: #edf5f1;
+  border: 1px solid rgba(102, 151, 144, 0.48);
+  border-radius: 3px;
+  background: rgba(7, 29, 34, 0.92);
+  box-shadow: 0 7px 22px rgba(0, 0, 0, 0.28);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 7px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.field-pack__feedback.is-visible { opacity: 1; transform: translate(-50%, 0); }
 
 .field-pack__header {
   display: grid;

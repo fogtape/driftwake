@@ -47,6 +47,7 @@ import {
   type QueueCraftResult,
 } from '../game/domain/craftingQueue';
 import { TOOL_MAX_DURABILITY, toolDurabilityRatio, type ToolDurability } from '../game/domain/toolDurability';
+import { canBenefitFromConsumable, type SurvivalState } from '../game/domain/survival';
 import {
   RESEARCH_PROJECTS,
   RESEARCH_SAMPLE_IDS,
@@ -68,12 +69,14 @@ interface FieldPackPanelProps {
   panel: OverlayPanel;
   inventory: Inventory;
   crafting: CraftingQueueState;
+  survival: SurvivalState;
   toolDurability: ToolDurability;
   inventorySlots: number;
   raft: RaftFeedback;
   progression: ProgressionFeedback;
   storage: StorageFeedback | null;
   saveStatus: 'idle' | 'saved' | 'error';
+  notice: string | null;
   onPanelChange: (panel: Exclude<OverlayPanel, null>) => void;
   onQueueCraft: (recipeId: RecipeId, quantity: number) => QueueCraftResult;
   onCancelCraft: (entryId: string) => CancelCraftResult;
@@ -139,12 +142,14 @@ export function FieldPackPanel({
   panel,
   inventory,
   crafting,
+  survival,
   toolDurability,
   inventorySlots,
   raft,
   progression,
   storage,
   saveStatus,
+  notice,
   onPanelChange,
   onQueueCraft,
   onCancelCraft,
@@ -303,6 +308,9 @@ export function FieldPackPanel({
   const transferDefinition = transferSelection ? ITEM_DEFINITIONS[transferSelection.itemId] : null;
   const transferTargetLabel = transferSelection?.side === 'pack' ? '密封干舱' : '随身背包';
   const transferMoved = transferPreview?.moved ?? 0;
+  const selectedConsumableReady = CONSUMABLES.has(selectedItem)
+    ? canBenefitFromConsumable(survival, selectedItem)
+    : false;
 
   return (
     <div className="modal-layer field-pack-layer" role="presentation">
@@ -547,9 +555,16 @@ export function FieldPackPanel({
                 )}
               </dl>
               {CONSUMABLES.has(selectedItem) && (
-                <button className="panel-command" type="button" onClick={() => onUse(selectedItem)}>
+                <button
+                  className="panel-command"
+                  type="button"
+                  disabled={!selectedConsumableReady}
+                  onClick={() => onUse(selectedItem)}
+                >
                   <HeartPulse size={18} />
-                  {selectedDefinition.category === 'water' ? '饮用' : '食用'}
+                  {selectedConsumableReady
+                    ? selectedDefinition.category === 'water' ? '饮用' : '食用'
+                    : selectedDefinition.category === 'water' ? '水分充足' : '状态充足'}
                 </button>
               )}
               {PLACEABLES[selectedItem] && (
@@ -774,6 +789,9 @@ export function FieldPackPanel({
             </section>
           </div>
         )}
+        <div className={`field-pack__feedback ${notice ? 'is-visible' : ''}`} aria-live="polite">
+          {notice}
+        </div>
       </section>
     </div>
   );

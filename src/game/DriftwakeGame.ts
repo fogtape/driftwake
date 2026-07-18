@@ -74,8 +74,20 @@ import {
   recipeCraftSeconds,
   type CraftingOutputBlockReason,
 } from './domain/craftingQueue';
+import {
+  survivalBand,
+  survivalNeedRunwaySeconds,
+  type SurvivalBand,
+  type SurvivalState,
+} from './domain/survival';
 
 const CRAFTING_TICK_SECONDS = 0.1;
+const SURVIVAL_BAND_SEVERITY: Record<SurvivalBand, number> = {
+  stable: 0,
+  low: 1,
+  critical: 2,
+  depleted: 3,
+};
 
 const DYNAMIC_RESOLUTION_POLICIES: Record<QualityPreset, DynamicResolutionPolicy> = {
   high: {
@@ -169,6 +181,10 @@ export class DriftwakeGame {
   private craftingAccumulator = 0;
   private craftingCompletedCount = 0;
   private lastCraftingBlockReason: CraftingOutputBlockReason | null = null;
+  private readonly lastSurvivalBands: Record<'thirst' | 'hunger', SurvivalBand> = {
+    thirst: 'stable',
+    hunger: 'stable',
+  };
   private saveElapsed = 0;
   private simulationTickCount = 0;
   private unsubscribeStore: (() => void) | null = null;
@@ -217,6 +233,10 @@ export class DriftwakeGame {
     this.mount.dataset.craftingProgress = '0';
     this.mount.dataset.craftingBlocked = 'none';
     this.mount.dataset.craftingCompletedCount = '0';
+    this.mount.dataset.survivalThirstBand = 'stable';
+    this.mount.dataset.survivalHungerBand = 'stable';
+    this.mount.dataset.thirstRunwaySeconds = '0';
+    this.mount.dataset.hungerRunwaySeconds = '0';
     this.audio.setMix(useGameStore.getState().audioMix);
     this.syncAudioFocusMuted();
     this.setQuality(useGameStore.getState().quality);
@@ -449,6 +469,9 @@ export class DriftwakeGame {
         if (state.crafting !== previous.crafting || state.inventory !== previous.inventory) {
           this.syncCraftingDiagnostics();
         }
+        if (state.survival !== previous.survival || state.inventory !== previous.inventory) {
+          this.syncSurvivalDiagnostics();
+        }
         if (state.phase === 'failed' && previous.phase !== 'failed' && state.failure) {
           this.pauseInput();
           if (state.audioEnabled) {
@@ -462,6 +485,7 @@ export class DriftwakeGame {
       });
       this.syncEquipment();
       this.syncCraftingDiagnostics();
+      this.syncSurvivalDiagnostics();
 
       store.setLoadingLabel('正在建立物理世界');
       await this.physics.initialize();
@@ -579,8 +603,10 @@ export class DriftwakeGame {
     this.saveNow();
   }
 
-  playConsume(): void {
-    this.audio.playCollect();
+  playConsume(itemId: ItemId): void {
+    if (itemId === 'emergencyWater' || itemId === 'freshWaterCup') this.audio.playDrink();
+    else this.audio.playEat(itemId === 'rawFish' || itemId === 'cookedFish' || itemId === 'burntFish');
+    this.saveNow();
   }
 
   transferStorage(itemId: ItemId, direction: 'to-storage' | 'to-pack', amount?: number): boolean {
@@ -775,8 +801,11 @@ export class DriftwakeGame {
 
     this.simulationAccumulator += stepSeconds;
     while (this.simulationAccumulator >= 1) {
-      useGameStore.getState().tickSurvival(1, this.player?.isSubmerged() ?? false);
-      useGameStore.getState().advancePlayTime(1);
+      const store = useGameStore.getState();
+      store.tickSurvival(1, this.player?.isSubmerged() ?? false);
+      const next = useGameStore.getState();
+      if (next.phase === 'playing') this.handleSurvivalPressure(next.survival);
+      next.advancePlayTime(1);
       this.simulationAccumulator -= 1;
     }
   };
@@ -1172,6 +1201,43 @@ export class DriftwakeGame {
     this.mount.dataset.craftingBlocked = blocked ?? 'none';
     this.mount.dataset.craftingCompletedCount = String(this.craftingCompletedCount);
     if (!blocked) this.lastCraftingBlockReason = null;
+  }
+
+  private syncSurvivalDiagnostics(): void {
+    const state = useGameStore.getState();
+    this.mount.dataset.survivalThirstBand = survivalBand('thirst', state.survival.thirst);
+    this.mount.dataset.survivalHungerBand = survivalBand('hunger', state.survival.hunger);
+    this.mount.dataset.thirstRunwaySeconds = String(Math.round(
+      survivalNeedRunwaySeconds(state.survival, state.inventory, 'thirst'),
+    ));
+    this.mount.dataset.hungerRunwaySeconds = String(Math.round(
+      survivalNeedRunwaySeconds(state.survival, state.inventory, 'hunger'),
+    ));
+  }
+
+  private handleSurvivalPressure(survival: SurvivalState): void {
+    let warning: { need: 'thirst' | 'hunger'; band: SurvivalBand } | null = null;
+    for (const need of ['thirst', 'hunger'] as const) {
+      const band = survivalBand(need, survival[need]);
+      const previous = this.lastSurvivalBands[need];
+      if (
+        SURVIVAL_BAND_SEVERITY[band] > SURVIVAL_BAND_SEVERITY[previous]
+        && band !== 'stable'
+      ) {
+        if (!warning || SURVIVAL_BAND_SEVERITY[band] > SURVIVAL_BAND_SEVERITY[warning.band]) {
+          warning = { need, band };
+        }
+      }
+      this.lastSurvivalBands[need] = band;
+    }
+    if (!warning) return;
+    const critical = warning.band === 'critical' || warning.band === 'depleted';
+    this.audio.playSurvivalWarning(warning.need, critical);
+    this.showTransientNotice(
+      warning.need === 'thirst'
+        ? warning.band === 'depleted' ? '水分耗尽 · 生命正在下降' : critical ? '严重缺水' : '水分偏低'
+        : warning.band === 'depleted' ? '饱食耗尽 · 生命正在下降' : critical ? '严重饥饿' : '饱食偏低',
+    );
   }
 
   private readonly onBeforeUnload = (): void => {

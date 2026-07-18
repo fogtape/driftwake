@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { ITEM_DEFINITIONS, itemCount, preferredToolOrder, type Inventory, type ToolId } from '../game/domain/items';
 import { TOOL_MAX_DURABILITY, toolDurabilityRatio, type ToolDurability } from '../game/domain/toolDurability';
+import { survivalBand } from '../game/domain/survival';
 import { ISLAND_APPROACH_SECONDS, ISLAND_DEPART_SECONDS, ISLAND_DOCK_SECONDS } from '../game/domain/island';
 import { cardinalLabel } from '../game/domain/navigation';
 import type {
@@ -91,12 +92,17 @@ function clampPercent(value: number): number {
 
 function Gauge({ icon, value, tone, label }: GaugeProps) {
   const rounded = Math.round(value);
+  const band = survivalBand(tone, value);
   return (
-    <div className={`survival-gauge survival-gauge--${tone}`} aria-label={`${label} ${rounded}`}>
+    <div
+      className={`survival-gauge survival-gauge--${tone} is-${band}`}
+      aria-label={`${label} ${rounded}${band === 'critical' || band === 'depleted' ? ' 危险' : band === 'low' ? ' 偏低' : ''}`}
+    >
       <span className="survival-gauge__icon">{icon}</span>
       <span className="survival-gauge__track">
         <span className="survival-gauge__fill" style={{ width: `${rounded}%` }} />
       </span>
+      <strong aria-hidden="true">{rounded}</strong>
     </div>
   );
 }

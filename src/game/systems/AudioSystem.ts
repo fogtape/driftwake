@@ -737,6 +737,68 @@ export class AudioSystem {
     }
   }
 
+  playSurvivalWarning(need: 'thirst' | 'hunger', critical: boolean): void {
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    if (need === 'thirst') {
+      this.noiseBurst(critical ? 0.22 : 0.14, critical ? 1850 : 2350, critical ? 0.052 : 0.032, 'highpass');
+      [0, critical ? 0.16 : 0.2].forEach((offset, index) => {
+        const oscillator = this.context!.createOscillator();
+        const gain = this.context!.createGain();
+        const start = now + offset;
+        oscillator.type = 'triangle';
+        oscillator.frequency.setValueAtTime(critical ? 168 : 205, start);
+        oscillator.frequency.exponentialRampToValueAtTime(critical ? 76 : 108, start + 0.13);
+        gain.gain.setValueAtTime((critical ? 0.047 : 0.027) / (index + 1), start);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.15);
+        oscillator.connect(gain).connect(this.effects!);
+        oscillator.start(start);
+        oscillator.stop(start + 0.16);
+      });
+      return;
+    }
+    this.noiseBurst(critical ? 0.52 : 0.34, critical ? 180 : 230, critical ? 0.085 : 0.05, 'lowpass');
+    const oscillator = this.context.createOscillator();
+    const filter = this.context.createBiquadFilter();
+    const gain = this.context.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(critical ? 62 : 74, now);
+    oscillator.frequency.exponentialRampToValueAtTime(critical ? 38 : 46, now + 0.42);
+    filter.type = 'lowpass';
+    filter.frequency.value = 260;
+    gain.gain.setValueAtTime(critical ? 0.055 : 0.034, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.46);
+    oscillator.connect(filter).connect(gain).connect(this.effects);
+    oscillator.start(now);
+    oscillator.stop(now + 0.47);
+  }
+
+  playDrink(): void {
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    this.noiseBurst(0.38, 780, 0.052, 'lowpass');
+    this.noiseBurst(0.16, 2100, 0.025, 'bandpass');
+    [0, 0.085, 0.17].forEach((offset, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + offset;
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(190 - index * 18, start);
+      oscillator.frequency.exponentialRampToValueAtTime(112 - index * 9, start + 0.1);
+      gain.gain.setValueAtTime(0.025 - index * 0.004, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
+      oscillator.connect(gain).connect(this.effects!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.13);
+    });
+  }
+
+  playEat(wet = false): void {
+    this.noiseBurst(wet ? 0.26 : 0.13, wet ? 620 : 2450, wet ? 0.065 : 0.048, wet ? 'lowpass' : 'highpass');
+    this.noiseBurst(0.1, wet ? 1280 : 980, 0.038, 'bandpass');
+    this.playWoodKnock(wet ? 0.025 : 0.04, 0.055);
+  }
+
   playPlayerBite(): void {
     this.noiseBurstTo(0.42, 220, 0.24, 'lowpass', this.creatures);
     this.noiseBurstTo(0.18, 1320, 0.11, 'bandpass', this.creatures);

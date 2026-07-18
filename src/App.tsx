@@ -228,11 +228,28 @@ export function App() {
     return result;
   };
   const useItem = (itemId: ItemId) => {
+    const before = useGameStore.getState().survival;
     const used = useGameStore.getState().useItem(itemId);
-    gameRef.current?.playUi(used);
     if (used) {
-      gameRef.current?.playConsume();
-      showTransientNotice(`${ITEM_DEFINITIONS[itemId].shortName} 已使用`);
+      const after = useGameStore.getState().survival;
+      const changes = [
+        ['生命', Math.round(after.health - before.health)],
+        ['水分', Math.round(after.thirst - before.thirst)],
+        ['饱食', Math.round(after.hunger - before.hunger)],
+      ] as const;
+      const summary = changes
+        .filter(([, amount]) => amount !== 0)
+        .map(([label, amount]) => `${label} ${amount > 0 ? '+' : ''}${amount}`)
+        .join(' · ');
+      gameRef.current?.playConsume(itemId);
+      showTransientNotice(`${ITEM_DEFINITIONS[itemId].shortName} · ${summary}`);
+    } else {
+      gameRef.current?.playUi(false);
+      showTransientNotice(
+        ITEM_DEFINITIONS[itemId].category === 'water'
+          ? '水分充足，暂时不需要饮用'
+          : '状态充足，暂时不需要进食',
+      );
     }
     return used;
   };
@@ -327,12 +344,14 @@ export function App() {
         panel={overlayPanel}
         inventory={inventory}
         crafting={crafting}
+        survival={survival}
         toolDurability={toolDurability}
         inventorySlots={inventorySlots}
         raft={raft}
         progression={progression}
         storage={storage}
         saveStatus={saveStatus}
+        notice={notice}
         onPanelChange={(panel) => {
           useGameStore.getState().setOverlayPanel(panel);
           gameRef.current?.playUi();
