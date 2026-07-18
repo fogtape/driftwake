@@ -1,7 +1,8 @@
 import {
+  BoxGeometry,
   Color,
+  CylinderGeometry,
   Group,
-  MathUtils,
   Mesh,
   MeshStandardMaterial,
   PerspectiveCamera,
@@ -11,27 +12,87 @@ import {
   type WebGLRenderer,
 } from 'three';
 import { createHammerModel, createRaftTile } from '../art/ProceduralModels';
+import { createRaftStructureParts } from '../art/RaftStructureParts';
 import type { MaterialLibrary } from '../art/Materials';
-import { ITEM_DEFINITIONS, hasItems, type ItemBundle } from '../domain/items';
+import {
+  INVENTORY_SLOT_CAPACITY,
+  ITEM_DEFINITIONS,
+  addItems,
+  hasItems,
+  type ItemBundle,
+  type ItemId,
+} from '../domain/items';
+import {
+  RAFT_BUILD_PIECES,
+  RAFT_BUILD_PIECE_DEFINITIONS,
+  RAFT_STRUCTURE_DEFINITIONS,
+  normalizeRaftRotation,
+  type RaftBuildPiece,
+  type RaftRotation,
+  type SavedRaftStructure,
+  type StructurePlacementReason,
+} from '../domain/raftStructures';
 import { useGameStore } from '../../state/gameStore';
 import type { AudioSystem } from './AudioSystem';
 import { RAFT_TILE_X, RAFT_TILE_Z, type GridCoordinate, type RaftSystem } from './RaftSystem';
+import type { RaftStructureSystem, StructurePlacementCandidate } from './RaftStructureSystem';
 import type { SplashSystem } from './SplashSystem';
 
 type PreviewMode = 'build' | 'repair' | 'invalid' | 'hidden';
 export type HammerAction = 'build' | 'repair' | 'dismantle';
 
-const FOUNDATION_COST: ItemBundle = { timber: 2, polymer: 1 };
+const FOUNDATION_COST: ItemBundle = RAFT_BUILD_PIECE_DEFINITIONS.foundation.cost;
 const REPAIR_COST: ItemBundle = { timber: 1 };
+const FOUNDATION_REFUND: ItemBundle = { timber: 1 };
+const PLACEMENT_REASON_LABEL: Record<Exclude<StructurePlacementReason, 'valid'>, string> = {
+  occupied: '此处已有同类承位结构',
+  unsupported: '缺少足够的下层承重结构',
+  'out-of-bounds': '结构超出木筏建造边界',
+  'invalid-level': '当前层高无法放置该结构',
+  limit: '木筏结构数量已达上限',
+};
 
 function coordinateEquals(a: GridCoordinate | null, b: GridCoordinate | null): boolean {
   return Boolean(a && b && a.x === b.x && a.z === b.z);
 }
 
+function costLabel(cost: ItemBundle): string {
+  return (Object.entries(cost) as [ItemId, number][])
+    .filter(([, amount]) => amount > 0)
+    .map(([itemId, amount]) => `${amount} ${ITEM_DEFINITIONS[itemId].shortName}`)
+    .join('  ');
+}
+
+function missingCostLabel(cost: ItemBundle, inventory: ItemBundle): string {
+  return (Object.entries(cost) as [ItemId, number][])
+    .filter(([itemId, amount]) => (inventory[itemId] ?? 0) < amount)
+    .map(([itemId]) => ITEM_DEFINITIONS[itemId].shortName)
+    .join('、');
+}
+
+function pieceLevel(piece: RaftBuildPiece): number {
+  return piece === 'floor' || piece === 'roof' ? 1 : 0;
+}
+
+function occupiesDeviceCell(candidate: StructurePlacementCandidate): boolean {
+  return candidate.level === 0 && (candidate.type === 'pillar' || candidate.type === 'stairs');
+}
+
 export class BuildSystem {
   private readonly viewModel: Group;
-  private readonly preview: Group;
-  private readonly previewMaterials: MeshStandardMaterial[] = [];
+  private readonly foundationPreview: Group;
+  private readonly foundationPreviewMaterials: MeshStandardMaterial[] = [];
+  private readonly structurePreview = new Group();
+  private readonly structurePreviewMaterial = new MeshStandardMaterial({
+    color: 0x72d4b3,
+    roughness: 0.68,
+    metalness: 0.02,
+    transparent: true,
+    opacity: 0.54,
+    depthWrite: false,
+  });
+  private readonly previewBoxGeometry = new BoxGeometry(1, 1, 1);
+  private readonly previewCylinderGeometry = new CylinderGeometry(0.5, 0.5, 1, 8);
   private readonly ray = new Ray();
   private readonly localOrigin = new Vector3();
   private readonly localDirection = new Vector3();
@@ -44,6 +105,11 @@ export class BuildSystem {
   private readonly invalidColor = new Color(0xe26f55);
   private targetCoordinate: GridCoordinate | null = null;
   private hoveredTileCoordinate: GridCoordinate | null = null;
+  private hoveredStructure: SavedRaftStructure | null = null;
+  private targetStructure: StructurePlacementCandidate | null = null;
+  private selectedPiece: RaftBuildPiece = 'foundation';
+  private selectedRotation: RaftRotation = 0;
+  private selectedLevel = 0;
   private mode: PreviewMode = 'hidden';
   private equipped = false;
   private inputEnabled = false;
@@ -55,6 +121,7 @@ export class BuildSystem {
     private readonly camera: PerspectiveCamera,
     materials: MaterialLibrary,
     private readonly raft: RaftSystem,
+    private readonly structures: RaftStructureSystem,
     private readonly audio: AudioSystem,
     private readonly splashes: SplashSystem,
     private readonly hasOccupant: (coordinate: GridCoordinate) => boolean = () => false,
@@ -69,10 +136,10 @@ export class BuildSystem {
     this.viewModel.visible = false;
     this.camera.add(this.viewModel);
 
-    this.preview = createRaftTile(materials, 47);
-    this.preview.name = 'raft-foundation-preview';
-    this.preview.visible = false;
-    this.preview.traverse((object) => {
+    this.foundationPreview = createRaftTile(materials, 47);
+    this.foundationPreview.name = 'raft-foundation-preview';
+    this.foundationPreview.visible = false;
+    this.foundationPreview.traverse((object) => {
       if (!(object instanceof Mesh)) return;
       const material = new MeshStandardMaterial({
         color: 0x72d4b3,
@@ -81,46 +148,62 @@ export class BuildSystem {
         opacity: 0.54,
         depthWrite: false,
       });
-      this.previewMaterials.push(material);
+      this.foundationPreviewMaterials.push(material);
       object.material = material;
       object.castShadow = false;
       object.receiveShadow = false;
     });
-    this.preview.renderOrder = 3;
-    this.raft.group.add(this.preview);
+    this.foundationPreview.renderOrder = 3;
+    this.raft.group.add(this.foundationPreview);
+
+    this.structurePreview.name = 'raft-structure-preview';
+    this.structurePreview.visible = false;
+    this.structurePreview.renderOrder = 3;
+    this.raft.group.add(this.structurePreview);
+    this.rebuildStructurePreview();
 
     this.renderer.domElement.addEventListener('mousedown', this.onPointerDown);
     this.renderer.domElement.addEventListener('contextmenu', this.onContextMenu);
+    this.renderer.domElement.addEventListener('wheel', this.onWheel, { passive: false });
+    window.addEventListener('keydown', this.onKeyDown);
+    this.publishFeedback();
   }
 
   setEquipped(equipped: boolean): void {
     this.equipped = equipped;
     this.viewModel.visible = equipped;
-    if (!equipped) {
-      this.preview.visible = false;
-      this.mode = 'hidden';
-      this.targetCoordinate = null;
-      this.hoveredTileCoordinate = null;
-    }
+    if (!equipped) this.hidePreview();
+    this.publishFeedback();
   }
 
   setInputEnabled(enabled: boolean): void {
     this.inputEnabled = enabled;
-    if (!enabled) {
-      this.preview.visible = false;
-      useGameStore.getState().setInteraction(null, 'build');
-    }
+    if (!enabled) this.hidePreview();
   }
 
   getDiagnostics(): {
     mode: PreviewMode;
     target: GridCoordinate | null;
     hovered: GridCoordinate | null;
+    piece: RaftBuildPiece;
+    rotation: RaftRotation;
+    level: number;
+    hoveredStructure: string | null;
+    structureTarget: string | null;
+    structureCount: number;
   } {
     return {
       mode: this.mode,
       target: this.targetCoordinate ? { ...this.targetCoordinate } : null,
       hovered: this.hoveredTileCoordinate ? { ...this.hoveredTileCoordinate } : null,
+      piece: this.selectedPiece,
+      rotation: this.selectedRotation,
+      level: this.selectedLevel,
+      hoveredStructure: this.hoveredStructure?.id ?? null,
+      structureTarget: this.targetStructure
+        ? `${this.targetStructure.type}:${this.targetStructure.x},${this.targetStructure.z}:${this.targetStructure.level}:${this.targetStructure.rotation}`
+        : null,
+      structureCount: this.structures.count,
     };
   }
 
@@ -132,18 +215,21 @@ export class BuildSystem {
     this.viewModel.position.set(0.52, -0.72 + strike * 0.07, -0.88 - strike * 0.18);
     this.viewModel.rotation.set(-0.18 - strike * 0.72, -0.28, -0.32 + strike * 0.22);
     this.viewModel.position.x += Math.sin(time * 1.6) * 0.008;
-
-    if (!this.inputEnabled) return;
-    this.updatePreview();
+    if (this.inputEnabled) this.updatePreview();
   }
 
   dispose(): void {
     this.renderer.domElement.removeEventListener('mousedown', this.onPointerDown);
     this.renderer.domElement.removeEventListener('contextmenu', this.onContextMenu);
+    this.renderer.domElement.removeEventListener('wheel', this.onWheel);
+    window.removeEventListener('keydown', this.onKeyDown);
     if (this.noticeTimer !== null) window.clearTimeout(this.noticeTimer);
     this.camera.remove(this.viewModel);
-    this.raft.group.remove(this.preview);
-    this.previewMaterials.forEach((material) => material.dispose());
+    this.raft.group.remove(this.foundationPreview, this.structurePreview);
+    this.foundationPreviewMaterials.forEach((material) => material.dispose());
+    this.structurePreviewMaterial.dispose();
+    this.previewBoxGeometry.dispose();
+    this.previewCylinderGeometry.dispose();
   }
 
   private updatePreview(): void {
@@ -152,19 +238,28 @@ export class BuildSystem {
     this.localOrigin.copy(this.camera.position).sub(this.raft.group.position).applyQuaternion(this.inverseRaftRotation);
     this.localDirection.copy(this.forward).applyQuaternion(this.inverseRaftRotation).normalize();
     this.ray.set(this.localOrigin, this.localDirection);
+    this.hoveredStructure = this.structures.findRayTarget(this.ray, 6.2);
     if (Math.abs(this.ray.direction.y) < 0.02) {
-      this.hidePreview();
+      this.hidePlacementOnly();
+      this.publishDismantlePrompt();
       return;
     }
     const distance = (0.08 - this.ray.origin.y) / this.ray.direction.y;
     if (distance <= 0 || distance > 6.2) {
-      this.hidePreview();
+      this.hidePlacementOnly();
+      this.publishDismantlePrompt();
       return;
     }
     this.ray.at(distance, this.localHit);
+    if (this.selectedPiece === 'foundation') this.updateFoundationPreview();
+    else this.updateStructurePreview();
+  }
+
+  private updateFoundationPreview(): void {
     const hitCoordinate = this.raft.localToGrid(this.localHit);
     const hitTile = this.raft.getTile(hitCoordinate);
     this.hoveredTileCoordinate = hitTile ? hitCoordinate : null;
+    this.targetStructure = null;
     let coordinate = hitCoordinate;
     let mode: PreviewMode = 'invalid';
 
@@ -188,61 +283,109 @@ export class BuildSystem {
 
     const inventory = useGameStore.getState().inventory;
     const cost = mode === 'repair' ? REPAIR_COST : FOUNDATION_COST;
-    const affordable = hasItems(inventory, cost);
-    this.setPreview(coordinate, mode, affordable);
+    this.setFoundationPreview(coordinate, mode, hasItems(inventory, cost));
   }
 
-  private setPreview(coordinate: GridCoordinate, mode: PreviewMode, affordable: boolean): void {
+  private updateStructurePreview(): void {
+    if (this.selectedPiece === 'foundation') return;
+    const structureType = this.selectedPiece;
+    const coordinate = this.raft.localToGrid(this.localHit);
+    this.hoveredTileCoordinate = this.raft.hasTile(coordinate) ? coordinate : null;
+    const candidate: StructurePlacementCandidate = {
+      type: structureType,
+      x: coordinate.x,
+      z: coordinate.z,
+      level: this.selectedLevel,
+      rotation: this.selectedRotation,
+    };
+    this.targetCoordinate = coordinate;
+    this.targetStructure = candidate;
+    const reason = occupiesDeviceCell(candidate) && this.hasOccupant(coordinate)
+      ? 'occupied'
+      : this.structures.canPlace(candidate);
+    const cost = RAFT_STRUCTURE_DEFINITIONS[candidate.type].cost;
+    const inventory = useGameStore.getState().inventory;
+    const affordable = hasItems(inventory, cost);
+    this.mode = reason === 'valid' ? 'build' : 'invalid';
+    this.foundationPreview.visible = false;
+    this.structurePreview.visible = true;
+    this.structures.positionObject(this.structurePreview, this.structures.createCandidate(candidate));
+    this.applyPreviewColor(reason === 'valid' && affordable ? this.validColor : this.invalidColor, reason === 'valid' && affordable ? 0.54 : 0.34);
+    const definition = RAFT_STRUCTURE_DEFINITIONS[candidate.type];
+    if (reason !== 'valid') {
+      useGameStore.getState().setInteraction(PLACEMENT_REASON_LABEL[reason], 'build');
+    } else if (!affordable) {
+      useGameStore.getState().setInteraction(`缺少 ${missingCostLabel(cost, inventory)}`, 'build');
+    } else {
+      useGameStore.getState().setInteraction(`${definition.shortName} · ${costLabel(cost)}`, 'build');
+    }
+    this.publishFeedback(reason === 'valid' && affordable);
+  }
+
+  private setFoundationPreview(coordinate: GridCoordinate, mode: PreviewMode, affordable: boolean): void {
     const changedTarget = !coordinateEquals(this.targetCoordinate, coordinate) || this.mode !== mode;
     this.targetCoordinate = coordinate;
     this.mode = mode;
-    this.preview.visible = true;
-    this.preview.position.set(
+    this.foundationPreview.visible = true;
+    this.structurePreview.visible = false;
+    this.foundationPreview.position.set(
       coordinate.x * RAFT_TILE_X,
       mode === 'repair' ? 0.045 : 0.015,
       coordinate.z * RAFT_TILE_Z,
     );
-    this.preview.scale.setScalar(mode === 'repair' ? 1.018 : 1);
+    this.foundationPreview.scale.setScalar(mode === 'repair' ? 1.018 : 1);
     const color = mode === 'invalid' || !affordable ? this.invalidColor : mode === 'repair' ? this.repairColor : this.validColor;
-    this.previewMaterials.forEach((material) => {
+    this.foundationPreviewMaterials.forEach((material) => {
       material.color.copy(color);
       material.opacity = mode === 'invalid' || !affordable ? 0.34 : 0.54;
     });
+    this.publishFeedback(mode !== 'invalid' && affordable);
     if (!changedTarget) return;
     if (mode === 'repair') {
       useGameStore.getState().setInteraction(affordable ? '修补受损筏格 · 1 漂木' : '缺少修补材料', 'build');
     } else if (mode === 'build') {
-      if (affordable) {
-        useGameStore.getState().setInteraction('扩建基础筏格 · 2 漂木  1 聚合片', 'build');
-      } else {
-        const inventory = useGameStore.getState().inventory;
-        const missing = (Object.entries(FOUNDATION_COST) as [keyof typeof FOUNDATION_COST, number][])
-          .filter(([id, amount]) => (inventory[id] ?? 0) < amount)
-          .map(([id]) => ITEM_DEFINITIONS[id].shortName)
-          .join('、');
-        useGameStore.getState().setInteraction(`缺少 ${missing}`, 'build');
-      }
+      useGameStore.getState().setInteraction(
+        affordable ? `基础筏格 · ${costLabel(FOUNDATION_COST)}` : `缺少 ${missingCostLabel(FOUNDATION_COST, useGameStore.getState().inventory)}`,
+        'build',
+      );
     } else {
-      const inventory = useGameStore.getState().inventory;
-      const missing = (Object.entries(FOUNDATION_COST) as [keyof typeof FOUNDATION_COST, number][])
-        .filter(([id, amount]) => (inventory[id] ?? 0) < amount)
-        .map(([id]) => ITEM_DEFINITIONS[id].shortName)
-        .join('、');
-      useGameStore.getState().setInteraction(missing ? `缺少 ${missing}` : '此处无法连接结构', 'build');
+      const missing = missingCostLabel(FOUNDATION_COST, useGameStore.getState().inventory);
+      useGameStore.getState().setInteraction(missing ? `缺少 ${missing}` : '此处无法连接基础筏格', 'build');
     }
   }
 
-  private hidePreview(): void {
-    this.preview.visible = false;
+  private hidePlacementOnly(): void {
+    this.foundationPreview.visible = false;
+    this.structurePreview.visible = false;
     this.mode = 'hidden';
     this.targetCoordinate = null;
     this.hoveredTileCoordinate = null;
+    this.targetStructure = null;
+    this.publishFeedback();
+  }
+
+  private hidePreview(): void {
+    this.hidePlacementOnly();
+    this.hoveredStructure = null;
     useGameStore.getState().setInteraction(null, 'build');
+  }
+
+  private publishDismantlePrompt(): void {
+    if (!this.hoveredStructure) {
+      useGameStore.getState().setInteraction(null, 'build');
+      return;
+    }
+    const definition = RAFT_STRUCTURE_DEFINITIONS[this.hoveredStructure.type];
+    useGameStore.getState().setInteraction(`${definition.shortName} · 返还 ${costLabel(definition.refund)}`, 'build');
   }
 
   private performBuild(): void {
     if (!this.targetCoordinate || this.mode === 'invalid' || this.mode === 'hidden') {
       this.audio.playDenied();
+      return;
+    }
+    if (this.selectedPiece !== 'foundation') {
+      this.performStructureBuild();
       return;
     }
     const store = useGameStore.getState();
@@ -288,15 +431,66 @@ export class BuildSystem {
     this.onHammerUsed(action);
   }
 
-  private showNotice(message: string): void {
-    useGameStore.getState().showNotice(message);
-    if (this.noticeTimer !== null) window.clearTimeout(this.noticeTimer);
-    this.noticeTimer = window.setTimeout(() => {
-      if (useGameStore.getState().notice === message) useGameStore.getState().showNotice(null);
-    }, 1450);
+  private performStructureBuild(): void {
+    if (!this.targetStructure) return;
+    const candidate = { ...this.targetStructure };
+    const definition = RAFT_STRUCTURE_DEFINITIONS[candidate.type];
+    const store = useGameStore.getState();
+    if (
+      (occupiesDeviceCell(candidate) && this.hasOccupant(candidate))
+      || this.structures.canPlace(candidate) !== 'valid'
+      || !store.spendItems(definition.cost)
+    ) {
+      this.audio.playDenied();
+      return;
+    }
+    const placed = this.structures.place(candidate);
+    if (!placed) {
+      store.addItemBundle(definition.cost);
+      this.audio.playDenied();
+      return;
+    }
+    this.structures.getLocalImpactPosition(placed, this.worldHit);
+    this.raft.localPointToWorld(this.worldHit, this.worldHit);
+    this.splashes.spawnImpact(this.worldHit, candidate.type === 'roof' ? 0x8ca56b : 0xd8ae70, 20);
+    this.audio.playBuild();
+    this.swing = 0.34;
+    this.showNotice(`${definition.shortName}已固定`);
+    this.updatePreview();
+    this.onHammerUsed('build');
   }
 
   private performDismantle(): void {
+    if (this.hoveredStructure) {
+      const definition = RAFT_STRUCTURE_DEFINITIONS[this.hoveredStructure.type];
+      const store = useGameStore.getState();
+      if (Object.keys(addItems(store.inventory, definition.refund, INVENTORY_SLOT_CAPACITY).rejected).length > 0) {
+        this.audio.playDenied();
+        this.showNotice('背包没有空间收回结构材料');
+        return;
+      }
+      const result = this.structures.remove(this.hoveredStructure.id);
+      if (result.blocked) {
+        this.audio.playDenied();
+        this.showNotice('上层结构仍依赖这个承重点');
+        return;
+      }
+      if (!result.removed) {
+        this.audio.playDenied();
+        return;
+      }
+      store.addItemBundle(definition.refund);
+      this.structures.getLocalImpactPosition(result.removed, this.worldHit);
+      this.raft.localPointToWorld(this.worldHit, this.worldHit);
+      this.splashes.spawnImpact(this.worldHit, 0x9b6650, 22);
+      this.audio.playBuild();
+      this.swing = 0.34;
+      this.showNotice(`拆除${definition.shortName} · ${costLabel(definition.refund)}`);
+      this.hoveredStructure = null;
+      this.updatePreview();
+      this.onHammerUsed('dismantle');
+      return;
+    }
     if (this.hoveredTileCoordinate && this.hasOccupant(this.hoveredTileCoordinate)) {
       const coordinate = { ...this.hoveredTileCoordinate };
       if (!this.dismantleOccupant(coordinate)) return;
@@ -309,9 +503,20 @@ export class BuildSystem {
       this.onHammerUsed('dismantle');
       return;
     }
+    if (this.hoveredTileCoordinate && !this.structures.canRemoveFoundation(this.hoveredTileCoordinate)) {
+      this.audio.playDenied();
+      this.showNotice('先拆除依赖该筏格的承重结构');
+      return;
+    }
     if (!this.hoveredTileCoordinate || !this.raft.canRemoveTile(this.hoveredTileCoordinate)) {
       this.audio.playDenied();
       this.showNotice('拆除会破坏结构连通');
+      return;
+    }
+    const store = useGameStore.getState();
+    if (Object.keys(addItems(store.inventory, FOUNDATION_REFUND, INVENTORY_SLOT_CAPACITY).rejected).length > 0) {
+      this.audio.playDenied();
+      this.showNotice('背包没有空间收回筏格材料');
       return;
     }
     const coordinate = { ...this.hoveredTileCoordinate };
@@ -319,16 +524,66 @@ export class BuildSystem {
       this.audio.playDenied();
       return;
     }
-    useGameStore.getState().addItemBundle({ timber: 1 });
+    store.addItemBundle(FOUNDATION_REFUND);
     this.raft.gridToLocal(coordinate, this.worldHit);
     this.raft.localPointToWorld(this.worldHit, this.worldHit);
     this.splashes.spawnImpact(this.worldHit, 0xa87150, 24);
     this.audio.playBuild();
     this.swing = 0.34;
-    useGameStore.getState().setRaft(this.raft.getIntegrityStats());
+    store.setRaft(this.raft.getIntegrityStats());
     this.showNotice('拆除返还 +1 漂木');
     this.updatePreview();
     this.onHammerUsed('dismantle');
+  }
+
+  private rebuildStructurePreview(): void {
+    this.structurePreview.clear();
+    if (this.selectedPiece === 'foundation') return;
+    const structureType = this.selectedPiece;
+    for (const part of createRaftStructureParts(structureType, false)) {
+      const geometry = part.geometry === 'box' ? this.previewBoxGeometry : this.previewCylinderGeometry;
+      const mesh = new Mesh(geometry, this.structurePreviewMaterial);
+      mesh.position.fromArray(part.position);
+      mesh.scale.fromArray(part.scale);
+      mesh.rotation.set(part.rotation?.[0] ?? 0, part.rotation?.[1] ?? 0, part.rotation?.[2] ?? 0);
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      this.structurePreview.add(mesh);
+    }
+  }
+
+  private applyPreviewColor(color: Color, opacity: number): void {
+    this.structurePreviewMaterial.color.copy(color);
+    this.structurePreviewMaterial.opacity = opacity;
+  }
+
+  private selectPiece(indexDelta: number): void {
+    const current = RAFT_BUILD_PIECES.indexOf(this.selectedPiece);
+    this.selectedPiece = RAFT_BUILD_PIECES[(current + indexDelta + RAFT_BUILD_PIECES.length) % RAFT_BUILD_PIECES.length];
+    this.selectedLevel = pieceLevel(this.selectedPiece);
+    this.rebuildStructurePreview();
+    this.audio.playUi();
+    this.updatePreview();
+    this.publishFeedback();
+  }
+
+  private publishFeedback(valid = this.mode !== 'invalid' && this.mode !== 'hidden'): void {
+    useGameStore.getState().setBuild({
+      piece: this.selectedPiece,
+      rotation: this.selectedRotation,
+      level: this.selectedLevel,
+      mode: this.equipped ? this.mode : 'hidden',
+      valid,
+      structures: this.structures.count,
+    });
+  }
+
+  private showNotice(message: string): void {
+    useGameStore.getState().showNotice(message);
+    if (this.noticeTimer !== null) window.clearTimeout(this.noticeTimer);
+    this.noticeTimer = window.setTimeout(() => {
+      if (useGameStore.getState().notice === message) useGameStore.getState().showNotice(null);
+    }, 1450);
   }
 
   private readonly onPointerDown = (event: MouseEvent): void => {
@@ -339,5 +594,32 @@ export class BuildSystem {
 
   private readonly onContextMenu = (event: MouseEvent): void => {
     if (this.equipped && this.inputEnabled) event.preventDefault();
+  };
+
+  private readonly onWheel = (event: WheelEvent): void => {
+    if (!this.equipped || !this.inputEnabled || event.deltaY === 0) return;
+    event.preventDefault();
+    this.selectPiece(event.deltaY > 0 ? 1 : -1);
+  };
+
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (
+      !this.equipped
+      || !this.inputEnabled
+      || event.repeat
+      || (event.code !== 'KeyR' && event.code !== 'KeyF')
+      || (event.code === 'KeyF' && this.selectedPiece === 'foundation')
+    ) return;
+    event.preventDefault();
+    if (event.code === 'KeyR') {
+      this.selectedRotation = normalizeRaftRotation(this.selectedRotation + 1);
+    } else {
+      const minimum = pieceLevel(this.selectedPiece);
+      const maximum = minimum + 1;
+      this.selectedLevel = this.selectedLevel >= maximum ? minimum : this.selectedLevel + 1;
+    }
+    this.audio.playUi();
+    this.updatePreview();
+    this.publishFeedback();
   };
 }

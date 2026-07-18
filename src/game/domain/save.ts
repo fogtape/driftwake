@@ -39,10 +39,11 @@ import {
   sanitizeCraftingQueue,
   type CraftingQueueState,
 } from './craftingQueue';
+import { sanitizeRaftStructures, type SavedRaftStructure } from './raftStructures';
 
-export const SAVE_VERSION = 13;
-export const SAVE_KEY = 'driftwake.save.v13';
-export const LEGACY_SAVE_KEYS = ['driftwake.save.v12', 'driftwake.save.v11', 'driftwake.save.v10', 'driftwake.save.v9', 'driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
+export const SAVE_VERSION = 14;
+export const SAVE_KEY = 'driftwake.save.v14';
+export const LEGACY_SAVE_KEYS = ['driftwake.save.v13', 'driftwake.save.v12', 'driftwake.save.v11', 'driftwake.save.v10', 'driftwake.save.v9', 'driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
 
 export type PlayerSurface = 'raft' | 'island' | 'water';
 
@@ -81,6 +82,7 @@ export interface DriftwakeSave {
   };
   raft: {
     tiles: SavedRaftTile[];
+    structures: SavedRaftStructure[];
     devices: SavedDeviceState[];
     navigation: SavedNavigationState;
     planting: SavedPlantingState;
@@ -158,6 +160,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
     player?: Partial<DriftwakeSave['player']>;
     raft?: {
       tiles?: SavedRaftTile[];
+      structures?: SavedRaftStructure[];
       devices?: SavedDeviceState[];
       navigation?: SavedNavigationState;
       planting?: SavedPlantingState;
@@ -208,8 +211,15 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       return true;
     });
   const stableTiles = tiles.length > 0 ? tiles : createDefaultRaftTiles();
+  const structures = version >= 14
+    ? sanitizeRaftStructures(candidate.raft.structures, stableTiles)
+    : [];
   const tileKeys = new Set(stableTiles.map((tile) => deviceKey(tile.x, tile.z)));
-  const occupied = new Set<string>();
+  const occupied = new Set(
+    structures
+      .filter((structure) => structure.level === 0 && (structure.type === 'pillar' || structure.type === 'stairs'))
+      .map((structure) => deviceKey(structure.x, structure.z)),
+  );
   const deviceIds = new Set<string>();
   const rawDevices = version >= 2 && Array.isArray(candidate.raft.devices) ? candidate.raft.devices : [];
   const devices = rawDevices
@@ -300,7 +310,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       failure: version >= 12 ? sanitizeFailureRecord(candidate.player.failure) : null,
       crafting,
     },
-    raft: { tiles: stableTiles, devices, navigation, planting, progression },
+    raft: { tiles: stableTiles, structures, devices, navigation, planting, progression },
     world: { island: { ...island, dockVersion: 1 }, underwater, drops },
   };
 }

@@ -44,6 +44,7 @@ export class SharkSystem {
     private readonly audio: AudioSystem,
     private readonly splashes: SplashSystem,
     private readonly onImpact: (strength: number) => void,
+    private readonly onRaftTileDestroyed: (coordinate: GridCoordinate) => void = () => undefined,
   ) {
     this.model = createSharkModel(materials);
     this.model.position.set(12, -0.8, 8);
@@ -215,7 +216,10 @@ export class SharkSystem {
     this.onImpact(0.2);
     useGameStore.getState().setRaft(this.raft.getIntegrityStats());
     this.showNotice(result.destroyed ? '外围筏格被撕碎' : '木筏结构受损');
-    if (result.destroyed) this.beginRetreat();
+    if (result.destroyed) {
+      this.onRaftTileDestroyed(this.targetTile);
+      this.beginRetreat();
+    }
   }
 
   private beginPlayerApproach(): void {

@@ -375,6 +375,23 @@ export class AudioSystem {
     this.noiseBurst(0.075, 1450, 0.035, 'bandpass');
   }
 
+  playDoor(open: boolean): void {
+    this.playWoodKnock(open ? 0.052 : 0.085, open ? 0.085 : 0.11);
+    this.noiseBurst(0.16, open ? 1180 : 860, 0.032, 'bandpass');
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(open ? 138 : 104, now);
+    oscillator.frequency.exponentialRampToValueAtTime(open ? 82 : 68, now + 0.16);
+    gain.gain.setValueAtTime(0.018, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+    oscillator.connect(gain).connect(this.effects);
+    oscillator.start(now);
+    oscillator.stop(now + 0.19);
+  }
+
   setDeviceActivity(fire: number, steam: number): void {
     this.deviceFireActivity = Math.max(0, Math.min(1, fire));
     this.deviceSteamActivity = Math.max(0, Math.min(1, steam));

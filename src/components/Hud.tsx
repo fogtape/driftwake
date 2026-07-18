@@ -2,16 +2,22 @@ import {
   Anchor,
   Anvil,
   Bird,
+  BrickWall,
+  ChartNoAxesGantt,
   Compass,
+  Columns3,
   CloudLightning,
   CookingPot,
   Droplet,
+  DoorOpen,
   GlassWater,
   Heart,
+  Layers3,
   Mountain,
   MousePointer2,
   Navigation,
   PackageOpen,
+  PanelTop,
   RadioTower,
   Sailboat,
   ShipWheel,
@@ -19,19 +25,27 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sprout,
+  Square,
   TriangleAlert,
   Utensils,
   Volume2,
   VolumeX,
   Waves,
   Wind,
+  RotateCw,
 } from 'lucide-react';
 import { ITEM_DEFINITIONS, itemCount, preferredToolOrder, type Inventory, type ToolId } from '../game/domain/items';
 import { TOOL_MAX_DURABILITY, toolDurabilityRatio, type ToolDurability } from '../game/domain/toolDurability';
 import { survivalBand } from '../game/domain/survival';
 import { ISLAND_APPROACH_SECONDS, ISLAND_DEPART_SECONDS, ISLAND_DOCK_SECONDS } from '../game/domain/island';
 import { cardinalLabel } from '../game/domain/navigation';
+import {
+  RAFT_BUILD_PIECES,
+  RAFT_BUILD_PIECE_DEFINITIONS,
+  type RaftBuildPiece,
+} from '../game/domain/raftStructures';
 import type {
+  BuildFeedback,
   DeviceFeedbackMap,
   FishingFeedback,
   IslandFeedback,
@@ -62,6 +76,7 @@ interface HudProps {
   fishing: FishingFeedback;
   shark: SharkFeedback;
   raft: RaftFeedback;
+  build: BuildFeedback;
   devices: DeviceFeedbackMap;
   navigation: NavigationFeedback;
   planting: PlantingFeedback;
@@ -88,6 +103,16 @@ interface GaugeProps {
 
 function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+}
+
+function BuildPieceIcon({ piece, size = 18 }: { piece: RaftBuildPiece; size?: number }) {
+  if (piece === 'foundation') return <Square size={size} />;
+  if (piece === 'wall') return <BrickWall size={size} />;
+  if (piece === 'door') return <DoorOpen size={size} />;
+  if (piece === 'pillar') return <Columns3 size={size} />;
+  if (piece === 'stairs') return <ChartNoAxesGantt size={size} />;
+  if (piece === 'floor') return <Layers3 size={size} />;
+  return <PanelTop size={size} />;
 }
 
 function Gauge({ icon, value, tone, label }: GaugeProps) {
@@ -123,6 +148,7 @@ export function Hud({
   fishing,
   shark,
   raft,
+  build,
   devices,
   navigation,
   planting,
@@ -375,6 +401,32 @@ export function Hud({
             </button>
           );
         })}
+      </div>
+
+      <div
+        className={`build-palette ${selectedTool === 'hammer' && !placementDevice ? 'is-visible' : ''} is-${build.mode} ${build.valid ? 'is-valid' : 'is-invalid'}`}
+        aria-label={`${RAFT_BUILD_PIECE_DEFINITIONS[build.piece].name}，${build.level + 1}层，朝向${['北', '东', '南', '西'][build.rotation]}，筏上结构 ${build.structures} 件`}
+      >
+        <div className="build-palette__pieces" aria-hidden="true">
+          {RAFT_BUILD_PIECES.map((piece) => (
+            <span className={piece === build.piece ? 'is-active' : ''} key={piece}>
+              <BuildPieceIcon piece={piece} size={17} />
+            </span>
+          ))}
+        </div>
+        <div className="build-palette__meta">
+          <strong>{RAFT_BUILD_PIECE_DEFINITIONS[build.piece].shortName}</strong>
+          <span><RotateCw size={12} />{['北', '东', '南', '西'][build.rotation]}<small>{build.level + 1}层</small></span>
+          <div aria-label="建造成本">
+            {(Object.entries(RAFT_BUILD_PIECE_DEFINITIONS[build.piece].cost) as [keyof Inventory, number][]).map(([itemId, amount]) => (
+              <i className={itemCount(inventory, itemId) < amount ? 'is-missing' : ''} key={itemId}>
+                <ItemIcon itemId={itemId} size={12} />
+                <b>{amount}</b>
+              </i>
+            ))}
+          </div>
+          <em>{build.structures}</em>
+        </div>
       </div>
 
       <div className={`crosshair ${fishing.phase === 'nibble' ? 'is-nibble' : ''} ${sharkAlert && (selectedTool === 'spear' || selectedTool === 'metalSpear') ? 'is-danger' : ''}`} aria-hidden="true">

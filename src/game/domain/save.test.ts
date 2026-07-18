@@ -31,13 +31,14 @@ describe('save schema', () => {
     expect(save?.player.survival).toEqual({ health: 100, thirst: 34, hunger: 0, oxygen: 100 });
     expect(save?.player.playSeconds).toBe(42);
     expect(save?.raft.tiles).toEqual([{ x: 0, z: 0, health: 75 }]);
+    expect(save?.raft.structures).toEqual([]);
     expect(save?.raft.devices).toMatchObject([
       { id: 'p', type: 'purifier', x: 0, z: 0, rotation: Math.PI / 2, phase: 'working', elapsed: 9 },
     ]);
   });
 
   it('rejects unsupported versions and provides a stable starting raft', () => {
-    expect(sanitizeSave({ version: 14 })).toBeNull();
+    expect(sanitizeSave({ version: 15 })).toBeNull();
     expect(createDefaultRaftTiles()).toHaveLength(9);
   });
 
@@ -63,8 +64,8 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v13');
-    expect(save?.version).toBe(13);
+    expect(SAVE_KEY).toBe('driftwake.save.v14');
+    expect(save?.version).toBe(SAVE_VERSION);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
     expect(save?.world.island.phase).toBe('approaching');
@@ -72,6 +73,44 @@ describe('save schema', () => {
     expect(save?.raft.navigation.devices).toEqual([]);
     expect(save?.raft.planting.planters).toEqual([]);
     expect(save?.raft.progression.devices).toEqual([]);
+  });
+
+  it('migrates v13 saves to an empty structure set', () => {
+    const save = sanitizeSave({
+      version: 13,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 12 },
+      raft: { tiles: [{ x: 0, z: 0, health: 100 }], structures: [{ id: 'ignored', type: 'pillar', x: 0, z: 0 }] },
+    });
+    expect(save?.version).toBe(14);
+    expect(save?.raft.structures).toEqual([]);
+  });
+
+  it('sanitizes v14 support chains before device occupancy', () => {
+    const save = sanitizeSave({
+      version: SAVE_VERSION,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 12 },
+      raft: {
+        tiles: [
+          { x: 0, z: 0, health: 100 },
+          { x: 1, z: 0, health: 100 },
+        ],
+        structures: [
+          { id: 'upper-wall', type: 'wall', x: 0, z: 0, level: 1, rotation: 0, health: 110 },
+          { id: 'upper-floor', type: 'floor', x: 0, z: 0, level: 1, rotation: 0, health: 90 },
+          { id: 'base-pillar', type: 'pillar', x: 0, z: 0, level: 0, rotation: 0, health: 125 },
+        ],
+        devices: [
+          { id: 'blocked', type: 'grill', x: 0, z: 0, rotation: 0, phase: 'idle', elapsed: 0 },
+          { id: 'kept', type: 'purifier', x: 1, z: 0, rotation: 0, phase: 'idle', elapsed: 0 },
+        ],
+      },
+    });
+    expect(save?.raft.structures.map((structure) => structure.id)).toEqual([
+      'base-pillar',
+      'upper-floor',
+      'upper-wall',
+    ]);
+    expect(save?.raft.devices.map((device) => device.id)).toEqual(['kept']);
   });
 
   it('falls back to a legacy save when the current slot is corrupt', () => {
@@ -393,7 +432,7 @@ describe('save schema', () => {
         },
       },
     });
-    expect(save?.version).toBe(13);
+    expect(save?.version).toBe(SAVE_VERSION);
     expect(save?.raft.navigation).toMatchObject({
       worldX: 123.5,
       worldZ: -88.25,

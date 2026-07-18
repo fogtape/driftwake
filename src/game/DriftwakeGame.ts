@@ -50,6 +50,7 @@ import { OceanSystem } from './systems/OceanSystem';
 import { PhysicsSystem } from './systems/PhysicsSystem';
 import { PlayerController } from './systems/PlayerController';
 import { RAFT_TILE_X, RAFT_TILE_Z, RaftSystem } from './systems/RaftSystem';
+import { RaftStructureSystem } from './systems/RaftStructureSystem';
 import { SalvageSystem } from './systems/SalvageSystem';
 import { SharkSystem } from './systems/SharkSystem';
 import { SpearSystem } from './systems/SpearSystem';
@@ -139,6 +140,7 @@ export class DriftwakeGame {
   private materials: MaterialLibrary | null = null;
   private ocean: OceanSystem | null = null;
   private raft: RaftSystem | null = null;
+  private structures: RaftStructureSystem | null = null;
   private debris: DebrisField | null = null;
   private player: PlayerController | null = null;
   private hook: HookSystem | null = null;
@@ -301,6 +303,15 @@ export class DriftwakeGame {
       );
       this.storm.setQuality(store.quality === 'high');
       this.raft = new RaftSystem(this.materials, save?.raft.tiles ?? createDefaultRaftTiles());
+      this.structures = new RaftStructureSystem(
+        this.raft,
+        this.materials,
+        save?.raft.structures ?? [],
+        (open) => {
+          this.audio.playDoor(open);
+          this.saveNow();
+        },
+      );
       this.scene.add(this.ocean.mesh, this.raft.group);
 
       store.setLoadingLabel('正在放流物资');
@@ -428,6 +439,7 @@ export class DriftwakeGame {
         this.navigation?.getIslandTravel() ?? { approachRate: 0.55, dockDriftRate: 1, anchored: false },
       );
       this.player.setCollisionResolver((position, previous) => {
+        this.structures?.resolvePlayerCollision(position, previous);
         this.devices?.resolvePlayerCollision(position, previous);
         this.navigation?.resolvePlayerCollision(position, previous);
         this.planting?.resolvePlayerCollision(position, previous);
@@ -438,6 +450,7 @@ export class DriftwakeGame {
         this.camera,
         this.materials,
         this.raft,
+        this.structures,
         this.audio,
         this.splashes,
         (coordinate) =>
@@ -469,6 +482,12 @@ export class DriftwakeGame {
         this.audio,
         this.splashes,
         (strength) => this.player?.addCameraShake(strength),
+        () => {
+          const removed = this.structures?.handleFoundationLoss() ?? [];
+          this.mount.dataset.raftStructureCascadeCount = String(removed.length);
+          if (removed.length > 0) this.showTransientNotice(`支撑断裂 · ${removed.length} 件上层结构坠海`);
+          this.saveNow();
+        },
       );
       this.spear = new SpearSystem(
         this.renderer,
@@ -695,6 +714,7 @@ export class DriftwakeGame {
     this.hook?.dispose(this.scene);
     this.salvage?.dispose();
     this.build?.dispose();
+    this.structures?.dispose();
     this.navigation?.dispose();
     this.planting?.dispose();
     this.progression?.dispose();
@@ -790,6 +810,12 @@ export class DriftwakeGame {
       this.mount.dataset.buildHovered = buildDiagnostics.hovered
         ? `${buildDiagnostics.hovered.x},${buildDiagnostics.hovered.z}`
         : 'none';
+      this.mount.dataset.buildPiece = buildDiagnostics.piece;
+      this.mount.dataset.buildRotation = String(buildDiagnostics.rotation);
+      this.mount.dataset.buildLevel = String(buildDiagnostics.level);
+      this.mount.dataset.buildStructureTarget = buildDiagnostics.structureTarget ?? 'none';
+      this.mount.dataset.buildHoveredStructure = buildDiagnostics.hoveredStructure ?? 'none';
+      this.mount.dataset.raftStructureCount = String(buildDiagnostics.structureCount);
     }
     this.fishing?.update(simulationSeconds, stepSeconds);
     this.spear?.update(simulationSeconds, stepSeconds);
@@ -798,6 +824,16 @@ export class DriftwakeGame {
     this.navigation?.update(simulationSeconds, stepSeconds);
     this.planting?.update(simulationSeconds, stepSeconds);
     this.progression?.update(simulationSeconds, stepSeconds);
+    this.structures?.updateDoorFocus(this.camera);
+    const structureDiagnostics = this.structures?.getDiagnostics();
+    if (structureDiagnostics) {
+      this.mount.dataset.structureFocusedDoor = structureDiagnostics.focusedDoor ?? 'none';
+      this.mount.dataset.structureOpenDoors = String(structureDiagnostics.openDoors);
+      this.mount.dataset.raftStructureCount = String(structureDiagnostics.structures);
+      if (this.simulationTickCount % 6 === 0) {
+        this.mount.dataset.structureDoorAim = JSON.stringify(this.structures?.getDoorAimDiagnostics(this.camera));
+      }
+    }
     this.island?.update(simulationSeconds, stepSeconds);
     const selectedTool = useGameStore.getState().selectedTool;
     if (
@@ -1163,6 +1199,7 @@ export class DriftwakeGame {
     this.underwater?.setHookEquipped(equipmentVisible && selectedToolAvailable && inWater && !placingDevice && state.selectedTool === 'hook');
     this.build?.setEquipped(equipmentVisible && selectedToolAvailable && onRaft && !placingDevice && state.selectedTool === 'hammer');
     this.build?.setInputEnabled(selectedToolAvailable && inputEnabled && onRaft && !placingDevice && state.selectedTool === 'hammer');
+    this.structures?.setInputEnabled(inputEnabled && onRaft && !placingDevice && state.selectedTool !== 'hammer');
     this.fishing?.setEquipped(equipmentVisible && selectedToolAvailable && onRaft && !placingDevice && state.selectedTool === 'fishingRod');
     this.fishing?.setInputEnabled(selectedToolAvailable && inputEnabled && onRaft && !placingDevice && state.selectedTool === 'fishingRod');
     const spearEquipped = selectedToolAvailable && (state.selectedTool === 'spear' || state.selectedTool === 'metalSpear');
@@ -1220,6 +1257,7 @@ export class DriftwakeGame {
       },
       raft: {
         tiles: this.raft.getSavedTiles(),
+        structures: this.structures?.getSavedStructures() ?? [],
         devices: this.devices?.getSavedDevices() ?? [],
         navigation: this.navigation?.getSavedState() ?? createDefaultNavigationState(),
         planting: this.planting?.getSavedState() ?? createDefaultPlantingState(),

@@ -52,6 +52,7 @@ export function App() {
   const fishing = useGameStore((state) => state.fishing);
   const shark = useGameStore((state) => state.shark);
   const raft = useGameStore((state) => state.raft);
+  const build = useGameStore((state) => state.build);
   const devices = useGameStore((state) => state.devices);
   const storage = useGameStore((state) => state.storage);
   const navigation = useGameStore((state) => state.navigation);
@@ -317,6 +318,7 @@ export function App() {
         fishing={fishing}
         shark={shark}
         raft={raft}
+        build={build}
         progression={progression}
         devices={devices}
         navigation={navigation}

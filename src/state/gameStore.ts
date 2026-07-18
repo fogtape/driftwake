@@ -41,6 +41,7 @@ import type { IslandPhase } from '../game/domain/island';
 import type { NavigationDeviceType, NavigationRouteMode, NavigationWeatherPhase, SignalArrayStatus } from '../game/domain/navigation';
 import type { PlayerSurface } from '../game/domain/save';
 import type { CameraMotionMode } from '../game/domain/settings';
+import type { RaftBuildPiece, RaftRotation } from '../game/domain/raftStructures';
 import {
   applyToolWear,
   freshToolDurability,
@@ -100,6 +101,15 @@ export interface RaftFeedback {
   tiles: number;
   damagedTiles: number;
   averageIntegrity: number;
+}
+
+export interface BuildFeedback {
+  piece: RaftBuildPiece;
+  rotation: RaftRotation;
+  level: number;
+  mode: 'hidden' | 'build' | 'repair' | 'invalid';
+  valid: boolean;
+  structures: number;
 }
 
 export interface DeviceFeedback {
@@ -232,6 +242,7 @@ interface GameState {
   fishing: FishingFeedback;
   shark: SharkFeedback;
   raft: RaftFeedback;
+  build: BuildFeedback;
   devices: DeviceFeedbackMap;
   storage: StorageFeedback | null;
   navigation: NavigationFeedback;
@@ -279,6 +290,7 @@ interface GameState {
   setFishing: (feedback: Partial<FishingFeedback>) => void;
   setShark: (feedback: Partial<SharkFeedback>) => void;
   setRaft: (feedback: RaftFeedback) => void;
+  setBuild: (feedback: BuildFeedback) => void;
   setDevices: (feedback: DeviceFeedbackMap) => void;
   setStorage: (feedback: StorageFeedback | null) => void;
   setNavigation: (feedback: NavigationFeedback) => void;
@@ -380,6 +392,10 @@ function defaultProgression(): ProgressionFeedback {
   };
 }
 
+function defaultBuild(): BuildFeedback {
+  return { piece: 'foundation', rotation: 0, level: 0, mode: 'hidden', valid: false, structures: 0 };
+}
+
 function countLearnableProjects(knowledge: ProgressionKnowledge): number {
   return (Object.keys(RESEARCH_PROJECTS) as ResearchProjectId[])
     .filter((projectId) => canLearnProject(knowledge, projectId)).length;
@@ -459,6 +475,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   fishing: defaultFishing(),
   shark: defaultShark(),
   raft: { tiles: 9, damagedTiles: 0, averageIntegrity: 100 },
+  build: defaultBuild(),
   devices: {
     purifier: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
     grill: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
@@ -738,6 +755,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         : { shark };
     }),
   setRaft: (raft) => set({ raft }),
+  setBuild: (build) => set({ build }),
   setDevices: (devices) => set({ devices }),
   setStorage: (storage) => set({ storage }),
   setNavigation: (navigation) => set({ navigation }),
@@ -809,6 +827,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       navigation: defaultNavigation(),
       planting: defaultPlanting(),
       progression: defaultProgression(),
+      build: defaultBuild(),
       storage: null,
       placementDevice: null,
       interaction: null,
