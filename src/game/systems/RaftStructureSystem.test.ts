@@ -129,6 +129,21 @@ describe('RaftStructureSystem runtime', () => {
     upperWall.dispose();
   });
 
+  it('exposes floor and roof undersides through the runtime sampler', () => {
+    const raft = new RaftSystem(createTestMaterials(), [{ x: 0, z: 0, health: 100 }]);
+    const structures = new RaftStructureSystem(raft, createTestMaterials(), [
+      saved('floor', 'floor', 0, 0, 1),
+      saved('roof', 'roof', 1, 0, 1),
+    ]);
+    expect(structures.getOverheadSurfaces(new Vector3(0, 0, 0))).toEqual([
+      expect.objectContaining({ type: 'floor', structureId: 'floor' }),
+    ]);
+    expect(structures.getOverheadSurfaces(new Vector3(1.44, 0, 0))).toEqual([
+      expect.objectContaining({ type: 'roof', structureId: 'roof' }),
+    ]);
+    structures.dispose();
+  });
+
   it('only toggles a focused door while the structure interaction owns E', () => {
     const raft = new RaftSystem(createTestMaterials(), [{ x: 0, z: 0, health: 100 }]);
     const onDoorToggled = vi.fn();

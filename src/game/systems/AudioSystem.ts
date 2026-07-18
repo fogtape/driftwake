@@ -379,6 +379,23 @@ export class AudioSystem {
     if (spatialTarget) this.releaseSpatialTarget(spatialTarget, 360);
   }
 
+  playCeilingBump(fibrous = false): void {
+    this.playWoodKnock(fibrous ? 0.038 : 0.055, fibrous ? 0.065 : 0.085);
+    this.noiseBurst(fibrous ? 0.075 : 0.052, fibrous ? 2450 : 980, fibrous ? 0.035 : 0.045, fibrous ? 'highpass' : 'lowpass');
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(fibrous ? 122 : 96, now);
+    oscillator.frequency.exponentialRampToValueAtTime(fibrous ? 76 : 54, now + 0.09);
+    gain.gain.setValueAtTime(fibrous ? 0.012 : 0.018, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+    oscillator.connect(gain).connect(this.effects);
+    oscillator.start(now);
+    oscillator.stop(now + 0.11);
+  }
+
   playStructureDamage(position: AudioPosition, severity: number, destroyed: boolean, fibrous = false): void {
     const normalized = Math.max(0, Math.min(1, severity));
     const spatialTarget = this.createSpatialTarget(position);

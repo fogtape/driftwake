@@ -19,4 +19,26 @@ describe('stepVerticalMotion', () => {
     expect(stepVerticalMotion(state, false, { supportHeadY: null, waterHeadY: 0.25 }, 1 / 60)).toBe('entered-water');
     expect(state.headY).toBe(0.25);
   });
+
+  it('clips upward velocity at an overhead surface and falls on the next step', () => {
+    const state: VerticalMotionState = { mode: 'grounded', headY: 1.54, velocityY: 0 };
+    const environment = { supportHeadY: 1.54, ceilingHeadY: 1.72, waterHeadY: 0.25 };
+    expect(stepVerticalMotion(state, true, environment, 1 / 20)).toBe('hit-ceiling');
+    expect(state).toEqual({ mode: 'airborne', headY: 1.72, velocityY: 0 });
+
+    expect(stepVerticalMotion(state, false, environment, 1 / 60)).toBe('none');
+    expect(state.headY).toBeLessThan(1.72);
+    expect(state.velocityY).toBeLessThan(0);
+  });
+
+  it('does not pull a descending player back to a ceiling', () => {
+    const state: VerticalMotionState = { mode: 'airborne', headY: 1.71, velocityY: -0.5 };
+    expect(stepVerticalMotion(
+      state,
+      false,
+      { supportHeadY: 1.54, ceilingHeadY: 1.72, waterHeadY: 0.25 },
+      1 / 60,
+    )).toBe('none');
+    expect(state.headY).toBeLessThan(1.71);
+  });
 });

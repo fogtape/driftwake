@@ -33,10 +33,12 @@ import {
   pruneUnsupportedRaftStructures,
   raftStructureDamageStage,
   raftStructureHealthRatio,
+  sampleRaftOverheadSurfaces,
   sampleRaftWalkableSurfaces,
   selectSharkAttackStructure,
   type FoundationCoordinate,
   type RaftStructureDamageStage,
+  type RaftOverheadSurface,
   type RaftWalkableSurface,
   type RaftRotation,
   type RaftStructureType,
@@ -179,6 +181,14 @@ export class RaftStructureSystem {
     return sampleRaftWalkableSurfaces(
       [...this.structures.values()],
       this.raft.getTiles(),
+      position.x,
+      position.z,
+    );
+  }
+
+  getOverheadSurfaces(position: Pick<Vector3, 'x' | 'z'>): RaftOverheadSurface[] {
+    return sampleRaftOverheadSurfaces(
+      [...this.structures.values()],
       position.x,
       position.z,
     );

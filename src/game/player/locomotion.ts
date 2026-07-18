@@ -1,5 +1,5 @@
 export type VerticalMotionMode = 'grounded' | 'airborne';
-export type VerticalMotionEvent = 'none' | 'jumped' | 'landed' | 'entered-water';
+export type VerticalMotionEvent = 'none' | 'jumped' | 'hit-ceiling' | 'landed' | 'entered-water';
 
 export interface VerticalMotionState {
   mode: VerticalMotionMode;
@@ -9,6 +9,7 @@ export interface VerticalMotionState {
 
 export interface VerticalMotionEnvironment {
   supportHeadY: number | null;
+  ceilingHeadY?: number | null;
   waterHeadY: number;
 }
 
@@ -32,8 +33,22 @@ export function stepVerticalMotion(
     state.velocityY = PLAYER_JUMP_SPEED;
   }
 
+  const previousHeadY = state.headY;
+  const wasAscending = state.velocityY > 0;
   state.velocityY -= PLAYER_GRAVITY * delta;
   state.headY += state.velocityY * delta;
+
+  const ceilingHeadY = environment.ceilingHeadY ?? null;
+  if (
+    wasAscending
+    && ceilingHeadY !== null
+    && previousHeadY <= ceilingHeadY + 0.02
+    && state.headY >= ceilingHeadY
+  ) {
+    state.headY = ceilingHeadY;
+    state.velocityY = 0;
+    return 'hit-ceiling';
+  }
 
   if (
     state.velocityY <= 0

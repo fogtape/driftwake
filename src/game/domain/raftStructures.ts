@@ -5,6 +5,8 @@ export const RAFT_TILE_X = 1.44;
 export const RAFT_TILE_Z = 1.38;
 export const RAFT_MAX_STEP_UP = 0.36;
 export const RAFT_MAX_STEP_DOWN = 0.42;
+export const RAFT_FLOOR_UNDERSIDE_OFFSET = 0.115;
+export const RAFT_ROOF_UNDERSIDE_OFFSET = 0.09;
 export const MAX_RAFT_STRUCTURES = 96;
 export const MAX_RAFT_STRUCTURE_LEVEL = 2;
 
@@ -59,6 +61,14 @@ export interface RaftWalkableSurface {
   height: number;
   type: RaftWalkableSurfaceType;
   structureId: string | null;
+}
+
+export type RaftOverheadSurfaceType = 'floor' | 'roof';
+
+export interface RaftOverheadSurface {
+  height: number;
+  type: RaftOverheadSurfaceType;
+  structureId: string;
 }
 
 export const RAFT_STRUCTURE_DEFINITIONS: Record<RaftStructureType, RaftStructureDefinition> = {
@@ -282,6 +292,74 @@ function roofSurfaceHeight(
   if (Math.abs(localX) > halfX + 0.04 || Math.abs(localZ) > halfZ + 0.04) return null;
   const ridge = 1 - Math.min(1, Math.abs(localX) / halfX);
   return structure.level * RAFT_STRUCTURE_LEVEL_HEIGHT + 0.08 + ridge * 0.23;
+}
+
+function insideStairOpening(
+  structures: readonly SavedRaftStructure[],
+  floor: Pick<SavedRaftStructure, 'x' | 'z' | 'level'>,
+  pointX: number,
+  pointZ: number,
+): boolean {
+  const centerX = floor.x * RAFT_TILE_X;
+  const centerZ = floor.z * RAFT_TILE_Z;
+  const dx = pointX - centerX;
+  const dz = pointZ - centerZ;
+  const openingDepth = 0.42;
+  for (const structure of structures) {
+    if (structure.type !== 'stairs' || structure.level + 1 !== floor.level) continue;
+    const destination = stairDestination(structure);
+    if (destination.x !== floor.x || destination.z !== floor.z) continue;
+    if (structure.rotation === 0) {
+      if (dz >= RAFT_TILE_Z * 0.5 - openingDepth && Math.abs(dx) <= RAFT_TILE_X * 0.41 + 0.04) return true;
+    } else if (structure.rotation === 1) {
+      if (dx <= -RAFT_TILE_X * 0.5 + openingDepth && Math.abs(dz) <= RAFT_TILE_Z * 0.41 + 0.04) return true;
+    } else if (structure.rotation === 2) {
+      if (dz <= -RAFT_TILE_Z * 0.5 + openingDepth && Math.abs(dx) <= RAFT_TILE_X * 0.41 + 0.04) return true;
+    } else if (dx >= RAFT_TILE_X * 0.5 - openingDepth && Math.abs(dz) <= RAFT_TILE_Z * 0.41 + 0.04) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function sampleRaftOverheadSurfaces(
+  structures: readonly SavedRaftStructure[],
+  pointX: number,
+  pointZ: number,
+): RaftOverheadSurface[] {
+  const surfaces: RaftOverheadSurface[] = [];
+  for (const structure of structures) {
+    if (structure.type === 'floor' && insideTile(pointX, pointZ, structure.x, structure.z)) {
+      if (insideStairOpening(structures, structure, pointX, pointZ)) continue;
+      surfaces.push({
+        height: structure.level * RAFT_STRUCTURE_LEVEL_HEIGHT - RAFT_FLOOR_UNDERSIDE_OFFSET,
+        type: 'floor',
+        structureId: structure.id,
+      });
+    } else if (structure.type === 'roof') {
+      const top = roofSurfaceHeight(structure, pointX, pointZ);
+      if (top === null) continue;
+      surfaces.push({
+        height: top - RAFT_ROOF_UNDERSIDE_OFFSET,
+        type: 'roof',
+        structureId: structure.id,
+      });
+    }
+  }
+  return surfaces.sort((a, b) => a.height - b.height || a.type.localeCompare(b.type));
+}
+
+export function selectRaftOverheadSurface(
+  surfaces: readonly RaftOverheadSurface[],
+  currentHeadHeight: number,
+): RaftOverheadSurface | null {
+  const minimum = Number.isFinite(currentHeadHeight) ? currentHeadHeight - 0.04 : 0;
+  let selected: RaftOverheadSurface | null = null;
+  for (const surface of surfaces) {
+    if (surface.height < minimum) continue;
+    if (!selected || surface.height < selected.height) selected = surface;
+  }
+  return selected;
 }
 
 export function sampleRaftWalkableSurfaces(

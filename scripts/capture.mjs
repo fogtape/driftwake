@@ -800,6 +800,41 @@ const structureTraversalSave = {
   },
 };
 
+const structureFloorCeilingSave = {
+  ...structureBuildSave,
+  player: {
+    ...structureBuildSave.player,
+    inventory: { hook: 1 },
+    toolDurability: { hook: 24 },
+    selectedTool: 'hook',
+    navigation: { surface: 'raft', x: 0, z: 0 },
+  },
+  raft: {
+    ...structureBuildSave.raft,
+    structures: [
+      { id: 'ceiling-floor-north', type: 'wall', x: 0, z: 0, level: 0, rotation: 0, health: 110 },
+      { id: 'ceiling-floor-west', type: 'wall', x: 0, z: 0, level: 0, rotation: 3, health: 110 },
+      { id: 'ceiling-floor', type: 'floor', x: 0, z: 0, level: 1, rotation: 0, health: 90 },
+    ],
+  },
+};
+
+const structureRoofCeilingSave = {
+  ...structureFloorCeilingSave,
+  player: {
+    ...structureFloorCeilingSave.player,
+    navigation: { surface: 'raft', x: 1.44, z: 0 },
+  },
+  raft: {
+    ...structureFloorCeilingSave.raft,
+    structures: [
+      { id: 'ceiling-roof-north', type: 'wall', x: 1, z: 0, level: 0, rotation: 0, health: 110 },
+      { id: 'ceiling-roof-east', type: 'wall', x: 1, z: 0, level: 0, rotation: 1, health: 110 },
+      { id: 'ceiling-roof', type: 'roof', x: 1, z: 0, level: 1, rotation: 0, health: 80 },
+    ],
+  },
+};
+
 const structureDamageSave = {
   ...structureBuildSave,
   player: {
@@ -879,7 +914,7 @@ async function openDesktopPage(label, options = {}) {
   if (options.seedSave) {
     await context.addInitScript((save) => {
       localStorage.setItem(`driftwake.save.v${save.version}`, JSON.stringify(save));
-    }, options.failureStart ? failureSave : options.survivalPressureStart ? survivalPressureSave : options.structureDamageStart ? structureDamageSave : options.structureTraversalStart ? structureTraversalSave : options.structureVisualStart ? structureVisualSave : options.structureBuildStart ? structureBuildSave : options.durabilityHammerStart ? durabilityHammerSave : options.durabilityFishingStart ? durabilityFishingSave : options.durabilityAxeStart ? durabilityAxeSave : options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
+    }, options.failureStart ? failureSave : options.survivalPressureStart ? survivalPressureSave : options.structureDamageStart ? structureDamageSave : options.structureFloorCeilingStart ? structureFloorCeilingSave : options.structureRoofCeilingStart ? structureRoofCeilingSave : options.structureTraversalStart ? structureTraversalSave : options.structureVisualStart ? structureVisualSave : options.structureBuildStart ? structureBuildSave : options.durabilityHammerStart ? durabilityHammerSave : options.durabilityFishingStart ? durabilityFishingSave : options.durabilityAxeStart ? durabilityAxeSave : options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
   }
   const page = await context.newPage();
   monitorPage(page, label);
@@ -1715,7 +1750,7 @@ async function captureToolDurability() {
 
 async function captureBuildingStructures() {
   const buildingPart = process.env.BUILDING_PART ?? 'all';
-  if (!['all', 'behavior', 'visual', 'traversal', 'damage'].includes(buildingPart)) {
+  if (!['all', 'behavior', 'visual', 'traversal', 'ceiling', 'damage'].includes(buildingPart)) {
     throw new Error(`Unknown BUILDING_PART: ${buildingPart}`);
   }
   if (buildingPart === 'visual') {
@@ -1724,6 +1759,10 @@ async function captureBuildingStructures() {
   }
   if (buildingPart === 'traversal') {
     await captureBuildingTraversal();
+    return;
+  }
+  if (buildingPart === 'ceiling') {
+    await captureBuildingCeiling();
     return;
   }
   if (buildingPart === 'damage') {
@@ -1946,6 +1985,7 @@ async function captureBuildingStructures() {
 
   await captureBuildingStructureVisual();
   await captureBuildingTraversal();
+  await captureBuildingCeiling();
   await captureBuildingDamageRepair();
 }
 
@@ -2108,6 +2148,7 @@ async function captureBuildingTraversal() {
       surface: data?.playerRaftSurface,
       localZ: Number(data?.playerLocalZ),
       jumpCount: Number(data?.playerJumpCount),
+      ceilingHits: Number(data?.playerCeilingHitCount),
       savedNavigation: saved?.player?.navigation,
     };
   });
@@ -2122,6 +2163,7 @@ async function captureBuildingTraversal() {
     || !['stairs', 'foundation'].includes(final.surface)
     || final.localZ < 1.98
     || final.jumpCount !== jumpBefore + 1
+    || final.ceilingHits !== 0
     || final.savedNavigation?.surface !== 'raft'
     || (final.savedNavigation?.y ?? 0) !== 0
   ) {
@@ -2129,6 +2171,83 @@ async function captureBuildingTraversal() {
   }
   console.log(`Building traversal gate: ${JSON.stringify({ upperBeforeReload, jumpBefore, final })}`);
   await context.close();
+}
+
+async function captureBuildingCeilingProbe(kind) {
+  const isFloor = kind === 'floor';
+  const run = await openDesktopPage(`building-ceiling-${kind}`, {
+    seedSave: true,
+    ...(isFloor ? { structureFloorCeilingStart: true } : { structureRoofCeilingStart: true }),
+    width: 768,
+    height: 480,
+  });
+  const { context, page } = run;
+  await enterGame(page);
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.raftStructureCount === '3'
+      && data?.playerRaftSurface === 'foundation'
+      && data?.playerCeilingHitCount === '0';
+  }, 10_000);
+
+  await page.keyboard.press('Space');
+  if (isFloor) {
+    await waitForRuntime(page, () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return data?.playerCeilingHitCount === '1'
+        && data?.playerCeilingSurface === 'floor'
+        && data?.playerJumpState === 'hit-ceiling:floor';
+    }, 8_000);
+  } else {
+    await waitForRuntime(page, () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return data?.playerCeilingHitCount === '1'
+        && data?.playerCeilingSurface === 'roof'
+        && data?.playerJumpState === 'hit-ceiling:roof';
+    }, 8_000);
+  }
+  const collision = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return {
+      contextHealthy: data?.contextHealthy,
+      simulationActive: data?.simulationActive,
+      hitCount: Number(data?.playerCeilingHitCount),
+      surface: data?.playerCeilingSurface,
+      structureId: data?.playerCeilingStructureId,
+      headY: Number(data?.playerCeilingHeadY),
+      velocityY: Number(data?.playerCeilingVelocityY),
+      jumpState: data?.playerJumpState,
+    };
+  });
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.playerAirborne === 'false'
+      && data?.playerRaftSurface === 'foundation'
+      && data?.playerCeilingHitCount === '1';
+  }, 8_000);
+  if (
+    collision.contextHealthy !== 'true'
+    || collision.simulationActive !== 'true'
+    || collision.hitCount !== 1
+    || collision.surface !== kind
+    || collision.structureId !== `ceiling-${kind}`
+    || Math.abs(collision.velocityY) > 0.001
+    || collision.headY <= 1.7
+    || collision.headY >= 2.7
+  ) {
+    throw new Error(`Building ${kind} ceiling collision failed: ${JSON.stringify(collision)}`);
+  }
+  await context.close();
+  return collision;
+}
+
+async function captureBuildingCeiling() {
+  const floor = await captureBuildingCeilingProbe('floor');
+  const roof = await captureBuildingCeilingProbe('roof');
+  if (roof.headY <= floor.headY + 0.18) {
+    throw new Error(`Building pitched ceiling heights failed: ${JSON.stringify({ floor, roof })}`);
+  }
+  console.log(`Building ceiling gate: ${JSON.stringify({ floor, roof })}`);
 }
 
 async function captureBuildingDamageRepair() {

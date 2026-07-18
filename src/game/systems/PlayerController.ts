@@ -6,7 +6,9 @@ import { OPEN_WATER_FLOOR_Y, WATER_SURFACE_Y } from '../domain/underwater';
 import { RAFT_TILE_X, RAFT_TILE_Z, type RaftSystem } from './RaftSystem';
 import {
   selectRaftLandingSurface,
+  selectRaftOverheadSurface,
   selectReachableRaftSurface,
+  type RaftOverheadSurface,
   type RaftWalkableSurface,
   type RaftWalkableSurfaceType,
 } from '../domain/raftStructures';
@@ -22,6 +24,12 @@ const WATER_FLOOR_CLEARANCE = 0.68;
 const SURFACE_BREATHING_DEPTH = 0.2;
 const RAFT_CLIMB_VERTICAL_REACH = 0.62;
 const RAFT_CLIMB_HORIZONTAL_REACH = 0.78;
+const PLAYER_CEILING_CLEARANCE = 0.035;
+
+export interface PlayerCeilingHit {
+  surface: RaftOverheadSurface;
+  position: Vector3;
+}
 
 export interface IslandNavigationProvider {
   sampleGroundHeight: (x: number, z: number) => number | null;
@@ -62,6 +70,8 @@ export class PlayerController {
   private readonly impulseDirection = new Vector3();
   private collisionResolver: ((position: Vector3, previous: Vector3, footHeight: number) => void) | null = null;
   private raftSurfaceSampler: ((position: Pick<Vector3, 'x' | 'z'>) => readonly RaftWalkableSurface[]) | null = null;
+  private raftOverheadSampler: ((position: Pick<Vector3, 'x' | 'z'>) => readonly RaftOverheadSurface[]) | null = null;
+  private ceilingHitHandler: ((hit: PlayerCeilingHit) => void) | null = null;
   private islandNavigation: IslandNavigationProvider | null = null;
   private surface: PlayerSurface;
   private moveCycle = 0;
@@ -85,6 +95,12 @@ export class PlayerController {
   private raftSurfaceType: RaftWalkableSurfaceType = 'foundation';
   private airborneLandingSurface: PlayerSurface | null = null;
   private airborneRaftFootHeight = 0;
+  private airborneCeilingSurface: RaftOverheadSurface | null = null;
+  private completedCeilingHitCount = 0;
+  private lastCeilingSurface: RaftOverheadSurface['type'] | 'none' = 'none';
+  private lastCeilingStructureId = 'none';
+  private lastCeilingHeadY = 0;
+  private lastCeilingVelocityY = 0;
 
   constructor(
     private readonly camera: PerspectiveCamera,
@@ -292,6 +308,16 @@ export class PlayerController {
     this.localPosition.y = this.raftFootHeight + CAMERA_HEIGHT;
   }
 
+  setRaftOverheadSampler(
+    sampler: ((position: Pick<Vector3, 'x' | 'z'>) => readonly RaftOverheadSurface[]) | null,
+  ): void {
+    this.raftOverheadSampler = sampler;
+  }
+
+  setCeilingHitHandler(handler: ((hit: PlayerCeilingHit) => void) | null): void {
+    this.ceilingHitHandler = handler;
+  }
+
   setIslandNavigation(provider: IslandNavigationProvider | null): void {
     this.islandNavigation = provider;
     if (this.surface === 'island') {
@@ -335,6 +361,26 @@ export class PlayerController {
 
   get verticalVelocityY(): number {
     return this.verticalMotion.velocityY;
+  }
+
+  get ceilingHitCount(): number {
+    return this.completedCeilingHitCount;
+  }
+
+  get ceilingSurface(): RaftOverheadSurface['type'] | 'none' {
+    return this.lastCeilingSurface;
+  }
+
+  get ceilingStructureId(): string {
+    return this.lastCeilingStructureId;
+  }
+
+  get ceilingHeadY(): number {
+    return this.lastCeilingHeadY;
+  }
+
+  get ceilingVelocityY(): number {
+    return this.lastCeilingVelocityY;
   }
 
   get raftFootY(): number {
@@ -499,15 +545,30 @@ export class PlayerController {
     }
 
     const supportHeadY = this.sampleAirborneSupport();
+    const ceilingHeadY = this.sampleAirborneCeiling();
     const event = stepVerticalMotion(
       this.verticalMotion,
       jumpPressed,
-      { supportHeadY, waterHeadY: WATER_SURFACE_Y },
+      { supportHeadY, ceilingHeadY, waterHeadY: WATER_SURFACE_Y },
       delta,
     );
     this.airbornePosition.y = this.verticalMotion.headY;
 
-    if (event === 'landed') {
+    if (event === 'hit-ceiling' && this.airborneCeilingSurface) {
+      this.completedCeilingHitCount += 1;
+      this.lastCeilingSurface = this.airborneCeilingSurface.type;
+      this.lastCeilingStructureId = this.airborneCeilingSurface.structureId;
+      this.lastCeilingHeadY = this.verticalMotion.headY;
+      this.lastCeilingVelocityY = this.verticalMotion.velocityY;
+      this.jumpDiagnostic = `hit-ceiling:${this.airborneCeilingSurface.type}`;
+      this.addCameraShake(this.airborneCeilingSurface.type === 'roof' ? 0.11 : 0.15);
+      this.candidatePosition.copy(this.airbornePosition);
+      this.candidatePosition.y += PLAYER_CEILING_CLEARANCE;
+      this.ceilingHitHandler?.({
+        surface: this.airborneCeilingSurface,
+        position: this.candidatePosition,
+      });
+    } else if (event === 'landed') {
       if (this.airborneLandingSurface === 'raft') {
         this.finishAirborneOnSurface('raft');
         this.raftFootHeight = this.airborneRaftFootHeight;
@@ -580,6 +641,23 @@ export class PlayerController {
       this.airborneLandingSurface = 'island';
     }
     return supportHeadY;
+  }
+
+  private sampleAirborneCeiling(): number | null {
+    this.airborneCeilingSurface = null;
+    if (!this.raftOverheadSampler || this.verticalMotion.velocityY < -0.001) return null;
+    this.raft.worldPointToLocal(this.airbornePosition, this.worldPosition);
+    const surface = selectRaftOverheadSurface(
+      this.raftOverheadSampler(this.worldPosition),
+      this.worldPosition.y,
+    );
+    if (!surface) return null;
+    this.candidateLocal.set(this.worldPosition.x, surface.height, this.worldPosition.z);
+    this.raft.localPointToWorld(this.candidateLocal, this.candidatePosition);
+    const ceilingHeadY = this.candidatePosition.y - PLAYER_CEILING_CLEARANCE;
+    if (ceilingHeadY < this.airbornePosition.y - 0.04) return null;
+    this.airborneCeilingSurface = surface;
+    return ceilingHeadY;
   }
 
   private finishAirborneOnSurface(surface: PlayerSurface): void {

@@ -4,16 +4,19 @@ import {
   canRemoveFoundationUnderStructures,
   canRemoveRaftStructure,
   pruneUnsupportedRaftStructures,
+  RAFT_FLOOR_UNDERSIDE_OFFSET,
   RAFT_STRUCTURE_LEVEL_HEIGHT,
   RAFT_STRUCTURE_DEFINITIONS,
   RAFT_TILE_X,
   RAFT_TILE_Z,
   raftStructureDamageStage,
+  sampleRaftOverheadSurfaces,
   sampleRaftWalkableSurfaces,
   sanitizeRaftStructures,
   sanitizeRaftFootHeight,
   selectSharkAttackStructure,
   selectRaftLandingSurface,
+  selectRaftOverheadSurface,
   selectReachableRaftSurface,
   structurePlacementKey,
   type SavedRaftStructure,
@@ -131,6 +134,46 @@ describe('raft structure topology', () => {
     expect(ridgeRoof.height).toBeGreaterThan(edgeRoof.height + 0.2);
     expect(sanitizeRaftFootHeight(ridge, 2.4)).toBe(ridgeRoof.height);
     expect(sanitizeRaftFootHeight(ridge, -99)).toBe(0);
+  });
+
+  it('samples the real floor underside while preserving its stair entry opening', () => {
+    const floor = structure('floor', 'floor', 0, 0, 1);
+    const expectedFloor = {
+      height: RAFT_STRUCTURE_LEVEL_HEIGHT - RAFT_FLOOR_UNDERSIDE_OFFSET,
+      type: 'floor',
+      structureId: 'floor',
+    };
+    const openings = [
+      { stairs: structure('south', 'stairs', 0, 1, 0, 0), x: 0, z: RAFT_TILE_Z * 0.5 - 0.05 },
+      { stairs: structure('west', 'stairs', -1, 0, 0, 1), x: -RAFT_TILE_X * 0.5 + 0.05, z: 0 },
+      { stairs: structure('north', 'stairs', 0, -1, 0, 2), x: 0, z: -RAFT_TILE_Z * 0.5 + 0.05 },
+      { stairs: structure('east', 'stairs', 1, 0, 0, 3), x: RAFT_TILE_X * 0.5 - 0.05, z: 0 },
+    ];
+
+    for (const opening of openings) {
+      expect(sampleRaftOverheadSurfaces([opening.stairs, floor], 0, 0)).toEqual([expectedFloor]);
+      expect(sampleRaftOverheadSurfaces([opening.stairs, floor], opening.x, opening.z)).toEqual([]);
+    }
+    expect(sampleRaftOverheadSurfaces(
+      [openings[0].stairs, floor],
+      RAFT_TILE_X * 0.5 - 0.03,
+      RAFT_TILE_Z * 0.5 - 0.05,
+    )[0]?.type).toBe('floor');
+  });
+
+  it('tracks a rotated pitched roof underside and selects only the nearest surface above the head', () => {
+    const roof = structure('roof', 'roof', 0, 0, 1, 1);
+    const ridge = sampleRaftOverheadSurfaces([roof], 0, 0);
+    const edge = sampleRaftOverheadSurfaces([roof], 0, RAFT_TILE_Z * 0.5);
+    const outside = sampleRaftOverheadSurfaces([roof], RAFT_TILE_X * 0.5 + 0.05, 0);
+    const upperFloor = structure('upper-floor', 'floor', 0, 0, 2);
+    const layered = sampleRaftOverheadSurfaces([upperFloor, roof], 0, 0);
+
+    expect(ridge[0].height).toBeGreaterThan(edge[0].height + 0.2);
+    expect(outside).toEqual([]);
+    expect(selectRaftOverheadSurface(layered, 1.54)?.structureId).toBe('roof');
+    expect(selectRaftOverheadSurface(layered, ridge[0].height + 0.05)?.structureId).toBe('upper-floor');
+    expect(selectRaftOverheadSurface(layered, 9)).toBeNull();
   });
 
   it('classifies visible damage stages and defines a bounded repair contract for every piece', () => {

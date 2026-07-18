@@ -345,6 +345,12 @@ export class DriftwakeGame {
         (surface) => this.audio.playFootstep(surface),
       );
       this.player.setRaftSurfaceSampler((position) => this.structures?.getWalkableSurfaces(position) ?? []);
+      this.player.setRaftOverheadSampler((position) => this.structures?.getOverheadSurfaces(position) ?? []);
+      this.player.setCeilingHitHandler(({ surface, position }) => {
+        const fibrous = surface.type === 'roof';
+        this.audio.playCeilingBump(fibrous);
+        this.splashes?.spawnCeilingDust(position, fibrous);
+      });
       this.setCameraMotionMode(useGameStore.getState().cameraMotionMode);
       this.island.setPlayer(this.player);
       this.underwater = new UnderwaterSystem(
@@ -1446,6 +1452,11 @@ export class DriftwakeGame {
     this.mount.dataset.playerJumpState = this.player?.jumpState ?? 'unavailable';
     this.mount.dataset.playerVerticalHeadY = (this.player?.verticalHeadY ?? 0).toFixed(3);
     this.mount.dataset.playerVerticalVelocityY = (this.player?.verticalVelocityY ?? 0).toFixed(3);
+    this.mount.dataset.playerCeilingHitCount = String(this.player?.ceilingHitCount ?? 0);
+    this.mount.dataset.playerCeilingSurface = this.player?.ceilingSurface ?? 'none';
+    this.mount.dataset.playerCeilingStructureId = this.player?.ceilingStructureId ?? 'none';
+    this.mount.dataset.playerCeilingHeadY = (this.player?.ceilingHeadY ?? 0).toFixed(3);
+    this.mount.dataset.playerCeilingVelocityY = (this.player?.ceilingVelocityY ?? 0).toFixed(3);
     this.mount.dataset.playerRaftFootY = (this.player?.raftFootY ?? 0).toFixed(3);
     this.mount.dataset.playerRaftSurface = this.player?.raftWalkableSurface ?? 'none';
     this.mount.dataset.playerLocalX = (this.player?.localPosition.x ?? 0).toFixed(3);

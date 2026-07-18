@@ -445,7 +445,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | ANI-017 | 五杯水位/完成标记、三份鱼体独立火候、共享燃料条、柜盖与内容标记 | `src/game/systems/DeviceSystem.ts` | 与高级设备领域队列、真实库存、HUD、音频和 v10 恢复同步 |
 | ANI-018 | 锚机棘轮加装、锁链受力、风暴载荷累积与未强化锚滑脱 | `src/game/systems/NavigationSystem.ts` | 与锚泊后果、警报、音频、模型强化和 v10 恢复同步 |
 | ANI-019 | 接收台扫描/调谐/电量、双桅相位/传播、目标浮筒/转子/脉冲与抵达解码 | `src/game/systems/NavigationSystem.ts` | 与电池、间距、活动信号、世界位置、距离、访问解锁和 v10 恢复同步 |
-| ANI-020 | 结构分件幽灵预览、旋转/层高切换、板门开合、连续楼梯登层、上层落地/分层碰撞、三档受损色泽/确定性松动和承重级联 | `src/game/systems/BuildSystem.ts`、`RaftStructureSystem.ts`、`PlayerController.ts` | 与材料、锤耐久、共享占位、鲨鱼外沿择靶、修补 HUD、支撑拓扑和 v15 恢复同步；不增加结构实例批次，屋顶/地板下表面头部阻挡待补 |
+| ANI-020 | 结构分件幽灵预览、旋转/层高切换、板门开合、连续楼梯登层、上层落地/分层碰撞、楼板/斜顶撞顶、三档受损色泽/确定性松动和承重级联 | `src/game/systems/BuildSystem.ts`、`RaftStructureSystem.ts`、`PlayerController.ts` | 与材料、锤耐久、共享占位、四向楼梯入口、材质撞顶音尘、鲨鱼外沿择靶、修补 HUD、支撑拓扑和 v15 恢复同步；不增加结构实例批次 |
 | VFX-001 | 入水粒子 | `src/game/systems/SplashSystem.ts` | 已实现 |
 | VFX-002 | 木屑、纤维屑、修补金屑、拆除、武器和咬击冲击粒子 | `src/game/systems/SplashSystem.ts` | 结构撕咬按生命/是否毁损分双层数量、色泽、尺寸和抛速；锤修按木材/纤维分层 |
 | VFX-003 | 五层加色火焰、动态点光、五块余烬和八层烟雾 | `src/game/art/ProceduralModels.ts` | 火势与设备阶段联动，焦鱼阶段转为深色烟 |
