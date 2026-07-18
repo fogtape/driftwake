@@ -5,11 +5,14 @@ import {
   canRemoveRaftStructure,
   pruneUnsupportedRaftStructures,
   RAFT_STRUCTURE_LEVEL_HEIGHT,
+  RAFT_STRUCTURE_DEFINITIONS,
   RAFT_TILE_X,
   RAFT_TILE_Z,
+  raftStructureDamageStage,
   sampleRaftWalkableSurfaces,
   sanitizeRaftStructures,
   sanitizeRaftFootHeight,
+  selectSharkAttackStructure,
   selectRaftLandingSurface,
   selectReachableRaftSurface,
   structurePlacementKey,
@@ -128,5 +131,41 @@ describe('raft structure topology', () => {
     expect(ridgeRoof.height).toBeGreaterThan(edgeRoof.height + 0.2);
     expect(sanitizeRaftFootHeight(ridge, 2.4)).toBe(ridgeRoof.height);
     expect(sanitizeRaftFootHeight(ridge, -99)).toBe(0);
+  });
+
+  it('classifies visible damage stages and defines a bounded repair contract for every piece', () => {
+    const wall = structure('wall', 'wall', 0, 0, 0);
+    expect(raftStructureDamageStage(wall)).toBe('intact');
+    expect(raftStructureDamageStage({ ...wall, health: 76 })).toBe('worn');
+    expect(raftStructureDamageStage({ ...wall, health: 41 })).toBe('critical');
+    for (const definition of Object.values(RAFT_STRUCTURE_DEFINITIONS)) {
+      expect(definition.repairAmount).toBeGreaterThan(0);
+      expect(Object.values(definition.repairCost).reduce((total, amount) => total + (amount ?? 0), 0)).toBeGreaterThan(0);
+      expect(definition.repairAmount).toBeLessThan(definition.maxHealth);
+    }
+  });
+
+  it('selects only exposed structures from the shark-facing perimeter', () => {
+    const exposed = structure('exposed', 'wall', 1, 0, 0, 1);
+    const opposite = structure('opposite', 'roof', -1, 0, 1);
+    const interior = structure('interior', 'pillar', 0, 0, 0);
+    expect(selectSharkAttackStructure(
+      [opposite, interior, exposed],
+      [{ x: -1, z: 0 }, { x: 1, z: 0 }],
+      12,
+      0,
+    )?.id).toBe('exposed');
+    expect(selectSharkAttackStructure([interior], [{ x: -1, z: 0 }, { x: 1, z: 0 }], 12, 0)).toBeNull();
+    expect(selectSharkAttackStructure(
+      [structure('upper-wall', 'wall', 1, 0, 1)],
+      [{ x: 1, z: 0 }],
+      12,
+      0,
+    )).toBeNull();
+
+    for (const type of Object.keys(RAFT_STRUCTURE_DEFINITIONS) as SavedRaftStructure['type'][]) {
+      const candidate = structure(`target-${type}`, type, 1, 0, type === 'floor' || type === 'roof' ? 1 : 0);
+      expect(selectSharkAttackStructure([candidate], [{ x: 1, z: 0 }], 12, 0)?.type).toBe(type);
+    }
   });
 });

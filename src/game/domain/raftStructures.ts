@@ -11,6 +11,7 @@ export const MAX_RAFT_STRUCTURE_LEVEL = 2;
 export type RaftRotation = 0 | 1 | 2 | 3;
 export type RaftStructureType = 'floor' | 'wall' | 'door' | 'pillar' | 'stairs' | 'roof';
 export type RaftBuildPiece = 'foundation' | RaftStructureType;
+export type RaftStructureDamageStage = 'intact' | 'worn' | 'critical';
 export type StructurePlacementReason =
   | 'valid'
   | 'occupied'
@@ -41,6 +42,8 @@ export interface RaftStructureDefinition {
   shortName: string;
   cost: ItemBundle;
   refund: ItemBundle;
+  repairCost: ItemBundle;
+  repairAmount: number;
   maxHealth: number;
 }
 
@@ -65,6 +68,8 @@ export const RAFT_STRUCTURE_DEFINITIONS: Record<RaftStructureType, RaftStructure
     shortName: '上层地板',
     cost: { timber: 3, rope: 1 },
     refund: { timber: 2 },
+    repairCost: { timber: 1 },
+    repairAmount: 36,
     maxHealth: 90,
   },
   wall: {
@@ -73,6 +78,8 @@ export const RAFT_STRUCTURE_DEFINITIONS: Record<RaftStructureType, RaftStructure
     shortName: '木墙',
     cost: { timber: 3, rope: 1 },
     refund: { timber: 2 },
+    repairCost: { timber: 1 },
+    repairAmount: 44,
     maxHealth: 110,
   },
   door: {
@@ -81,6 +88,8 @@ export const RAFT_STRUCTURE_DEFINITIONS: Record<RaftStructureType, RaftStructure
     shortName: '板门',
     cost: { timber: 3, rope: 2 },
     refund: { timber: 2, rope: 1 },
+    repairCost: { timber: 1, rope: 1 },
+    repairAmount: 38,
     maxHealth: 95,
   },
   pillar: {
@@ -89,6 +98,8 @@ export const RAFT_STRUCTURE_DEFINITIONS: Record<RaftStructureType, RaftStructure
     shortName: '承重柱',
     cost: { timber: 2, rope: 1 },
     refund: { timber: 1 },
+    repairCost: { timber: 1 },
+    repairAmount: 50,
     maxHealth: 125,
   },
   stairs: {
@@ -97,6 +108,8 @@ export const RAFT_STRUCTURE_DEFINITIONS: Record<RaftStructureType, RaftStructure
     shortName: '楼梯',
     cost: { timber: 4, rope: 2 },
     refund: { timber: 2, rope: 1 },
+    repairCost: { timber: 1, rope: 1 },
+    repairAmount: 40,
     maxHealth: 100,
   },
   roof: {
@@ -105,6 +118,8 @@ export const RAFT_STRUCTURE_DEFINITIONS: Record<RaftStructureType, RaftStructure
     shortName: '斜顶',
     cost: { timber: 2, fiber: 3, rope: 1 },
     refund: { timber: 1, fiber: 2 },
+    repairCost: { fiber: 2 },
+    repairAmount: 34,
     maxHealth: 80,
   },
 };
@@ -141,6 +156,69 @@ function coordinateKey(x: number, z: number): string {
 
 function foundationKeys(foundations: readonly FoundationCoordinate[]): Set<string> {
   return new Set(foundations.map((foundation) => coordinateKey(foundation.x, foundation.z)));
+}
+
+export function raftStructureHealthRatio(
+  structure: Pick<SavedRaftStructure, 'type' | 'health'>,
+): number {
+  const maximum = RAFT_STRUCTURE_DEFINITIONS[structure.type].maxHealth;
+  return Math.max(0, Math.min(1, structure.health / maximum));
+}
+
+export function raftStructureDamageStage(
+  structure: Pick<SavedRaftStructure, 'type' | 'health'>,
+): RaftStructureDamageStage {
+  const ratio = raftStructureHealthRatio(structure);
+  if (ratio >= 0.78) return 'intact';
+  if (ratio >= 0.5) return 'worn';
+  return 'critical';
+}
+
+function structureAttackPoint(structure: SavedRaftStructure): FoundationCoordinate {
+  let x = structure.x;
+  let z = structure.z;
+  if (structure.type === 'wall' || structure.type === 'door') {
+    if (structure.rotation === 0) z -= 0.5;
+    else if (structure.rotation === 1) x += 0.5;
+    else if (structure.rotation === 2) z += 0.5;
+    else x -= 0.5;
+  }
+  return { x, z };
+}
+
+export function selectSharkAttackStructure(
+  structures: readonly SavedRaftStructure[],
+  edgeFoundations: readonly FoundationCoordinate[],
+  fromRaftX: number,
+  fromRaftZ: number,
+): SavedRaftStructure | null {
+  const edges = foundationKeys(edgeFoundations);
+  const length = Math.hypot(fromRaftX, fromRaftZ) || 1;
+  const directionX = fromRaftX / length;
+  const directionZ = fromRaftZ / length;
+  let selected: SavedRaftStructure | null = null;
+  let selectedScore = Number.NEGATIVE_INFINITY;
+  for (const structure of structures) {
+    if (!edges.has(coordinateKey(structure.x, structure.z))) continue;
+    const maximumReachableLevel = structure.type === 'floor' || structure.type === 'roof' ? 1 : 0;
+    if (structure.level > maximumReachableLevel) continue;
+    const point = structureAttackPoint(structure);
+    const surfacePenalty = structure.type === 'floor' || structure.type === 'roof' ? 0.12 : 0;
+    const damagePreference = (1 - raftStructureHealthRatio(structure)) * 0.4;
+    const score = point.x * directionX
+      + point.z * directionZ
+      - structure.level * 0.34
+      - surfacePenalty
+      + damagePreference;
+    if (
+      score > selectedScore + 1e-6
+      || (Math.abs(score - selectedScore) <= 1e-6 && (!selected || structure.id.localeCompare(selected.id) < 0))
+    ) {
+      selected = structure;
+      selectedScore = score;
+    }
+  }
+  return selected ? { ...selected } : null;
 }
 
 function insideTile(

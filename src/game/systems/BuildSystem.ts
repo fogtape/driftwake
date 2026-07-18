@@ -191,6 +191,8 @@ export class BuildSystem {
     hoveredStructure: string | null;
     structureTarget: string | null;
     structureCount: number;
+    repairTarget: string | null;
+    repairHealth: number;
   } {
     return {
       mode: this.mode,
@@ -204,6 +206,16 @@ export class BuildSystem {
         ? `${this.targetStructure.type}:${this.targetStructure.x},${this.targetStructure.z}:${this.targetStructure.level}:${this.targetStructure.rotation}`
         : null,
       structureCount: this.structures.count,
+      repairTarget: this.mode === 'repair'
+        && this.hoveredStructure
+        && this.hoveredStructure.health < RAFT_STRUCTURE_DEFINITIONS[this.hoveredStructure.type].maxHealth
+        ? this.hoveredStructure.id
+        : null,
+      repairHealth: this.mode === 'repair'
+        && this.hoveredStructure
+        && this.hoveredStructure.health < RAFT_STRUCTURE_DEFINITIONS[this.hoveredStructure.type].maxHealth
+        ? this.hoveredStructure.health
+        : 0,
     };
   }
 
@@ -239,6 +251,13 @@ export class BuildSystem {
     this.localDirection.copy(this.forward).applyQuaternion(this.inverseRaftRotation).normalize();
     this.ray.set(this.localOrigin, this.localDirection);
     this.hoveredStructure = this.structures.findRayTarget(this.ray, 6.2);
+    if (
+      this.hoveredStructure
+      && this.hoveredStructure.health < RAFT_STRUCTURE_DEFINITIONS[this.hoveredStructure.type].maxHealth
+    ) {
+      this.setStructureRepairPreview(this.hoveredStructure);
+      return;
+    }
     if (Math.abs(this.ray.direction.y) < 0.02) {
       this.hidePlacementOnly();
       this.publishDismantlePrompt();
@@ -354,6 +373,25 @@ export class BuildSystem {
     }
   }
 
+  private setStructureRepairPreview(structure: SavedRaftStructure): void {
+    const definition = RAFT_STRUCTURE_DEFINITIONS[structure.type];
+    const inventory = useGameStore.getState().inventory;
+    const affordable = hasItems(inventory, definition.repairCost);
+    this.targetCoordinate = { x: structure.x, z: structure.z };
+    this.hoveredTileCoordinate = this.raft.hasTile(structure) ? { x: structure.x, z: structure.z } : null;
+    this.targetStructure = null;
+    this.mode = 'repair';
+    this.foundationPreview.visible = false;
+    this.structurePreview.visible = false;
+    useGameStore.getState().setInteraction(
+      affordable
+        ? `修补${definition.shortName} ${structure.health}/${definition.maxHealth} · ${costLabel(definition.repairCost)}`
+        : `修补${definition.shortName} · 缺少 ${missingCostLabel(definition.repairCost, inventory)}`,
+      'build',
+    );
+    this.publishFeedback(affordable);
+  }
+
   private hidePlacementOnly(): void {
     this.foundationPreview.visible = false;
     this.structurePreview.visible = false;
@@ -384,6 +422,14 @@ export class BuildSystem {
       this.audio.playDenied();
       return;
     }
+    if (
+      this.mode === 'repair'
+      && this.hoveredStructure
+      && this.hoveredStructure.health < RAFT_STRUCTURE_DEFINITIONS[this.hoveredStructure.type].maxHealth
+    ) {
+      this.performStructureRepair();
+      return;
+    }
     if (this.selectedPiece !== 'foundation') {
       this.performStructureBuild();
       return;
@@ -406,7 +452,7 @@ export class BuildSystem {
       this.raft.gridToLocal(coordinate, this.worldHit);
       this.raft.localPointToWorld(this.worldHit, this.worldHit);
       this.splashes.spawnImpact(this.worldHit, 0xefc35c, 15);
-      this.audio.playRepair();
+      this.audio.playRepair(this.worldHit);
       this.showNotice('结构已修补');
     } else {
       action = 'build';
@@ -429,6 +475,41 @@ export class BuildSystem {
     store.setRaft(this.raft.getIntegrityStats());
     this.updatePreview();
     this.onHammerUsed(action);
+  }
+
+  private performStructureRepair(): void {
+    if (!this.hoveredStructure) return;
+    const target = this.structures.getStructure(this.hoveredStructure.id);
+    if (!target) {
+      this.audio.playDenied();
+      return;
+    }
+    const definition = RAFT_STRUCTURE_DEFINITIONS[target.type];
+    const store = useGameStore.getState();
+    if (target.health >= definition.maxHealth || !store.spendItems(definition.repairCost)) {
+      this.audio.playDenied();
+      return;
+    }
+    const result = this.structures.repair(target.id, definition.repairAmount);
+    if (!result.changed || !result.structure) {
+      store.addItemBundle(definition.repairCost);
+      this.audio.playDenied();
+      return;
+    }
+    this.structures.getLocalImpactPosition(result.structure, this.worldHit);
+    this.raft.localPointToWorld(this.worldHit, this.worldHit);
+    this.splashes.spawnRepair(this.worldHit, target.type === 'roof');
+    this.audio.playRepair(this.worldHit, target.type === 'roof');
+    this.swing = 0.34;
+    const complete = result.structure.health >= definition.maxHealth;
+    this.showNotice(
+      complete
+        ? `${definition.shortName}已完全修复`
+        : `${definition.shortName}已修补 · ${result.structure.health}/${definition.maxHealth}`,
+    );
+    this.hoveredStructure = { ...result.structure };
+    this.updatePreview();
+    this.onHammerUsed('repair');
   }
 
   private performStructureBuild(): void {
@@ -568,6 +649,16 @@ export class BuildSystem {
   }
 
   private publishFeedback(valid = this.mode !== 'invalid' && this.mode !== 'hidden'): void {
+    const repairTarget = this.mode === 'repair'
+      && this.hoveredStructure
+      && this.hoveredStructure.health < RAFT_STRUCTURE_DEFINITIONS[this.hoveredStructure.type].maxHealth
+      ? {
+          id: this.hoveredStructure.id,
+          type: this.hoveredStructure.type,
+          health: this.hoveredStructure.health,
+          maxHealth: RAFT_STRUCTURE_DEFINITIONS[this.hoveredStructure.type].maxHealth,
+        }
+      : null;
     useGameStore.getState().setBuild({
       piece: this.selectedPiece,
       rotation: this.selectedRotation,
@@ -575,6 +666,7 @@ export class BuildSystem {
       mode: this.equipped ? this.mode : 'hidden',
       valid,
       structures: this.structures.count,
+      repairTarget,
     });
   }
 

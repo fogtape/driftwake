@@ -31,8 +31,12 @@ import {
   canRemoveRaftStructure,
   normalizeRaftRotation,
   pruneUnsupportedRaftStructures,
+  raftStructureDamageStage,
+  raftStructureHealthRatio,
   sampleRaftWalkableSurfaces,
+  selectSharkAttackStructure,
   type FoundationCoordinate,
+  type RaftStructureDamageStage,
   type RaftWalkableSurface,
   type RaftRotation,
   type RaftStructureType,
@@ -67,6 +71,20 @@ export interface StructureRemovalResult {
   blocked: boolean;
 }
 
+export interface StructureDamageResult {
+  changed: boolean;
+  destroyed: boolean;
+  structure: SavedRaftStructure | null;
+  removed: SavedRaftStructure[];
+  damageTaken: number;
+}
+
+export interface StructureRepairResult {
+  changed: boolean;
+  structure: SavedRaftStructure | null;
+  repaired: number;
+}
+
 function bucketKey(part: Pick<StructurePart, 'geometry' | 'material'>): BucketKey {
   return `${part.geometry}:${part.material}`;
 }
@@ -98,7 +116,22 @@ export class RaftStructureSystem {
   private readonly baseQuaternion = new Quaternion();
   private readonly unitScale = new Vector3(1, 1, 1);
   private readonly healthyColor = new Color(0xffffff);
-  private readonly damagedColor = new Color(0xc76b57);
+  private readonly wornColors: Record<StructurePartMaterial, Color> = {
+    wood: new Color(0xd19a70),
+    woodAlt: new Color(0xc88f68),
+    darkWood: new Color(0xb77a60),
+    rope: new Color(0xc29a67),
+    metal: new Color(0xa99582),
+    fiber: new Color(0xa7a568),
+  };
+  private readonly criticalColors: Record<StructurePartMaterial, Color> = {
+    wood: new Color(0xc07a5c),
+    woodAlt: new Color(0xb86f54),
+    darkWood: new Color(0xa56350),
+    rope: new Color(0xb48a5c),
+    metal: new Color(0x9e9082),
+    fiber: new Color(0x95965c),
+  };
   private readonly instanceColor = new Color();
   private readonly bounds = new Box3();
   private readonly hit = new Vector3();
@@ -151,11 +184,25 @@ export class RaftStructureSystem {
     );
   }
 
-  getDiagnostics(): { focusedDoor: string | null; openDoors: number; structures: number } {
+  getDiagnostics(): {
+    focusedDoor: string | null;
+    openDoors: number;
+    structures: number;
+    damaged: number;
+    critical: number;
+    lowestHealthRatio: number;
+  } {
+    const structures = [...this.structures.values()];
     return {
       focusedDoor: this.focusedDoorId,
-      openDoors: [...this.structures.values()].filter((structure) => structure.type === 'door' && structure.open).length,
-      structures: this.structures.size,
+      openDoors: structures.filter((structure) => structure.type === 'door' && structure.open).length,
+      structures: structures.length,
+      damaged: structures.filter((structure) => raftStructureDamageStage(structure) !== 'intact').length,
+      critical: structures.filter((structure) => raftStructureDamageStage(structure) === 'critical').length,
+      lowestHealthRatio: structures.reduce(
+        (lowest, structure) => Math.min(lowest, raftStructureHealthRatio(structure)),
+        1,
+      ),
     };
   }
 
@@ -193,6 +240,19 @@ export class RaftStructureSystem {
   getStructure(id: string): SavedRaftStructure | null {
     const structure = this.structures.get(id);
     return structure ? { ...structure } : null;
+  }
+
+  findSharkTarget(
+    edgeFoundations: readonly GridCoordinate[],
+    fromRaftX: number,
+    fromRaftZ: number,
+  ): SavedRaftStructure | null {
+    return selectSharkAttackStructure(
+      [...this.structures.values()],
+      edgeFoundations,
+      fromRaftX,
+      fromRaftZ,
+    );
   }
 
   setInputEnabled(enabled: boolean): void {
@@ -267,6 +327,60 @@ export class RaftStructureSystem {
     if (this.focusedDoorId === id) this.clearDoorFocus();
     this.rebuildInstances();
     return { removed: { ...structure }, blocked: false };
+  }
+
+  damage(id: string, amount: number): StructureDamageResult {
+    const structure = this.structures.get(id);
+    const requested = Number.isFinite(amount) ? Math.max(0, Math.round(amount)) : 0;
+    if (!structure || requested <= 0) {
+      return {
+        changed: false,
+        destroyed: false,
+        structure: structure ? { ...structure } : null,
+        removed: [],
+        damageTaken: 0,
+      };
+    }
+    const damageTaken = Math.min(structure.health, requested);
+    structure.health = Math.max(0, structure.health - requested);
+    if (structure.health > 0) {
+      this.rebuildInstances();
+      return {
+        changed: true,
+        destroyed: false,
+        structure: { ...structure },
+        removed: [],
+        damageTaken,
+      };
+    }
+
+    const destroyed = { ...structure, health: 0 };
+    this.structures.delete(id);
+    const unsupported = pruneUnsupportedRaftStructures([...this.structures.values()], this.raft.getTiles());
+    this.structures.clear();
+    for (const kept of unsupported.kept) this.structures.set(kept.id, kept);
+    const removed = [destroyed, ...unsupported.removed];
+    if (this.focusedDoorId && removed.some((entry) => entry.id === this.focusedDoorId)) this.clearDoorFocus();
+    this.rebuildInstances();
+    return {
+      changed: true,
+      destroyed: true,
+      structure: null,
+      removed: removed.map((entry) => ({ ...entry })),
+      damageTaken,
+    };
+  }
+
+  repair(id: string, amount: number): StructureRepairResult {
+    const structure = this.structures.get(id);
+    const requested = Number.isFinite(amount) ? Math.max(0, Math.round(amount)) : 0;
+    if (!structure || requested <= 0) return { changed: false, structure: structure ? { ...structure } : null, repaired: 0 };
+    const maximum = RAFT_STRUCTURE_DEFINITIONS[structure.type].maxHealth;
+    if (structure.health >= maximum) return { changed: false, structure: { ...structure }, repaired: 0 };
+    const before = structure.health;
+    structure.health = Math.min(maximum, structure.health + requested);
+    this.rebuildInstances();
+    return { changed: true, structure: { ...structure }, repaired: structure.health - before };
   }
 
   canRemoveFoundation(coordinate: GridCoordinate): boolean {
@@ -399,8 +513,9 @@ export class RaftStructureSystem {
       this.baseMatrix.compose(this.basePosition, this.baseQuaternion, this.unitScale);
       const definition = RAFT_STRUCTURE_DEFINITIONS[structure.type];
       const healthRatio = Math.max(0, Math.min(1, structure.health / definition.maxHealth));
+      const damageStage = raftStructureDamageStage(structure);
       const variation = ((hashText(structure.id) % 9) - 4) * 0.008;
-      this.instanceColor.copy(this.damagedColor).lerp(this.healthyColor, healthRatio).offsetHSL(variation, 0, variation);
+      let partIndex = 0;
       for (const part of createRaftStructureParts(structure.type, structure.open === true)) {
         const bucket = this.buckets.get(bucketKey(part));
         if (!bucket || bucket.count >= MAX_PARTS_PER_BUCKET) continue;
@@ -411,12 +526,14 @@ export class RaftStructureSystem {
           part.rotation?.[1] ?? 0,
           part.rotation?.[2] ?? 0,
         );
+        this.applyDamagePresentation(structure, part, partIndex, healthRatio, damageStage, variation);
         this.partQuaternion.setFromEuler(this.partEuler);
         this.partMatrix.compose(this.partPosition, this.partQuaternion, this.partScale);
         this.worldMatrix.multiplyMatrices(this.baseMatrix, this.partMatrix);
         bucket.mesh.setMatrixAt(bucket.count, this.worldMatrix);
         bucket.mesh.setColorAt(bucket.count, this.instanceColor);
         bucket.count += 1;
+        partIndex += 1;
       }
     }
     for (const bucket of this.buckets.values()) {
@@ -426,6 +543,39 @@ export class RaftStructureSystem {
       bucket.mesh.computeBoundingSphere();
     }
     this.revision += 1;
+  }
+
+  private applyDamagePresentation(
+    structure: SavedRaftStructure,
+    part: StructurePart,
+    partIndex: number,
+    healthRatio: number,
+    stage: RaftStructureDamageStage,
+    variation: number,
+  ): void {
+    if (stage === 'intact') {
+      this.instanceColor.copy(this.healthyColor).offsetHSL(variation, 0, variation);
+      return;
+    }
+    const target = stage === 'critical' ? this.criticalColors[part.material] : this.wornColors[part.material];
+    const recovery = stage === 'critical'
+      ? Math.max(0, Math.min(0.18, healthRatio * 0.34))
+      : Math.max(0, Math.min(0.3, (healthRatio - 0.5) * 1.08));
+    this.instanceColor.copy(target).lerp(this.healthyColor, recovery).offsetHSL(variation, 0, variation);
+
+    const seed = hashText(`${structure.id}:${partIndex}`);
+    const damage = 1 - healthRatio;
+    const lateral = ((seed & 15) / 15 - 0.5) * damage;
+    const depth = (((seed >>> 4) & 15) / 15 - 0.5) * damage;
+    this.partPosition.x += lateral * 0.065;
+    this.partPosition.z += depth * 0.055;
+    this.partPosition.y -= damage * (structure.type === 'floor' || structure.type === 'roof' ? 0.045 : 0.018);
+    this.partEuler.z += lateral * 0.085;
+    this.partEuler.x += depth * 0.045;
+    if (stage === 'critical' && seed % 13 === 0 && part.material !== 'metal') {
+      this.partScale.y *= 0.76;
+      this.partPosition.y -= 0.028;
+    }
   }
 
   private setBaseTransform(structure: Pick<SavedRaftStructure, 'type' | 'x' | 'z' | 'level' | 'rotation'>): void {

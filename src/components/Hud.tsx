@@ -42,6 +42,7 @@ import { cardinalLabel } from '../game/domain/navigation';
 import {
   RAFT_BUILD_PIECES,
   RAFT_BUILD_PIECE_DEFINITIONS,
+  RAFT_STRUCTURE_DEFINITIONS,
   type RaftBuildPiece,
 } from '../game/domain/raftStructures';
 import type {
@@ -167,6 +168,12 @@ export function Hud({
 }: HudProps) {
   const sharkAlert = shark.mode === 'approaching' || shark.mode === 'attacking';
   const fishingActive = fishing.phase === 'hooked';
+  const structureRepair = build.repairTarget;
+  const structureRepairDefinition = structureRepair
+    ? RAFT_STRUCTURE_DEFINITIONS[structureRepair.type]
+    : null;
+  const displayedBuildCost = structureRepairDefinition?.repairCost
+    ?? RAFT_BUILD_PIECE_DEFINITIONS[build.piece].cost;
   const placedDeviceTypes = island.ashore
     ? []
     : (['purifier', 'grill', 'solarPurifier', 'tripleGrill', 'locker'] as const)
@@ -353,7 +360,11 @@ export function Hud({
       <div className={`shark-warning ${stormAlert ? 'has-weather-alert' : ''} ${sharkAlert ? 'is-visible' : ''}`} aria-live="polite">
         <TriangleAlert size={18} />
         <div>
-          <span>{shark.target === 'player' ? (shark.mode === 'attacking' ? '深潮鲨正在扑咬' : '深潮鲨锁定了你') : shark.mode === 'attacking' ? '结构遭到撕咬' : '深潮鲨正在逼近'}</span>
+          <span>{shark.target === 'player'
+            ? (shark.mode === 'attacking' ? '深潮鲨正在扑咬' : '深潮鲨锁定了你')
+            : shark.target === 'structure'
+              ? (shark.mode === 'attacking' ? '暴露结构遭到撕咬' : '脆弱结构已被锁定')
+              : shark.mode === 'attacking' ? '筏体遭到撕咬' : '深潮鲨正在逼近'}</span>
           <i><b style={{ width: `${Math.round(shark.threat * 100)}%` }} /></i>
         </div>
       </div>
@@ -405,7 +416,9 @@ export function Hud({
 
       <div
         className={`build-palette ${selectedTool === 'hammer' && !placementDevice ? 'is-visible' : ''} is-${build.mode} ${build.valid ? 'is-valid' : 'is-invalid'}`}
-        aria-label={`${RAFT_BUILD_PIECE_DEFINITIONS[build.piece].name}，${build.level + 1}层，朝向${['北', '东', '南', '西'][build.rotation]}，筏上结构 ${build.structures} 件`}
+        aria-label={structureRepair && structureRepairDefinition
+          ? `修补${structureRepairDefinition.name}，完整度 ${structureRepair.health}/${structureRepair.maxHealth}`
+          : `${RAFT_BUILD_PIECE_DEFINITIONS[build.piece].name}，${build.level + 1}层，朝向${['北', '东', '南', '西'][build.rotation]}，筏上结构 ${build.structures} 件`}
       >
         <div className="build-palette__pieces" aria-hidden="true">
           {RAFT_BUILD_PIECES.map((piece) => (
@@ -415,17 +428,21 @@ export function Hud({
           ))}
         </div>
         <div className="build-palette__meta">
-          <strong>{RAFT_BUILD_PIECE_DEFINITIONS[build.piece].shortName}</strong>
-          <span><RotateCw size={12} />{['北', '东', '南', '西'][build.rotation]}<small>{build.level + 1}层</small></span>
-          <div aria-label="建造成本">
-            {(Object.entries(RAFT_BUILD_PIECE_DEFINITIONS[build.piece].cost) as [keyof Inventory, number][]).map(([itemId, amount]) => (
+          <strong>{structureRepairDefinition ? `修补${structureRepairDefinition.shortName}` : RAFT_BUILD_PIECE_DEFINITIONS[build.piece].shortName}</strong>
+          <span>
+            {structureRepair
+              ? <><ShieldAlert size={12} />{structureRepair.health}/{structureRepair.maxHealth}</>
+              : <><RotateCw size={12} />{['北', '东', '南', '西'][build.rotation]}<small>{build.level + 1}层</small></>}
+          </span>
+          <div aria-label={structureRepair ? '修补成本' : '建造成本'}>
+            {(Object.entries(displayedBuildCost) as [keyof Inventory, number][]).map(([itemId, amount]) => (
               <i className={itemCount(inventory, itemId) < amount ? 'is-missing' : ''} key={itemId}>
                 <ItemIcon itemId={itemId} size={12} />
                 <b>{amount}</b>
               </i>
             ))}
           </div>
-          <em>{build.structures}</em>
+          <em>{structureRepair ? `${Math.round((structureRepair.health / structureRepair.maxHealth) * 100)}%` : build.structures}</em>
         </div>
       </div>
 

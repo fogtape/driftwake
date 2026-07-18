@@ -22,6 +22,33 @@ export class SplashSystem {
     this.spawnBurst(position, color, count, 0.62, 0.055, 0.35, 1.35);
   }
 
+  spawnStructureDamage(position: Vector3, healthRatio: number, destroyed: boolean, fibrous = false): void {
+    const severity = 1 - Math.max(0, Math.min(1, healthRatio));
+    this.spawnBurst(
+      position,
+      fibrous ? 0x9b9a5f : 0x9b6249,
+      Math.round(14 + severity * 18 + (destroyed ? 12 : 0)),
+      destroyed ? 0.92 : 0.68,
+      destroyed ? 0.07 : 0.055,
+      0.28,
+      destroyed ? 2.05 : 1.35,
+    );
+    this.spawnBurst(
+      position,
+      fibrous ? 0x5f603d : 0x5f3c34,
+      Math.round(7 + severity * 10),
+      0.74,
+      0.038,
+      0.18,
+      0.92,
+    );
+  }
+
+  spawnRepair(position: Vector3, fibrous = false): void {
+    this.spawnBurst(position, 0xefc35c, 11, 0.48, 0.045, 0.22, 0.86);
+    this.spawnBurst(position, fibrous ? 0xaeb275 : 0xd3a372, 7, 0.54, 0.035, 0.16, 0.64);
+  }
+
   private spawnBurst(
     position: Vector3,
     color: number,

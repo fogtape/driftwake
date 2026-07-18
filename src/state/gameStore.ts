@@ -41,7 +41,7 @@ import type { IslandPhase } from '../game/domain/island';
 import type { NavigationDeviceType, NavigationRouteMode, NavigationWeatherPhase, SignalArrayStatus } from '../game/domain/navigation';
 import type { PlayerSurface } from '../game/domain/save';
 import type { CameraMotionMode } from '../game/domain/settings';
-import type { RaftBuildPiece, RaftRotation } from '../game/domain/raftStructures';
+import type { RaftBuildPiece, RaftRotation, RaftStructureType } from '../game/domain/raftStructures';
 import {
   applyToolWear,
   freshToolDurability,
@@ -88,7 +88,7 @@ export interface SharkFeedback {
   threat: number;
   health: number;
   visible: boolean;
-  target: 'raft' | 'player';
+  target: 'raft' | 'structure' | 'player';
 }
 
 export interface PlayerFeedback {
@@ -110,6 +110,12 @@ export interface BuildFeedback {
   mode: 'hidden' | 'build' | 'repair' | 'invalid';
   valid: boolean;
   structures: number;
+  repairTarget: {
+    id: string;
+    type: RaftStructureType;
+    health: number;
+    maxHealth: number;
+  } | null;
 }
 
 export interface DeviceFeedback {
@@ -393,7 +399,15 @@ function defaultProgression(): ProgressionFeedback {
 }
 
 function defaultBuild(): BuildFeedback {
-  return { piece: 'foundation', rotation: 0, level: 0, mode: 'hidden', valid: false, structures: 0 };
+  return {
+    piece: 'foundation',
+    rotation: 0,
+    level: 0,
+    mode: 'hidden',
+    valid: false,
+    structures: 0,
+    repairTarget: null,
+  };
 }
 
 function countLearnableProjects(knowledge: ProgressionKnowledge): number {

@@ -721,6 +721,12 @@ button:focus-visible {
 
 .build-palette.is-visible { opacity: 1; transform: translate(-50%, 0); }
 .build-palette.is-invalid { border-color: rgba(226, 111, 85, 0.38); }
+.build-palette.is-repair { border-color: rgba(239, 195, 92, 0.52); }
+.build-palette.is-repair .build-palette__meta > strong,
+.build-palette.is-repair .build-palette__meta > span { color: #efd58b; }
+.build-palette.is-repair.is-invalid { border-color: rgba(226, 111, 85, 0.5); }
+.build-palette.is-repair.is-invalid .build-palette__meta > strong,
+.build-palette.is-repair.is-invalid .build-palette__meta > span { color: #f0a08c; }
 
 .build-palette__pieces {
   display: grid;

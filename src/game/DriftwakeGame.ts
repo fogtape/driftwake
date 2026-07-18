@@ -478,15 +478,18 @@ export class DriftwakeGame {
       this.shark = new SharkSystem(
         this.scene,
         this.raft,
+        this.structures,
         this.player,
         this.materials,
         this.audio,
         this.splashes,
         (strength) => this.player?.addCameraShake(strength),
-        () => {
-          const removed = this.structures?.handleFoundationLoss() ?? [];
-          this.mount.dataset.raftStructureCascadeCount = String(removed.length);
-          if (removed.length > 0) this.showTransientNotice(`支撑断裂 · ${removed.length} 件上层结构坠海`);
+        (mutation) => {
+          const cascadeCount = mutation.kind === 'structure' && mutation.destroyed
+            ? Math.max(0, mutation.removed.length - 1)
+            : mutation.removed.length;
+          this.mount.dataset.raftStructureCascadeCount = String(cascadeCount);
+          this.mount.dataset.lastRaftMutation = `${mutation.kind}:${mutation.targetId}:${mutation.health}:${mutation.destroyed}`;
           this.saveNow();
         },
       );
@@ -816,11 +819,23 @@ export class DriftwakeGame {
       this.mount.dataset.buildLevel = String(buildDiagnostics.level);
       this.mount.dataset.buildStructureTarget = buildDiagnostics.structureTarget ?? 'none';
       this.mount.dataset.buildHoveredStructure = buildDiagnostics.hoveredStructure ?? 'none';
+      this.mount.dataset.buildRepairTarget = buildDiagnostics.repairTarget ?? 'none';
+      this.mount.dataset.buildRepairHealth = String(buildDiagnostics.repairHealth);
       this.mount.dataset.raftStructureCount = String(buildDiagnostics.structureCount);
     }
     this.fishing?.update(simulationSeconds, stepSeconds);
     this.spear?.update(simulationSeconds, stepSeconds);
     this.shark?.update(simulationSeconds, stepSeconds);
+    const sharkDiagnostics = this.shark?.getDiagnostics();
+    if (sharkDiagnostics) {
+      this.mount.dataset.sharkRaftTargetKind = sharkDiagnostics.targetKind;
+      this.mount.dataset.sharkRaftTargetId = sharkDiagnostics.targetId ?? 'none';
+      this.mount.dataset.sharkLastRaftTargetKind = sharkDiagnostics.lastRaftTargetKind;
+      this.mount.dataset.sharkLastRaftTargetId = sharkDiagnostics.lastRaftTargetId ?? 'none';
+      this.mount.dataset.sharkLastRaftTargetHealth = String(sharkDiagnostics.lastRaftTargetHealth);
+      this.mount.dataset.sharkStructureDamageCount = String(sharkDiagnostics.structureDamageEvents);
+      this.mount.dataset.sharkFoundationDamageCount = String(sharkDiagnostics.foundationDamageEvents);
+    }
     this.devices?.update(simulationSeconds, stepSeconds);
     this.navigation?.update(simulationSeconds, stepSeconds);
     this.planting?.update(simulationSeconds, stepSeconds);
@@ -831,6 +846,9 @@ export class DriftwakeGame {
       this.mount.dataset.structureFocusedDoor = structureDiagnostics.focusedDoor ?? 'none';
       this.mount.dataset.structureOpenDoors = String(structureDiagnostics.openDoors);
       this.mount.dataset.raftStructureCount = String(structureDiagnostics.structures);
+      this.mount.dataset.raftDamagedStructureCount = String(structureDiagnostics.damaged);
+      this.mount.dataset.raftCriticalStructureCount = String(structureDiagnostics.critical);
+      this.mount.dataset.raftStructureLowestHealth = structureDiagnostics.lowestHealthRatio.toFixed(3);
       if (this.simulationTickCount % 6 === 0) {
         this.mount.dataset.structureDoorAim = JSON.stringify(this.structures?.getDoorAimDiagnostics(this.camera));
       }

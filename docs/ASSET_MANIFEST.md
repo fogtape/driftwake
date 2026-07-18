@@ -445,9 +445,9 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | ANI-017 | 五杯水位/完成标记、三份鱼体独立火候、共享燃料条、柜盖与内容标记 | `src/game/systems/DeviceSystem.ts` | 与高级设备领域队列、真实库存、HUD、音频和 v10 恢复同步 |
 | ANI-018 | 锚机棘轮加装、锁链受力、风暴载荷累积与未强化锚滑脱 | `src/game/systems/NavigationSystem.ts` | 与锚泊后果、警报、音频、模型强化和 v10 恢复同步 |
 | ANI-019 | 接收台扫描/调谐/电量、双桅相位/传播、目标浮筒/转子/脉冲与抵达解码 | `src/game/systems/NavigationSystem.ts` | 与电池、间距、活动信号、世界位置、距离、访问解锁和 v10 恢复同步 |
-| ANI-020 | 结构分件幽灵预览、旋转/层高切换、板门开合、连续楼梯登层、上层落地/分层碰撞和失去基础后的承重级联 | `src/game/systems/BuildSystem.ts`、`RaftStructureSystem.ts`、`PlayerController.ts` | 与材料、锤耐久、共享占位、支撑拓扑和 v15 脚底层高恢复同步；屋顶/地板下表面头部阻挡待补 |
+| ANI-020 | 结构分件幽灵预览、旋转/层高切换、板门开合、连续楼梯登层、上层落地/分层碰撞、三档受损色泽/确定性松动和承重级联 | `src/game/systems/BuildSystem.ts`、`RaftStructureSystem.ts`、`PlayerController.ts` | 与材料、锤耐久、共享占位、鲨鱼外沿择靶、修补 HUD、支撑拓扑和 v15 恢复同步；不增加结构实例批次，屋顶/地板下表面头部阻挡待补 |
 | VFX-001 | 入水粒子 | `src/game/systems/SplashSystem.ts` | 已实现 |
-| VFX-002 | 木屑、修补、拆除、武器和咬击冲击粒子 | `src/game/systems/SplashSystem.ts` | 颜色与数量按事件区分 |
+| VFX-002 | 木屑、纤维屑、修补金屑、拆除、武器和咬击冲击粒子 | `src/game/systems/SplashSystem.ts` | 结构撕咬按生命/是否毁损分双层数量、色泽、尺寸和抛速；锤修按木材/纤维分层 |
 | VFX-003 | 五层加色火焰、动态点光、五块余烬和八层烟雾 | `src/game/art/ProceduralModels.ts` | 火势与设备阶段联动，焦鱼阶段转为深色烟 |
 | VFX-004 | 净水蒸汽、海水退位、杯中水位和循环滴水 | `src/game/systems/DeviceSystem.ts` | 蒸馏进度实时驱动，不使用位图序列 |
 | VFX-005 | 岸线泡沫脉动、资源高亮、木屑/石屑/叶片分类冲击 | `src/game/systems/IslandSystem.ts` | 跟随岛屿阶段、焦点和采集事件驱动 |
@@ -472,7 +472,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | AMB-ISLAND | 距离驱动的叶冠风层和稀疏双音鸟鸣 | `src/game/systems/AudioSystem.ts` |
 | AMB-UNDERWATER | 世界总线动态低通、水体低频脉动和呼吸警告；UI 总线保持清晰 | `src/game/systems/AudioSystem.ts` |
 | AMB-STORM | 独立低通风压、带通雨噪、慢速阵风幅度变化，以及双段闪光触发的雷声簇 | `src/game/systems/AudioSystem.ts` |
-| SFX-HOOK/BUILD | 抛钩、HRTF 空间落水、五类物资方位碰撞、居中背包确认、近场受力收绳、断钩、木击、修补、拆除、拒绝反馈与板门木铰/摩擦层 | `src/game/systems/AudioSystem.ts` |
+| SFX-HOOK/BUILD | 抛钩、HRTF 空间落水、五类物资方位碰撞、居中背包确认、近场受力收绳、断钩、木击、按木/纤维修补、结构空间断裂/坍塌、拆除、拒绝反馈与板门木铰/摩擦层 | `src/game/systems/AudioSystem.ts` |
 | SFX-FISHING | 抛线、浮标、三连鱼讯、卷线、捕获与断线 | `src/game/systems/AudioSystem.ts` |
 | SFX-DEVICE | 放置木/铁冲击、五联海水装填、三槽食物位、干舱开合/物资双向转移、点火、完成、焦糊、持续火焰和蒸汽层 | `src/game/systems/AudioSystem.ts` |
 | SFX-ISLAND | 木筏/沙地脚步、石斧破风、入木、倒树、枝料/石料/植被拾取 | `src/game/systems/AudioSystem.ts` |

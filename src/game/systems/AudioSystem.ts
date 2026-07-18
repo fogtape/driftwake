@@ -370,9 +370,42 @@ export class AudioSystem {
     }, 72);
   }
 
-  playRepair(): void {
-    this.playWoodKnock(0.085, 0.1);
-    this.noiseBurst(0.075, 1450, 0.035, 'bandpass');
+  playRepair(position?: AudioPosition, fibrous = false): void {
+    const spatialTarget = position ? this.createSpatialTarget(position) : null;
+    const target = spatialTarget ?? this.effects;
+    this.playWoodKnockTo(fibrous ? 0.062 : 0.085, 0.1, target);
+    this.noiseBurstTo(0.075, fibrous ? 1960 : 1450, fibrous ? 0.028 : 0.035, 'bandpass', target);
+    if (fibrous) this.noiseBurstTo(0.052, 3180, 0.018, 'highpass', target);
+    if (spatialTarget) this.releaseSpatialTarget(spatialTarget, 360);
+  }
+
+  playStructureDamage(position: AudioPosition, severity: number, destroyed: boolean, fibrous = false): void {
+    const normalized = Math.max(0, Math.min(1, severity));
+    const spatialTarget = this.createSpatialTarget(position);
+    const target = spatialTarget ?? this.effects;
+    this.playWoodKnockTo(0.08 + normalized * 0.055 + (destroyed ? 0.045 : 0), destroyed ? 0.2 : 0.13, target);
+    this.noiseBurstTo(
+      destroyed ? 0.28 : 0.16,
+      fibrous ? 1680 : 820,
+      0.04 + normalized * 0.04,
+      fibrous ? 'bandpass' : 'lowpass',
+      target,
+    );
+    this.noiseBurstTo(0.1, destroyed ? 2480 : 1840, destroyed ? 0.055 : 0.032, 'bandpass', target);
+    if (this.context && target && destroyed) {
+      const now = this.context.currentTime;
+      const oscillator = this.context.createOscillator();
+      const gain = this.context.createGain();
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(fibrous ? 126 : 98, now);
+      oscillator.frequency.exponentialRampToValueAtTime(42, now + 0.24);
+      gain.gain.setValueAtTime(0.045, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
+      oscillator.connect(gain).connect(target);
+      oscillator.start(now);
+      oscillator.stop(now + 0.27);
+    }
+    if (spatialTarget) this.releaseSpatialTarget(spatialTarget, destroyed ? 620 : 440);
   }
 
   playDoor(open: boolean): void {

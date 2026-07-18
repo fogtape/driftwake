@@ -800,6 +800,23 @@ const structureTraversalSave = {
   },
 };
 
+const structureDamageSave = {
+  ...structureBuildSave,
+  player: {
+    ...structureBuildSave.player,
+    inventory: { hook: 1, hammer: 1, timber: 12, rope: 4 },
+    toolDurability: { hook: 24, hammer: 80 },
+    selectedTool: 'hammer',
+    navigation: { surface: 'raft', x: 2.88, z: 1.45 },
+  },
+  raft: {
+    ...structureBuildSave.raft,
+    structures: [
+      { id: 'damage-wall', type: 'wall', x: 2, z: 2, level: 0, rotation: 2, health: 75 },
+    ],
+  },
+};
+
 await mkdir(outputDir, { recursive: true });
 
 const browserRuntime = await launchDriftwakeChromium(chromium, {
@@ -836,6 +853,16 @@ async function openDesktopPage(label, options = {}) {
     },
     deviceScaleFactor: 1,
   });
+  if (Number.isFinite(options.simulationTimeScale) && options.simulationTimeScale > 1) {
+    await context.addInitScript((scale) => {
+      const nativeNow = performance.now.bind(performance);
+      const origin = nativeNow();
+      Object.defineProperty(performance, 'now', {
+        configurable: true,
+        value: () => origin + (nativeNow() - origin) * scale,
+      });
+    }, options.simulationTimeScale);
+  }
   if (captureQuality) {
     await context.addInitScript((quality) => {
       localStorage.setItem('driftwake.preferences.v2', JSON.stringify({
@@ -852,7 +879,7 @@ async function openDesktopPage(label, options = {}) {
   if (options.seedSave) {
     await context.addInitScript((save) => {
       localStorage.setItem(`driftwake.save.v${save.version}`, JSON.stringify(save));
-    }, options.failureStart ? failureSave : options.survivalPressureStart ? survivalPressureSave : options.structureTraversalStart ? structureTraversalSave : options.structureVisualStart ? structureVisualSave : options.structureBuildStart ? structureBuildSave : options.durabilityHammerStart ? durabilityHammerSave : options.durabilityFishingStart ? durabilityFishingSave : options.durabilityAxeStart ? durabilityAxeSave : options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
+    }, options.failureStart ? failureSave : options.survivalPressureStart ? survivalPressureSave : options.structureDamageStart ? structureDamageSave : options.structureTraversalStart ? structureTraversalSave : options.structureVisualStart ? structureVisualSave : options.structureBuildStart ? structureBuildSave : options.durabilityHammerStart ? durabilityHammerSave : options.durabilityFishingStart ? durabilityFishingSave : options.durabilityAxeStart ? durabilityAxeSave : options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
   }
   const page = await context.newPage();
   monitorPage(page, label);
@@ -1688,7 +1715,7 @@ async function captureToolDurability() {
 
 async function captureBuildingStructures() {
   const buildingPart = process.env.BUILDING_PART ?? 'all';
-  if (!['all', 'behavior', 'visual', 'traversal'].includes(buildingPart)) {
+  if (!['all', 'behavior', 'visual', 'traversal', 'damage'].includes(buildingPart)) {
     throw new Error(`Unknown BUILDING_PART: ${buildingPart}`);
   }
   if (buildingPart === 'visual') {
@@ -1697,6 +1724,10 @@ async function captureBuildingStructures() {
   }
   if (buildingPart === 'traversal') {
     await captureBuildingTraversal();
+    return;
+  }
+  if (buildingPart === 'damage') {
+    await captureBuildingDamageRepair();
     return;
   }
   const viewport = { width: 1024, height: 640 };
@@ -1915,6 +1946,7 @@ async function captureBuildingStructures() {
 
   await captureBuildingStructureVisual();
   await captureBuildingTraversal();
+  await captureBuildingDamageRepair();
 }
 
 async function captureBuildingStructureVisual() {
@@ -2096,6 +2128,233 @@ async function captureBuildingTraversal() {
     throw new Error(`Building traversal failed: ${JSON.stringify({ upperBeforeReload, jumpBefore, final })}`);
   }
   console.log(`Building traversal gate: ${JSON.stringify({ upperBeforeReload, jumpBefore, final })}`);
+  await context.close();
+}
+
+async function captureBuildingDamageRepair() {
+  const viewport = { width: 768, height: 480 };
+  const attack = await openDesktopPage('building-damage-attack', {
+    seedSave: true,
+    structureDamageStart: true,
+    simulationTimeScale: 10,
+    ...viewport,
+  });
+  let { context } = attack;
+  let { page } = attack;
+  await installNoticeHistory(page);
+  await enterGame(page);
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v15') ?? 'null');
+    return data?.raftStructureCount === '1'
+      && saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health === 75;
+  }, 10_000);
+  try {
+    await waitForRuntime(page, () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v15') ?? 'null');
+      return Number(data?.sharkStructureDamageCount) >= 2
+        && data?.sharkLastRaftTargetKind === 'structure'
+        && data?.sharkLastRaftTargetId === 'damage-wall'
+        && data?.raftCriticalStructureCount === '1'
+        && saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health === 7;
+    }, 90_000);
+  } catch (error) {
+    const diagnostics = await page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v15') ?? 'null');
+      return {
+        simulationTicks: data?.simulationTickCount,
+        simulationActive: data?.simulationActive,
+        contextHealthy: data?.contextHealthy,
+        sharkMode: document.querySelector('.shark-warning.is-visible')?.textContent?.replace(/\s+/g, ' ').trim(),
+        targetKind: data?.sharkRaftTargetKind,
+        targetId: data?.sharkRaftTargetId,
+        lastTargetKind: data?.sharkLastRaftTargetKind,
+        lastTargetId: data?.sharkLastRaftTargetId,
+        lastTargetHealth: data?.sharkLastRaftTargetHealth,
+        structureDamageEvents: data?.sharkStructureDamageCount,
+        foundationDamageEvents: data?.sharkFoundationDamageCount,
+        damaged: data?.raftDamagedStructureCount,
+        critical: data?.raftCriticalStructureCount,
+        savedHealth: saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health,
+        savedTileHealth: saved?.raft?.tiles?.find((tile) => tile.x === 2 && tile.z === 2)?.health,
+        mutation: data?.lastRaftMutation,
+        notices: globalThis.__driftwakeCaptureNotices ?? [],
+      };
+    });
+    throw new Error(`Building shark damage timed out: ${JSON.stringify(diagnostics)}`, { cause: error });
+  }
+  const damagedState = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v15') ?? 'null');
+    return {
+      damageEvents: Number(data?.sharkStructureDamageCount),
+      foundationEvents: Number(data?.sharkFoundationDamageCount),
+      lastTargetKind: data?.sharkLastRaftTargetKind,
+      lastTargetId: data?.sharkLastRaftTargetId,
+      lastTargetHealth: Number(data?.sharkLastRaftTargetHealth),
+      mutation: data?.lastRaftMutation,
+      critical: Number(data?.raftCriticalStructureCount),
+      health: saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health,
+      tileHealth: saved?.raft?.tiles?.find((tile) => tile.x === 2 && tile.z === 2)?.health,
+      notices: globalThis.__driftwakeCaptureNotices ?? [],
+    };
+  });
+  const damagedSave = await page.evaluate(() => JSON.parse(localStorage.getItem('driftwake.save.v15') ?? 'null'));
+  if (
+    damagedState.damageEvents !== 2
+    || damagedState.foundationEvents !== 0
+    || damagedState.lastTargetKind !== 'structure'
+    || damagedState.lastTargetId !== 'damage-wall'
+    || damagedState.lastTargetHealth !== 7
+    || damagedState.mutation !== 'structure:damage-wall:7:false'
+    || damagedState.critical !== 1
+    || damagedState.health !== 7
+    || damagedState.tileHealth !== 100
+    || !damagedState.notices.some((notice) => notice.includes('木墙受损'))
+  ) {
+    throw new Error(`Building structure damage failed: ${JSON.stringify(damagedState)}`);
+  }
+
+  await context.close();
+  context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
+  await context.addInitScript((save) => {
+    localStorage.setItem('driftwake.save.v15', JSON.stringify(save));
+  }, damagedSave);
+  page = await context.newPage();
+  monitorPage(page, 'building-damage-restored');
+  await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+  await page.waitForSelector('.primary-command:not(:disabled)', { timeout: 45_000 });
+  await installNoticeHistory(page);
+  await enterGame(page);
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v15') ?? 'null');
+    return data?.raftCriticalStructureCount === '1'
+      && saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health === 7;
+  }, 10_000);
+
+  const repairAimMovement = { x: 0, y: 0 };
+  for (let iteration = 0; iteration < 6; iteration += 1) {
+    const correction = await page.evaluate(([targetX, targetY, targetZ]) => {
+      const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.structureDoorAim ?? '{}');
+      const [cameraX, cameraY, cameraZ] = aim.camera;
+      const [forwardX, forwardY, forwardZ] = aim.forward;
+      const deltaX = targetX - cameraX;
+      const deltaY = targetY - cameraY;
+      const deltaZ = targetZ - cameraZ;
+      const distance = Math.hypot(deltaX, deltaY, deltaZ);
+      const desiredYaw = Math.atan2(-deltaX / distance, -deltaZ / distance);
+      const desiredPitch = Math.asin(deltaY / distance);
+      const currentYaw = Math.atan2(-forwardX, -forwardZ);
+      const currentPitch = Math.asin(forwardY);
+      const movementX = Math.atan2(
+        Math.sin(currentYaw - desiredYaw),
+        Math.cos(currentYaw - desiredYaw),
+      ) / 0.00175;
+      const movementY = (currentPitch - desiredPitch) / 0.00155;
+      const movement = new MouseEvent('mousemove');
+      Object.defineProperties(movement, {
+        movementX: { value: movementX },
+        movementY: { value: movementY },
+      });
+      document.dispatchEvent(movement);
+      return { x: movementX, y: movementY };
+    }, [2.88, 1.05, 3.45]);
+    repairAimMovement.x += correction.x;
+    repairAimMovement.y += correction.y;
+    await page.waitForTimeout(280);
+    if (await page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return data?.buildMode === 'repair'
+        && data?.buildRepairTarget === 'damage-wall'
+        && data?.buildRepairHealth === '7';
+    })) break;
+  }
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.buildMode === 'repair'
+      && data?.buildRepairTarget === 'damage-wall'
+      && data?.buildRepairHealth === '7';
+  }, 8_000);
+  const repairUi = await page.evaluate(() => ({
+    palette: document.querySelector('.build-palette')?.textContent?.replace(/\s+/g, ' ').trim(),
+    prompt: document.querySelector('.interaction-prompt.is-visible')?.textContent?.replace(/\s+/g, ' ').trim(),
+  }));
+  if (!repairUi.palette?.includes('修补木墙') || !repairUi.palette.includes('7/110') || !repairUi.prompt?.includes('修补木墙')) {
+    throw new Error(`Building repair UI failed: ${JSON.stringify(repairUi)}`);
+  }
+  await captureCompositedPage(
+    page,
+    new URL('building-structure-damage-desktop.png', outputDir).pathname,
+  );
+
+  await page.mouse.click(viewport.width / 2, viewport.height / 2);
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v15') ?? 'null');
+    return data?.lastToolWear === 'repair:hammer:79'
+      && data?.buildRepairHealth === '51'
+      && saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health === 51
+      && saved?.player?.inventory?.timber === 11;
+  }, 8_000);
+  await page.waitForTimeout(450);
+  await page.mouse.click(viewport.width / 2, viewport.height / 2);
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v15') ?? 'null');
+    return data?.lastToolWear === 'repair:hammer:78'
+      && data?.buildRepairHealth === '95'
+      && saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health === 95
+      && saved?.player?.inventory?.timber === 10;
+  }, 8_000);
+  await page.waitForTimeout(450);
+  await page.mouse.click(viewport.width / 2, viewport.height / 2);
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v15') ?? 'null');
+    return data?.lastToolWear === 'repair:hammer:77'
+      && data?.raftDamagedStructureCount === '0'
+      && data?.buildRepairTarget === 'none'
+      && saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health === 110
+      && saved?.player?.inventory?.timber === 9;
+  }, 8_000);
+  await captureCompositedPage(
+    page,
+    new URL('building-structure-repaired-desktop.png', outputDir).pathname,
+  );
+  const final = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v15') ?? 'null');
+    return {
+      contextHealthy: data?.contextHealthy,
+      simulationActive: data?.simulationActive,
+      repairTarget: data?.buildRepairTarget,
+      damaged: Number(data?.raftDamagedStructureCount),
+      critical: Number(data?.raftCriticalStructureCount),
+      health: saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health,
+      timber: saved?.player?.inventory?.timber,
+      hammer: saved?.player?.toolDurability?.hammer,
+      wear: data?.lastToolWear,
+      notices: globalThis.__driftwakeCaptureNotices ?? [],
+    };
+  });
+  if (
+    final.contextHealthy !== 'true'
+    || final.simulationActive !== 'true'
+    || final.repairTarget !== 'none'
+    || final.damaged !== 0
+    || final.critical !== 0
+    || final.health !== 110
+    || final.timber !== 9
+    || final.hammer !== 77
+    || final.wear !== 'repair:hammer:77'
+    || !final.notices.some((notice) => notice.includes('木墙已完全修复'))
+  ) {
+    throw new Error(`Building structure repair failed: ${JSON.stringify(final)}`);
+  }
+  console.log(`Building damage/repair gate: ${JSON.stringify({ damagedState, repairAimMovement, repairUi, final })}`);
   await context.close();
 }
 

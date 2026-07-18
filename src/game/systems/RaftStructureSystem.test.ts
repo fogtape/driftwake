@@ -178,4 +178,35 @@ describe('RaftStructureSystem runtime', () => {
     expect(structures.count).toBe(0);
     structures.dispose();
   });
+
+  it('repairs visible damage to its type maximum without overspending health', () => {
+    const raft = new RaftSystem(createTestMaterials(), [{ x: 0, z: 0, health: 100 }]);
+    const structures = new RaftStructureSystem(raft, createTestMaterials(), [saved('wall', 'wall', 0, 0, 0)]);
+    const damage = structures.damage('wall', 34);
+    expect(damage).toMatchObject({ changed: true, destroyed: false, damageTaken: 34 });
+    expect(damage.structure?.health).toBe(76);
+    expect(structures.getDiagnostics()).toMatchObject({ damaged: 1, critical: 0 });
+
+    const repaired = structures.repair('wall', RAFT_STRUCTURE_DEFINITIONS.wall.repairAmount);
+    expect(repaired).toMatchObject({ changed: true, repaired: 34 });
+    expect(repaired.structure?.health).toBe(RAFT_STRUCTURE_DEFINITIONS.wall.maxHealth);
+    expect(structures.repair('wall', 999).changed).toBe(false);
+    expect(structures.getDiagnostics()).toMatchObject({ damaged: 0, critical: 0, lowestHealthRatio: 1 });
+    structures.dispose();
+  });
+
+  it('destroys a targeted support and returns its complete deterministic collapse chain', () => {
+    const raft = new RaftSystem(createTestMaterials(), [{ x: 0, z: 0, health: 100 }]);
+    const structures = new RaftStructureSystem(raft, createTestMaterials(), [
+      saved('pillar', 'pillar', 0, 0, 0),
+      saved('floor', 'floor', 0, 0, 1),
+      saved('upper-wall', 'wall', 0, 0, 1),
+    ]);
+    const result = structures.damage('pillar', RAFT_STRUCTURE_DEFINITIONS.pillar.maxHealth);
+    expect(result.destroyed).toBe(true);
+    expect(result.structure).toBeNull();
+    expect(result.removed.map((entry) => entry.id)).toEqual(['pillar', 'floor', 'upper-wall']);
+    expect(structures.count).toBe(0);
+    structures.dispose();
+  });
 });
