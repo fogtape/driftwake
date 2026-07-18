@@ -1,7 +1,7 @@
 # 原创资产清单
 
-> 更新日期：2026-07-17
-> 状态：第十一轮持续信号航线、接收台、定向阵列与中继目标美术交互基线，发布前仍需做最终授权、DCC 替换与相似性复核
+> 更新日期：2026-07-18
+> 状态：第十二轮漂流物、近距拾取与钩具损耗美术交互基线，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -355,13 +355,13 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 ## 代码原生模型与动画
 
-本轮接收台、定向阵列和中继目标需要确定性响应相位间距、电池、扫描频段、世界坐标、目标距离和跨版本存档，因此继续以代码原生形体与实时动画建立统一可玩的近最终基线。信号层压板与磷光玻璃使用独立 AI PBR；没有因软件截图后端较慢而降低运行时贴图质量。
+本轮新增的补给桶、海面剩余物资和近距聚焦环全部由代码原生形体驱动，并复用既有审定 PBR 材质；战利品、对象池、耐久和 v11 存档均不依赖视觉对象作为玩法真值。上一轮信号层压板与磷光玻璃继续使用独立 AI PBR；没有因本机软件 WebGL 复验失败而降低运行时贴图质量。
 
 | ID | 资产 | 位置 | 当前状态 |
 | --- | --- | --- | --- |
 | MOD-001 | 可扩展木筏：每格 3 木板、2 横梁、4 铆钉 | `src/game/systems/RaftSystem.ts` | 动态实例化，支持逐格损伤、修补和拆除 |
 | MOD-002 | 打捞钩：木柄、弯钩、尖端、五圈绳缠 | `src/game/art/ProceduralModels.ts` | 已用于第一视角与投射物 |
-| MOD-003 | 木料、聚合容器、纤维叶、补给箱 | `src/game/art/ProceduralModels.ts` | 已进入漂流物对象池 |
+| MOD-003 | 木料、聚合容器、纤维叶、盐封补给箱与三道金属箍补给桶 | `src/game/art/ProceduralModels.ts` | 五类形体已进入固定种子漂流物对象池，箱桶拥有独立战利品层级 |
 | MOD-004 | 远景岛原型：岩体、沙洲、树干和 42 片叶 | `src/game/art/ProceduralModels.ts` | 保留为历史原型，运行时已由可探索岛替代 |
 | MOD-005 | 建造锤：木柄、金属锤头、撞面、拔钉爪、六圈绑带 | `src/game/art/ProceduralModels.ts` | 已进入第一视角建造与修补 |
 | MOD-006 | 木矛：长杆、金属尖端与五圈扎结 | `src/game/art/ProceduralModels.ts` | 已进入第一视角刺击 |
@@ -393,7 +393,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | MOD-032 | 原创信号中继标：三密封浮筒、合金箍、三臂甲板、中央桅杆、双环转子、磷光核心和四层脉冲环 | `src/game/art/SignalModels.ts` | 25+ 网格；位于持续世界坐标，浮筒错相升沉、转子、灯和距离脉冲实时驱动 |
 | ANI-001 | 木筏三轴波浪升沉 | `src/game/systems/RaftSystem.ts` | 已实现 |
 | ANI-002 | 第一人称移动、镜头与木筏局部坐标 | `src/game/systems/PlayerController.ts` | 已实现基础版 |
-| ANI-003 | 钩具蓄力、抛射、旋转、拖回与收起 | `src/game/systems/HookSystem.ts` | 已实现基础闭环 |
+| ANI-003 | 钩具蓄力、抛射、旋转、拖回、收起、耐久损耗与断裂恢复 | `src/game/systems/HookSystem.ts` | 手持/抛出模型唯一所有权、48 次耐久和替代钩制作已接通；最终双手蒙皮待 DCC |
 | ANI-004 | 建造锤挥击、筏格预览、放置、修补与拆除 | `src/game/systems/BuildSystem.ts` | 已实现交互切片 |
 | ANI-005 | 钓竿抛投、浮标升沉、鱼体绕线、张力和收杆 | `src/game/systems/FishingSystem.ts` | 已实现完整单次循环 |
 | ANI-006 | 鲨鱼尾摆、巡游、逼近、扑咬、受击、撤退与下潜 | `src/game/systems/SharkSystem.ts` | 已实现第一轮威胁循环 |
@@ -422,6 +422,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | VFX-010 | 内向飑云穹顶、330 条高画质/160 条低画质 GPU 实例雨线、双段闪电、风暴雾光、增幅波浪和泡沫 | `src/game/systems/StormSystem.ts`、`DriftwakeGame.ts`、`src/game/shaders/ocean.ts` | 云、雨、海况、曝光和雷声由同一确定性天气强度驱动；水下关闭不适用的表面雨幕 |
 | VFX-011 | 五路冷凝蒸汽/滴水、三槽火焰/焦烟/鱼体材质、柜盖阻尼和内容物标记 | `src/game/systems/DeviceSystem.ts` | 所有可见状态由领域队列、燃料、火候和真实储物内容驱动，不使用菜单假状态 |
 | VFX-012 | 磷光扫描束/信号点、相位灯、三层阵列传播环、四层中继脉冲和距离驱动显隐 | `src/game/systems/NavigationSystem.ts` | 所有发光与脉冲由在线、电量、目标与真实世界距离驱动；断电状态不保留假扫描 |
+| VFX-013 | 近距打捞聚焦环、分类拾取冲击与池化海面剩余物资 | `src/game/systems/SalvageSystem.ts`、`DebrisField.ts` | 注视角、距离、背包接收结果和 v11 世界掉落状态共同驱动，不静默吞物资 |
 
 ## 程序音频分层
 
@@ -435,7 +436,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | AMB-ISLAND | 距离驱动的叶冠风层和稀疏双音鸟鸣 | `src/game/systems/AudioSystem.ts` |
 | AMB-UNDERWATER | 世界总线动态低通、水体低频脉动和呼吸警告；UI 总线保持清晰 | `src/game/systems/AudioSystem.ts` |
 | AMB-STORM | 独立低通风压、带通雨噪、慢速阵风幅度变化，以及双段闪光触发的雷声簇 | `src/game/systems/AudioSystem.ts` |
-| SFX-HOOK/BUILD | 抛钩、落水、收获、木击、修补、拆除与拒绝反馈 | `src/game/systems/AudioSystem.ts` |
+| SFX-HOOK/BUILD | 抛钩、落水、木/聚合/纤维收获、箱桶木铁双层拾取、木击、修补、拆除与拒绝反馈 | `src/game/systems/AudioSystem.ts` |
 | SFX-FISHING | 抛线、浮标、三连鱼讯、卷线、捕获与断线 | `src/game/systems/AudioSystem.ts` |
 | SFX-DEVICE | 放置木/铁冲击、五联海水装填、三槽食物位、干舱开合/物资双向转移、点火、完成、焦糊、持续火焰和蒸汽层 | `src/game/systems/AudioSystem.ts` |
 | SFX-ISLAND | 木筏/沙地脚步、石斧破风、入木、倒树、枝料/石料/植被拾取 | `src/game/systems/AudioSystem.ts` |
@@ -457,6 +458,6 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 - 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005 至 TEX-014 已采用高质量输出；
 - 建立同一角色比例与材质语言下的模型规范；
 - 为岛屿补充手绘沙地/草地/岩面材质组、草丛层级和更丰富的岸线小物，保持现有确定性地形与碰撞接口；
-- 为珊瑚、海草、鱼群、水下钩具、拾风帆、强化索具/锚具、定潮舵台、接收台/阵列/中继标、高级生活设备、作物、盐翼盗鸟、研究台、通风架、熔炉和金属工具建立最终 DCC 模型、蒙皮与顶点动画，保留当前布局和领域接口；
+- 为漂流箱桶、最终双手/钩具、珊瑚、海草、鱼群、水下钩具、拾风帆、强化索具/锚具、定潮舵台、接收台/阵列/中继标、高级生活设备、作物、盐翼盗鸟、研究台、通风架、熔炉和金属工具建立最终 DCC 模型、蒙皮与顶点动画，保留当前布局和领域接口；
 - 录制或生成多样本海浪、绳索、木结构、研究器械、湿砖、金属、火焰、蒸汽、烹饪和鲨鱼音效，保留当前程序音频作动态底层；
 - 为所有最终资产建立来源、版本、修改记录和发布授权结论。

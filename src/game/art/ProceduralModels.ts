@@ -39,7 +39,7 @@ import {
 } from '../domain/island';
 import type { MaterialLibrary } from './Materials';
 
-export type DebrisKind = 'timber' | 'polymer' | 'fiber' | 'cache';
+export type DebrisKind = 'timber' | 'polymer' | 'fiber' | 'barrel' | 'cache';
 
 export interface DeviceModelVisuals {
   fire?: Group;
@@ -490,6 +490,23 @@ function createCacheDebris(materials: MaterialLibrary): Group {
   return group;
 }
 
+function createBarrelDebris(materials: MaterialLibrary): Group {
+  const group = new Group();
+  const body = shadowed(new Mesh(new CylinderGeometry(0.32, 0.38, 0.82, 12, 3), materials.darkWood));
+  body.rotation.z = Math.PI / 2;
+  group.add(body);
+  for (const x of [-0.31, 0, 0.31]) {
+    const band = shadowed(new Mesh(new TorusGeometry(x === 0 ? 0.35 : 0.34, 0.026, 7, 20), materials.rustMetal));
+    band.position.x = x;
+    band.rotation.y = Math.PI / 2;
+    group.add(band);
+  }
+  const bung = shadowed(new Mesh(new CylinderGeometry(0.055, 0.065, 0.045, 9), materials.polymer));
+  bung.position.set(0.08, 0.34, 0);
+  group.add(bung);
+  return group;
+}
+
 export function createDebrisModel(kind: DebrisKind, materials: MaterialLibrary): Group {
   const model =
     kind === 'timber'
@@ -498,7 +515,9 @@ export function createDebrisModel(kind: DebrisKind, materials: MaterialLibrary):
         ? createPolymerDebris(materials)
         : kind === 'fiber'
           ? createFiberDebris(materials)
-          : createCacheDebris(materials);
+          : kind === 'barrel'
+            ? createBarrelDebris(materials)
+            : createCacheDebris(materials);
   model.userData.kind = kind;
   return model;
 }

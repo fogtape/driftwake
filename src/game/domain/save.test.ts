@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SAVE_KEY, SAVE_VERSION, createDefaultRaftTiles, loadSave, sanitizeSave } from './save';
 import { createDefaultNavigationState } from './navigation';
 import { islandDockZForRaft, islandTransform, sanitizeIslandState } from './island';
+import { TOOL_MAX_DURABILITY } from './toolDurability';
 
 describe('save schema', () => {
   it('sanitizes inventory, selected tools, stats and duplicate raft tiles', () => {
@@ -23,6 +24,10 @@ describe('save schema', () => {
       },
     });
     expect(save?.player.inventory).toEqual({ hook: 1, hammer: 1 });
+    expect(save?.player.toolDurability).toEqual({
+      hook: TOOL_MAX_DURABILITY.hook,
+      hammer: TOOL_MAX_DURABILITY.hammer,
+    });
     expect(save?.player.survival).toEqual({ health: 100, thirst: 34, hunger: 0, oxygen: 100 });
     expect(save?.player.playSeconds).toBe(42);
     expect(save?.raft.tiles).toEqual([{ x: 0, z: 0, health: 75 }]);
@@ -32,17 +37,18 @@ describe('save schema', () => {
   });
 
   it('rejects unsupported versions and provides a stable starting raft', () => {
-    expect(sanitizeSave({ version: 11 })).toBeNull();
+    expect(sanitizeSave({ version: 12 })).toBeNull();
     expect(createDefaultRaftTiles()).toHaveLength(9);
   });
 
-  it('restores the non-discardable starter hook in a damaged save', () => {
+  it('keeps a broken hook absent so the replacement recipe remains meaningful', () => {
     const save = sanitizeSave({
       version: SAVE_VERSION,
       player: { inventory: { timber: 2 }, survival: {}, selectedTool: 'hook', playSeconds: 0 },
       raft: { tiles: [{ x: 0, z: 0, health: 100 }], devices: [] },
     });
-    expect(save?.player.inventory.hook).toBe(1);
+    expect(save?.player.inventory.hook).toBeUndefined();
+    expect(save?.player.toolDurability.hook).toBeUndefined();
     expect(save?.player.selectedTool).toBe('hook');
   });
 
@@ -57,8 +63,8 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v10');
-    expect(save?.version).toBe(10);
+    expect(SAVE_KEY).toBe('driftwake.save.v11');
+    expect(save?.version).toBe(11);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
     expect(save?.world.island.phase).toBe('approaching');
@@ -387,7 +393,7 @@ describe('save schema', () => {
         },
       },
     });
-    expect(save?.version).toBe(10);
+    expect(save?.version).toBe(11);
     expect(save?.raft.navigation).toMatchObject({
       worldX: 123.5,
       worldZ: -88.25,
@@ -399,5 +405,29 @@ describe('save schema', () => {
       visitedSignals: ['tideRelay'],
     });
     expect(save?.raft.navigation.devices).toHaveLength(3);
+  });
+
+  it('restores v11 hook durability and bounded world salvage drops', () => {
+    const save = sanitizeSave({
+      version: 11,
+      player: {
+        inventory: { hook: 1, hammer: 1 },
+        toolDurability: { hook: 7, hammer: 999, spear: 12 },
+        survival: {},
+        selectedTool: 'hook',
+        playSeconds: 31,
+      },
+      raft: { tiles: [{ x: 0, z: 0, health: 100 }], devices: [] },
+      world: {
+        drops: [
+          { loot: { timber: 2, polymer: 1, madeUp: 50 }, x: 999, y: -99, z: -999 },
+          { loot: {}, x: 0, y: 0, z: 0 },
+        ],
+      },
+    });
+    expect(save?.player.toolDurability).toEqual({ hook: 7, hammer: TOOL_MAX_DURABILITY.hammer });
+    expect(save?.world.drops).toEqual([
+      { loot: { timber: 2, polymer: 1 }, x: 36, y: -4, z: -120 },
+    ]);
   });
 });

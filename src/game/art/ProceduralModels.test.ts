@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { MaterialLibrary } from './Materials';
 import {
   createAxeModel,
+  createDebrisModel,
   createExplorableIsland,
   createFishingRodModel,
   createGrillModel,
@@ -89,6 +90,16 @@ function renderedPartCount(root: Group): number {
 }
 
 describe('procedural model assets', () => {
+  it('gives the salvage barrel a distinct banded silhouette', () => {
+    const barrel = createDebrisModel('barrel', createTestMaterials());
+    const stats = meshStats(barrel);
+    const size = new Box3().setFromObject(barrel).getSize(new Vector3());
+    expect(stats.meshes).toBeGreaterThanOrEqual(5);
+    expect(size.x).toBeGreaterThan(0.75);
+    expect(size.y).toBeGreaterThan(0.6);
+    expect(barrel.userData.kind).toBe('barrel');
+  });
+
   it('builds a non-degenerate articulated shark silhouette', () => {
     const shark = createSharkModel(createTestMaterials());
     const stats = meshStats(shark);

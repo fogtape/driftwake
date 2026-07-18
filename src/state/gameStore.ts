@@ -1,25 +1,34 @@
 import { create } from 'zustand';
 import {
   INVENTORY_SLOT_CAPACITY,
+  ITEM_DEFINITIONS,
   STARTING_INVENTORY,
   addItems,
   itemCount,
+  preferredToolOrder,
   removeItems,
   salvageLoot,
   usedInventorySlots,
   type Inventory,
+  type InventoryMutation,
   type ItemBundle,
   type ItemId,
   type SalvageKind,
   type ToolId,
 } from '../game/domain/items';
-import { craftRecipe, type CraftResult, type RecipeId } from '../game/domain/recipes';
+import { RECIPES, craftRecipe, type CraftResult, type RecipeId } from '../game/domain/recipes';
 import { INITIAL_SURVIVAL, advanceSurvival, consumeItem, type SurvivalState } from '../game/domain/survival';
 import type { DeviceType } from '../game/domain/devices';
 import type { IslandPhase } from '../game/domain/island';
 import type { NavigationDeviceType, NavigationRouteMode, NavigationWeatherPhase, SignalArrayStatus } from '../game/domain/navigation';
 import type { PlayerSurface } from '../game/domain/save';
 import type { CameraMotionMode } from '../game/domain/settings';
+import {
+  applyToolWear,
+  freshToolDurability,
+  normalizeToolDurability,
+  type ToolDurability,
+} from '../game/domain/toolDurability';
 import {
   addResearchSample,
   canLearnProject,
@@ -38,7 +47,7 @@ export type OverlayPanel = 'pack' | 'crafting' | 'research' | 'storage' | null;
 export type FishingPhase = 'idle' | 'casting' | 'waiting' | 'nibble' | 'hooked' | 'caught' | 'lost';
 export type SharkMode = 'distant' | 'circling' | 'approaching' | 'attacking' | 'retreating';
 export type PlacementType = DeviceType | NavigationDeviceType | ProgressionDeviceType | 'planter';
-export type InteractionOwner = 'build' | 'device' | 'fishing' | 'island' | 'navigation' | 'planting' | 'progression' | 'shark' | 'underwater' | 'global';
+export type InteractionOwner = 'build' | 'device' | 'fishing' | 'island' | 'navigation' | 'planting' | 'progression' | 'salvage' | 'shark' | 'underwater' | 'global';
 
 export interface AudioMix {
   master: number;
@@ -171,6 +180,7 @@ export type ResearchSampleResult = 'researched' | 'already-researched' | 'missin
 
 export interface PlayerSaveSnapshot {
   inventory: Inventory;
+  toolDurability: ToolDurability;
   survival: SurvivalState;
   selectedTool: ToolId;
   playSeconds: number;
@@ -193,6 +203,7 @@ interface GameState {
   selectedTool: ToolId;
   hookCharge: number;
   inventory: Inventory;
+  toolDurability: ToolDurability;
   inventorySlots: number;
   survival: SurvivalState;
   player: PlayerFeedback;
@@ -230,7 +241,9 @@ interface GameState {
   setHookCharge: (hookCharge: number) => void;
   addLoot: (kind: SalvageKind, roll?: number) => ItemBundle;
   addItemBundle: (bundle: ItemBundle) => ItemBundle;
+  receiveItemBundle: (bundle: ItemBundle) => InventoryMutation;
   spendItems: (bundle: ItemBundle) => boolean;
+  damageTool: (tool: ToolId, amount?: number) => { remaining: number; broken: boolean };
   craft: (recipeId: RecipeId) => CraftResult;
   useItem: (itemId: ItemId) => boolean;
   tickSurvival: (seconds: number, submerged?: boolean) => void;
@@ -375,6 +388,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   selectedTool: 'hook',
   hookCharge: 0,
   inventory: { ...STARTING_INVENTORY },
+  toolDurability: normalizeToolDurability(STARTING_INVENTORY, null),
   inventorySlots: usedInventorySlots(STARTING_INVENTORY),
   survival: { ...INITIAL_SURVIVAL },
   player: defaultPlayer(),
@@ -422,22 +436,69 @@ export const useGameStore = create<GameState>((set, get) => ({
   setHookCharge: (hookCharge) =>
     set((state) => (Math.abs(state.hookCharge - hookCharge) < 0.002 ? state : { hookCharge })),
   addLoot: (kind, roll = Math.random()) => {
-    const result = addItems(get().inventory, salvageLoot(kind, roll), INVENTORY_SLOT_CAPACITY);
-    set({ inventory: result.inventory, inventorySlots: usedInventorySlots(result.inventory) });
+    const state = get();
+    const result = addItems(state.inventory, salvageLoot(kind, roll), INVENTORY_SLOT_CAPACITY);
+    set({
+      inventory: result.inventory,
+      inventorySlots: usedInventorySlots(result.inventory),
+      toolDurability: normalizeToolDurability(result.inventory, state.toolDurability),
+    });
     return result.accepted;
   },
   addItemBundle: (bundle) => {
-    const result = addItems(get().inventory, bundle, INVENTORY_SLOT_CAPACITY);
-    set({ inventory: result.inventory, inventorySlots: usedInventorySlots(result.inventory) });
+    const state = get();
+    const result = addItems(state.inventory, bundle, INVENTORY_SLOT_CAPACITY);
+    set({
+      inventory: result.inventory,
+      inventorySlots: usedInventorySlots(result.inventory),
+      toolDurability: normalizeToolDurability(result.inventory, state.toolDurability),
+    });
     return result.accepted;
+  },
+  receiveItemBundle: (bundle) => {
+    const state = get();
+    const result = addItems(state.inventory, bundle, INVENTORY_SLOT_CAPACITY);
+    set({
+      inventory: result.inventory,
+      inventorySlots: usedInventorySlots(result.inventory),
+      toolDurability: normalizeToolDurability(result.inventory, state.toolDurability),
+    });
+    return result;
   },
   spendItems: (bundle) => {
     const state = get();
     const result = removeItems(state.inventory, bundle);
     if (!result) return false;
-    const selectedTool = itemCount(result, state.selectedTool) > 0 ? state.selectedTool : 'hook';
-    set({ inventory: result, inventorySlots: usedInventorySlots(result), selectedTool });
+    const selectedTool = itemCount(result, state.selectedTool) > 0
+      ? state.selectedTool
+      : preferredToolOrder(result).find((tool) => itemCount(result, tool) > 0) ?? 'hook';
+    set({
+      inventory: result,
+      inventorySlots: usedInventorySlots(result),
+      selectedTool,
+      toolDurability: normalizeToolDurability(result, state.toolDurability),
+    });
     return true;
+  },
+  damageTool: (tool, amount = 1) => {
+    const state = get();
+    if (itemCount(state.inventory, tool) <= 0) return { remaining: 0, broken: false };
+    const worn = applyToolWear(state.toolDurability, tool, amount);
+    if (!worn.broken) {
+      set({ toolDurability: worn.durability });
+      return { remaining: worn.remaining, broken: false };
+    }
+    const inventory = removeItems(state.inventory, { [tool]: 1 }) ?? state.inventory;
+    const selectedTool = state.selectedTool === tool
+      ? preferredToolOrder(inventory).find((candidate) => itemCount(inventory, candidate) > 0) ?? 'hook'
+      : state.selectedTool;
+    set({
+      inventory,
+      inventorySlots: usedInventorySlots(inventory),
+      selectedTool,
+      toolDurability: normalizeToolDurability(inventory, worn.durability),
+    });
+    return { remaining: 0, broken: true };
   },
   craft: (recipeId) => {
     const state = get();
@@ -449,7 +510,12 @@ export const useGameStore = create<GameState>((set, get) => ({
           : recipeId === 'metalAxe' && state.selectedTool === 'axe'
             ? 'metalAxe'
             : state.selectedTool;
-      set({ inventory: result.inventory, inventorySlots: usedInventorySlots(result.inventory), selectedTool });
+      const outputId = Object.keys(RECIPES[recipeId].output)[0] as ItemId;
+      const normalizedDurability = normalizeToolDurability(result.inventory, state.toolDurability);
+      const toolDurability = ITEM_DEFINITIONS[outputId].category === 'tool'
+        ? freshToolDurability(normalizedDurability, outputId as ToolId)
+        : normalizedDurability;
+      set({ inventory: result.inventory, inventorySlots: usedInventorySlots(result.inventory), selectedTool, toolDurability });
     }
     return result;
   },
@@ -560,6 +626,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   hydratePlayer: (snapshot) =>
     set({
       inventory: snapshot.inventory,
+      toolDurability: snapshot.toolDurability,
       inventorySlots: usedInventorySlots(snapshot.inventory),
       survival: snapshot.survival,
       selectedTool: snapshot.selectedTool,
@@ -579,6 +646,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const state = get();
     return {
       inventory: state.inventory,
+      toolDurability: state.toolDurability,
       survival: state.survival,
       selectedTool: state.selectedTool,
       playSeconds: state.playSeconds,

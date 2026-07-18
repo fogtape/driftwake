@@ -27,6 +27,7 @@ import {
   Wind,
 } from 'lucide-react';
 import { ITEM_DEFINITIONS, itemCount, preferredToolOrder, type Inventory, type ToolId } from '../game/domain/items';
+import { TOOL_MAX_DURABILITY, toolDurabilityRatio, type ToolDurability } from '../game/domain/toolDurability';
 import { ISLAND_APPROACH_SECONDS, ISLAND_DEPART_SECONDS, ISLAND_DOCK_SECONDS } from '../game/domain/island';
 import { cardinalLabel } from '../game/domain/navigation';
 import type {
@@ -53,6 +54,7 @@ interface HudProps {
   selectedTool: ToolId;
   hookCharge: number;
   inventory: Inventory;
+  toolDurability: ToolDurability;
   survival: { health: number; thirst: number; hunger: number; oxygen: number };
   player: PlayerFeedback;
   fishing: FishingFeedback;
@@ -107,6 +109,7 @@ export function Hud({
   selectedTool,
   hookCharge,
   inventory,
+  toolDurability,
   survival,
   player,
   fishing,
@@ -341,17 +344,26 @@ export function Hud({
       <div className="hotbar" aria-label="快捷工具">
         {preferredToolOrder(inventory).map((tool) => {
           const unlocked = itemCount(inventory, tool) > 0;
+          const remainingDurability = toolDurability[tool] ?? TOOL_MAX_DURABILITY[tool];
+          const durabilityRatio = unlocked
+            ? toolDurabilityRatio({ [tool]: remainingDurability }, tool)
+            : 0;
           return (
             <button
-              className={`hotbar-slot ${selectedTool === tool ? 'is-active' : ''} ${unlocked ? '' : 'is-locked'}`}
+              className={`hotbar-slot ${selectedTool === tool ? 'is-active' : ''} ${unlocked ? '' : 'is-locked'} ${durabilityRatio <= 0.2 && unlocked ? 'is-worn' : ''}`}
               type="button"
-              title={unlocked ? ITEM_DEFINITIONS[tool].name : '尚未制作'}
-              aria-label={ITEM_DEFINITIONS[tool].name}
+              title={unlocked ? `${ITEM_DEFINITIONS[tool].name} · 耐久 ${remainingDurability}/${TOOL_MAX_DURABILITY[tool]}` : '尚未制作'}
+              aria-label={unlocked ? `${ITEM_DEFINITIONS[tool].name}，耐久 ${remainingDurability}` : `${ITEM_DEFINITIONS[tool].name}，尚未制作`}
               disabled={!unlocked}
               onClick={() => onSelectTool(tool)}
               key={tool}
             >
               <ItemIcon itemId={tool} size={25} />
+              {unlocked && (
+                <span className="hotbar-slot__durability" aria-hidden="true">
+                  <i style={{ transform: `scaleX(${durabilityRatio})` }} />
+                </span>
+              )}
             </button>
           );
         })}

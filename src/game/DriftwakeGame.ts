@@ -27,7 +27,7 @@ import {
   type MaterialLibrary,
 } from './art/Materials';
 import { useGameStore, type AudioMix, type QualityPreset } from '../state/gameStore';
-import { preferredToolOrder, type ItemId } from './domain/items';
+import { itemCount, preferredToolOrder, type ItemId } from './domain/items';
 import type { DeviceType } from './domain/devices';
 import { SAVE_VERSION, createDefaultRaftTiles, loadSave, writeSave, type DriftwakeSave } from './domain/save';
 import { createDefaultIslandState } from './domain/island';
@@ -47,6 +47,7 @@ import { OceanSystem } from './systems/OceanSystem';
 import { PhysicsSystem } from './systems/PhysicsSystem';
 import { PlayerController } from './systems/PlayerController';
 import { RaftSystem } from './systems/RaftSystem';
+import { SalvageSystem } from './systems/SalvageSystem';
 import { SharkSystem } from './systems/SharkSystem';
 import { SpearSystem } from './systems/SpearSystem';
 import { SplashSystem } from './systems/SplashSystem';
@@ -107,6 +108,7 @@ export class DriftwakeGame {
   private debris: DebrisField | null = null;
   private player: PlayerController | null = null;
   private hook: HookSystem | null = null;
+  private salvage: SalvageSystem | null = null;
   private build: BuildSystem | null = null;
   private devices: DeviceSystem | null = null;
   private fishing: FishingSystem | null = null;
@@ -179,6 +181,8 @@ export class DriftwakeGame {
     this.mount.dataset.hookHeldVisible = 'false';
     this.mount.dataset.hookProjectileVisible = 'false';
     this.mount.dataset.hookRopeVisible = 'false';
+    this.mount.dataset.salvageFocus = 'none';
+    this.mount.dataset.worldDropCount = '0';
     this.mount.dataset.sailAttachment = 'missing';
     this.mount.dataset.islandRaftClearance = '0';
     this.audio.setMix(useGameStore.getState().audioMix);
@@ -226,9 +230,16 @@ export class DriftwakeGame {
       this.scene.add(this.ocean.mesh, this.raft.group);
 
       store.setLoadingLabel('正在放流物资');
-      this.debris = new DebrisField(this.scene, this.materials, 30);
+      this.debris = new DebrisField(this.scene, this.materials, 30, save?.world.drops ?? []);
       this.setQuality(store.quality);
       this.splashes = new SplashSystem(this.scene);
+      this.salvage = new SalvageSystem(
+        this.scene,
+        this.camera,
+        this.debris,
+        this.audio,
+        this.splashes,
+      );
       const islandState = save?.world.island ?? createDefaultIslandState();
       this.island = new IslandSystem(
         this.scene,
@@ -397,7 +408,8 @@ export class DriftwakeGame {
           state.overlayPanel !== previous.overlayPanel ||
           state.settingsOpen !== previous.settingsOpen ||
           state.phase !== previous.phase ||
-          state.placementDevice !== previous.placementDevice
+          state.placementDevice !== previous.placementDevice ||
+          state.inventory !== previous.inventory
         ) {
           if (state.selectedTool !== previous.selectedTool) this.audio.playEquip();
           this.syncEquipment();
@@ -545,6 +557,7 @@ export class DriftwakeGame {
     });
     this.player?.dispose();
     this.hook?.dispose(this.scene);
+    this.salvage?.dispose();
     this.build?.dispose();
     this.navigation?.dispose();
     this.planting?.dispose();
@@ -632,6 +645,9 @@ export class DriftwakeGame {
     this.progression?.update(simulationSeconds, stepSeconds);
     this.island?.update(simulationSeconds, stepSeconds);
     this.underwater?.update(simulationSeconds, stepSeconds);
+    this.salvage?.update(simulationSeconds);
+    this.mount.dataset.salvageFocus = this.salvage?.focusedKind ?? 'none';
+    this.mount.dataset.worldDropCount = String(this.debris?.activeWorldDropCount ?? 0);
     this.splashes?.update(stepSeconds);
 
     const weather = this.navigation?.getWeather() ?? { weatherPhase: 'calm' as const, stormIntensity: 0, gust: 0 };
@@ -911,6 +927,7 @@ export class DriftwakeGame {
     const surface = this.player?.getSurface() ?? 'raft';
     const inWater = surface === 'water';
     const onIsland = surface === 'island';
+    const selectedToolAvailable = itemCount(state.inventory, state.selectedTool) > 0;
     const survivalDeviceTypes: readonly DeviceType[] = ['purifier', 'grill', 'solarPurifier', 'tripleGrill', 'locker'];
     const survivalDevicePlacement = survivalDeviceTypes.includes(state.placementDevice as DeviceType)
       ? state.placementDevice as DeviceType
@@ -938,15 +955,16 @@ export class DriftwakeGame {
     this.planting?.setInputEnabled(inputEnabled && onRaft);
     this.progression?.setPlacementType(progressionPlacement);
     this.progression?.setInputEnabled(inputEnabled && onRaft);
-    this.hook?.setEquipped(onRaft && !placingDevice && state.selectedTool === 'hook');
-    this.hook?.setEnabled(inputEnabled && onRaft && !placingDevice && state.selectedTool === 'hook');
-    this.underwater?.setHookEquipped(inWater && !placingDevice && state.selectedTool === 'hook');
-    this.build?.setEquipped(onRaft && !placingDevice && state.selectedTool === 'hammer');
-    this.build?.setInputEnabled(inputEnabled && onRaft && !placingDevice && state.selectedTool === 'hammer');
-    this.fishing?.setEquipped(onRaft && !placingDevice && state.selectedTool === 'fishingRod');
-    this.fishing?.setInputEnabled(inputEnabled && onRaft && !placingDevice && state.selectedTool === 'fishingRod');
-    const spearEquipped = state.selectedTool === 'spear' || state.selectedTool === 'metalSpear';
-    const axeEquipped = state.selectedTool === 'axe' || state.selectedTool === 'metalAxe';
+    this.salvage?.setInputEnabled(inputEnabled && !placingDevice && (onRaft || (inWater && !(this.player?.isSubmerged() ?? false))));
+    this.hook?.setEquipped(selectedToolAvailable && onRaft && !placingDevice && state.selectedTool === 'hook');
+    this.hook?.setEnabled(selectedToolAvailable && inputEnabled && onRaft && !placingDevice && state.selectedTool === 'hook');
+    this.underwater?.setHookEquipped(selectedToolAvailable && inWater && !placingDevice && state.selectedTool === 'hook');
+    this.build?.setEquipped(selectedToolAvailable && onRaft && !placingDevice && state.selectedTool === 'hammer');
+    this.build?.setInputEnabled(selectedToolAvailable && inputEnabled && onRaft && !placingDevice && state.selectedTool === 'hammer');
+    this.fishing?.setEquipped(selectedToolAvailable && onRaft && !placingDevice && state.selectedTool === 'fishingRod');
+    this.fishing?.setInputEnabled(selectedToolAvailable && inputEnabled && onRaft && !placingDevice && state.selectedTool === 'fishingRod');
+    const spearEquipped = selectedToolAvailable && (state.selectedTool === 'spear' || state.selectedTool === 'metalSpear');
+    const axeEquipped = selectedToolAvailable && (state.selectedTool === 'axe' || state.selectedTool === 'metalAxe');
     this.spear?.setEquipped((onRaft || inWater) && !placingDevice && spearEquipped, state.selectedTool === 'metalSpear');
     this.spear?.setInputEnabled(inputEnabled && (onRaft || inWater) && !placingDevice && spearEquipped);
     this.island?.setAxeEquipped(onIsland && !placingDevice && axeEquipped, state.selectedTool === 'metalAxe');
@@ -977,6 +995,7 @@ export class DriftwakeGame {
         underwater:
           this.underwater?.getSavedState() ??
           createDefaultUnderwaterState(islandState.seed, islandState.cycle),
+        drops: this.debris?.getSavedDrops() ?? [],
       },
     };
     useGameStore.getState().setSaveStatus(writeSave(save) ? 'saved' : 'error');

@@ -21,8 +21,10 @@ import {
   itemCount,
   type Inventory,
   type ItemId,
+  type ToolId,
 } from '../game/domain/items';
 import { RECIPES, isRecipeUnlocked, missingForRecipe, type CraftResult, type RecipeId } from '../game/domain/recipes';
+import { TOOL_MAX_DURABILITY, toolDurabilityRatio, type ToolDurability } from '../game/domain/toolDurability';
 import {
   RESEARCH_PROJECTS,
   RESEARCH_SAMPLE_IDS,
@@ -43,6 +45,7 @@ import { ItemIcon } from './ItemIcon';
 interface FieldPackPanelProps {
   panel: OverlayPanel;
   inventory: Inventory;
+  toolDurability: ToolDurability;
   inventorySlots: number;
   raft: RaftFeedback;
   progression: ProgressionFeedback;
@@ -95,6 +98,7 @@ function categoryLabel(category: (typeof ITEM_DEFINITIONS)[ItemId]['category']):
 export function FieldPackPanel({
   panel,
   inventory,
+  toolDurability,
   inventorySlots,
   raft,
   progression,
@@ -150,6 +154,13 @@ export function FieldPackPanel({
 
   if (!panel || (panel === 'storage' && !storage)) return null;
   const selectedDefinition = ITEM_DEFINITIONS[selectedItem];
+  const selectedTool = selectedDefinition.category === 'tool' ? selectedItem as ToolId : null;
+  const selectedDurability = selectedTool
+    ? toolDurability[selectedTool] ?? TOOL_MAX_DURABILITY[selectedTool]
+    : 0;
+  const selectedDurabilityRatio = selectedTool
+    ? toolDurabilityRatio({ [selectedTool]: selectedDurability }, selectedTool)
+    : 0;
   const emptySlots = Math.max(0, INVENTORY_SLOT_CAPACITY - stacks.length);
 
   return (
@@ -286,6 +297,15 @@ export function FieldPackPanel({
               <dl>
                 <div><dt>持有</dt><dd>{itemCount(inventory, selectedItem)}</dd></div>
                 <div><dt>堆叠</dt><dd>{selectedDefinition.maxStack}</dd></div>
+                {selectedTool && (
+                  <div className={`item-detail__durability ${selectedDurabilityRatio <= 0.2 ? 'is-worn' : ''}`}>
+                    <dt>耐久</dt>
+                    <dd>
+                      <i><b style={{ transform: `scaleX(${selectedDurabilityRatio})` }} /></i>
+                      <span>{selectedDurability}/{TOOL_MAX_DURABILITY[selectedTool]}</span>
+                    </dd>
+                  </div>
+                )}
               </dl>
               {CONSUMABLES.has(selectedItem) && (
                 <button className="panel-command" type="button" onClick={() => onUse(selectedItem)}>

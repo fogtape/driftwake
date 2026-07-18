@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { itemCount, usedInventorySlots } from '../game/domain/items';
+import { TOOL_MAX_DURABILITY, normalizeToolDurability } from '../game/domain/toolDurability';
 import { useGameStore } from './gameStore';
 
 describe('game store item use', () => {
@@ -7,6 +8,7 @@ describe('game store item use', () => {
     const inventory = { freshWaterCup: 1 } as const;
     useGameStore.setState({
       inventory,
+      toolDurability: normalizeToolDurability(inventory, null),
       inventorySlots: usedInventorySlots(inventory),
       survival: { health: 70, thirst: 20, hunger: 60, oxygen: 100 },
       interaction: null,
@@ -56,5 +58,35 @@ describe('game store item use', () => {
     expect(state.selectedTool).toBe('metalSpear');
     expect(itemCount(state.inventory, 'spear')).toBe(0);
     expect(itemCount(state.inventory, 'metalSpear')).toBe(1);
+    expect(state.toolDurability.metalSpear).toBe(TOOL_MAX_DURABILITY.metalSpear);
+  });
+
+  it('removes a broken hook and selects the next owned tool', () => {
+    const inventory = { hook: 1, hammer: 1 } as const;
+    useGameStore.setState({
+      inventory,
+      inventorySlots: usedInventorySlots(inventory),
+      selectedTool: 'hook',
+      toolDurability: { hook: 1, hammer: 24 },
+    });
+    expect(useGameStore.getState().damageTool('hook')).toEqual({ remaining: 0, broken: true });
+    const state = useGameStore.getState();
+    expect(itemCount(state.inventory, 'hook')).toBe(0);
+    expect(state.toolDurability.hook).toBeUndefined();
+    expect(state.selectedTool).toBe('hammer');
+  });
+
+  it('crafts a full-durability replacement hook after loss', () => {
+    const inventory = { timber: 2, polymer: 2, rope: 1 } as const;
+    useGameStore.setState({
+      inventory,
+      inventorySlots: usedInventorySlots(inventory),
+      selectedTool: 'hook',
+      toolDurability: {},
+    });
+    expect(useGameStore.getState().craft('hook').ok).toBe(true);
+    const state = useGameStore.getState();
+    expect(itemCount(state.inventory, 'hook')).toBe(1);
+    expect(state.toolDurability.hook).toBe(TOOL_MAX_DURABILITY.hook);
   });
 });

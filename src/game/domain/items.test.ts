@@ -56,4 +56,8 @@ describe('inventory domain', () => {
   it('expands a cache into useful loot instead of a cache counter', () => {
     expect(salvageLoot('cache', 0.2)).toEqual({ timber: 2, polymer: 1, fiber: 2, scrap: 1, emergencyWater: 1 });
   });
+
+  it('gives sealed barrels a smaller supply roll than full caches', () => {
+    expect(salvageLoot('barrel', 0.5)).toEqual({ polymer: 2, fiber: 1, ration: 1 });
+  });
 });

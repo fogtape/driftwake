@@ -42,6 +42,7 @@ export function App() {
   const hookCharge = useGameStore((state) => state.hookCharge);
   const selectedTool = useGameStore((state) => state.selectedTool);
   const inventory = useGameStore((state) => state.inventory);
+  const toolDurability = useGameStore((state) => state.toolDurability);
   const inventorySlots = useGameStore((state) => state.inventorySlots);
   const survival = useGameStore((state) => state.survival);
   const player = useGameStore((state) => state.player);
@@ -262,6 +263,7 @@ export function App() {
         selectedTool={selectedTool}
         hookCharge={hookCharge}
         inventory={inventory}
+        toolDurability={toolDurability}
         survival={survival}
         player={player}
         fishing={fishing}
@@ -286,6 +288,7 @@ export function App() {
       <FieldPackPanel
         panel={overlayPanel}
         inventory={inventory}
+        toolDurability={toolDurability}
         inventorySlots={inventorySlots}
         raft={raft}
         progression={progression}

@@ -12,6 +12,14 @@ import {
 export type RecipeCategory = 'material' | 'tool' | 'survival';
 
 export const RECIPES = {
+  hook: {
+    id: 'hook',
+    name: '替代打捞钩',
+    category: 'tool',
+    output: { hook: 1 },
+    cost: { timber: 2, polymer: 2, rope: 1 },
+    description: '用漂木握柄、聚合钩爪和编织绳重新制作打捞工具；断钩后仍可近距离拾取漂流物筹集材料。',
+  },
   rope: {
     id: 'rope',
     name: '编织绳',

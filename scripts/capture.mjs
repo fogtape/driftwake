@@ -109,6 +109,35 @@ const seededSave = {
   },
 };
 
+const salvageSave = {
+  ...seededSave,
+  version: 11,
+  player: {
+    ...seededSave.player,
+    inventory: { hook: 1, timber: 2, polymer: 2, rope: 1 },
+    toolDurability: { hook: 1 },
+    selectedTool: 'hook',
+    navigation: { surface: 'raft', x: 0, z: 1.08 },
+  },
+  raft: {
+    ...seededSave.raft,
+    devices: [],
+    navigation: {
+      ...seededSave.raft.navigation,
+      courseAngle: 0,
+      heading: 0,
+      devices: [],
+    },
+    planting: { birdClock: 0, birdVisit: 0, planters: [] },
+    progression: { researched: [], learned: [], devices: [] },
+  },
+  world: {
+    ...seededSave.world,
+    island: { ...seededSave.world.island, phase: 'approaching', elapsed: 0 },
+    drops: [{ loot: { fiber: 2, scrap: 1 }, x: 0, y: 0.1, z: -1.25 }],
+  },
+};
+
 const islandSeededSave = {
   ...seededSave,
   player: {
@@ -627,8 +656,8 @@ async function openDesktopPage(label, options = {}) {
   }
   if (options.seedSave) {
     await context.addInitScript((save) => {
-      localStorage.setItem('driftwake.save.v10', JSON.stringify(save));
-    }, options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
+      localStorage.setItem(`driftwake.save.v${save.version}`, JSON.stringify(save));
+    }, options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
   }
   const page = await context.newPage();
   monitorPage(page, label);
@@ -1767,6 +1796,81 @@ async function captureHook() {
   await context.close();
 }
 
+async function captureSalvage() {
+  const { context, page } = await openDesktopPage('salvage', { seedSave: true, salvageStart: true });
+  await enterGame(page);
+  await ensurePointerLock(page);
+  const prompt = await aimDownToPrompt(page, '捡起散落物资', 60);
+  if (!prompt.includes('捡起散落物资')) {
+    const diagnostic = await page.evaluate(() => ({
+      prompt: document.querySelector('.interaction-prompt')?.textContent?.trim() ?? '',
+      salvageFocus: document.querySelector('.game-mount')?.dataset.salvageFocus ?? 'missing',
+      worldDropCount: document.querySelector('.game-mount')?.dataset.worldDropCount ?? 'missing',
+    }));
+    await page.screenshot({ path: new URL('salvage-pickup-diagnostic.png', outputDir).pathname });
+    throw new Error(`Near-pickup salvage prompt missing: ${JSON.stringify(diagnostic)}`);
+  }
+  await inspectCanvasPixels(page, 'salvage-pickup');
+  if (process.env.CAPTURE_FAST !== '1') {
+    await captureCompositedPage(page, new URL('salvage-pickup-desktop.png', outputDir).pathname);
+  }
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(
+    () => document.querySelector('.loot-notice')?.textContent?.includes('+2 纤维'),
+    null,
+    { timeout: 5_000 },
+  );
+  await page.waitForFunction(
+    () => document.querySelector('.game-mount')?.dataset.worldDropCount === '0',
+    null,
+    { timeout: 5_000 },
+  );
+
+  await page.mouse.down();
+  await page.waitForTimeout(180);
+  await page.mouse.up();
+  await page.waitForFunction(
+    () => document.querySelector('.loot-notice')?.textContent?.includes('打捞钩断裂'),
+    null,
+    { timeout: 5_000 },
+  );
+  const brokenOwnership = await assertHookVisualOwnership(page, 'salvage-broken-hook');
+  if (brokenOwnership.heldVisible) throw new Error('Broken hook remained visible in the player hand');
+
+  await page.keyboard.press('KeyC');
+  await page.getByRole('dialog', { name: '野外背包' }).waitFor();
+  await page.getByRole('button', { name: '制作替代打捞钩' }).click();
+  await page.waitForFunction(
+    () => document.querySelector('.loot-notice')?.textContent?.includes('替代打捞钩 已制作'),
+    null,
+    { timeout: 5_000 },
+  );
+  const repairedTitle = await page.getByRole('button', { name: /打捞钩，耐久 48/ }).getAttribute('title');
+  if (repairedTitle !== '打捞钩 · 耐久 48/48') {
+    throw new Error(`Replacement hook durability did not reset: ${repairedTitle}`);
+  }
+  const recraftedOwnership = await assertHookVisualOwnership(page, 'salvage-recrafted');
+  if (recraftedOwnership.state === 'idle' && !recraftedOwnership.heldVisible) {
+    throw new Error(`Recrafted idle hook was not visible: ${JSON.stringify(recraftedOwnership)}`);
+  }
+  await page.getByRole('button', { name: '关闭背包' }).click();
+  await page.getByRole('button', { name: '继续漂流' }).click();
+  await waitForRuntime(
+    page,
+    () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return data?.hookState === 'idle' && data.hookHeldVisible === 'true' && data.hookProjectileVisible === 'false';
+    },
+    8_000,
+  );
+  await assertHookVisualOwnership(page, 'salvage-recovery', 'held');
+  await inspectCanvasPixels(page, 'salvage-recovery');
+  if (process.env.CAPTURE_FAST !== '1') {
+    await captureCompositedPage(page, new URL('salvage-recovery-desktop.png', outputDir).pathname);
+  }
+  await context.close();
+}
+
 async function captureMobile() {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -1786,6 +1890,7 @@ try {
   if (captureOnly === 'all' || captureOnly === 'game') await captureGame();
   if (captureOnly === 'all' || captureOnly === 'pause') await capturePause();
   if (captureOnly === 'all' || captureOnly === 'hook') await captureHook();
+  if (captureOnly === 'all' || captureOnly === 'salvage') await captureSalvage();
   if (captureOnly === 'all' || captureOnly === 'pack') await capturePack();
   if (captureOnly === 'all' || captureOnly === 'crafting') await captureCrafting();
   if (captureOnly === 'all' || captureOnly === 'settings') await captureSettings();

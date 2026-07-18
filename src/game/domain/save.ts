@@ -1,4 +1,5 @@
-import { normalizeInventory, type Inventory, type ToolId } from './items';
+import { itemCount, normalizeInventory, preferredToolOrder, type Inventory, type ItemBundle, type ToolId } from './items';
+import { normalizeToolDurability, type ToolDurability } from './toolDurability';
 import { INITIAL_SURVIVAL, normalizeSurvival, type SurvivalState } from './survival';
 import { MAX_RAFT_DEVICES, deviceKey, sanitizeSavedDevice, type SavedDeviceState } from './devices';
 import {
@@ -33,9 +34,9 @@ import {
   type SavedProgressionState,
 } from './progression';
 
-export const SAVE_VERSION = 10;
-export const SAVE_KEY = 'driftwake.save.v10';
-export const LEGACY_SAVE_KEYS = ['driftwake.save.v9', 'driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
+export const SAVE_VERSION = 11;
+export const SAVE_KEY = 'driftwake.save.v11';
+export const LEGACY_SAVE_KEYS = ['driftwake.save.v10', 'driftwake.save.v9', 'driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
 
 export type PlayerSurface = 'raft' | 'island' | 'water';
 
@@ -52,11 +53,19 @@ export interface SavedRaftTile {
   health: number;
 }
 
+export interface SavedWorldDrop {
+  loot: ItemBundle;
+  x: number;
+  y: number;
+  z: number;
+}
+
 export interface DriftwakeSave {
   version: typeof SAVE_VERSION;
   savedAt: number;
   player: {
     inventory: Inventory;
+    toolDurability: ToolDurability;
     survival: SurvivalState;
     selectedTool: ToolId;
     playSeconds: number;
@@ -72,6 +81,7 @@ export interface DriftwakeSave {
   world: {
     island: SavedIslandState;
     underwater: SavedUnderwaterState;
+    drops: SavedWorldDrop[];
   };
 }
 
@@ -145,10 +155,10 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       planting?: SavedPlantingState;
       progression?: SavedProgressionState;
     };
-    world?: { island?: SavedIslandState; underwater?: SavedUnderwaterState };
+    world?: { island?: SavedIslandState; underwater?: SavedUnderwaterState; drops?: SavedWorldDrop[] };
   };
   if (
-    (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3 && candidate.version !== 4 && candidate.version !== 5 && candidate.version !== 6 && candidate.version !== 7 && candidate.version !== 8 && candidate.version !== 9 && candidate.version !== SAVE_VERSION) ||
+    (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3 && candidate.version !== 4 && candidate.version !== 5 && candidate.version !== 6 && candidate.version !== 7 && candidate.version !== 8 && candidate.version !== 9 && candidate.version !== 10 && candidate.version !== SAVE_VERSION) ||
     !candidate.player ||
     !candidate.raft
   ) return null;
@@ -162,12 +172,12 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       ? sanitizeUnderwaterState(candidate.world?.underwater, island.seed, island.cycle)
       : createDefaultUnderwaterState(island.seed, island.cycle);
   const inventory = normalizeInventory(candidate.player.inventory ?? {});
-  inventory.hook = 1;
+  const toolDurability = normalizeToolDurability(inventory, candidate.player.toolDurability);
   const selectedCandidate = candidate.player.selectedTool;
   const selectedTool: ToolId =
     selectedCandidate !== undefined && TOOL_IDS.has(selectedCandidate) && (inventory[selectedCandidate] ?? 0) > 0
       ? selectedCandidate
-      : 'hook';
+      : preferredToolOrder(inventory).find((tool) => itemCount(inventory, tool) > 0) ?? 'hook';
   const rawTiles = Array.isArray(candidate.raft.tiles) ? candidate.raft.tiles : [];
   const seen = new Set<string>();
   const tiles = rawTiles
@@ -245,12 +255,24 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       return true;
     }),
   };
+  const drops = candidate.version >= 11 && Array.isArray(candidate.world?.drops)
+    ? candidate.world.drops
+      .slice(0, 8)
+      .map((drop) => ({
+        loot: normalizeInventory(drop?.loot ?? {}),
+        x: Math.max(-36, Math.min(36, finiteNumber(drop?.x))),
+        y: Math.max(-4, Math.min(4, finiteNumber(drop?.y))),
+        z: Math.max(-120, Math.min(24, finiteNumber(drop?.z))),
+      }))
+      .filter((drop) => Object.keys(drop.loot).length > 0)
+    : [];
 
   return {
     version: SAVE_VERSION,
     savedAt: typeof candidate.savedAt === 'number' && Number.isFinite(candidate.savedAt) ? candidate.savedAt : Date.now(),
     player: {
       inventory,
+      toolDurability,
       survival: normalizeSurvival(candidate.player.survival ?? INITIAL_SURVIVAL),
       selectedTool,
       playSeconds: Math.max(0, finiteInteger(candidate.player.playSeconds)),
@@ -262,7 +284,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       ),
     },
     raft: { tiles: stableTiles, devices, navigation, planting, progression },
-    world: { island: { ...island, dockVersion: 1 }, underwater },
+    world: { island: { ...island, dockVersion: 1 }, underwater, drops },
   };
 }
 

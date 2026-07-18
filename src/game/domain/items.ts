@@ -448,7 +448,7 @@ export const ITEM_DEFINITIONS = {
 
 export type ItemId = keyof typeof ITEM_DEFINITIONS;
 export type ToolId = Extract<ItemId, 'hook' | 'hammer' | 'spear' | 'metalSpear' | 'fishingRod' | 'axe' | 'metalAxe'>;
-export type SalvageKind = 'timber' | 'polymer' | 'fiber' | 'cache';
+export type SalvageKind = 'timber' | 'polymer' | 'fiber' | 'barrel' | 'cache';
 export type Inventory = Partial<Record<ItemId, number>>;
 export type ItemBundle = Partial<Record<ItemId, number>>;
 
@@ -548,6 +548,13 @@ export function removeItems(current: Inventory, bundle: ItemBundle): Inventory |
 }
 
 export function salvageLoot(kind: SalvageKind, roll = 0.5): ItemBundle {
+  if (kind === 'barrel') {
+    const loot: ItemBundle = { polymer: 2, fiber: 1 };
+    if (roll < 0.34) loot.emergencyWater = 1;
+    else if (roll < 0.68) loot.ration = 1;
+    else loot.scrap = 1;
+    return loot;
+  }
   if (kind !== 'cache') return { [kind]: 1 };
   const loot: ItemBundle = { timber: 2, polymer: 1, fiber: 2, scrap: 1 };
   if (roll < 0.45) loot.emergencyWater = 1;

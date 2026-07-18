@@ -3,6 +3,7 @@ import type { AudioMix } from '../../state/gameStore';
 import type { HarvestNodeType } from '../domain/island';
 import type { PlayerSurface } from '../domain/save';
 import type { ReefNodeType } from '../domain/underwater';
+import type { DebrisKind } from '../art/ProceduralModels';
 
 export class AudioSystem {
   private context: AudioContext | null = null;
@@ -172,6 +173,14 @@ export class AudioSystem {
       oscillator.start(now + offset);
       oscillator.stop(now + offset + 0.13);
     });
+  }
+
+  playSalvagePickup(kind: DebrisKind): void {
+    if (kind === 'cache' || kind === 'barrel') {
+      this.playWoodKnock(kind === 'cache' ? 0.09 : 0.065, kind === 'cache' ? 0.12 : 0.085);
+      this.noiseBurst(kind === 'cache' ? 0.16 : 0.11, 1480, 0.045, 'bandpass');
+    }
+    this.playCollect();
   }
 
   playEquip(): void {

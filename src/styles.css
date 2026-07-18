@@ -654,6 +654,26 @@ button:focus-visible {
 .hotbar-slot.is-empty { background: rgba(5, 22, 27, 0.5); }
 .hotbar-slot:disabled { cursor: not-allowed; }
 
+.hotbar-slot__durability {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  left: 6px;
+  height: 2px;
+  overflow: hidden;
+  background: rgba(1, 10, 12, 0.72);
+}
+
+.hotbar-slot__durability i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #72c9b6;
+  transform-origin: left center;
+}
+
+.hotbar-slot.is-worn .hotbar-slot__durability i { background: #e37458; }
+
 .hotbar-slot__number {
   position: absolute;
   top: 3px;
@@ -1238,6 +1258,11 @@ button:focus-visible {
 .item-detail dl div { display: flex; justify-content: space-between; padding-bottom: 7px; border-bottom: 1px solid rgba(53, 86, 91, 0.6); }
 .item-detail dt { color: #789493; font-size: 12px; }
 .item-detail dd { margin: 0; font-size: 12px; }
+.item-detail__durability dd { display: flex; align-items: center; gap: 8px; }
+.item-detail__durability dd > i { width: 72px; height: 3px; overflow: hidden; background: #17343a; }
+.item-detail__durability dd > i b { display: block; width: 100%; height: 100%; background: #72c9b6; transform-origin: left center; }
+.item-detail__durability.is-worn dd > i b { background: #e37458; }
+.item-detail__durability dd > span { min-width: 42px; color: #bed1cd; text-align: right; }
 
 .panel-command {
   display: inline-flex;

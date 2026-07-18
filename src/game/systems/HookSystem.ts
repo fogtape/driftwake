@@ -16,7 +16,8 @@ import { bundleLabel } from '../domain/items';
 import { sampleWaveHeight } from '../math/waves';
 import { useGameStore } from '../../state/gameStore';
 import type { AudioSystem } from './AudioSystem';
-import type { DebrisField, DebrisItem } from './DebrisField';
+import type { DebrisField, SalvageTarget } from './DebrisField';
+import { claimSalvageTarget } from './SalvageSystem';
 import type { SplashSystem } from './SplashSystem';
 
 export type HookState = 'idle' | 'charging' | 'flying' | 'latched' | 'retracting';
@@ -45,7 +46,7 @@ export class HookSystem {
   private readonly ropePositions = new Float32Array(6);
   private state: HookState = 'idle';
   private charge = 0;
-  private latchedItem: DebrisItem | null = null;
+  private latchedItem: SalvageTarget | null = null;
   private noticeTimer: number | null = null;
   private enabled = false;
   private equipped = false;
@@ -174,21 +175,33 @@ export class HookSystem {
     this.projectile.visible = true;
     this.rope.visible = true;
     this.audio.playCast(this.charge);
+    const wear = useGameStore.getState().damageTool('hook');
+    if (wear.broken) this.showNotice('打捞钩断裂 · 可近距拾取物资制作替代钩', 2600);
     useGameStore.getState().setHookCharge(0);
   }
 
-  private completeCollection(item: DebrisItem): void {
-    const kind = this.debris.collect(item);
+  private completeCollection(item: SalvageTarget): void {
+    const result = claimSalvageTarget(item, this.debris);
     this.latchedItem = null;
-    const accepted = useGameStore.getState().addLoot(kind);
-    const notice = bundleLabel(accepted) || '背包已满';
+    const accepted = bundleLabel(result.accepted);
+    const rejected = Object.keys(result.rejected).length > 0;
+    if (!accepted) {
+      this.audio.playDenied();
+      this.showNotice('背包已满，物资仍留在水面');
+      this.reset();
+      return;
+    }
+    this.audio.playSalvagePickup(result.kind);
+    this.showNotice(rejected ? `${accepted} · 剩余物资留在水面` : accepted);
+    this.reset();
+  }
+
+  private showNotice(notice: string, duration = 1450): void {
     useGameStore.getState().showNotice(notice);
     if (this.noticeTimer !== null) window.clearTimeout(this.noticeTimer);
     this.noticeTimer = window.setTimeout(() => {
       if (useGameStore.getState().notice === notice) useGameStore.getState().showNotice(null);
-    }, 1250);
-    this.audio.playCollect();
-    this.reset();
+    }, duration);
   }
 
   private reset(): void {
