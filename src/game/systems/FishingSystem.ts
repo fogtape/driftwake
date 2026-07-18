@@ -18,6 +18,18 @@ import { sampleWaveHeight } from '../math/waves';
 import { useGameStore, type FishingPhase } from '../../state/gameStore';
 import type { AudioSystem } from './AudioSystem';
 import type { SplashSystem } from './SplashSystem';
+import type { ItemBundle } from '../domain/items';
+
+export interface FishingRodWearResult {
+  broken: boolean;
+}
+
+export function resolveFishingRodWear(
+  accepted: ItemBundle,
+  onFishRetrieved: () => FishingRodWearResult,
+): FishingRodWearResult {
+  return (accepted.rawFish ?? 0) > 0 ? onFishRetrieved() : { broken: false };
+}
 
 const LINE_SEGMENTS = 9;
 
@@ -51,6 +63,7 @@ export class FishingSystem {
     materials: MaterialLibrary,
     private readonly audio: AudioSystem,
     private readonly splashes: SplashSystem,
+    private readonly onFishRetrieved: () => FishingRodWearResult = () => ({ broken: false }),
   ) {
     this.viewModel = createFishingRodModel(materials);
     this.viewModel.name = 'first-person-fishing-rod';
@@ -230,6 +243,7 @@ export class FishingSystem {
     this.showNotice(accepted.rawFish ? '+1 银脊鱼' : '背包已满，鱼滑回海里');
     useGameStore.getState().setFishing({ phase: 'caught', tension: 0, progress: 1 });
     useGameStore.getState().setInteraction(null, 'fishing');
+    if (resolveFishingRodWear(accepted, this.onFishRetrieved).broken) this.finishReset();
   }
 
   private updateCatch(): void {

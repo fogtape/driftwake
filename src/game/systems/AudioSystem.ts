@@ -5,6 +5,7 @@ import type { PlayerSurface } from '../domain/save';
 import type { ReefNodeType } from '../domain/underwater';
 import type { DebrisKind } from '../art/ProceduralModels';
 import type { FailureCause } from '../domain/failure';
+import type { ToolId } from '../domain/items';
 
 export interface AudioPosition {
   x: number;
@@ -320,6 +321,29 @@ export class AudioSystem {
     oscillator.connect(gain).connect(this.effects);
     oscillator.start(now);
     oscillator.stop(now + 0.14);
+  }
+
+  playToolBreak(tool: ToolId): void {
+    if (tool === 'fishingRod') {
+      this.playLineBreak();
+      this.playWoodKnock(0.11, 0.16);
+      return;
+    }
+    const metal = tool === 'metalSpear' || tool === 'metalAxe';
+    this.noiseBurst(metal ? 0.2 : 0.16, metal ? 2850 : 1900, metal ? 0.075 : 0.062, 'highpass');
+    this.playWoodKnock(metal ? 0.075 : 0.15, metal ? 0.1 : 0.18);
+    if (!metal || !this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(680, now);
+    oscillator.frequency.exponentialRampToValueAtTime(118, now + 0.19);
+    gain.gain.setValueAtTime(0.045, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.21);
+    oscillator.connect(gain).connect(this.effects);
+    oscillator.start(now);
+    oscillator.stop(now + 0.22);
   }
 
   playEquip(): void {

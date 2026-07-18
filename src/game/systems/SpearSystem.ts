@@ -3,6 +3,16 @@ import type { MaterialLibrary } from '../art/Materials';
 import { createSpearModel } from '../art/ProceduralModels';
 import type { AudioSystem } from './AudioSystem';
 
+export function resolveSpearImpact(
+  upgraded: boolean,
+  strikeTarget: (damage: number) => boolean,
+  onSpearHit: (upgraded: boolean) => void,
+): boolean {
+  const hit = strikeTarget(upgraded ? 52 : 34);
+  if (hit) onSpearHit(upgraded);
+  return hit;
+}
+
 export class SpearSystem {
   private readonly viewModels: { wood: Group; metal: Group };
   private equipped = false;
@@ -17,6 +27,7 @@ export class SpearSystem {
     materials: MaterialLibrary,
     private readonly audio: AudioSystem,
     private readonly strikeTarget: (damage: number) => boolean,
+    private readonly onSpearHit: (upgraded: boolean) => void = () => undefined,
   ) {
     this.viewModels = {
       wood: createSpearModel(materials),
@@ -54,7 +65,7 @@ export class SpearSystem {
     viewModel.rotation.set(-1.08 - lunge * 0.18, -0.18, -0.28 + lunge * 0.12);
     if (this.attackTime > 0 && !this.impactResolved && attackProgress >= 0.38) {
       this.impactResolved = true;
-      if (!this.strikeTarget(this.upgraded ? 52 : 34)) this.audio.playDenied();
+      if (!resolveSpearImpact(this.upgraded, this.strikeTarget, this.onSpearHit)) this.audio.playDenied();
     }
   }
 

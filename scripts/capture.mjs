@@ -654,6 +654,67 @@ const survivalPressureSave = {
   },
 };
 
+const durabilityBaseSave = {
+  ...seededSave,
+  version: 13,
+  player: {
+    ...seededSave.player,
+    inventory: { hook: 1 },
+    toolDurability: { hook: 24 },
+    selectedTool: 'hook',
+    crafting: { entries: [], nextSerial: 1 },
+    failure: null,
+    navigation: { surface: 'raft', x: 0, z: 1.08 },
+  },
+  raft: {
+    ...seededSave.raft,
+    devices: [],
+    navigation: { ...seededSave.raft.navigation, devices: [] },
+    planting: { birdClock: 0, birdVisit: 0, planters: [] },
+    progression: { researched: [], learned: [], devices: [] },
+  },
+  world: {
+    ...seededSave.world,
+    island: { ...seededSave.world.island, dockVersion: 1, phase: 'approaching', elapsed: 0 },
+    drops: [],
+  },
+};
+
+const durabilityHammerSave = {
+  ...durabilityBaseSave,
+  player: {
+    ...durabilityBaseSave.player,
+    inventory: { hook: 1, hammer: 1, timber: 8, polymer: 5 },
+    toolDurability: { hook: 24, hammer: 1 },
+    selectedTool: 'hammer',
+  },
+};
+
+const durabilityFishingSave = {
+  ...durabilityBaseSave,
+  player: {
+    ...durabilityBaseSave.player,
+    inventory: { hook: 1, fishingRod: 1 },
+    toolDurability: { hook: 24, fishingRod: 1 },
+    selectedTool: 'fishingRod',
+  },
+};
+
+const durabilityAxeSave = {
+  ...durabilityBaseSave,
+  player: {
+    ...durabilityBaseSave.player,
+    inventory: { hook: 1, axe: 1 },
+    toolDurability: { hook: 24, axe: 1 },
+    selectedTool: 'axe',
+    navigation: { surface: 'island', x: -1.1, z: -5.9 },
+  },
+  world: {
+    ...durabilityBaseSave.world,
+    island: { ...seededSave.world.island, dockVersion: 1, phase: 'docked', elapsed: 12 },
+  },
+};
+
 await mkdir(outputDir, { recursive: true });
 
 const browserRuntime = await launchDriftwakeChromium(chromium, {
@@ -684,7 +745,10 @@ function monitorPage(page, label) {
 
 async function openDesktopPage(label, options = {}) {
   const context = await browser.newContext({
-    viewport: { width: desktopWidth, height: desktopHeight },
+    viewport: {
+      width: options.width ?? desktopWidth,
+      height: options.height ?? desktopHeight,
+    },
     deviceScaleFactor: 1,
   });
   if (captureQuality) {
@@ -703,7 +767,7 @@ async function openDesktopPage(label, options = {}) {
   if (options.seedSave) {
     await context.addInitScript((save) => {
       localStorage.setItem(`driftwake.save.v${save.version}`, JSON.stringify(save));
-    }, options.failureStart ? failureSave : options.survivalPressureStart ? survivalPressureSave : options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
+    }, options.failureStart ? failureSave : options.survivalPressureStart ? survivalPressureSave : options.durabilityHammerStart ? durabilityHammerSave : options.durabilityFishingStart ? durabilityFishingSave : options.durabilityAxeStart ? durabilityAxeSave : options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
   }
   const page = await context.newPage();
   monitorPage(page, label);
@@ -810,6 +874,25 @@ async function waitForRuntime(page, predicate, timeout = 10_000) {
   }
   if (await page.evaluate(predicate)) return;
   throw new Error(`runtime condition timed out after ${timeout}ms`);
+}
+
+async function installNoticeHistory(page) {
+  await page.evaluate(() => {
+    globalThis.__driftwakeCaptureNotices = [];
+    const recordNotice = () => {
+      const text = document.querySelector('.loot-notice.is-visible')?.textContent?.trim();
+      if (text && globalThis.__driftwakeCaptureNotices.at(-1) !== text) {
+        globalThis.__driftwakeCaptureNotices.push(text);
+      }
+    };
+    new MutationObserver(recordNotice).observe(document.body, {
+      attributes: true,
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+    recordNotice();
+  });
 }
 
 async function captureCompositedPage(page, path) {
@@ -1139,22 +1222,7 @@ async function captureCrafting() {
 
 async function captureSurvivalPressure() {
   const { context, page } = await openDesktopPage('survival-pressure', { seedSave: true, survivalPressureStart: true });
-  await page.evaluate(() => {
-    globalThis.__driftwakeCaptureNotices = [];
-    const recordNotice = () => {
-      const text = document.querySelector('.loot-notice.is-visible')?.textContent?.trim();
-      if (text && globalThis.__driftwakeCaptureNotices.at(-1) !== text) {
-        globalThis.__driftwakeCaptureNotices.push(text);
-      }
-    };
-    new MutationObserver(recordNotice).observe(document.body, {
-      attributes: true,
-      characterData: true,
-      childList: true,
-      subtree: true,
-    });
-    recordNotice();
-  });
+  await installNoticeHistory(page);
   await enterGame(page);
   await waitForRuntime(page, () => {
     const data = document.querySelector('.game-mount')?.dataset;
@@ -1249,6 +1317,288 @@ async function captureSurvivalPressure() {
   }
   console.log(`Survival supply recovery/save gate: ${JSON.stringify(recoveryState)}`);
   await context.close();
+}
+
+async function captureToolDurability() {
+  const durabilityPart = process.env.DURABILITY_PART ?? 'all';
+  if (durabilityPart === 'all' || durabilityPart === 'hammer') {
+  const hammerRun = await openDesktopPage('durability-hammer', { seedSave: true, durabilityHammerStart: true });
+  await installNoticeHistory(hammerRun.page);
+  await enterGame(hammerRun.page);
+  console.log('Hammer durability runtime entered');
+  await hammerRun.page.mouse.click(desktopWidth / 2, desktopHeight / 2);
+  await hammerRun.page.waitForTimeout(450);
+  const emptyHammerWear = Number(await hammerRun.page.locator('.game-mount').getAttribute('data-tool-wear-event-count'));
+  if (emptyHammerWear !== 0) throw new Error(`Empty hammer action consumed durability: ${emptyHammerWear}`);
+  await hammerRun.page.evaluate(() => {
+    const movement = new MouseEvent('mousemove');
+    Object.defineProperties(movement, {
+      movementX: { value: 303 },
+      movementY: { value: 409 },
+    });
+    document.dispatchEvent(movement);
+  });
+  await hammerRun.page.waitForFunction(
+    () => document.querySelector('.interaction-prompt')?.textContent?.includes('修补受损筏格'),
+    undefined,
+    { timeout: 5_000 },
+  ).catch(() => undefined);
+  const hammerPrompt = await readInteractionPrompt(hammerRun.page);
+  if (!hammerPrompt.includes('修补受损筏格')) {
+    const buildDiagnostics = await hammerRun.page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return { mode: data?.buildMode, target: data?.buildTarget, hovered: data?.buildHovered };
+    });
+    await hammerRun.page.screenshot({ path: new URL('durability-hammer-diagnostic.png', outputDir).pathname, timeout: 5_000 }).catch(() => undefined);
+    throw new Error(`Expected repair prompt for durability gate, received: ${hammerPrompt}; ${JSON.stringify(buildDiagnostics)}`);
+  }
+  await hammerRun.page.mouse.click(desktopWidth / 2, desktopHeight / 2);
+  await waitForRuntime(
+    hammerRun.page,
+    () => document.querySelector('.game-mount')?.dataset.lastToolWear === 'repair:hammer:0',
+    5_000,
+  );
+  const hammerState = await hammerRun.page.evaluate(() => {
+    const mount = document.querySelector('.game-mount');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v13') ?? 'null');
+    return {
+      wearEvents: Number(mount?.dataset.toolWearEventCount),
+      lastWear: mount?.dataset.lastToolWear,
+      durability: JSON.parse(mount?.dataset.toolDurability ?? '{}'),
+      notices: globalThis.__driftwakeCaptureNotices ?? [],
+      selectedTool: saved?.player?.selectedTool,
+      inventory: saved?.player?.inventory,
+      savedDurability: saved?.player?.toolDurability,
+      repairedHealth: saved?.raft?.tiles?.find((tile) => tile.x === 1 && tile.z === -1)?.health,
+    };
+  });
+  if (
+    hammerState.wearEvents !== 1
+    || hammerState.lastWear !== 'repair:hammer:0'
+    || hammerState.durability.hammer !== undefined
+    || hammerState.inventory?.hammer
+    || hammerState.savedDurability?.hammer !== undefined
+    || hammerState.selectedTool !== 'hook'
+    || hammerState.repairedHealth !== 100
+    || !hammerState.notices.some((notice) => notice.includes('建造锤损坏'))
+  ) {
+    throw new Error(`Hammer durability transaction failed: ${JSON.stringify(hammerState)}`);
+  }
+  console.log(`Hammer durability gate: ${JSON.stringify(hammerState)}`);
+  if (process.env.CAPTURE_FAST !== '1') {
+    await captureCompositedPage(hammerRun.page, new URL('durability-hammer-desktop.png', outputDir).pathname);
+  }
+  await hammerRun.context.close();
+  if (durabilityPart === 'hammer') return;
+  }
+
+  if (durabilityPart === 'all' || durabilityPart === 'fishing') {
+  const fishingViewport = { width: 240, height: 160 };
+  const fishingRun = await openDesktopPage('durability-fishing', {
+    seedSave: true,
+    durabilityFishingStart: true,
+    ...fishingViewport,
+  });
+  await installNoticeHistory(fishingRun.page);
+  await enterGame(fishingRun.page);
+  await fishingRun.page.evaluate(() => {
+    document.querySelector('canvas')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+  });
+  try {
+    await waitForRuntime(
+      fishingRun.page,
+      () => document.querySelector('.game-mount')?.dataset.fishingPhase === 'casting',
+      5_000,
+    );
+  } catch (error) {
+    const diagnostics = await fishingRun.page.evaluate(() => {
+      const mount = document.querySelector('.game-mount');
+      return {
+        phase: mount?.dataset.fishingPhase,
+        simulationActive: mount?.dataset.simulationActive,
+        pointerLocked: document.pointerLockElement === document.querySelector('canvas'),
+        activeTool: document.querySelector('.hotbar-slot.is-active')?.getAttribute('aria-label'),
+      };
+    });
+    throw new Error(`Fishing cast did not start: ${JSON.stringify(diagnostics)}`, { cause: error });
+  }
+  try {
+    await waitForRuntime(
+      fishingRun.page,
+      () => document.querySelector('.game-mount')?.dataset.fishingPhase === 'nibble',
+      45_000,
+    );
+  } catch (error) {
+    const diagnostics = await fishingRun.page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return {
+        phase: data?.fishingPhase,
+        tension: data?.fishingTension,
+        progress: data?.fishingProgress,
+        simulationTicks: data?.simulationTickCount,
+      };
+    });
+    throw new Error(`Fishing bite did not arrive: ${JSON.stringify(diagnostics)}`, { cause: error });
+  }
+  await fishingRun.page.evaluate(() => {
+    document.querySelector('canvas')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+  });
+  let holdingReel = true;
+  const fishingDeadline = Date.now() + 300_000;
+  let nextFightLogAt = Date.now() + 15_000;
+  let lastFight = null;
+  while (Date.now() < fishingDeadline) {
+    const fight = await fishingRun.page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return {
+        phase: data?.fishingPhase,
+        tension: Number(data?.fishingTension),
+        progress: Number(data?.fishingProgress),
+        wearEvents: Number(data?.toolWearEventCount),
+      };
+    });
+    lastFight = fight;
+    if (fight.wearEvents >= 1) break;
+    if (fight.phase === 'lost' || fight.phase === 'idle') break;
+    if (holdingReel && fight.tension >= 0.68) {
+      await fishingRun.page.evaluate(() => {
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+      });
+      holdingReel = false;
+    } else if (!holdingReel && fight.tension <= 0.42) {
+      await fishingRun.page.evaluate(() => {
+        document.querySelector('canvas')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+      });
+      holdingReel = true;
+    }
+    if (Date.now() >= nextFightLogAt) {
+      console.log(`Fishing fight checkpoint: ${JSON.stringify(fight)}`);
+      nextFightLogAt += 15_000;
+    }
+    await fishingRun.page.waitForTimeout(80);
+  }
+  if (holdingReel) {
+    await fishingRun.page.evaluate(() => {
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+    });
+  }
+  if ((lastFight?.wearEvents ?? 0) < 1) {
+    const notices = await fishingRun.page.evaluate(() => globalThis.__driftwakeCaptureNotices ?? []);
+    throw new Error(`Fishing fight did not settle before deadline: ${JSON.stringify({ ...lastFight, notices })}`);
+  }
+  await waitForRuntime(
+    fishingRun.page,
+    () => document.querySelector('.game-mount')?.dataset.lastToolWear === 'fishing-catch:fishingRod:0',
+    5_000,
+  );
+  const fishingState = await fishingRun.page.evaluate(() => {
+    const mount = document.querySelector('.game-mount');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v13') ?? 'null');
+    return {
+      phase: mount?.dataset.fishingPhase,
+      wearEvents: Number(mount?.dataset.toolWearEventCount),
+      lastWear: mount?.dataset.lastToolWear,
+      notices: globalThis.__driftwakeCaptureNotices ?? [],
+      inventory: saved?.player?.inventory,
+      savedDurability: saved?.player?.toolDurability,
+      selectedTool: saved?.player?.selectedTool,
+    };
+  });
+  if (
+    fishingState.phase !== 'idle'
+    || fishingState.wearEvents !== 1
+    || fishingState.inventory?.rawFish !== 1
+    || fishingState.inventory?.fishingRod
+    || fishingState.savedDurability?.fishingRod !== undefined
+    || fishingState.selectedTool !== 'hook'
+    || !fishingState.notices.some((notice) => notice.includes('钓竿损坏'))
+  ) {
+    throw new Error(`Fishing durability transaction failed: ${JSON.stringify(fishingState)}`);
+  }
+  console.log(`Fishing durability gate: ${JSON.stringify(fishingState)}`);
+  await fishingRun.context.close();
+  if (durabilityPart === 'fishing') return;
+  }
+
+  if (durabilityPart !== 'all' && durabilityPart !== 'axe') {
+    throw new Error(`Unknown DURABILITY_PART: ${durabilityPart}`);
+  }
+  const axeViewport = { width: 640, height: 480 };
+  const axeRun = await openDesktopPage('durability-axe', {
+    seedSave: true,
+    durabilityAxeStart: true,
+    ...axeViewport,
+  });
+  await installNoticeHistory(axeRun.page);
+  await enterGame(axeRun.page);
+  await axeRun.page.waitForFunction(() => {
+    const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.axeAim ?? '{}');
+    return Boolean(aim.closestPalm?.center);
+  }, undefined, { timeout: 10_000 });
+  await axeRun.page.evaluate(() => {
+    const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.axeAim ?? '{}');
+    const [cameraX, cameraY, cameraZ] = aim.camera;
+    const [forwardX, forwardY, forwardZ] = aim.forward;
+    const [targetX, targetY, targetZ] = aim.closestPalm.center;
+    const deltaX = targetX - cameraX;
+    const deltaY = targetY - cameraY;
+    const deltaZ = targetZ - cameraZ;
+    const distance = Math.hypot(deltaX, deltaY, deltaZ);
+    const desiredYaw = Math.atan2(-deltaX / distance, -deltaZ / distance);
+    const desiredPitch = Math.asin(deltaY / distance);
+    const currentYaw = Math.atan2(-forwardX, -forwardZ);
+    const currentPitch = Math.asin(forwardY);
+    const yawDelta = Math.atan2(Math.sin(currentYaw - desiredYaw), Math.cos(currentYaw - desiredYaw));
+    const movement = new MouseEvent('mousemove');
+    Object.defineProperties(movement, {
+      movementX: { value: yawDelta / 0.00175 },
+      movementY: { value: (currentPitch - desiredPitch) / 0.00155 },
+    });
+    document.dispatchEvent(movement);
+  });
+  await axeRun.page.waitForFunction(
+    () => document.querySelector('.interaction-prompt')?.textContent?.includes('砍伐盐冠棕榈'),
+    undefined,
+    { timeout: 20_000 },
+  ).catch(() => undefined);
+  const axePrompt = await readInteractionPrompt(axeRun.page);
+  if (!axePrompt.includes('砍伐盐冠棕榈')) {
+    const aim = await axeRun.page.evaluate(() => JSON.parse(document.querySelector('.game-mount')?.dataset.axeAim ?? '{}'));
+    await axeRun.page.screenshot({ path: new URL('durability-axe-diagnostic.png', outputDir).pathname, timeout: 5_000 }).catch(() => undefined);
+    throw new Error(`Expected palm chopping prompt for durability gate, received: ${axePrompt}; ${JSON.stringify(aim)}`);
+  }
+  await axeRun.page.mouse.click(axeViewport.width / 2, axeViewport.height / 2);
+  await waitForRuntime(
+    axeRun.page,
+    () => document.querySelector('.game-mount')?.dataset.lastToolWear === 'axe-hit:axe:0',
+    5_000,
+  );
+  const axeState = await axeRun.page.evaluate(() => {
+    const mount = document.querySelector('.game-mount');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v13') ?? 'null');
+    return {
+      wearEvents: Number(mount?.dataset.toolWearEventCount),
+      lastWear: mount?.dataset.lastToolWear,
+      notices: globalThis.__driftwakeCaptureNotices ?? [],
+      inventory: saved?.player?.inventory,
+      savedDurability: saved?.player?.toolDurability,
+      selectedTool: saved?.player?.selectedTool,
+      damagedPalms: saved?.world?.island?.nodes?.filter((node) => node.id.startsWith('palm-') && node.health === 2).length,
+    };
+  });
+  if (
+    axeState.wearEvents !== 1
+    || axeState.inventory?.axe
+    || axeState.savedDurability?.axe !== undefined
+    || axeState.selectedTool !== 'hook'
+    || axeState.damagedPalms !== 1
+    || !axeState.notices.some((notice) => notice.includes('石斧损坏'))
+  ) {
+    throw new Error(`Axe durability transaction failed: ${JSON.stringify(axeState)}`);
+  }
+  console.log(`Axe durability gate: ${JSON.stringify(axeState)}`);
+  await axeRun.context.close();
 }
 
 async function captureSettings() {
@@ -2478,6 +2828,7 @@ try {
   if (captureOnly === 'all' || captureOnly === 'pack') await capturePack();
   if (captureOnly === 'all' || captureOnly === 'crafting') await captureCrafting();
   if (captureOnly === 'all' || captureOnly === 'survival') await captureSurvivalPressure();
+  if (captureOnly === 'all' || captureOnly === 'durability') await captureToolDurability();
   if (captureOnly === 'all' || captureOnly === 'settings') await captureSettings();
   if (captureOnly === 'all' || captureOnly === 'devices') await captureDevices();
   if (captureOnly === 'all' || captureOnly === 'advanced') await captureAdvancedDevices();

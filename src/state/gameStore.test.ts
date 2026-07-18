@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { itemCount, usedInventorySlots } from '../game/domain/items';
+import { itemCount, usedInventorySlots, type ToolId } from '../game/domain/items';
 import { TOOL_MAX_DURABILITY, normalizeToolDurability } from '../game/domain/toolDurability';
 import { createDefaultCraftingQueue } from '../game/domain/craftingQueue';
 import { useGameStore } from './gameStore';
@@ -126,6 +126,26 @@ describe('game store item use', () => {
     expect(state.toolDurability.hook).toBeUndefined();
     expect(state.selectedTool).toBe('hammer');
   });
+
+  it.each<ToolId>(['hammer', 'spear', 'metalSpear', 'fishingRod', 'axe', 'metalAxe'])(
+    'atomically removes a broken %s and selects an owned fallback',
+    (tool) => {
+      const inventory = { hook: 1, [tool]: 1 };
+      useGameStore.setState({
+        inventory,
+        inventorySlots: usedInventorySlots(inventory),
+        selectedTool: tool,
+        toolDurability: { hook: 24, [tool]: 1 },
+      });
+
+      expect(useGameStore.getState().damageTool(tool)).toEqual({ remaining: 0, broken: true });
+      const state = useGameStore.getState();
+      expect(itemCount(state.inventory, tool)).toBe(0);
+      expect(state.toolDurability[tool]).toBeUndefined();
+      expect(state.selectedTool).toBe('hook');
+      expect(state.toolDurability.hook).toBe(24);
+    },
+  );
 
   it('completes a full-durability replacement hook after loss', () => {
     const inventory = { timber: 2, polymer: 2, rope: 1 } as const;

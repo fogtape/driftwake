@@ -28,7 +28,8 @@ import {
   type MaterialLibrary,
 } from './art/Materials';
 import { useGameStore, type AudioMix, type QualityPreset } from '../state/gameStore';
-import { itemCount, preferredToolOrder, type ItemId } from './domain/items';
+import { ITEM_DEFINITIONS, itemCount, preferredToolOrder, type ItemId, type ToolId } from './domain/items';
+import { TOOL_MAX_DURABILITY } from './domain/toolDurability';
 import type { DeviceType } from './domain/devices';
 import { SAVE_VERSION, createDefaultRaftTiles, loadSave, writeSave, type DriftwakeSave } from './domain/save';
 import { createDefaultIslandState } from './domain/island';
@@ -39,7 +40,7 @@ import { createDefaultProgressionState, type ProgressionDeviceType } from './dom
 import type { FailureRecord } from './domain/failure';
 import type { CameraMotionMode } from './domain/settings';
 import { AudioSystem } from './systems/AudioSystem';
-import { BuildSystem } from './systems/BuildSystem';
+import { BuildSystem, type HammerAction } from './systems/BuildSystem';
 import { DebrisField } from './systems/DebrisField';
 import { DeviceSystem } from './systems/DeviceSystem';
 import { FishingSystem } from './systems/FishingSystem';
@@ -82,6 +83,16 @@ import {
 } from './domain/survival';
 
 const CRAFTING_TICK_SECONDS = 0.1;
+type ToolWearAction = HammerAction | 'spear-hit' | 'fishing-catch' | 'axe-hit';
+
+const TOOL_BREAK_CONTEXT: Record<ToolWearAction, string> = {
+  build: '本次扩建已完成',
+  repair: '本次修补已完成',
+  dismantle: '本次拆除已完成',
+  'spear-hit': '本次刺击仍然命中',
+  'fishing-catch': '渔获已收入背包',
+  'axe-hit': '本次砍击仍然生效',
+};
 const SURVIVAL_BAND_SEVERITY: Record<SurvivalBand, number> = {
   stable: 0,
   low: 1,
@@ -180,6 +191,7 @@ export class DriftwakeGame {
   private simulationAccumulator = 0;
   private craftingAccumulator = 0;
   private craftingCompletedCount = 0;
+  private toolWearEventCount = 0;
   private lastCraftingBlockReason: CraftingOutputBlockReason | null = null;
   private readonly lastSurvivalBands: Record<'thirst' | 'hunger', SurvivalBand> = {
     thirst: 'stable',
@@ -237,6 +249,16 @@ export class DriftwakeGame {
     this.mount.dataset.survivalHungerBand = 'stable';
     this.mount.dataset.thirstRunwaySeconds = '0';
     this.mount.dataset.hungerRunwaySeconds = '0';
+    this.mount.dataset.toolDurability = '{}';
+    this.mount.dataset.toolWearEventCount = '0';
+    this.mount.dataset.lastToolWear = 'none';
+    this.mount.dataset.fishingPhase = 'idle';
+    this.mount.dataset.fishingTension = '0';
+    this.mount.dataset.fishingProgress = '0';
+    this.mount.dataset.buildMode = 'hidden';
+    this.mount.dataset.buildTarget = 'none';
+    this.mount.dataset.buildHovered = 'none';
+    this.mount.dataset.axeAim = '{}';
     this.audio.setMix(useGameStore.getState().audioMix);
     this.syncAudioFocusMuted();
     this.setQuality(useGameStore.getState().quality);
@@ -302,6 +324,7 @@ export class DriftwakeGame {
         this.audio,
         this.splashes,
         islandState,
+        (upgraded) => this.applyToolWear(upgraded ? 'metalAxe' : 'axe', 'axe-hit'),
       );
       this.player = new PlayerController(
         this.camera,
@@ -427,6 +450,7 @@ export class DriftwakeGame {
           (this.navigation?.dismantleAt(coordinate) ?? false) ||
           (this.planting?.dismantleAt(coordinate) ?? false) ||
           (this.progression?.dismantleAt(coordinate) ?? false),
+        (action) => this.applyToolWear('hammer', action),
       );
       this.fishing = new FishingSystem(
         this.renderer,
@@ -435,6 +459,7 @@ export class DriftwakeGame {
         this.materials,
         this.audio,
         this.splashes,
+        () => this.applyToolWear('fishingRod', 'fishing-catch'),
       );
       this.shark = new SharkSystem(
         this.scene,
@@ -451,6 +476,7 @@ export class DriftwakeGame {
         this.materials,
         this.audio,
         (damage) => this.shark?.receiveSpearStrike(this.camera, damage) ?? false,
+        (upgraded) => this.applyToolWear(upgraded ? 'metalSpear' : 'spear', 'spear-hit'),
       );
       store.setRaft(this.raft.getIntegrityStats());
       this.unsubscribeStore = useGameStore.subscribe((state, previous) => {
@@ -472,6 +498,10 @@ export class DriftwakeGame {
         if (state.survival !== previous.survival || state.inventory !== previous.inventory) {
           this.syncSurvivalDiagnostics();
         }
+        if (state.toolDurability !== previous.toolDurability || state.inventory !== previous.inventory) {
+          this.syncToolDurabilityDiagnostics();
+        }
+        if (state.fishing !== previous.fishing) this.syncFishingDiagnostics();
         if (state.phase === 'failed' && previous.phase !== 'failed' && state.failure) {
           this.pauseInput();
           if (state.audioEnabled) {
@@ -486,6 +516,8 @@ export class DriftwakeGame {
       this.syncEquipment();
       this.syncCraftingDiagnostics();
       this.syncSurvivalDiagnostics();
+      this.syncToolDurabilityDiagnostics();
+      this.syncFishingDiagnostics();
 
       store.setLoadingLabel('正在建立物理世界');
       await this.physics.initialize();
@@ -749,6 +781,16 @@ export class DriftwakeGame {
       this.mount.dataset.hookRopeSag = hookVisual.ropeSag.toFixed(3);
     }
     this.build?.update(simulationSeconds, stepSeconds);
+    const buildDiagnostics = this.build?.getDiagnostics();
+    if (buildDiagnostics) {
+      this.mount.dataset.buildMode = buildDiagnostics.mode;
+      this.mount.dataset.buildTarget = buildDiagnostics.target
+        ? `${buildDiagnostics.target.x},${buildDiagnostics.target.z}`
+        : 'none';
+      this.mount.dataset.buildHovered = buildDiagnostics.hovered
+        ? `${buildDiagnostics.hovered.x},${buildDiagnostics.hovered.z}`
+        : 'none';
+    }
     this.fishing?.update(simulationSeconds, stepSeconds);
     this.spear?.update(simulationSeconds, stepSeconds);
     this.shark?.update(simulationSeconds, stepSeconds);
@@ -757,6 +799,14 @@ export class DriftwakeGame {
     this.planting?.update(simulationSeconds, stepSeconds);
     this.progression?.update(simulationSeconds, stepSeconds);
     this.island?.update(simulationSeconds, stepSeconds);
+    const selectedTool = useGameStore.getState().selectedTool;
+    if (
+      this.island
+      && this.simulationTickCount % 6 === 0
+      && (selectedTool === 'axe' || selectedTool === 'metalAxe')
+    ) {
+      this.mount.dataset.axeAim = JSON.stringify(this.island.getAxeAimDiagnostics());
+    }
     this.underwater?.update(simulationSeconds, stepSeconds);
     this.salvage?.update(simulationSeconds);
     this.mount.dataset.salvageFocus = this.salvage?.focusedKind ?? 'none';
@@ -1201,6 +1251,36 @@ export class DriftwakeGame {
     this.mount.dataset.craftingBlocked = blocked ?? 'none';
     this.mount.dataset.craftingCompletedCount = String(this.craftingCompletedCount);
     if (!blocked) this.lastCraftingBlockReason = null;
+  }
+
+  private applyToolWear(tool: ToolId, action: ToolWearAction): { remaining: number; broken: boolean } {
+    const store = useGameStore.getState();
+    if (itemCount(store.inventory, tool) <= 0) return { remaining: 0, broken: false };
+    const wear = store.damageTool(tool);
+    this.toolWearEventCount += 1;
+    this.mount.dataset.toolWearEventCount = String(this.toolWearEventCount);
+    this.mount.dataset.lastToolWear = `${action}:${tool}:${wear.remaining}`;
+    this.syncToolDurabilityDiagnostics();
+    if (wear.broken) {
+      this.audio.playToolBreak(tool);
+      this.showTransientNotice(`${ITEM_DEFINITIONS[tool].shortName}损坏 · ${TOOL_BREAK_CONTEXT[action]}`);
+    } else if (wear.remaining === Math.ceil(TOOL_MAX_DURABILITY[tool] * 0.2)) {
+      this.showTransientNotice(`${ITEM_DEFINITIONS[tool].shortName} · 耐久仅剩 ${wear.remaining}`);
+    }
+    this.saveNow();
+    return wear;
+  }
+
+  private syncToolDurabilityDiagnostics(): void {
+    const state = useGameStore.getState();
+    this.mount.dataset.toolDurability = JSON.stringify(state.toolDurability);
+  }
+
+  private syncFishingDiagnostics(): void {
+    const fishing = useGameStore.getState().fishing;
+    this.mount.dataset.fishingPhase = fishing.phase;
+    this.mount.dataset.fishingTension = fishing.tension.toFixed(3);
+    this.mount.dataset.fishingProgress = fishing.progress.toFixed(3);
   }
 
   private syncSurvivalDiagnostics(): void {

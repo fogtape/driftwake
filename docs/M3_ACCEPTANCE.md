@@ -1,8 +1,8 @@
 # M3 背包、合成与生存验收记录
 
 > 当前状态：`DOING`
-> 本次切片：失败恢复；堆叠拆分与容器转移；连续制作队列；前期生存压力
-> 版本：`0.13.3`
+> 本次切片：失败恢复；堆叠拆分与容器转移；连续制作队列；前期生存压力；工具耐久
+> 版本：`0.13.4`
 > 日期：2026-07-18
 
 ## 已形成的闭环
@@ -34,6 +34,10 @@
 - 生命/水分/饱食/氧气共享四档压力判定，低值 HUD 才显式出现数字，危险档使用有限脉冲；水分和饱食只在向下跨档时触发，同一模拟秒多项跨档时仅播报最高严重度的一项；
 - 满状态补给在领域、Store 与 UI 三层拒绝，不会损失物品；饮水、干粮与湿食拥有不同音色，反馈显示实际生命/水分/饱食增减，成功消费立即写入 v13；
 - 背包模态镜像现有节流通知，制作、研究、转移和补给反馈不再被 HUD 层遮挡。
+- 建造锤只在扩建、修补或拆除实际提交后磨损；无目标、结构不连通、材料不足或回滚时不扣耐久；
+- 木矛/金属矛只在鲨鱼命中返回成功后分别磨损，空刺不磨损；石斧/金属斧只在距离内棕榈生命实际下降后磨损，满包拒绝最后一击时不磨损；
+- 钓竿只在鱼已被背包接收后磨损；抛竿、错过鱼讯、断线和满包滑鱼均不扣耐久；
+- 统一工具事务保证最后一次有效动作先生效，再移除断裂工具、选择可用后备、播放木质/金属/鱼线分层音色并立即写入 v13；剩余 20% 时给出一次低耐久提示。
 
 ## 自动验证
 
@@ -50,11 +54,18 @@ CAPTURE_ONLY=crafting CAPTURE_FAST=1 CAPTURE_QUALITY=low \
 CAPTURE_ONLY=survival CAPTURE_FAST=1 CAPTURE_QUALITY=low \
   CAPTURE_WIDTH=1024 CAPTURE_HEIGHT=640 \
   DRIFTWAKE_URL=http://127.0.0.1:4180 npm run capture
+CAPTURE_ONLY=durability DURABILITY_PART=hammer CAPTURE_FAST=1 CAPTURE_QUALITY=low \
+  CAPTURE_WIDTH=1024 CAPTURE_HEIGHT=640 \
+  DRIFTWAKE_URL=http://127.0.0.1:4180 npm run capture
+CAPTURE_ONLY=durability DURABILITY_PART=fishing CAPTURE_FAST=1 CAPTURE_QUALITY=low \
+  DRIFTWAKE_URL=http://127.0.0.1:4180 npm run capture
+CAPTURE_ONLY=durability DURABILITY_PART=axe CAPTURE_FAST=1 CAPTURE_QUALITY=low \
+  DRIFTWAKE_URL=http://127.0.0.1:4180 npm run capture
 ```
 
 2026-07-18 结果：
 
-- 33 个测试文件、184 项测试通过；
+- 35 个测试文件、196 项测试通过；
 - TypeScript 与生产构建通过；
 - 领域测试覆盖稳定堆叠投影、奇数半组、精确部分转移、容量限制、不变性和源/目标守恒；运行时测试覆盖暂停呈现间隔；
 - `advanced` 最终构建浏览器场景实际把 6 个漂木拆半存入 3 个、拖放 20 个、再取回 1 个，最终背包为 4，干舱为 `20 + 10`，容量从 7/8 变为 8/8；满舱时废铁正确预判仅可容 2 个，无既有堆叠的生鱼提交被禁用；
@@ -64,6 +75,8 @@ CAPTURE_ONLY=survival CAPTURE_FAST=1 CAPTURE_QUALITY=low \
 - 2 项前期平衡回归完整运行 3600 个确定性秒，并锁定首轮生产可达性、四轮净水、补给消费次数、末值安全区与无操作失败窗口；另有领域/Store 测试覆盖分档、续航估算和满状态不消费；
 - `survival` 最终构建在 1024×640 与 640×720 均验证水分 14 为危险、饱食 26 为偏低，同帧通知仅保留更高严重度的“严重缺水”，底部生存区与快捷栏不相交；饮水/进食后 v13 为水分约 46、饱食约 54，补给从库存移除且两项分档恢复稳定；
 - 1024×640 生存压力合成图已人工检查：低值数字、脉冲图标、世界交互提示、快捷栏和设备状态无重叠；背包内反馈文本及矩形边界由浏览器门禁验证；
+- 工具耐久新增 12 项测试：覆盖木/金属矛命中与空刺、渔获入包与拒收、六种工具形态最后一点耐久、后备选择、分数磨损取整与升级工具保留；
+- `durability` 最终构建真实完成了锤子空点反例与筏格 `66 -> 100` 修补断锤、完整鱼讯/张力收线后 `rawFish=1` 断竿，以及几何反解准星后的棕榈 `3 -> 2` 断斧；三段均只磨损一次、切回钩子并立即写入 v13；
 - 干舱打开后一秒内始终只有一个 `aria-modal` 对话框、无暂停页重叠、`contextHealthy=true`；桌面面板 980×680，两侧无横向溢出，640×720 面板边界保持在视口内；
 - 最终构建的浏览器场景稳定验证失败阶段 `simulationActive=false`、无 Pointer Lock；
 - 最终构建的 v12 将 `3 漂木 + 2 聚合片 + 1 应急水` 结算为一份右舷回收包，`dropPending` 只从 `true` 变为 `false` 一次；
@@ -81,6 +94,8 @@ CAPTURE_ONLY=crafting CAPTURE_QUALITY=high npm run capture
 CAPTURE_ONLY=crafting CAPTURE_QUALITY=low npm run capture
 CAPTURE_ONLY=survival CAPTURE_QUALITY=high npm run capture
 CAPTURE_ONLY=survival CAPTURE_QUALITY=low npm run capture
+CAPTURE_ONLY=durability CAPTURE_QUALITY=high npm run capture
+CAPTURE_ONLY=durability CAPTURE_QUALITY=low npm run capture
 ```
 
 人工连续检查：
@@ -95,13 +110,13 @@ CAPTURE_ONLY=survival CAPTURE_QUALITY=low npm run capture
 8. 拆分、双击和拖放在 30/60 FPS 下均只提交一次，容量不足反馈与真实移动量一致，转移音效方向明确。
 9. 批量入队、取消返料和顺序完成在 30/60 FPS 下均只提交一次；入队、完成、取消三组音效可辨且不盖过海面与危险提示。
 10. 缺水/饥饿跨档提示在真实 30/60 FPS 航程中只触发一次，饮水、干粮和湿食音色可辨，背包反馈不会遮挡按钮或被模态层吞掉。
+11. 锤子、木/金属矛、钓竿和石/金属斧的低耐久、断裂音色与动作命中层次可辨；最后一次动作结果、通知、快捷栏切换和世界状态同步。
 
 ## 当前环境限制
 
-Termux Chromium 可稳定完成失败结算、DOM、v12 一次性落物、`advanced` 的真实容器交互、`crafting` 的 v13 队列闭环，以及 `survival` 的双视口补给恢复。暂停呈现限频后，软件 GLES 下的容器 DOM 不再被连续 3D 帧饿死；1440×900 制作页与 1024×640 生存压力均取得 CDP 合成证据，但其他高分辨率整页 `ReadPixels` 仍可能卡住合成器或结束 GLES 进程，不能替代目标真实 GPU 的帧率、失败画面与最终混音门禁。
+Termux Chromium 可稳定完成失败结算、DOM、v12 一次性落物、`advanced` 的真实容器交互、`crafting` 的 v13 队列闭环、`survival` 的双视口补给恢复，以及 `durability` 的锤/钓竿/斧分段真实动作。钓鱼行为门禁使用 240×160 低填充率画布保留固定步与真实输入，锤子仍以 1024×640 验证；高分辨率整页 `ReadPixels` 仍可能卡住合成器或结束 GLES 进程，不能替代目标真实 GPU 的帧率、失败画面与最终混音门禁。
 
 ## M3 剩余工作
 
 - 30 至 60 分钟缺水、饥饿、失败与回收节奏的无说明玩家验收；
-- 锤、矛、钓竿和斧的实际动作耐久接线；
 - 真实 GPU 失败页合成视觉与最终混音门禁。

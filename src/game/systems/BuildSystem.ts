@@ -19,6 +19,7 @@ import { RAFT_TILE_X, RAFT_TILE_Z, type GridCoordinate, type RaftSystem } from '
 import type { SplashSystem } from './SplashSystem';
 
 type PreviewMode = 'build' | 'repair' | 'invalid' | 'hidden';
+export type HammerAction = 'build' | 'repair' | 'dismantle';
 
 const FOUNDATION_COST: ItemBundle = { timber: 2, polymer: 1 };
 const REPAIR_COST: ItemBundle = { timber: 1 };
@@ -58,6 +59,7 @@ export class BuildSystem {
     private readonly splashes: SplashSystem,
     private readonly hasOccupant: (coordinate: GridCoordinate) => boolean = () => false,
     private readonly dismantleOccupant: (coordinate: GridCoordinate) => boolean = () => false,
+    private readonly onHammerUsed: (action: HammerAction) => void = () => undefined,
   ) {
     this.viewModel = createHammerModel(materials);
     this.viewModel.name = 'first-person-building-hammer';
@@ -108,6 +110,18 @@ export class BuildSystem {
       this.preview.visible = false;
       useGameStore.getState().setInteraction(null, 'build');
     }
+  }
+
+  getDiagnostics(): {
+    mode: PreviewMode;
+    target: GridCoordinate | null;
+    hovered: GridCoordinate | null;
+  } {
+    return {
+      mode: this.mode,
+      target: this.targetCoordinate ? { ...this.targetCoordinate } : null,
+      hovered: this.hoveredTileCoordinate ? { ...this.hoveredTileCoordinate } : null,
+    };
   }
 
   update(time: number, delta: number): void {
@@ -233,7 +247,9 @@ export class BuildSystem {
     }
     const store = useGameStore.getState();
     const coordinate = { ...this.targetCoordinate };
+    let action: HammerAction;
     if (this.mode === 'repair') {
+      action = 'repair';
       if (!store.spendItems(REPAIR_COST)) {
         this.audio.playDenied();
         return;
@@ -250,6 +266,7 @@ export class BuildSystem {
       this.audio.playRepair();
       this.showNotice('结构已修补');
     } else {
+      action = 'build';
       if (!this.raft.canAddTile(coordinate) || !store.spendItems(FOUNDATION_COST)) {
         this.audio.playDenied();
         return;
@@ -268,6 +285,7 @@ export class BuildSystem {
     this.swing = 0.34;
     store.setRaft(this.raft.getIntegrityStats());
     this.updatePreview();
+    this.onHammerUsed(action);
   }
 
   private showNotice(message: string): void {
@@ -288,6 +306,7 @@ export class BuildSystem {
       this.audio.playBuild();
       this.swing = 0.34;
       this.updatePreview();
+      this.onHammerUsed('dismantle');
       return;
     }
     if (!this.hoveredTileCoordinate || !this.raft.canRemoveTile(this.hoveredTileCoordinate)) {
@@ -309,6 +328,7 @@ export class BuildSystem {
     useGameStore.getState().setRaft(this.raft.getIntegrityStats());
     this.showNotice('拆除返还 +1 漂木');
     this.updatePreview();
+    this.onHammerUsed('dismantle');
   }
 
   private readonly onPointerDown = (event: MouseEvent): void => {

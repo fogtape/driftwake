@@ -107,6 +107,7 @@ export class IslandSystem {
     private readonly audio: AudioSystem,
     private readonly splashes: SplashSystem,
     savedState: SavedIslandState,
+    private readonly onAxeHit: (upgraded: boolean) => void = () => undefined,
   ) {
     this.state = {
       ...savedState,
@@ -271,6 +272,48 @@ export class IslandSystem {
     const raftFront = this.raft.group.position.z + raftFrontEdgeZForTiles(this.raft.getTiles());
     const islandFront = transform.z + ISLAND_TERRAIN_HALF_DEPTH * transform.scale;
     return raftFront - islandFront;
+  }
+
+  getAxeAimDiagnostics(): {
+    equipped: boolean;
+    focused: string | null;
+    camera: [number, number, number];
+    forward: [number, number, number];
+    nearest: { id: string; along: number; miss: number; distance: number } | null;
+    closestPalm: { id: string; center: [number, number, number]; distance: number } | null;
+  } {
+    this.camera.getWorldDirection(this.forward);
+    this.ray.set(this.camera.position, this.forward);
+    let nearest: { id: string; along: number; miss: number; distance: number } | null = null;
+    let closestPalm: { id: string; center: [number, number, number]; distance: number } | null = null;
+    for (const runtime of this.nodes.values()) {
+      if (runtime.definition.type !== 'palm' || runtime.state.health <= 0) continue;
+      runtime.model.getWorldPosition(this.center);
+      this.center.y += 1.35;
+      this.toCenter.copy(this.center).sub(this.ray.origin);
+      const distance = this.toCenter.length();
+      const along = this.toCenter.dot(this.ray.direction);
+      this.closest.copy(this.ray.direction).multiplyScalar(Math.max(0, along)).add(this.ray.origin);
+      const miss = this.closest.distanceTo(this.center);
+      if (!nearest || miss < nearest.miss) {
+        nearest = { id: runtime.definition.id, along, miss, distance };
+      }
+      if (!closestPalm || distance < closestPalm.distance) {
+        closestPalm = {
+          id: runtime.definition.id,
+          center: [this.center.x, this.center.y, this.center.z],
+          distance,
+        };
+      }
+    }
+    return {
+      equipped: this.axeEquipped,
+      focused: this.focused?.definition.id ?? null,
+      camera: [this.camera.position.x, this.camera.position.y, this.camera.position.z],
+      forward: [this.forward.x, this.forward.y, this.forward.z],
+      nearest,
+      closestPalm,
+    };
   }
 
   dispose(): void {
@@ -476,6 +519,7 @@ export class IslandSystem {
     }
     this.syncNodeState();
     this.publishFeedback();
+    this.onAxeHit(this.axeUpgraded);
   }
 
   private isBlocked(x: number, z: number): boolean {

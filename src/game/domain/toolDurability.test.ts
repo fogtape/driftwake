@@ -27,4 +27,12 @@ describe('tool durability', () => {
     expect(fresh.hook).toBe(TOOL_MAX_DURABILITY.hook);
     expect(toolDurabilityRatio(fresh, 'hook')).toBe(1);
   });
+
+  it('rounds fractional wear upward and preserves the upgraded tool tier', () => {
+    expect(applyToolWear({ metalAxe: 120 }, 'metalAxe', 2.2)).toEqual({
+      durability: { metalAxe: 117 },
+      remaining: 117,
+      broken: false,
+    });
+  });
 });
