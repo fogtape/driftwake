@@ -68,6 +68,14 @@ import {
 } from './runtime/dynamicResolution';
 import { sampleDayCycle, sampleEnvironmentLighting } from './environment/environment';
 import { sampleWaveHeight } from './math/waves';
+import { RECIPES } from './domain/recipes';
+import {
+  craftingOutputBlockReason,
+  recipeCraftSeconds,
+  type CraftingOutputBlockReason,
+} from './domain/craftingQueue';
+
+const CRAFTING_TICK_SECONDS = 0.1;
 
 const DYNAMIC_RESOLUTION_POLICIES: Record<QualityPreset, DynamicResolutionPolicy> = {
   high: {
@@ -158,6 +166,9 @@ export class DriftwakeGame {
   private currentGust = 0;
   private currentLightning = 0;
   private simulationAccumulator = 0;
+  private craftingAccumulator = 0;
+  private craftingCompletedCount = 0;
+  private lastCraftingBlockReason: CraftingOutputBlockReason | null = null;
   private saveElapsed = 0;
   private simulationTickCount = 0;
   private unsubscribeStore: (() => void) | null = null;
@@ -201,6 +212,11 @@ export class DriftwakeGame {
     this.mount.dataset.failureDropCount = '0';
     this.mount.dataset.sailAttachment = 'missing';
     this.mount.dataset.islandRaftClearance = '0';
+    this.mount.dataset.craftingQueueLength = '0';
+    this.mount.dataset.craftingActive = 'none';
+    this.mount.dataset.craftingProgress = '0';
+    this.mount.dataset.craftingBlocked = 'none';
+    this.mount.dataset.craftingCompletedCount = '0';
     this.audio.setMix(useGameStore.getState().audioMix);
     this.syncAudioFocusMuted();
     this.setQuality(useGameStore.getState().quality);
@@ -430,6 +446,9 @@ export class DriftwakeGame {
           if (state.selectedTool !== previous.selectedTool) this.audio.playEquip();
           this.syncEquipment();
         }
+        if (state.crafting !== previous.crafting || state.inventory !== previous.inventory) {
+          this.syncCraftingDiagnostics();
+        }
         if (state.phase === 'failed' && previous.phase !== 'failed' && state.failure) {
           this.pauseInput();
           if (state.audioEnabled) {
@@ -442,6 +461,7 @@ export class DriftwakeGame {
         }
       });
       this.syncEquipment();
+      this.syncCraftingDiagnostics();
 
       store.setLoadingLabel('正在建立物理世界');
       await this.physics.initialize();
@@ -539,6 +559,24 @@ export class DriftwakeGame {
   playUi(success = true): void {
     if (success) this.audio.playUi();
     else this.audio.playDenied();
+  }
+
+  notifyCraftQueued(count: number, success: boolean): void {
+    if (!success) {
+      this.audio.playDenied();
+      return;
+    }
+    this.audio.playCraftQueued(count);
+    this.saveNow();
+  }
+
+  notifyCraftCancelled(success: boolean): void {
+    if (!success) {
+      this.audio.playDenied();
+      return;
+    }
+    this.audio.playCraftCancel();
+    this.saveNow();
   }
 
   playConsume(): void {
@@ -706,6 +744,34 @@ export class DriftwakeGame {
     this.currentLightning = this.storm?.update(simulationSeconds, surfaceStorm, this.currentGust) ?? 0;
     this.audio.setStormActivity(this.currentStormIntensity);
     this.audio.update(simulationSeconds);
+
+    this.craftingAccumulator += stepSeconds;
+    while (this.craftingAccumulator + 1e-9 >= CRAFTING_TICK_SECONDS) {
+      const craftingResult = useGameStore.getState().tickCrafting(CRAFTING_TICK_SECONDS);
+      this.craftingAccumulator -= CRAFTING_TICK_SECONDS;
+      if (craftingResult.completed.length > 0) {
+        this.craftingCompletedCount += craftingResult.completed.length;
+        const firstName = RECIPES[craftingResult.completed[0].recipeId].name;
+        this.audio.playCraftComplete(craftingResult.completed.length);
+        this.showTransientNotice(
+          craftingResult.completed.length === 1
+            ? `${firstName} 已完成，收入背包`
+            : `${firstName} 等 ${craftingResult.completed.length} 项已完成`,
+        );
+        this.saveNow();
+      }
+      if (craftingResult.blockedReason !== this.lastCraftingBlockReason) {
+        this.lastCraftingBlockReason = craftingResult.blockedReason;
+        if (craftingResult.blockedReason === 'inventory-full') {
+          this.audio.playDenied();
+          this.showTransientNotice('制作已完成，背包腾出空位后领取');
+        } else if (craftingResult.blockedReason === 'already-owned') {
+          this.audio.playDenied();
+          this.showTransientNotice('制作已完成，同类工具占用产出位置');
+        }
+      }
+      this.syncCraftingDiagnostics();
+    }
 
     this.simulationAccumulator += stepSeconds;
     while (this.simulationAccumulator >= 1) {
@@ -1089,6 +1155,23 @@ export class DriftwakeGame {
       },
     };
     useGameStore.getState().setSaveStatus(writeSave(save) ? 'saved' : 'error');
+  }
+
+  private syncCraftingDiagnostics(): void {
+    const state = useGameStore.getState();
+    const active = state.crafting.entries[0] ?? null;
+    const duration = active ? recipeCraftSeconds(active.recipeId) : 0;
+    const blocked = active && active.elapsedSeconds >= duration - 1e-6
+      ? craftingOutputBlockReason(state.inventory, active)
+      : null;
+    this.mount.dataset.craftingQueueLength = String(state.crafting.entries.length);
+    this.mount.dataset.craftingActive = active?.recipeId ?? 'none';
+    this.mount.dataset.craftingProgress = active && duration > 0
+      ? Math.min(1, active.elapsedSeconds / duration).toFixed(3)
+      : '0';
+    this.mount.dataset.craftingBlocked = blocked ?? 'none';
+    this.mount.dataset.craftingCompletedCount = String(this.craftingCompletedCount);
+    if (!blocked) this.lastCraftingBlockReason = null;
   }
 
   private readonly onBeforeUnload = (): void => {

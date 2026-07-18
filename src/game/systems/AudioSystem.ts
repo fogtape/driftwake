@@ -171,6 +171,61 @@ export class AudioSystem {
     oscillator.stop(now + 0.09);
   }
 
+  playCraftQueued(count = 1): void {
+    if (!this.context || !this.ui) return;
+    const now = this.context.currentTime;
+    const strength = Math.min(1, Math.max(1, count) / 4);
+    this.noiseBurst(0.055, 1320, 0.018 + strength * 0.012, 'bandpass');
+    [330, 440].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + index * 0.045;
+      oscillator.type = index === 0 ? 'triangle' : 'sine';
+      oscillator.frequency.setValueAtTime(frequency, start);
+      oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.12, start + 0.08);
+      gain.gain.setValueAtTime(0.025 + strength * 0.008, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.11);
+      oscillator.connect(gain).connect(this.ui!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.12);
+    });
+  }
+
+  playCraftComplete(count = 1): void {
+    if (!this.context || !this.effects || !this.ui) return;
+    const now = this.context.currentTime;
+    this.playWoodKnock(0.052 + Math.min(0.025, Math.max(0, count - 1) * 0.006), 0.075);
+    this.noiseBurst(0.1, 2380, 0.028, 'bandpass');
+    [392, 523.25, 659.25].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      const start = now + 0.025 + index * 0.055;
+      oscillator.type = index === 2 ? 'sine' : 'triangle';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.03 - index * 0.003, start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+      oscillator.connect(gain).connect(this.ui!);
+      oscillator.start(start);
+      oscillator.stop(start + 0.19);
+    });
+  }
+
+  playCraftCancel(): void {
+    if (!this.context || !this.ui) return;
+    const now = this.context.currentTime;
+    this.noiseBurst(0.07, 760, 0.018, 'lowpass');
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(310, now);
+    oscillator.frequency.exponentialRampToValueAtTime(155, now + 0.12);
+    gain.gain.setValueAtTime(0.027, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+    oscillator.connect(gain).connect(this.ui);
+    oscillator.start(now);
+    oscillator.stop(now + 0.15);
+  }
+
   playCast(charge: number): void {
     if (!this.context || !this.effects) return;
     const now = this.context.currentTime;

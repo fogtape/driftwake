@@ -3,11 +3,12 @@ import {
   ArrowRightLeft,
   Backpack,
   Check,
-  ChevronRight,
   FlaskConical,
   Hammer,
   HeartPulse,
   Layers3,
+  ListChecks,
+  ListPlus,
   LockKeyhole,
   MapPin,
   Microscope,
@@ -18,6 +19,7 @@ import {
   Plus,
   Scissors,
   ShieldCheck,
+  Timer,
   X,
 } from 'lucide-react';
 import {
@@ -32,7 +34,18 @@ import {
   type ItemId,
   type ToolId,
 } from '../game/domain/items';
-import { RECIPES, isRecipeUnlocked, missingForRecipe, type CraftResult, type RecipeId } from '../game/domain/recipes';
+import { RECIPES, isRecipeUnlocked, type RecipeId } from '../game/domain/recipes';
+import {
+  MAX_CRAFTING_QUEUE,
+  canCancelCraftingEntry,
+  craftingOutputBlockReason,
+  maxQueueableCrafts,
+  recipeCraftSeconds,
+  recipeOutputItem,
+  type CancelCraftResult,
+  type CraftingQueueState,
+  type QueueCraftResult,
+} from '../game/domain/craftingQueue';
 import { TOOL_MAX_DURABILITY, toolDurabilityRatio, type ToolDurability } from '../game/domain/toolDurability';
 import {
   RESEARCH_PROJECTS,
@@ -54,6 +67,7 @@ import { ItemIcon } from './ItemIcon';
 interface FieldPackPanelProps {
   panel: OverlayPanel;
   inventory: Inventory;
+  crafting: CraftingQueueState;
   toolDurability: ToolDurability;
   inventorySlots: number;
   raft: RaftFeedback;
@@ -61,7 +75,8 @@ interface FieldPackPanelProps {
   storage: StorageFeedback | null;
   saveStatus: 'idle' | 'saved' | 'error';
   onPanelChange: (panel: Exclude<OverlayPanel, null>) => void;
-  onCraft: (recipeId: RecipeId) => CraftResult;
+  onQueueCraft: (recipeId: RecipeId, quantity: number) => QueueCraftResult;
+  onCancelCraft: (entryId: string) => CancelCraftResult;
   onUse: (itemId: ItemId) => boolean;
   onPlace: (deviceType: PlacementType) => void;
   onResearch: (sample: ResearchSampleId) => ResearchSampleResult;
@@ -123,6 +138,7 @@ function categoryLabel(category: (typeof ITEM_DEFINITIONS)[ItemId]['category']):
 export function FieldPackPanel({
   panel,
   inventory,
+  crafting,
   toolDurability,
   inventorySlots,
   raft,
@@ -130,7 +146,8 @@ export function FieldPackPanel({
   storage,
   saveStatus,
   onPanelChange,
-  onCraft,
+  onQueueCraft,
+  onCancelCraft,
   onUse,
   onPlace,
   onResearch,
@@ -144,6 +161,7 @@ export function FieldPackPanel({
   );
   const stacks = useMemo(() => inventoryStacks(inventory), [inventory]);
   const [selectedItem, setSelectedItem] = useState<ItemId>('hook');
+  const [craftQuantities, setCraftQuantities] = useState<Partial<Record<RecipeId, number>>>({});
   const storageStacks = useMemo(
     () => storage ? inventoryStacks(storage.inventory) : [],
     [storage],
@@ -544,44 +562,147 @@ export function FieldPackPanel({
           </div>
         ) : panel === 'crafting' ? (
           <div className="field-pack__body field-pack__body--crafting">
-            <div className="crafting-heading">
-              <div><FlaskConical size={20} /><span>便携制作</span></div>
-            </div>
-            <div className="recipe-list">
-              {(Object.keys(RECIPES) as RecipeId[]).map((recipeId) => {
-                const recipe = RECIPES[recipeId];
-                const outputId = Object.keys(recipe.output)[0] as ItemId;
-                const missing = missingForRecipe(inventory, recipeId);
-                const alreadyOwned = ITEM_DEFINITIONS[outputId].category === 'tool' && itemCount(inventory, outputId) > 0;
-                const unlocked = isRecipeUnlocked(recipeId, progression.learned);
-                const canCraft = unlocked && Object.keys(missing).length === 0 && !alreadyOwned;
-                return (
-                  <article className={`recipe-row ${canCraft ? 'is-ready' : ''} ${unlocked ? '' : 'is-locked'}`} key={recipeId}>
-                    <div className="recipe-row__icon" style={{ '--item-tone': ITEM_DEFINITIONS[outputId].tone } as React.CSSProperties}>
-                      <ItemIcon itemId={outputId} size={29} />
-                    </div>
-                    <div className="recipe-row__copy">
-                      <h3>{recipe.name}</h3>
-                      <p>{unlocked ? recipe.description : '需要在盐迹研究台完成材料推演。'}</p>
-                      <div className="recipe-costs">
-                        {(Object.entries(recipe.cost) as [ItemId, number][]).map(([itemId, amount]) => {
-                          const enough = itemCount(inventory, itemId) >= amount;
-                          return (
-                            <span className={enough ? 'is-met' : 'is-missing'} key={itemId}>
-                              <ItemIcon itemId={itemId} size={14} />
-                              {itemCount(inventory, itemId)}/{amount}
-                            </span>
-                          );
-                        })}
+            <section className="crafting-catalog" aria-labelledby="crafting-catalog-heading">
+              <div className="crafting-heading">
+                <div><FlaskConical size={20} /><span id="crafting-catalog-heading">便携制作</span></div>
+                <small>工位就绪</small>
+              </div>
+              <div className="recipe-list">
+                {(Object.keys(RECIPES) as RecipeId[]).map((recipeId) => {
+                  const recipe = RECIPES[recipeId];
+                  const outputId = recipeOutputItem(recipeId);
+                  const unlocked = isRecipeUnlocked(recipeId, progression.learned);
+                  const queuedOutput = crafting.entries.some((entry) => recipeOutputItem(entry.recipeId) === outputId);
+                  const alreadyOwned = ITEM_DEFINITIONS[outputId].category === 'tool'
+                    && (itemCount(inventory, outputId) > 0 || queuedOutput);
+                  const maxCrafts = maxQueueableCrafts(inventory, crafting, recipeId, progression.learned);
+                  const quantity = Math.min(
+                    Math.max(1, craftQuantities[recipeId] ?? 1),
+                    Math.max(1, maxCrafts),
+                  );
+                  const canQueue = maxCrafts > 0;
+                  return (
+                    <article className={`recipe-row ${canQueue ? 'is-ready' : ''} ${unlocked ? '' : 'is-locked'}`} key={recipeId}>
+                      <div className="recipe-row__icon" style={{ '--item-tone': ITEM_DEFINITIONS[outputId].tone } as React.CSSProperties}>
+                        <ItemIcon itemId={outputId} size={29} />
                       </div>
-                    </div>
-                    <button className="recipe-command" type="button" disabled={!canCraft} onClick={() => onCraft(recipeId)} aria-label={`制作${recipe.name}`}>
-                      {!unlocked ? <LockKeyhole size={18} /> : alreadyOwned ? <Check size={19} /> : <ChevronRight size={20} />}
-                    </button>
-                  </article>
-                );
-              })}
-            </div>
+                      <div className="recipe-row__copy">
+                        <div className="recipe-row__title">
+                          <h3>{recipe.name}</h3>
+                          <span><Timer size={13} />{(recipeCraftSeconds(recipeId) * quantity).toFixed(1)}s</span>
+                        </div>
+                        <p>{unlocked ? recipe.description : '需要在盐迹研究台完成材料推演。'}</p>
+                        <div className="recipe-costs">
+                          {(Object.entries(recipe.cost) as [ItemId, number][]).map(([itemId, amount]) => {
+                            const total = amount * quantity;
+                            const enough = itemCount(inventory, itemId) >= total;
+                            return (
+                              <span className={enough ? 'is-met' : 'is-missing'} key={itemId}>
+                                <ItemIcon itemId={itemId} size={14} />
+                                {itemCount(inventory, itemId)}/{total}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="recipe-row__actions">
+                        <div className="recipe-quantity" role="group" aria-label={`${recipe.name}制作数量`}>
+                          <button
+                            type="button"
+                            disabled={!canQueue || quantity <= 1}
+                            onClick={() => setCraftQuantities((current) => ({ ...current, [recipeId]: quantity - 1 }))}
+                            aria-label={`减少${recipe.name}制作数量`}
+                            title="减少"
+                          ><Minus size={13} /></button>
+                          <output aria-label={`${recipe.name}当前制作数量`}>{quantity}</output>
+                          <button
+                            type="button"
+                            disabled={!canQueue || quantity >= maxCrafts}
+                            onClick={() => setCraftQuantities((current) => ({ ...current, [recipeId]: quantity + 1 }))}
+                            aria-label={`增加${recipe.name}制作数量`}
+                            title="增加"
+                          ><Plus size={13} /></button>
+                        </div>
+                        <button
+                          className="recipe-command"
+                          type="button"
+                          disabled={!canQueue}
+                          onClick={() => onQueueCraft(recipeId, quantity)}
+                          aria-label={`将${quantity}个${recipe.name}加入制作队列`}
+                          title="加入制作队列"
+                        >
+                          {!unlocked ? <LockKeyhole size={18} /> : alreadyOwned ? <Check size={19} /> : <ListPlus size={19} />}
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+
+            <aside className="crafting-queue" aria-labelledby="crafting-queue-heading">
+              <div className="crafting-heading crafting-queue__heading">
+                <div><ListChecks size={20} /><span id="crafting-queue-heading">制作队列</span></div>
+                <small>{crafting.entries.length}/{MAX_CRAFTING_QUEUE}</small>
+              </div>
+              {crafting.entries.length === 0 ? (
+                <div className="crafting-queue__empty">
+                  <ListChecks size={28} />
+                  <strong>暂无排队项目</strong>
+                  <span>工位空闲</span>
+                </div>
+              ) : (
+                <ol className="crafting-queue__list">
+                  {crafting.entries.map((entry, index) => {
+                    const recipe = RECIPES[entry.recipeId];
+                    const outputId = recipeOutputItem(entry.recipeId);
+                    const duration = recipeCraftSeconds(entry.recipeId);
+                    const progress = Math.min(1, entry.elapsedSeconds / duration);
+                    const blocked = index === 0 && progress >= 1
+                      ? craftingOutputBlockReason(inventory, entry)
+                      : null;
+                    const cancellable = canCancelCraftingEntry(inventory, crafting, entry.id);
+                    const status = blocked === 'inventory-full'
+                      ? '等待背包空位'
+                      : blocked === 'already-owned'
+                        ? '同类工具占位'
+                        : index > 0
+                          ? '已备料 · 排队'
+                          : progress > 0
+                            ? '制作中'
+                            : '已备料';
+                    return (
+                      <li className={`crafting-queue__entry ${index === 0 ? 'is-active' : ''} ${blocked ? 'is-blocked' : ''}`} key={entry.id}>
+                        <span className="crafting-queue__index">{String(index + 1).padStart(2, '0')}</span>
+                        <div className="crafting-queue__icon" style={{ '--item-tone': ITEM_DEFINITIONS[outputId].tone } as React.CSSProperties}>
+                          <ItemIcon itemId={outputId} size={23} />
+                        </div>
+                        <div className="crafting-queue__copy">
+                          <strong>{recipe.name}</strong>
+                          <span className={blocked ? 'is-blocked' : ''}>{status}</span>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={!cancellable}
+                          onClick={() => onCancelCraft(entry.id)}
+                          aria-label={`取消${recipe.name}并返还材料`}
+                          title={cancellable ? '取消并返还材料' : '背包需能完整容纳返还材料'}
+                        ><X size={15} /></button>
+                        <div
+                          className="crafting-queue__progress"
+                          role="progressbar"
+                          aria-label={`${recipe.name}制作进度`}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={Math.round(progress * 100)}
+                        ><i style={{ transform: `scaleX(${progress})` }} /></div>
+                        <small>{index === 0 ? `${Math.max(0, duration - entry.elapsedSeconds).toFixed(1)}s` : `${duration.toFixed(1)}s`}</small>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </aside>
           </div>
         ) : (
           <div className="field-pack__body field-pack__body--research">

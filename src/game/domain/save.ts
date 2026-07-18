@@ -34,10 +34,15 @@ import {
   type SavedProgressionState,
 } from './progression';
 import { sanitizeFailureRecord, type FailureRecord } from './failure';
+import {
+  createDefaultCraftingQueue,
+  sanitizeCraftingQueue,
+  type CraftingQueueState,
+} from './craftingQueue';
 
-export const SAVE_VERSION = 12;
-export const SAVE_KEY = 'driftwake.save.v12';
-export const LEGACY_SAVE_KEYS = ['driftwake.save.v11', 'driftwake.save.v10', 'driftwake.save.v9', 'driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
+export const SAVE_VERSION = 13;
+export const SAVE_KEY = 'driftwake.save.v13';
+export const LEGACY_SAVE_KEYS = ['driftwake.save.v12', 'driftwake.save.v11', 'driftwake.save.v10', 'driftwake.save.v9', 'driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
 
 export type PlayerSurface = 'raft' | 'island' | 'water';
 
@@ -72,6 +77,7 @@ export interface DriftwakeSave {
     playSeconds: number;
     navigation: SavedPlayerNavigation;
     failure: FailureRecord | null;
+    crafting: CraftingQueueState;
   };
   raft: {
     tiles: SavedRaftTile[];
@@ -179,6 +185,9 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       : createDefaultUnderwaterState(island.seed, island.cycle);
   const inventory = normalizeInventory(candidate.player.inventory ?? {});
   const toolDurability = normalizeToolDurability(inventory, candidate.player.toolDurability);
+  const crafting = version >= 13
+    ? sanitizeCraftingQueue(candidate.player.crafting)
+    : createDefaultCraftingQueue();
   const selectedCandidate = candidate.player.selectedTool;
   const selectedTool: ToolId =
     selectedCandidate !== undefined && TOOL_IDS.has(selectedCandidate) && (inventory[selectedCandidate] ?? 0) > 0
@@ -289,6 +298,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
         legacyDockLayout,
       ),
       failure: version >= 12 ? sanitizeFailureRecord(candidate.player.failure) : null,
+      crafting,
     },
     raft: { tiles: stableTiles, devices, navigation, planting, progression },
     world: { island: { ...island, dockVersion: 1 }, underwater, drops },

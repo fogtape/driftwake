@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { itemCount, usedInventorySlots } from '../game/domain/items';
 import { TOOL_MAX_DURABILITY, normalizeToolDurability } from '../game/domain/toolDurability';
+import { createDefaultCraftingQueue } from '../game/domain/craftingQueue';
 import { useGameStore } from './gameStore';
 
 describe('game store item use', () => {
@@ -13,6 +14,7 @@ describe('game store item use', () => {
       toolDurability: normalizeToolDurability(inventory, null),
       inventorySlots: usedInventorySlots(inventory),
       survival: { health: 70, thirst: 20, hunger: 60, oxygen: 100 },
+      crafting: createDefaultCraftingQueue(),
       interaction: null,
       interactionOwner: null,
     });
@@ -82,7 +84,7 @@ describe('game store item use', () => {
     expect(useGameStore.getState().interaction).toBeNull();
   });
 
-  it('selects the upgraded tool when crafting replaces the equipped base tier', () => {
+  it('selects the upgraded tool when queued crafting replaces the equipped base tier', () => {
     const inventory = { spear: 1, metalIngot: 2, rope: 1 } as const;
     useGameStore.setState((state) => ({
       inventory,
@@ -90,7 +92,8 @@ describe('game store item use', () => {
       selectedTool: 'spear',
       progression: { ...state.progression, learned: ['metalSpear'] },
     }));
-    expect(useGameStore.getState().craft('metalSpear').ok).toBe(true);
+    expect(useGameStore.getState().queueCraft('metalSpear', 1).ok).toBe(true);
+    expect(useGameStore.getState().tickCrafting(2.8).completed).toHaveLength(1);
     const state = useGameStore.getState();
     expect(state.selectedTool).toBe('metalSpear');
     expect(itemCount(state.inventory, 'spear')).toBe(0);
@@ -113,7 +116,7 @@ describe('game store item use', () => {
     expect(state.selectedTool).toBe('hammer');
   });
 
-  it('crafts a full-durability replacement hook after loss', () => {
+  it('completes a full-durability replacement hook after loss', () => {
     const inventory = { timber: 2, polymer: 2, rope: 1 } as const;
     useGameStore.setState({
       inventory,
@@ -121,9 +124,68 @@ describe('game store item use', () => {
       selectedTool: 'hook',
       toolDurability: {},
     });
-    expect(useGameStore.getState().craft('hook').ok).toBe(true);
+    expect(useGameStore.getState().queueCraft('hook', 1).ok).toBe(true);
+    expect(useGameStore.getState().tickCrafting(2.4).completed).toHaveLength(1);
     const state = useGameStore.getState();
     expect(itemCount(state.inventory, 'hook')).toBe(1);
     expect(state.toolDurability.hook).toBe(TOOL_MAX_DURABILITY.hook);
+  });
+
+  it('commits queued materials and completes one portable craft at a time', () => {
+    const inventory = { fiber: 4 } as const;
+    useGameStore.setState({
+      inventory,
+      inventorySlots: usedInventorySlots(inventory),
+      crafting: createDefaultCraftingQueue(),
+    });
+    const queued = useGameStore.getState().queueCraft('rope', 2);
+    expect(queued).toMatchObject({ ok: true, queued: 2, inventory: {} });
+    expect(useGameStore.getState().crafting.entries).toHaveLength(2);
+
+    const first = useGameStore.getState().tickCrafting(0.9);
+    expect(first.completed).toHaveLength(1);
+    expect(itemCount(useGameStore.getState().inventory, 'rope')).toBe(1);
+    expect(useGameStore.getState().crafting.entries).toHaveLength(1);
+  });
+
+  it('restores an upgraded tool and its wear when a committed craft is cancelled', () => {
+    const inventory = { hook: 1, spear: 1, metalIngot: 2, rope: 1 } as const;
+    useGameStore.setState((state) => ({
+      inventory,
+      inventorySlots: usedInventorySlots(inventory),
+      selectedTool: 'spear',
+      toolDurability: { hook: 20, spear: 5 },
+      crafting: createDefaultCraftingQueue(),
+      progression: { ...state.progression, learned: ['metalSpear'] },
+    }));
+    const queued = useGameStore.getState().queueCraft('metalSpear', 1);
+    expect(queued.ok).toBe(true);
+    expect(useGameStore.getState()).toMatchObject({ selectedTool: 'hook' });
+    expect(itemCount(useGameStore.getState().inventory, 'spear')).toBe(0);
+
+    const cancelled = useGameStore.getState().cancelCraft(queued.crafting.entries[0].id);
+    expect(cancelled.ok).toBe(true);
+    const state = useGameStore.getState();
+    expect(state.selectedTool).toBe('spear');
+    expect(itemCount(state.inventory, 'spear')).toBe(1);
+    expect(state.toolDurability.spear).toBe(5);
+  });
+
+  it('selects a completed upgrade with fresh durability', () => {
+    const inventory = { hook: 1, spear: 1, metalIngot: 2, rope: 1 } as const;
+    useGameStore.setState((state) => ({
+      inventory,
+      inventorySlots: usedInventorySlots(inventory),
+      selectedTool: 'spear',
+      toolDurability: { hook: 20, spear: 5 },
+      crafting: createDefaultCraftingQueue(),
+      progression: { ...state.progression, learned: ['metalSpear'] },
+    }));
+    expect(useGameStore.getState().queueCraft('metalSpear', 1).ok).toBe(true);
+    expect(useGameStore.getState().tickCrafting(2.8).completed).toHaveLength(1);
+    const state = useGameStore.getState();
+    expect(state.selectedTool).toBe('metalSpear');
+    expect(itemCount(state.inventory, 'metalSpear')).toBe(1);
+    expect(state.toolDurability.metalSpear).toBe(TOOL_MAX_DURABILITY.metalSpear);
   });
 });

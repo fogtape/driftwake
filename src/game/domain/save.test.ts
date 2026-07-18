@@ -37,7 +37,7 @@ describe('save schema', () => {
   });
 
   it('rejects unsupported versions and provides a stable starting raft', () => {
-    expect(sanitizeSave({ version: 13 })).toBeNull();
+    expect(sanitizeSave({ version: 14 })).toBeNull();
     expect(createDefaultRaftTiles()).toHaveLength(9);
   });
 
@@ -63,8 +63,8 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v12');
-    expect(save?.version).toBe(12);
+    expect(SAVE_KEY).toBe('driftwake.save.v13');
+    expect(save?.version).toBe(13);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
     expect(save?.world.island.phase).toBe('approaching');
@@ -393,7 +393,7 @@ describe('save schema', () => {
         },
       },
     });
-    expect(save?.version).toBe(12);
+    expect(save?.version).toBe(13);
     expect(save?.raft.navigation).toMatchObject({
       worldX: 123.5,
       worldZ: -88.25,
@@ -454,6 +454,56 @@ describe('save schema', () => {
       dropped: { timber: 2, polymer: 1 },
       occurredAt: 43,
       dropPending: true,
+    });
+    expect(save?.player.crafting).toEqual({ entries: [], nextSerial: 1 });
+  });
+
+  it('restores a bounded v13 crafting queue without refunding committed materials', () => {
+    const save = sanitizeSave({
+      version: 13,
+      player: {
+        inventory: { hook: 1, timber: 3 },
+        survival: {},
+        selectedTool: 'hook',
+        playSeconds: 52,
+        crafting: {
+          entries: [
+            { id: 'rope-job', recipeId: 'rope', elapsedSeconds: 0.45 },
+            {
+              id: 'spear-upgrade',
+              recipeId: 'metalSpear',
+              elapsedSeconds: 99,
+              consumedToolDurability: 6,
+              selectOnComplete: true,
+            },
+            { id: 'invalid', recipeId: 'madeUp', elapsedSeconds: 1 },
+          ],
+          nextSerial: 9,
+        },
+      },
+      raft: { tiles: [{ x: 0, z: 0, health: 100 }], devices: [] },
+    });
+    expect(save?.player.inventory).toEqual({ hook: 1, timber: 3 });
+    expect(save?.player.crafting).toEqual({
+      entries: [
+        {
+          id: 'rope-job',
+          recipeId: 'rope',
+          elapsedSeconds: 0.45,
+          consumedTool: null,
+          consumedToolDurability: null,
+          selectOnComplete: false,
+        },
+        {
+          id: 'spear-upgrade',
+          recipeId: 'metalSpear',
+          elapsedSeconds: 2.8,
+          consumedTool: 'spear',
+          consumedToolDurability: 6,
+          selectOnComplete: true,
+        },
+      ],
+      nextSerial: 9,
     });
   });
 });

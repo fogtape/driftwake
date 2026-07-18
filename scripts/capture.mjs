@@ -1004,12 +1004,121 @@ async function captureCrafting() {
   await enterGame(page);
   await page.waitForTimeout(500);
   await page.keyboard.press('KeyC');
-  await page.getByRole('dialog', { name: '野外背包' }).waitFor();
-  await page.screenshot({ path: new URL('crafting-desktop.png', outputDir).pathname });
-  const advancedRecipe = page.locator('.recipe-row').filter({ hasText: '潮镜五联净水器' });
-  await advancedRecipe.scrollIntoViewIfNeeded();
-  await advancedRecipe.waitFor({ state: 'visible' });
-  await page.screenshot({ path: new URL('crafting-advanced-desktop.png', outputDir).pathname });
+  const dialog = page.getByRole('dialog', { name: '野外背包' });
+  await dialog.waitFor();
+  const ropeRecipe = dialog.locator('.recipe-row').filter({ hasText: '编织绳' });
+  await ropeRecipe.getByRole('button', { name: '增加编织绳制作数量' }).click({ force: true });
+  await ropeRecipe.getByRole('button', { name: '增加编织绳制作数量' }).click({ force: true });
+  await ropeRecipe.getByRole('button', { name: '将3个编织绳加入制作队列' }).click({ force: true });
+  await page.waitForFunction(() => {
+    const mount = document.querySelector('.game-mount');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v13') ?? 'null');
+    return mount?.dataset.craftingQueueLength === '3'
+      && saved?.version === 13
+      && saved?.player?.inventory?.fiber === 8
+      && saved?.player?.crafting?.entries?.length === 3;
+  });
+  const cancelButtons = dialog.getByRole('button', { name: '取消编织绳并返还材料' });
+  await cancelButtons.nth(2).click({ force: true });
+  await page.waitForFunction(() => {
+    const mount = document.querySelector('.game-mount');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v13') ?? 'null');
+    return mount?.dataset.craftingQueueLength === '2'
+      && saved?.player?.inventory?.fiber === 10
+      && saved?.player?.crafting?.entries?.length === 2;
+  });
+  const queuedState = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v13') ?? 'null');
+    const mount = document.querySelector('.game-mount');
+    const dialog = document.querySelector('.field-pack');
+    const catalog = document.querySelector('.crafting-catalog');
+    const queue = document.querySelector('.crafting-queue');
+    const dialogRect = dialog?.getBoundingClientRect();
+    const catalogRect = catalog?.getBoundingClientRect();
+    const queueRect = queue?.getBoundingClientRect();
+    return {
+      queueLength: Number(mount?.dataset.craftingQueueLength),
+      active: mount?.dataset.craftingActive,
+      fiber: saved?.player?.inventory?.fiber,
+      savedQueueLength: saved?.player?.crafting?.entries?.length,
+      queueText: document.querySelector('.crafting-queue')?.textContent?.replace(/\s+/g, ' ').trim(),
+      layout: {
+        viewport: { width: innerWidth, height: innerHeight },
+        dialog: dialogRect ? { left: dialogRect.left, top: dialogRect.top, right: dialogRect.right, bottom: dialogRect.bottom } : null,
+        catalog: catalogRect ? { left: catalogRect.left, top: catalogRect.top, right: catalogRect.right, bottom: catalogRect.bottom } : null,
+        queue: queueRect ? { left: queueRect.left, top: queueRect.top, right: queueRect.right, bottom: queueRect.bottom } : null,
+        recipeOverflow: [...document.querySelectorAll('.recipe-row')].some((row) => row.scrollWidth > row.clientWidth + 2),
+        queueOverflow: queue ? queue.scrollWidth > queue.clientWidth + 2 : true,
+      },
+    };
+  });
+  const { layout } = queuedState;
+  const panelsSeparated = layout.viewport.width > 640
+    ? layout.catalog && layout.queue && layout.queue.left >= layout.catalog.right - 1
+    : layout.catalog && layout.queue && layout.catalog.top >= layout.queue.bottom - 1;
+  if (
+    !layout.dialog
+    || layout.dialog.left < 0
+    || layout.dialog.top < 0
+    || layout.dialog.right > layout.viewport.width
+    || layout.dialog.bottom > layout.viewport.height
+    || !panelsSeparated
+    || layout.recipeOverflow
+    || layout.queueOverflow
+  ) {
+    throw new Error(`Crafting layout gate failed: ${JSON.stringify(layout)}`);
+  }
+  console.log(`Crafting queued/cancelled state: ${JSON.stringify(queuedState)}`);
+  if (process.env.CAPTURE_FAST !== '1') {
+    await captureCompositedPage(page, new URL('crafting-desktop.png', outputDir).pathname);
+    const advancedRecipe = page.locator('.recipe-row').filter({ hasText: '潮镜五联净水器' });
+    await advancedRecipe.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+    await page.waitForTimeout(300);
+    await captureCompositedPage(page, new URL('crafting-advanced-desktop.png', outputDir).pathname);
+  }
+  await dialog.getByRole('button', { name: '取消编织绳并返还材料' }).last().click({ force: true });
+  await page.waitForFunction(() => {
+    const mount = document.querySelector('.game-mount');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v13') ?? 'null');
+    return mount?.dataset.craftingQueueLength === '1'
+      && saved?.player?.inventory?.fiber === 12
+      && saved?.player?.crafting?.entries?.length === 1;
+  });
+  await dialog.getByRole('button', { name: '关闭背包' }).click({ force: true });
+  const resume = page.getByRole('button', { name: '继续漂流', exact: true });
+  await resume.waitFor({ timeout: 10_000 });
+  await resume.click({ force: true });
+  await waitForRuntime(page, () => (
+    document.pointerLockElement === document.querySelector('canvas')
+    && document.querySelector('.game-mount')?.dataset.simulationActive === 'true'
+  ), 10_000);
+  await waitForRuntime(page, () => (
+    document.querySelector('.game-mount')?.dataset.craftingQueueLength === '0'
+    && Number(document.querySelector('.game-mount')?.dataset.craftingCompletedCount) >= 1
+  ), 60_000);
+  const completedState = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v13') ?? 'null');
+    const data = document.querySelector('.game-mount')?.dataset;
+    return {
+      queueLength: Number(data?.craftingQueueLength),
+      completed: Number(data?.craftingCompletedCount),
+      blocked: data?.craftingBlocked,
+      fiber: saved?.player?.inventory?.fiber,
+      rope: saved?.player?.inventory?.rope,
+      savedQueueLength: saved?.player?.crafting?.entries?.length,
+    };
+  });
+  if (
+    completedState.queueLength !== 0
+    || completedState.completed < 1
+    || completedState.blocked !== 'none'
+    || completedState.fiber !== 12
+    || completedState.rope !== 6
+    || completedState.savedQueueLength !== 0
+  ) {
+    throw new Error(`Crafting completion/save gate failed: ${JSON.stringify(completedState)}`);
+  }
+  console.log(`Crafting completion/save gate: ${JSON.stringify(completedState)}`);
   await context.close();
 }
 
@@ -2016,8 +2125,8 @@ async function captureSalvage() {
     await page.screenshot({ path: new URL('salvage-pickup-diagnostic.png', outputDir).pathname });
     throw new Error(`Near-pickup salvage prompt missing: ${JSON.stringify(diagnostic)}`);
   }
-  await inspectCanvasPixels(page, 'salvage-pickup');
   if (process.env.CAPTURE_FAST !== '1') {
+    await inspectCanvasPixels(page, 'salvage-pickup');
     await captureCompositedPage(page, new URL('salvage-pickup-desktop.png', outputDir).pathname);
   }
   await page.keyboard.press('KeyE');
@@ -2044,12 +2153,27 @@ async function captureSalvage() {
   if (brokenOwnership.heldVisible) throw new Error('Broken hook remained visible in the player hand');
 
   await page.keyboard.press('KeyC');
-  await page.getByRole('dialog', { name: '野外背包' }).waitFor();
-  await page.getByRole('button', { name: '制作替代打捞钩' }).click();
+  const craftingDialog = page.getByRole('dialog', { name: '野外背包' });
+  await craftingDialog.waitFor();
+  await craftingDialog.getByRole('button', { name: '将1个替代打捞钩加入制作队列' }).click({ force: true });
   await page.waitForFunction(
-    () => document.querySelector('.loot-notice')?.textContent?.includes('替代打捞钩 已制作'),
+    () => document.querySelector('.game-mount')?.dataset.craftingQueueLength === '1',
     null,
     { timeout: 5_000 },
+  );
+  await craftingDialog.getByRole('button', { name: '关闭背包' }).click({ force: true });
+  await page.getByRole('button', { name: '继续漂流' }).click({ force: true });
+  await waitForRuntime(
+    page,
+    () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return data?.craftingQueueLength === '0'
+        && Number(data.craftingCompletedCount) >= 1
+        && data.hookState === 'idle'
+        && data.hookHeldVisible === 'true'
+        && data.hookProjectileVisible === 'false';
+    },
+    90_000,
   );
   const repairedTitle = await page.getByRole('button', { name: /打捞钩，耐久 48/ }).getAttribute('title');
   if (repairedTitle !== '打捞钩 · 耐久 48/48') {
@@ -2059,19 +2183,9 @@ async function captureSalvage() {
   if (recraftedOwnership.state === 'idle' && !recraftedOwnership.heldVisible) {
     throw new Error(`Recrafted idle hook was not visible: ${JSON.stringify(recraftedOwnership)}`);
   }
-  await page.getByRole('button', { name: '关闭背包' }).click();
-  await page.getByRole('button', { name: '继续漂流' }).click();
-  await waitForRuntime(
-    page,
-    () => {
-      const data = document.querySelector('.game-mount')?.dataset;
-      return data?.hookState === 'idle' && data.hookHeldVisible === 'true' && data.hookProjectileVisible === 'false';
-    },
-    8_000,
-  );
   await assertHookVisualOwnership(page, 'salvage-recovery', 'held');
-  await inspectCanvasPixels(page, 'salvage-recovery');
   if (process.env.CAPTURE_FAST !== '1') {
+    await inspectCanvasPixels(page, 'salvage-recovery');
     await captureCompositedPage(page, new URL('salvage-recovery-desktop.png', outputDir).pathname);
   }
   await context.close();
@@ -2089,7 +2203,7 @@ async function captureFailureRecovery() {
   const failed = await page.evaluate(() => {
     const mount = document.querySelector('.game-mount');
     const content = document.querySelector('.failure-screen__content')?.getBoundingClientRect();
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v12') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v13') ?? 'null');
     return {
       pointerLocked: Boolean(document.pointerLockElement),
       simulationActive: mount?.dataset.simulationActive,
@@ -2159,13 +2273,13 @@ async function captureFailureRecovery() {
   try {
     await page.locator('.failure-screen').waitFor({ state: 'detached', timeout: 8_000 });
     await page.waitForFunction(() => {
-      const saved = JSON.parse(localStorage.getItem('driftwake.save.v12') ?? 'null');
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v13') ?? 'null');
       return saved?.player?.failure === null && saved?.player?.navigation?.surface === 'raft';
     }, null, { timeout: 8_000 });
   } catch (error) {
     const diagnostic = await page.evaluate(() => {
       const mount = document.querySelector('.game-mount');
-      const saved = JSON.parse(localStorage.getItem('driftwake.save.v12') ?? 'null');
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v13') ?? 'null');
       return {
         contextHealthy: mount?.dataset.contextHealthy,
         simulationActive: mount?.dataset.simulationActive,
@@ -2181,7 +2295,7 @@ async function captureFailureRecovery() {
   }
   const recovered = await page.evaluate(() => {
     const mount = document.querySelector('.game-mount');
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v12') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v13') ?? 'null');
     return {
       failureCause: mount?.dataset.failureCause,
       worldDropCount: mount?.dataset.worldDropCount,

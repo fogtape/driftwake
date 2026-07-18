@@ -47,6 +47,7 @@ export function App() {
   const inventorySlots = useGameStore((state) => state.inventorySlots);
   const survival = useGameStore((state) => state.survival);
   const failure = useGameStore((state) => state.failure);
+  const crafting = useGameStore((state) => state.crafting);
   const player = useGameStore((state) => state.player);
   const fishing = useGameStore((state) => state.fishing);
   const shark = useGameStore((state) => state.shark);
@@ -203,14 +204,27 @@ export function App() {
     useGameStore.getState().setOverlayPanel(panel);
     gameRef.current?.playUi();
   };
-  const craft = (recipeId: RecipeId) => {
-    const result = useGameStore.getState().craft(recipeId);
-    gameRef.current?.playUi(result.ok);
-    if (result.ok) showTransientNotice(`${RECIPES[recipeId].name} 已制作`);
-    else if (result.reason === 'inventory-full') showTransientNotice('背包没有空位');
-    else if (result.reason === 'already-owned') showTransientNotice('已经持有该工具');
+  const queueCraft = (recipeId: RecipeId, quantity: number) => {
+    const result = useGameStore.getState().queueCraft(recipeId, quantity);
+    gameRef.current?.notifyCraftQueued(result.queued, result.ok);
+    if (result.reason === 'queued') showTransientNotice(`${RECIPES[recipeId].name} ×${result.queued} 已加入队列`);
+    else if (result.reason === 'partial') showTransientNotice(`已备料 ${result.queued} 项，材料或队列容量不足`);
+    else if (result.reason === 'queue-full') showTransientNotice('制作队列已满');
+    else if (result.reason === 'already-owned') showTransientNotice('已持有或正在制作该工具');
     else if (result.reason === 'locked') showTransientNotice('需要先在研究台学习配方');
     else showTransientNotice('材料不足');
+    return result;
+  };
+  const cancelCraft = (entryId: string) => {
+    const result = useGameStore.getState().cancelCraft(entryId);
+    gameRef.current?.notifyCraftCancelled(result.ok);
+    if (result.ok && result.cancelled) {
+      showTransientNotice(`${RECIPES[result.cancelled.recipeId].name} 已取消，材料已返还`);
+    } else if (result.reason === 'inventory-full') {
+      showTransientNotice('背包没有空间完整返还材料');
+    } else if (result.reason === 'tool-conflict') {
+      showTransientNotice('同类工具占位，暂时无法返还升级材料');
+    }
     return result;
   };
   const useItem = (itemId: ItemId) => {
@@ -312,6 +326,7 @@ export function App() {
       <FieldPackPanel
         panel={overlayPanel}
         inventory={inventory}
+        crafting={crafting}
         toolDurability={toolDurability}
         inventorySlots={inventorySlots}
         raft={raft}
@@ -322,7 +337,8 @@ export function App() {
           useGameStore.getState().setOverlayPanel(panel);
           gameRef.current?.playUi();
         }}
-        onCraft={craft}
+        onQueueCraft={queueCraft}
+        onCancelCraft={cancelCraft}
         onUse={useItem}
         onPlace={placeDevice}
         onResearch={researchSample}

@@ -16,7 +16,17 @@ import {
   type SalvageKind,
   type ToolId,
 } from '../game/domain/items';
-import { RECIPES, craftRecipe, type CraftResult, type RecipeId } from '../game/domain/recipes';
+import { RECIPES, type RecipeId } from '../game/domain/recipes';
+import {
+  advanceCraftingQueue,
+  cancelCraftingEntry,
+  createDefaultCraftingQueue,
+  queueCraftItems,
+  type AdvanceCraftingResult,
+  type CancelCraftResult,
+  type CraftingQueueState,
+  type QueueCraftResult,
+} from '../game/domain/craftingQueue';
 import { INITIAL_SURVIVAL, advanceSurvival, consumeItem, type SurvivalState } from '../game/domain/survival';
 import {
   RECOVERY_SURVIVAL,
@@ -193,6 +203,7 @@ export interface PlayerSaveSnapshot {
   selectedTool: ToolId;
   playSeconds: number;
   failure: FailureRecord | null;
+  crafting: CraftingQueueState;
 }
 
 interface GameState {
@@ -216,6 +227,7 @@ interface GameState {
   inventorySlots: number;
   survival: SurvivalState;
   failure: FailureRecord | null;
+  crafting: CraftingQueueState;
   player: PlayerFeedback;
   fishing: FishingFeedback;
   shark: SharkFeedback;
@@ -254,7 +266,9 @@ interface GameState {
   receiveItemBundle: (bundle: ItemBundle) => InventoryMutation;
   spendItems: (bundle: ItemBundle) => boolean;
   damageTool: (tool: ToolId, amount?: number) => { remaining: number; broken: boolean };
-  craft: (recipeId: RecipeId) => CraftResult;
+  queueCraft: (recipeId: RecipeId, quantity: number) => QueueCraftResult;
+  cancelCraft: (entryId: string) => CancelCraftResult;
+  tickCrafting: (seconds: number) => AdvanceCraftingResult;
   useItem: (itemId: ItemId) => boolean;
   tickSurvival: (seconds: number, submerged?: boolean) => void;
   damagePlayer: (amount: number, cause?: FailureCause) => void;
@@ -440,6 +454,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   inventorySlots: usedInventorySlots(STARTING_INVENTORY),
   survival: { ...INITIAL_SURVIVAL },
   failure: null,
+  crafting: createDefaultCraftingQueue(),
   player: defaultPlayer(),
   fishing: defaultFishing(),
   shark: defaultShark(),
@@ -549,23 +564,88 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
     return { remaining: 0, broken: true };
   },
-  craft: (recipeId) => {
+  queueCraft: (recipeId, quantity) => {
     const state = get();
-    const result = craftRecipe(state.inventory, recipeId, state.progression.learned);
-    if (result.ok) {
-      const selectedTool =
-        recipeId === 'metalSpear' && state.selectedTool === 'spear'
-          ? 'metalSpear'
-          : recipeId === 'metalAxe' && state.selectedTool === 'axe'
-            ? 'metalAxe'
-            : state.selectedTool;
-      const outputId = Object.keys(RECIPES[recipeId].output)[0] as ItemId;
-      const normalizedDurability = normalizeToolDurability(result.inventory, state.toolDurability);
-      const toolDurability = ITEM_DEFINITIONS[outputId].category === 'tool'
-        ? freshToolDurability(normalizedDurability, outputId as ToolId)
-        : normalizedDurability;
-      set({ inventory: result.inventory, inventorySlots: usedInventorySlots(result.inventory), selectedTool, toolDurability });
+    const result = queueCraftItems(state.inventory, state.crafting, recipeId, quantity, {
+      learned: state.progression.learned,
+      selectedTool: state.selectedTool,
+      toolDurability: state.toolDurability,
+    });
+    if (!result.ok) return result;
+    const selectedTool = itemCount(result.inventory, state.selectedTool) > 0
+      ? state.selectedTool
+      : preferredToolOrder(result.inventory).find((tool) => itemCount(result.inventory, tool) > 0) ?? 'hook';
+    set({
+      inventory: result.inventory,
+      inventorySlots: usedInventorySlots(result.inventory),
+      crafting: result.crafting,
+      selectedTool,
+      toolDurability: normalizeToolDurability(result.inventory, state.toolDurability),
+    });
+    return result;
+  },
+  cancelCraft: (entryId) => {
+    const state = get();
+    const result = cancelCraftingEntry(state.inventory, state.crafting, entryId, INVENTORY_SLOT_CAPACITY);
+    if (!result.ok || !result.cancelled) return result;
+    let toolDurability = normalizeToolDurability(result.inventory, state.toolDurability);
+    if (result.cancelled.consumedTool && result.cancelled.consumedToolDurability !== null) {
+      toolDurability = {
+        ...toolDurability,
+        [result.cancelled.consumedTool]: result.cancelled.consumedToolDurability,
+      };
     }
+    const selectedTool = result.cancelled.selectOnComplete && result.cancelled.consumedTool
+      ? result.cancelled.consumedTool
+      : itemCount(result.inventory, state.selectedTool) > 0
+        ? state.selectedTool
+        : preferredToolOrder(result.inventory).find((tool) => itemCount(result.inventory, tool) > 0) ?? 'hook';
+    set({
+      inventory: result.inventory,
+      inventorySlots: usedInventorySlots(result.inventory),
+      crafting: result.crafting,
+      selectedTool,
+      toolDurability,
+    });
+    return result;
+  },
+  tickCrafting: (seconds) => {
+    const state = get();
+    if (state.crafting.entries.length === 0) {
+      return {
+        inventory: state.inventory,
+        crafting: state.crafting,
+        completed: [],
+        blockedReason: null,
+      };
+    }
+    const result = advanceCraftingQueue(state.inventory, state.crafting, seconds, INVENTORY_SLOT_CAPACITY);
+    const progressChanged = result.crafting.entries.length !== state.crafting.entries.length
+      || result.crafting.entries.some((entry, index) => {
+        const previous = state.crafting.entries[index];
+        return !previous || previous.id !== entry.id || Math.abs(previous.elapsedSeconds - entry.elapsedSeconds) > 1e-6;
+      });
+    if (!progressChanged && result.completed.length === 0) return result;
+
+    let selectedTool = state.selectedTool;
+    let toolDurability = normalizeToolDurability(result.inventory, state.toolDurability);
+    for (const entry of result.completed) {
+      const outputId = Object.keys(RECIPES[entry.recipeId].output)[0] as ItemId;
+      if (ITEM_DEFINITIONS[outputId].category === 'tool') {
+        toolDurability = freshToolDurability(toolDurability, outputId as ToolId);
+        if (entry.selectOnComplete) selectedTool = outputId as ToolId;
+      }
+    }
+    if (itemCount(result.inventory, selectedTool) <= 0) {
+      selectedTool = preferredToolOrder(result.inventory).find((tool) => itemCount(result.inventory, tool) > 0) ?? 'hook';
+    }
+    set({
+      inventory: result.inventory,
+      inventorySlots: usedInventorySlots(result.inventory),
+      crafting: result.crafting,
+      selectedTool,
+      toolDurability,
+    });
     return result;
   },
   useItem: (itemId) => {
@@ -720,6 +800,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       inventorySlots: usedInventorySlots(snapshot.inventory),
       survival: snapshot.survival,
       failure: snapshot.failure,
+      crafting: snapshot.crafting,
       selectedTool: snapshot.selectedTool,
       playSeconds: snapshot.playSeconds,
       fishing: defaultFishing(),
@@ -742,6 +823,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       selectedTool: state.selectedTool,
       playSeconds: state.playSeconds,
       failure: state.failure,
+      crafting: state.crafting,
     };
   },
 }));
