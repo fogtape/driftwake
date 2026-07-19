@@ -85,6 +85,16 @@ export class SplashSystem {
     this.spawnBurst(position, fibrous ? 0xc4c17c : 0x72c8d4, 16, 0.68, 0.048, 0.24, 1.2);
   }
 
+  spawnSharkDefeat(position: Vector3): void {
+    this.spawnBurst(position, 0xc55350, 24, 0.82, 0.062, 0.24, 1.48);
+    this.spawnBurst(position, 0x8fcfd0, 30, 1.02, 0.055, 0.52, 2.18);
+  }
+
+  spawnSharkHarvest(position: Vector3, completed = false): void {
+    this.spawnBurst(position, 0xb95f5b, completed ? 22 : 14, 0.62, 0.05, 0.16, 0.92);
+    this.spawnBurst(position, 0x789695, completed ? 13 : 8, 0.74, 0.038, 0.22, 1.12);
+  }
+
   spawnCeilingDust(position: Vector3, fibrous = false): void {
     this.spawnBurst(position, fibrous ? 0xb6b27a : 0xc89868, fibrous ? 8 : 10, 0.48, 0.035, -0.42, 0.06);
     this.spawnBurst(position, fibrous ? 0x66623d : 0x684536, 5, 0.36, 0.026, -0.28, 0.02);

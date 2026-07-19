@@ -50,7 +50,7 @@ export function selectSalvageFocus(
 }
 
 function targetLabel(target: SalvageTarget): string {
-  if (target.source === 'drop') return '散落物资';
+  if (target.source === 'drop') return target.model.userData.lootKind === 'shark' ? '深潮鲨战利品' : '散落物资';
   if (target.kind === 'cache') return '盐封补给箱';
   if (target.kind === 'barrel') return '漂流补给桶';
   return ITEM_DEFINITIONS[target.kind].name;

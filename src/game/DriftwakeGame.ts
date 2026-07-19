@@ -37,6 +37,7 @@ import { createDefaultUnderwaterState } from './domain/underwater';
 import { createDefaultNavigationState } from './domain/navigation';
 import { createDefaultPlantingState } from './domain/planting';
 import { createDefaultProgressionState, type ProgressionDeviceType } from './domain/progression';
+import { createDefaultSharkState } from './domain/shark';
 import type { FailureRecord } from './domain/failure';
 import type { CameraMotionMode } from './domain/settings';
 import {
@@ -535,6 +536,7 @@ export class DriftwakeGame {
         this.raft,
         this.structures,
         this.player,
+        this.camera,
         this.materials,
         this.audio,
         this.splashes,
@@ -551,6 +553,16 @@ export class DriftwakeGame {
           this.saveNow();
         },
         this.collectionNets,
+        save?.world.shark ?? createDefaultSharkState(),
+        (loot, position) => {
+          const result = useGameStore.getState().receiveItemBundle(loot);
+          const rejected = Object.values(result.rejected).some((amount) => (amount ?? 0) > 0);
+          const worldDropped = rejected
+            ? Boolean(this.debris?.spawnWorldDrop(result.rejected, position, true))
+            : false;
+          return { ...result, worldDropped };
+        },
+        () => this.saveNow(),
       );
       this.spear = new SpearSystem(
         this.renderer,
@@ -727,7 +739,7 @@ export class DriftwakeGame {
 
   playConsume(itemId: ItemId): void {
     if (itemId === 'emergencyWater' || itemId === 'freshWaterCup') this.audio.playDrink();
-    else this.audio.playEat(itemId === 'rawFish' || itemId === 'cookedFish' || itemId === 'burntFish');
+    else this.audio.playEat(itemId === 'rawFish' || itemId === 'sharkMeat' || itemId === 'cookedFish' || itemId === 'burntFish');
     this.saveNow();
   }
 
@@ -899,7 +911,6 @@ export class DriftwakeGame {
     }
     this.fishing?.update(simulationSeconds, stepSeconds);
     this.spear?.update(simulationSeconds, stepSeconds);
-    this.shark?.update(simulationSeconds, stepSeconds);
     this.structureCollapses?.update(simulationSeconds, stepSeconds);
     const collapseDiagnostics = this.structureCollapses?.getDiagnostics();
     if (collapseDiagnostics) {
@@ -922,6 +933,18 @@ export class DriftwakeGame {
       this.mount.dataset.sharkStructureDamageCount = String(sharkDiagnostics.structureDamageEvents);
       this.mount.dataset.sharkFoundationDamageCount = String(sharkDiagnostics.foundationDamageEvents);
       this.mount.dataset.sharkCollectionNetDamageCount = String(sharkDiagnostics.collectionNetDamageEvents);
+      this.mount.dataset.sharkLifecycle = sharkDiagnostics.lifecycle;
+      this.mount.dataset.sharkCarcassPhase = sharkDiagnostics.carcassPhase;
+      this.mount.dataset.sharkCarcassFocused = String(sharkDiagnostics.carcassFocused);
+      this.mount.dataset.sharkHarvestIndex = String(sharkDiagnostics.harvestIndex);
+      this.mount.dataset.sharkHarvestProgress = sharkDiagnostics.harvestProgress.toFixed(3);
+      this.mount.dataset.sharkHarvestEvents = String(sharkDiagnostics.harvestEvents);
+      this.mount.dataset.sharkCarcassSeconds = sharkDiagnostics.carcassSeconds.toFixed(2);
+      this.mount.dataset.sharkCooldownSeconds = sharkDiagnostics.cooldownSeconds.toFixed(2);
+      this.mount.dataset.sharkHealth = String(Math.round(sharkDiagnostics.health));
+      this.mount.dataset.sharkMode = sharkDiagnostics.mode;
+      this.mount.dataset.sharkWorldPosition = JSON.stringify(sharkDiagnostics.worldPosition);
+      this.mount.dataset.sharkAim = JSON.stringify(this.shark?.getAimDiagnostics());
       this.mount.dataset.raftReinforcedTileCount = String(this.raft?.reinforcedTileCount ?? 0);
     }
     this.devices?.update(simulationSeconds, stepSeconds);
@@ -969,6 +992,7 @@ export class DriftwakeGame {
     }
     this.underwater?.update(simulationSeconds, stepSeconds);
     this.salvage?.update(simulationSeconds);
+    this.shark?.update(simulationSeconds, stepSeconds);
     this.mount.dataset.salvageFocus = this.salvage?.focusedKind ?? 'none';
     this.mount.dataset.worldDropCount = String(this.debris?.activeWorldDropCount ?? 0);
     this.splashes?.update(stepSeconds);
@@ -1333,6 +1357,7 @@ export class DriftwakeGame {
     const axeEquipped = selectedToolAvailable && (state.selectedTool === 'axe' || state.selectedTool === 'metalAxe');
     this.spear?.setEquipped(equipmentVisible && (onRaft || inWater) && !placingDevice && spearEquipped, state.selectedTool === 'metalSpear');
     this.spear?.setInputEnabled(inputEnabled && (onRaft || inWater) && !placingDevice && spearEquipped);
+    this.shark?.setInputEnabled(inputEnabled && (onRaft || inWater) && !placingDevice);
     this.island?.setAxeEquipped(equipmentVisible && onIsland && !placingDevice && axeEquipped, state.selectedTool === 'metalAxe');
     this.island?.setInputEnabled(inputEnabled);
     this.underwater?.setInputEnabled(inputEnabled);
@@ -1397,6 +1422,7 @@ export class DriftwakeGame {
           this.underwater?.getSavedState() ??
           createDefaultUnderwaterState(islandState.seed, islandState.cycle),
         drops: this.debris?.getSavedDrops() ?? [],
+        shark: this.shark?.getSavedState() ?? createDefaultSharkState(),
       },
     };
     useGameStore.getState().setSaveStatus(writeSave(save) ? 'saved' : 'error');

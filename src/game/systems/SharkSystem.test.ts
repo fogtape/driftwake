@@ -1,4 +1,4 @@
-import { MeshBasicMaterial, MeshStandardMaterial, Scene, Vector3 } from 'three';
+import { MeshBasicMaterial, MeshStandardMaterial, PerspectiveCamera, Scene, Vector3 } from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MaterialLibrary } from '../art/Materials';
 import type { PlayerController } from './PlayerController';
@@ -8,6 +8,7 @@ import type { CollectionNetSystem } from './CollectionNetSystem';
 import { RaftSystem } from './RaftSystem';
 import { RaftStructureSystem } from './RaftStructureSystem';
 import { SharkSystem } from './SharkSystem';
+import { useGameStore } from '../../state/gameStore';
 
 function createTestMaterials(): MaterialLibrary {
   const material = () => new MeshStandardMaterial();
@@ -55,6 +56,7 @@ function createTestMaterials(): MaterialLibrary {
 
 describe('SharkSystem structure attacks', () => {
   beforeEach(() => {
+    useGameStore.getState().setInteraction(null);
     vi.stubGlobal('window', {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
@@ -108,6 +110,7 @@ describe('SharkSystem structure attacks', () => {
       raft,
       structures,
       player,
+      new PerspectiveCamera(),
       materials,
       audio,
       splashes,
@@ -190,6 +193,7 @@ describe('SharkSystem structure attacks', () => {
       raft,
       structures,
       player,
+      new PerspectiveCamera(),
       materials,
       audio,
       splashes,
@@ -214,6 +218,208 @@ describe('SharkSystem structure attacks', () => {
     });
     expect(onMutation).toHaveBeenCalledTimes(2);
     expect(raft.getTile({ x: 1, z: 1 })?.health).toBe(100);
+    shark.dispose();
+    structures.dispose();
+  });
+
+  it('holds to harvest four deterministic carcass stages and never advances an unsettled rejection', () => {
+    const materials = createTestMaterials();
+    const scene = new Scene();
+    const raft = new RaftSystem(materials, [{ x: 0, z: 0, health: 100 }]);
+    const structures = new RaftStructureSystem(raft, materials, []);
+    const player = {
+      getSurface: () => 'raft',
+      getWorldFootPosition: (target: Vector3) => target.set(0, 0, 0),
+      applyWaterImpulse: vi.fn(),
+    } as unknown as PlayerController;
+    const camera = new PerspectiveCamera();
+    camera.position.set(0, 1.35, 0);
+    camera.lookAt(0, -0.2, -2.2);
+    camera.updateMatrixWorld(true);
+    const audio = {
+      playSharkCarcassSurface: vi.fn(),
+      playSharkHarvest: vi.fn(),
+      playSharkCarcassSink: vi.fn(),
+      playDenied: vi.fn(),
+    } as unknown as AudioSystem;
+    const splashes = {
+      spawn: vi.fn(),
+      spawnSharkHarvest: vi.fn(),
+    } as unknown as SplashSystem;
+    const onHarvest = vi.fn()
+      .mockImplementationOnce((loot) => ({
+        inventory: {},
+        accepted: {},
+        rejected: { ...loot },
+        worldDropped: false,
+      }))
+      .mockImplementation((loot) => {
+        useGameStore.getState().setInteraction('附近漂浮包', 'salvage');
+        return {
+          inventory: { ...loot },
+          accepted: { ...loot },
+          rejected: {},
+          worldDropped: false,
+        };
+      });
+    const onStateChange = vi.fn();
+    const shark = new SharkSystem(
+      scene,
+      raft,
+      structures,
+      player,
+      camera,
+      materials,
+      audio,
+      splashes,
+      vi.fn(),
+      vi.fn(),
+      null,
+      {
+        lifecycle: 'carcass',
+        health: 0,
+        x: 0,
+        z: -2.2,
+        harvestIndex: 0,
+        remainingSeconds: 30,
+      },
+      onHarvest,
+      onStateChange,
+    );
+    shark.setInputEnabled(true);
+    shark.update(0, 1 / 60);
+    expect(shark.getDiagnostics()).toMatchObject({
+      lifecycle: 'carcass',
+      carcassPhase: 'available',
+      carcassFocused: true,
+      harvestIndex: 0,
+    });
+
+    const pressHarvest = () => (shark as unknown as { onKeyDown: (event: KeyboardEvent) => void }).onKeyDown({
+      code: 'KeyE',
+      repeat: false,
+      preventDefault: vi.fn(),
+    } as unknown as KeyboardEvent);
+    pressHarvest();
+    for (let tick = 0; tick < 60; tick += 1) shark.update((tick + 1) / 60, 1 / 60);
+    expect(onHarvest).toHaveBeenCalledTimes(1);
+    expect(shark.getDiagnostics().harvestIndex).toBe(0);
+    expect(vi.mocked(audio.playDenied)).toHaveBeenCalledTimes(1);
+
+    pressHarvest();
+    camera.position.x = 1.7;
+    camera.updateMatrixWorld(true);
+    for (let tick = 0; tick < 235; tick += 1) shark.update((tick + 61) / 60, 1 / 60);
+    expect(onHarvest).toHaveBeenCalledTimes(5);
+    expect(onHarvest.mock.calls.slice(1).map(([loot]) => loot)).toEqual([
+      { sharkMeat: 1 },
+      { sharkMeat: 1 },
+      { sharkMeat: 1, sharkHide: 1 },
+      { sharkTooth: 2 },
+    ]);
+    expect(shark.getDiagnostics()).toMatchObject({
+      lifecycle: 'cooldown',
+      carcassPhase: 'sinking',
+      harvestIndex: 4,
+      harvestEvents: 4,
+      carcassFocused: false,
+    });
+    expect(shark.getSavedState()).toMatchObject({ lifecycle: 'cooldown', health: 0 });
+    expect(vi.mocked(audio.playSharkHarvest)).toHaveBeenCalledTimes(4);
+    expect(onStateChange).toHaveBeenCalledTimes(4);
+    shark.dispose();
+    structures.dispose();
+  });
+
+  it('keeps a settled carcass reachable after a maximum-range strike and replaces the combat prompt', () => {
+    const materials = createTestMaterials();
+    const scene = new Scene();
+    const raft = new RaftSystem(materials, [{ x: 0, z: 0, health: 100 }]);
+    const structures = new RaftStructureSystem(raft, materials, []);
+    const player = {
+      getSurface: () => 'raft',
+      getWorldFootPosition: (target: Vector3) => target.set(0, 0, 0),
+      applyWaterImpulse: vi.fn(),
+    } as unknown as PlayerController;
+    const camera = new PerspectiveCamera();
+    camera.position.set(0, 1.35, 0);
+    camera.lookAt(0, -0.24, -6);
+    camera.updateMatrixWorld(true);
+    useGameStore.getState().setInteraction('鲨鱼进入刺击距离', 'shark');
+    const shark = new SharkSystem(
+      scene,
+      raft,
+      structures,
+      player,
+      camera,
+      materials,
+      {} as AudioSystem,
+      {} as SplashSystem,
+      vi.fn(),
+      vi.fn(),
+      null,
+      {
+        lifecycle: 'carcass',
+        health: 0,
+        x: 0,
+        z: -6,
+        harvestIndex: 0,
+        remainingSeconds: 30,
+      },
+    );
+    shark.setInputEnabled(true);
+
+    shark.update(0, 1 / 60);
+
+    expect(shark.getDiagnostics()).toMatchObject({
+      lifecycle: 'carcass',
+      carcassPhase: 'available',
+      carcassFocused: true,
+    });
+    expect(useGameStore.getState()).toMatchObject({
+      interactionOwner: 'shark',
+    });
+    expect(useGameStore.getState().interaction).toContain('按住 E 割取');
+    shark.dispose();
+    structures.dispose();
+  });
+
+  it('restores a short cooldown and returns a healthy distant shark', () => {
+    const materials = createTestMaterials();
+    const scene = new Scene();
+    const raft = new RaftSystem(materials, [{ x: 0, z: 0, health: 100 }]);
+    const structures = new RaftStructureSystem(raft, materials, []);
+    const player = {
+      getSurface: () => 'raft',
+      getWorldFootPosition: (target: Vector3) => target.set(0, 0, 0),
+      applyWaterImpulse: vi.fn(),
+    } as unknown as PlayerController;
+    const onStateChange = vi.fn();
+    const shark = new SharkSystem(
+      scene,
+      raft,
+      structures,
+      player,
+      new PerspectiveCamera(),
+      materials,
+      {} as AudioSystem,
+      {} as SplashSystem,
+      vi.fn(),
+      vi.fn(),
+      null,
+      { lifecycle: 'cooldown', health: 0, x: 0, z: 0, harvestIndex: 0, remainingSeconds: 0.05 },
+      undefined,
+      onStateChange,
+    );
+    shark.update(0.1, 0.1);
+    expect(shark.getDiagnostics()).toMatchObject({
+      lifecycle: 'active',
+      carcassPhase: 'none',
+      health: 100,
+      mode: 'distant',
+    });
+    expect(shark.model.visible).toBe(true);
+    expect(onStateChange).toHaveBeenCalledTimes(1);
     shark.dispose();
     structures.dispose();
   });

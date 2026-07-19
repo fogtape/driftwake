@@ -110,6 +110,7 @@ const CONSUMABLES = new Set<ItemId>([
   'ration',
   'palmFruit',
   'rawFish',
+  'sharkMeat',
   'cookedFish',
   'burntFish',
 ]);

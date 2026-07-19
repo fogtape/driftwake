@@ -64,7 +64,7 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v17');
+    expect(SAVE_KEY).toBe('driftwake.save.v18');
     expect(save?.version).toBe(SAVE_VERSION);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
@@ -102,6 +102,39 @@ describe('save schema', () => {
     });
     expect(legacy?.raft.tiles[0]?.reinforced).toBe(false);
     expect(current?.raft.tiles[0]?.reinforced).toBe(true);
+  });
+
+  it('migrates v17 to a healthy shark and sanitizes the current carcass window', () => {
+    const legacy = sanitizeSave({
+      version: 17,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 12 },
+      raft: { tiles: [{ x: 0, z: 0, health: 100 }] },
+      world: { shark: { lifecycle: 'carcass', health: 0, harvestIndex: 2, remainingSeconds: 20 } },
+    });
+    const current = sanitizeSave({
+      version: SAVE_VERSION,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 12 },
+      raft: { tiles: [{ x: 0, z: 0, health: 100 }] },
+      world: {
+        shark: {
+          lifecycle: 'carcass',
+          health: 99,
+          x: 4.5,
+          z: -2.25,
+          harvestIndex: 2,
+          remainingSeconds: 20,
+        },
+      },
+    });
+    expect(legacy?.world.shark).toMatchObject({ lifecycle: 'active', health: 100, harvestIndex: 0 });
+    expect(current?.world.shark).toEqual({
+      lifecycle: 'carcass',
+      health: 0,
+      x: 4.5,
+      z: -2.25,
+      harvestIndex: 2,
+      remainingSeconds: 20,
+    });
   });
 
   it('sanitizes v16 collection nets against dynamic raft edges', () => {

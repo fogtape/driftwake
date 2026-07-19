@@ -71,7 +71,7 @@ export type GamePhase = 'title' | 'playing' | 'failed';
 export type QualityPreset = 'low' | 'high';
 export type OverlayPanel = 'pack' | 'crafting' | 'research' | 'storage' | null;
 export type FishingPhase = 'idle' | 'casting' | 'waiting' | 'nibble' | 'hooked' | 'caught' | 'lost';
-export type SharkMode = 'distant' | 'circling' | 'approaching' | 'attacking' | 'retreating';
+export type SharkMode = 'distant' | 'circling' | 'approaching' | 'attacking' | 'retreating' | 'carcass';
 export type PlacementType = DeviceType | NavigationDeviceType | ProgressionDeviceType | 'planter' | 'collectionNet';
 export type InteractionOwner = 'build' | 'collectionNet' | 'device' | 'fishing' | 'island' | 'navigation' | 'planting' | 'progression' | 'salvage' | 'shark' | 'underwater' | 'global';
 
@@ -95,7 +95,11 @@ export interface SharkFeedback {
   threat: number;
   health: number;
   visible: boolean;
-  target: 'raft' | 'structure' | 'collectionNet' | 'player';
+  target: 'raft' | 'structure' | 'collectionNet' | 'player' | 'carcass';
+  harvestProgress: number;
+  harvested: number;
+  harvestTotal: number;
+  carcassSeconds: number;
 }
 
 export interface PlayerFeedback {
@@ -351,7 +355,17 @@ function defaultFishing(): FishingFeedback {
 }
 
 function defaultShark(): SharkFeedback {
-  return { mode: 'distant', threat: 0, health: 100, visible: false, target: 'raft' };
+  return {
+    mode: 'distant',
+    threat: 0,
+    health: 100,
+    visible: false,
+    target: 'raft',
+    harvestProgress: 0,
+    harvested: 0,
+    harvestTotal: 4,
+    carcassSeconds: 0,
+  };
 }
 
 function defaultPlayer(): PlayerFeedback {
@@ -811,7 +825,11 @@ export const useGameStore = create<GameState>((set, get) => ({
         shark.threat === state.shark.threat &&
         shark.health === state.shark.health &&
         shark.visible === state.shark.visible &&
-        shark.target === state.shark.target
+        shark.target === state.shark.target &&
+        shark.harvestProgress === state.shark.harvestProgress &&
+        shark.harvested === state.shark.harvested &&
+        shark.harvestTotal === state.shark.harvestTotal &&
+        shark.carcassSeconds === state.shark.carcassSeconds
         ? state
         : { shark };
     }),

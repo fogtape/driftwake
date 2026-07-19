@@ -421,10 +421,76 @@ export function createSharkModel(materials: MaterialLibrary): Group {
     }
   }
 
+  const harvestMarks: Mesh[] = [];
+  const markDefinitions = [
+    { radius: 0.55, z: -0.48, angle: -0.22 },
+    { radius: 0.58, z: 0.24, angle: 0.16 },
+    { radius: 0.46, z: 0.92, angle: -0.12 },
+  ];
+  for (const [index, definition] of markDefinitions.entries()) {
+    const mark = new Mesh(
+      new TorusGeometry(definition.radius, 0.027, 5, 20, Math.PI * 0.76),
+      materials.sharkMouth,
+    );
+    mark.name = `shark-harvest-mark-${index}`;
+    mark.position.set(0, 0, definition.z);
+    mark.rotation.z = definition.angle;
+    mark.scale.y = 0.78;
+    mark.visible = false;
+    mark.renderOrder = 2;
+    harvestMarks.push(mark);
+    shark.add(mark);
+  }
+
   shark.userData.tailPivot = tailPivot;
   shark.userData.body = body;
+  shark.userData.harvestMarks = harvestMarks;
   shark.scale.setScalar(0.88);
   return shark;
+}
+
+export function createSharkLootDropModel(materials: MaterialLibrary): Group {
+  const bundle = new Group();
+  bundle.name = 'shark-harvest-drop';
+
+  const float = shadowed(new Mesh(new RoundedBoxGeometry(0.98, 0.12, 0.58, 3, 0.06), materials.sealedCanvas));
+  float.name = 'shark-loot-float';
+  float.position.y = -0.07;
+  float.rotation.y = -0.08;
+  bundle.add(float);
+
+  const hide = shadowed(new Mesh(new RoundedBoxGeometry(0.74, 0.1, 0.44, 3, 0.045), materials.sharkSkin));
+  hide.name = 'shark-loot-hide';
+  hide.position.y = 0.035;
+  hide.rotation.y = -0.12;
+  bundle.add(hide);
+
+  const meatGeometry = new RoundedBoxGeometry(0.34, 0.2, 0.25, 3, 0.065);
+  for (let index = 0; index < 3; index += 1) {
+    const meat = shadowed(new Mesh(meatGeometry, materials.sharkMouth));
+    meat.name = `shark-meat-cut-${index}`;
+    meat.position.set(-0.3 + index * 0.3, 0.16 + (index % 2) * 0.035, -0.02 + (index % 2) * 0.12);
+    meat.rotation.set(0.08 * index, -0.18 + index * 0.16, 0.04 * (index - 1));
+    bundle.add(meat);
+  }
+
+  for (const [index, x] of [-0.18, 0.18].entries()) {
+    const tooth = shadowed(new Mesh(new ConeGeometry(0.085, 0.28, 7), materials.sailCloth));
+    tooth.name = `shark-tooth-plate-${index}`;
+    tooth.position.set(x, 0.28, 0.27);
+    tooth.rotation.x = Math.PI * 0.56;
+    bundle.add(tooth);
+  }
+
+  for (const x of [-0.31, 0.31]) {
+    const binding = shadowed(new Mesh(new TorusGeometry(0.28, 0.022, 5, 16), materials.rope));
+    binding.position.x = x;
+    binding.rotation.y = Math.PI / 2;
+    binding.scale.z = 0.72;
+    bundle.add(binding);
+  }
+  bundle.userData.kind = 'sharkLoot';
+  return bundle;
 }
 
 function createPalmLeaf(material: MeshStandardMaterial, scale = 1): Mesh {

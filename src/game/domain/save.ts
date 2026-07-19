@@ -48,10 +48,11 @@ import {
   type SavedRaftStructure,
 } from './raftStructures';
 import { sanitizeCollectionNets, type SavedCollectionNet } from './collectionNets';
+import { createDefaultSharkState, sanitizeSharkState, type SavedSharkState } from './shark';
 
-export const SAVE_VERSION = 17;
-export const SAVE_KEY = 'driftwake.save.v17';
-export const LEGACY_SAVE_KEYS = ['driftwake.save.v16', 'driftwake.save.v15', 'driftwake.save.v14', 'driftwake.save.v13', 'driftwake.save.v12', 'driftwake.save.v11', 'driftwake.save.v10', 'driftwake.save.v9', 'driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
+export const SAVE_VERSION = 18;
+export const SAVE_KEY = 'driftwake.save.v18';
+export const LEGACY_SAVE_KEYS = ['driftwake.save.v17', 'driftwake.save.v16', 'driftwake.save.v15', 'driftwake.save.v14', 'driftwake.save.v13', 'driftwake.save.v12', 'driftwake.save.v11', 'driftwake.save.v10', 'driftwake.save.v9', 'driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
 
 export type PlayerSurface = 'raft' | 'island' | 'water';
 
@@ -102,6 +103,7 @@ export interface DriftwakeSave {
     island: SavedIslandState;
     underwater: SavedUnderwaterState;
     drops: SavedWorldDrop[];
+    shark: SavedSharkState;
   };
 }
 
@@ -186,7 +188,12 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       planting?: SavedPlantingState;
       progression?: SavedProgressionState;
     };
-    world?: { island?: SavedIslandState; underwater?: SavedUnderwaterState; drops?: SavedWorldDrop[] };
+    world?: {
+      island?: SavedIslandState;
+      underwater?: SavedUnderwaterState;
+      drops?: SavedWorldDrop[];
+      shark?: SavedSharkState;
+    };
   };
   const version = candidate.version;
   if (
@@ -320,6 +327,9 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       }))
       .filter((drop) => Object.keys(drop.loot).length > 0)
     : [];
+  const shark = version >= 18
+    ? sanitizeSharkState(candidate.world?.shark)
+    : createDefaultSharkState();
 
   return {
     version: SAVE_VERSION,
@@ -343,7 +353,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       crafting,
     },
     raft: { tiles: stableTiles, structures, collectionNets, devices, navigation, planting, progression },
-    world: { island: { ...island, dockVersion: 1 }, underwater, drops },
+    world: { island: { ...island, dockVersion: 1 }, underwater, drops, shark },
   };
 }
 

@@ -967,6 +967,13 @@ button:focus-visible {
 .shark-warning span { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 600; }
 .shark-warning i { width: 100%; height: 3px; }
 .shark-warning i b { display: block; height: 100%; background: #e26f55; }
+.shark-warning.is-harvest {
+  color: #dff5ef;
+  border-color: rgba(120, 211, 199, 0.44);
+  background: rgba(15, 43, 43, 0.82);
+}
+.shark-warning.is-harvest > svg { color: #8cddd0; }
+.shark-warning.is-harvest i b { background: #78d3c7; }
 
 .crop-warning {
   position: absolute;

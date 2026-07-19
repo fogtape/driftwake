@@ -1,4 +1,13 @@
-import { Group, MathUtils, PerspectiveCamera, Scene, Vector3 } from 'three';
+import {
+  Group,
+  MathUtils,
+  Mesh,
+  MeshBasicMaterial,
+  PerspectiveCamera,
+  Scene,
+  TorusGeometry,
+  Vector3,
+} from 'three';
 import type { MaterialLibrary } from '../art/Materials';
 import { createSharkModel } from '../art/ProceduralModels';
 import { createSeededRandom, randomRange } from '../math/random';
@@ -17,6 +26,25 @@ import type { GridCoordinate, RaftSystem } from './RaftSystem';
 import type { RaftStructureSystem } from './RaftStructureSystem';
 import type { SplashSystem } from './SplashSystem';
 import type { PlayerController } from './PlayerController';
+import { bundleLabel, type InventoryMutation, type ItemBundle } from '../domain/items';
+import {
+  SHARK_CARCASS_WINDOW_SECONDS,
+  SHARK_CARCASS_HARVEST_REACH,
+  SHARK_HARVEST_HOLD_SECONDS,
+  SHARK_HARVEST_STAGES,
+  SHARK_MAX_HEALTH,
+  SHARK_RESPAWN_SECONDS,
+  SHARK_SPEAR_REACH,
+  SHARK_SINK_SECONDS,
+  createDefaultSharkState,
+  sharkHarvestStage,
+  type SavedSharkState,
+  type SharkLifecycle,
+} from '../domain/shark';
+
+const SHARK_CARCASS_FOCUS_RADIUS = 1.38;
+const SHARK_CARCASS_HOLD_REACH = SHARK_CARCASS_HARVEST_REACH + 0.9;
+const SHARK_CARCASS_HOLD_RADIUS = 2.35;
 
 export interface SharkRaftMutation {
   kind: 'foundation' | 'structure' | 'collectionNet';
@@ -35,6 +63,21 @@ export interface SharkDiagnostics {
   structureDamageEvents: number;
   foundationDamageEvents: number;
   collectionNetDamageEvents: number;
+  lifecycle: SharkLifecycle;
+  carcassPhase: 'none' | 'settling' | 'available' | 'sinking' | 'cooldown';
+  carcassFocused: boolean;
+  harvestIndex: number;
+  harvestProgress: number;
+  harvestEvents: number;
+  carcassSeconds: number;
+  cooldownSeconds: number;
+  health: number;
+  mode: SharkMode;
+  worldPosition: { x: number; y: number; z: number };
+}
+
+export interface SharkHarvestSettlement extends InventoryMutation {
+  worldDropped: boolean;
 }
 
 export class SharkSystem {
@@ -50,6 +93,18 @@ export class SharkSystem {
   private readonly playerWorld = new Vector3();
   private readonly pursuitDirection = new Vector3();
   private readonly cascadeWorld = new Vector3();
+  private readonly carcassVector = new Vector3();
+  private readonly cameraWorld = new Vector3();
+  private readonly carcassFocusRing = new Mesh(
+    new TorusGeometry(1.02, 0.035, 7, 42),
+    new MeshBasicMaterial({
+      color: 0x78d3c7,
+      transparent: true,
+      opacity: 0.78,
+      depthWrite: false,
+    }),
+  );
+  private readonly harvestMarks: Mesh[];
   private mode: SharkMode = 'distant';
   private totalTime = 0;
   private phaseTime = 0;
@@ -60,8 +115,18 @@ export class SharkSystem {
   private targetCollectionNetId: string | null = null;
   private biteIndex = 0;
   private hitsDuringAttack = 0;
-  private health = 100;
-  private defeated = false;
+  private health = SHARK_MAX_HEALTH;
+  private lifecycle: SharkLifecycle = 'active';
+  private carcassPhase: SharkDiagnostics['carcassPhase'] = 'none';
+  private carcassRemaining = 0;
+  private cooldownRemaining = 0;
+  private harvestIndex = 0;
+  private harvestProgress = 0;
+  private harvestEvents = 0;
+  private carcassFocused = false;
+  private harvestHeld = false;
+  private inputEnabled = false;
+  private lastCarcassPrompt: string | null = null;
   private targetingPlayer = false;
   private nextPlayerBiteAt = 0;
   private feedbackTimer = 0;
@@ -78,12 +143,21 @@ export class SharkSystem {
     private readonly raft: RaftSystem,
     private readonly structures: RaftStructureSystem,
     private readonly player: PlayerController,
+    private readonly camera: PerspectiveCamera,
     materials: MaterialLibrary,
     private readonly audio: AudioSystem,
     private readonly splashes: SplashSystem,
     private readonly onImpact: (strength: number) => void,
     private readonly onRaftMutation: (mutation: SharkRaftMutation) => void = () => undefined,
     private readonly collectionNets: CollectionNetSystem | null = null,
+    savedState: SavedSharkState = createDefaultSharkState(),
+    private readonly onHarvest: (loot: ItemBundle, position: Vector3) => SharkHarvestSettlement = (loot) => ({
+      inventory: {},
+      accepted: {},
+      rejected: { ...loot },
+      worldDropped: false,
+    }),
+    private readonly onStateChange: () => void = () => undefined,
   ) {
     this.model = createSharkModel(materials);
     this.model.position.set(12, -0.8, 8);
@@ -101,18 +175,34 @@ export class SharkSystem {
       || (exposedWeakNet && exposedWeakNet.health < COLLECTION_NET_MAX_HEALTH * 0.72)
     ) this.nextAttackAt = 6.5;
     this.tailPivot = this.model.userData.tailPivot as Group;
-    this.scene.add(this.model);
+    this.harvestMarks = this.model.userData.harvestMarks as Mesh[];
+    this.carcassFocusRing.name = 'shark-carcass-focus-ring';
+    this.carcassFocusRing.rotation.x = Math.PI / 2;
+    this.carcassFocusRing.visible = false;
+    this.carcassFocusRing.renderOrder = 5;
+    this.restoreState(savedState);
+    this.scene.add(this.model, this.carcassFocusRing);
+    window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keyup', this.onKeyUp);
   }
 
   update(time: number, delta: number): void {
     this.totalTime += delta;
     this.phaseTime += delta;
     this.feedbackTimer -= delta;
+    if (this.lifecycle !== 'active') {
+      this.updateDefeated(time, delta);
+      if (this.feedbackTimer <= 0) {
+        this.feedbackTimer = 0.08;
+        this.publishFeedback();
+      }
+      return;
+    }
     this.tailPivot.rotation.y = Math.sin(time * (this.mode === 'attacking' ? 9.5 : 5.2)) * (this.mode === 'attacking' ? 0.42 : 0.26);
     this.model.rotation.z = Math.sin(time * 1.4) * 0.035;
 
     const playerInWater = this.player.getSurface() === 'water';
-    if (playerInWater && !this.defeated && this.mode !== 'retreating') {
+    if (playerInWater && this.mode !== 'retreating') {
       if (!this.targetingPlayer) this.beginPlayerApproach();
       this.updatePlayerHunt(time, delta);
     } else {
@@ -131,10 +221,11 @@ export class SharkSystem {
   }
 
   canStrike(camera: PerspectiveCamera): boolean {
-    if ((this.mode !== 'approaching' && this.mode !== 'attacking') || this.defeated || !this.model.visible) return false;
-    this.strikeVector.copy(this.model.position).sub(camera.position);
+    if ((this.mode !== 'approaching' && this.mode !== 'attacking') || this.lifecycle !== 'active' || !this.model.visible) return false;
+    camera.getWorldPosition(this.cameraWorld);
+    this.strikeVector.copy(this.model.position).sub(this.cameraWorld);
     const distance = this.strikeVector.length();
-    if (distance > 5.8 || distance < 0.25) return false;
+    if (distance > SHARK_SPEAR_REACH || distance < 0.25) return false;
     this.strikeVector.divideScalar(distance);
     camera.getWorldDirection(this.cameraForward);
     return this.cameraForward.dot(this.strikeVector) > 0.69;
@@ -148,8 +239,7 @@ export class SharkSystem {
     this.splashes.spawnImpact(this.model.position, 0xb74f45, 16);
     this.showNotice(this.health <= 0 ? '深潮鲨失去力气' : '刺击命中');
     if (this.health <= 0) {
-      this.defeated = true;
-      this.beginRetreat();
+      this.beginDefeat();
     } else if (this.hitsDuringAttack >= 2) {
       this.beginRetreat();
     }
@@ -175,12 +265,311 @@ export class SharkSystem {
       structureDamageEvents: this.structureDamageEvents,
       foundationDamageEvents: this.foundationDamageEvents,
       collectionNetDamageEvents: this.collectionNetDamageEvents,
+      lifecycle: this.lifecycle,
+      carcassPhase: this.carcassPhase,
+      carcassFocused: this.carcassFocused,
+      harvestIndex: this.harvestIndex,
+      harvestProgress: this.harvestProgress,
+      harvestEvents: this.harvestEvents,
+      carcassSeconds: this.carcassRemaining,
+      cooldownSeconds: this.cooldownRemaining,
+      health: this.health,
+      mode: this.mode,
+      worldPosition: {
+        x: this.model.position.x,
+        y: this.model.position.y,
+        z: this.model.position.z,
+      },
     };
+  }
+
+  getSavedState(): SavedSharkState {
+    if (this.lifecycle === 'carcass') {
+      return {
+        lifecycle: 'carcass',
+        health: 0,
+        x: Number(this.model.position.x.toFixed(3)),
+        z: Number(this.model.position.z.toFixed(3)),
+        harvestIndex: this.harvestIndex,
+        remainingSeconds: Number(this.carcassRemaining.toFixed(3)),
+      };
+    }
+    if (this.lifecycle === 'cooldown') {
+      return {
+        ...createDefaultSharkState(),
+        lifecycle: 'cooldown',
+        health: 0,
+        remainingSeconds: Number(this.cooldownRemaining.toFixed(3)),
+      };
+    }
+    return { ...createDefaultSharkState(), health: this.health };
+  }
+
+  getAimDiagnostics(): {
+    camera: [number, number, number];
+    forward: [number, number, number];
+    target: [number, number, number];
+  } {
+    this.camera.getWorldPosition(this.cameraWorld);
+    this.camera.getWorldDirection(this.cameraForward);
+    return {
+      camera: [this.cameraWorld.x, this.cameraWorld.y, this.cameraWorld.z],
+      forward: [this.cameraForward.x, this.cameraForward.y, this.cameraForward.z],
+      target: [this.model.position.x, this.model.position.y, this.model.position.z],
+    };
+  }
+
+  setInputEnabled(enabled: boolean): void {
+    this.inputEnabled = enabled;
+    if (enabled) return;
+    this.harvestHeld = false;
+    this.harvestProgress = 0;
+    this.carcassFocused = false;
+    this.carcassFocusRing.visible = false;
+    this.clearCarcassPrompt();
   }
 
   dispose(): void {
     if (this.noticeTimer !== null) window.clearTimeout(this.noticeTimer);
-    this.scene.remove(this.model);
+    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup', this.onKeyUp);
+    this.clearCarcassPrompt();
+    this.scene.remove(this.model, this.carcassFocusRing);
+    this.carcassFocusRing.geometry.dispose();
+    this.carcassFocusRing.material.dispose();
+  }
+
+  private restoreState(savedState: SavedSharkState): void {
+    this.health = savedState.health;
+    if (savedState.lifecycle === 'active') {
+      if (this.health < SHARK_MAX_HEALTH) {
+        this.mode = 'circling';
+        this.nextAttackAt = 0.8;
+      }
+      return;
+    }
+    this.health = 0;
+    this.targetTile = null;
+    this.targetStructureId = null;
+    this.targetCollectionNetId = null;
+    this.targetingPlayer = false;
+    if (savedState.lifecycle === 'carcass') {
+      this.lifecycle = 'carcass';
+      this.carcassPhase = 'available';
+      this.carcassRemaining = savedState.remainingSeconds;
+      this.harvestIndex = savedState.harvestIndex;
+      this.mode = 'carcass';
+      this.model.position.set(savedState.x, 0, savedState.z);
+      this.model.rotation.z = Math.PI * 0.48;
+      this.updateHarvestMarks();
+      return;
+    }
+    this.lifecycle = 'cooldown';
+    this.carcassPhase = 'cooldown';
+    this.cooldownRemaining = savedState.remainingSeconds;
+    this.mode = 'retreating';
+    this.model.visible = false;
+  }
+
+  private beginDefeat(): void {
+    this.lifecycle = 'carcass';
+    this.carcassPhase = 'settling';
+    this.carcassRemaining = SHARK_CARCASS_WINDOW_SECONDS;
+    this.harvestIndex = 0;
+    this.harvestProgress = 0;
+    this.harvestEvents = 0;
+    this.harvestHeld = false;
+    this.targetTile = null;
+    this.targetStructureId = null;
+    this.targetCollectionNetId = null;
+    this.targetingPlayer = false;
+    this.outward.copy(this.model.position).sub(this.raft.group.position);
+    this.outward.y = 0;
+    if (this.outward.lengthSq() < 0.1) this.outward.set(1, 0, 0);
+    this.outward.normalize();
+    this.setMode('retreating');
+    this.audio.playSharkDefeat();
+    this.splashes.spawnSharkDefeat(this.model.position);
+    this.onImpact(0.24);
+    this.clearCarcassPrompt();
+    useGameStore.getState().setInteraction(null, 'shark');
+    this.onStateChange();
+  }
+
+  private updateDefeated(time: number, delta: number): void {
+    this.tailPivot.rotation.y = Math.sin(time * 2.4) * (this.carcassPhase === 'settling' ? 0.1 : 0.035);
+    if (this.carcassPhase === 'settling') {
+      this.model.position.addScaledVector(this.outward, delta * MathUtils.lerp(0.58, 0.08, Math.min(1, this.phaseTime / 1.55)));
+      const surface = sampleWaveHeight(this.model.position.x, this.model.position.z, time);
+      this.model.position.y = surface - 0.5 - Math.sin(Math.min(1, this.phaseTime / 1.55) * Math.PI) * 0.22;
+      this.lookTarget.copy(this.model.position).add(this.outward);
+      this.lookTarget.y = this.model.position.y;
+      this.model.lookAt(this.lookTarget);
+      const settle = MathUtils.smoothstep(this.phaseTime, 0, 1.55);
+      this.model.rotation.z = MathUtils.lerp(0, Math.PI * 0.48, settle);
+      if (this.phaseTime >= 1.55) {
+        this.carcassPhase = 'available';
+        this.setMode('carcass');
+        this.audio.playSharkCarcassSurface();
+        this.splashes.spawn(this.model.position);
+        this.showNotice('深潮鲨浮在水面，战利品会随浪流失');
+        this.onStateChange();
+      }
+      return;
+    }
+    if (this.carcassPhase === 'available') {
+      this.carcassRemaining = Math.max(0, this.carcassRemaining - delta);
+      this.model.position.addScaledVector(this.outward, delta * 0.035);
+      this.model.position.y = sampleWaveHeight(this.model.position.x, this.model.position.z, time) - 0.24;
+      this.lookTarget.copy(this.model.position).add(this.outward);
+      this.lookTarget.y = this.model.position.y;
+      this.model.lookAt(this.lookTarget);
+      this.model.rotation.z = Math.PI * 0.48 + Math.sin(time * 1.15) * 0.045;
+      this.updateCarcassInteraction(time, delta);
+      if (this.carcassPhase === 'available' && this.carcassRemaining <= 0) this.beginCarcassSinking(false);
+      return;
+    }
+    if (this.carcassPhase === 'sinking') {
+      const surface = sampleWaveHeight(this.model.position.x, this.model.position.z, time);
+      this.model.position.addScaledVector(this.outward, delta * 0.025);
+      this.model.position.y = surface - 0.24 - Math.min(4.6, this.phaseTime * 0.92);
+      this.model.rotation.z = Math.PI * 0.48 + this.phaseTime * 0.08;
+      if (this.phaseTime >= SHARK_SINK_SECONDS) {
+        this.carcassPhase = 'cooldown';
+        this.phaseTime = 0;
+        this.model.visible = false;
+        this.onStateChange();
+      }
+      return;
+    }
+    this.cooldownRemaining = Math.max(0, this.cooldownRemaining - delta);
+    if (this.cooldownRemaining > 0) return;
+    this.lifecycle = 'active';
+    this.carcassPhase = 'none';
+    this.health = SHARK_MAX_HEALTH;
+    this.harvestIndex = 0;
+    this.harvestProgress = 0;
+    this.model.visible = true;
+    this.model.rotation.set(0, 0, 0);
+    this.updateHarvestMarks();
+    this.circleAngle += Math.PI * 0.72;
+    this.nextAttackAt = this.totalTime + randomRange(this.random, 52, 75);
+    this.setMode('distant');
+    this.onStateChange();
+  }
+
+  private updateCarcassInteraction(time: number, delta: number): void {
+    if (!this.inputEnabled) {
+      this.cancelCarcassInteraction();
+      return;
+    }
+    this.camera.getWorldPosition(this.cameraWorld);
+    this.carcassVector.copy(this.model.position).sub(this.cameraWorld);
+    const distanceSquared = this.carcassVector.lengthSq();
+    this.camera.getWorldDirection(this.cameraForward);
+    const along = this.carcassVector.dot(this.cameraForward);
+    const perpendicularSquared = Math.max(0, distanceSquared - along * along);
+    const focusAcquired = along > 0.18
+      && distanceSquared <= SHARK_CARCASS_HARVEST_REACH * SHARK_CARCASS_HARVEST_REACH
+      && perpendicularSquared <= SHARK_CARCASS_FOCUS_RADIUS * SHARK_CARCASS_FOCUS_RADIUS;
+    const heldFocusRetained = along > 0.05
+      && distanceSquared <= SHARK_CARCASS_HOLD_REACH * SHARK_CARCASS_HOLD_REACH
+      && perpendicularSquared <= SHARK_CARCASS_HOLD_RADIUS * SHARK_CARCASS_HOLD_RADIUS;
+    this.carcassFocused = this.harvestHeld ? heldFocusRetained : focusAcquired;
+    if (!this.carcassFocused) {
+      this.cancelCarcassInteraction();
+      return;
+    }
+    const stage = sharkHarvestStage(this.harvestIndex);
+    if (!stage) {
+      this.beginCarcassSinking(true);
+      return;
+    }
+    this.carcassFocusRing.visible = true;
+    this.carcassFocusRing.position.copy(this.model.position);
+    this.carcassFocusRing.position.y = sampleWaveHeight(this.model.position.x, this.model.position.z, time) + 0.035;
+    this.carcassFocusRing.scale.setScalar(0.96 + Math.sin(time * 4.2) * 0.055);
+    if (this.harvestHeld) {
+      this.harvestProgress = Math.min(SHARK_HARVEST_HOLD_SECONDS, this.harvestProgress + delta);
+    } else {
+      this.harvestProgress = 0;
+    }
+    const progress = Math.round((this.harvestProgress / SHARK_HARVEST_HOLD_SECONDS) * 100);
+    this.setCarcassPrompt(
+      this.harvestHeld
+        ? `正在割取${stage.label} · ${progress}%`
+        : `按住 E 割取${stage.label} · ${this.harvestIndex + 1}/${SHARK_HARVEST_STAGES.length}`,
+    );
+    if (this.harvestProgress >= SHARK_HARVEST_HOLD_SECONDS) this.completeHarvestStage();
+  }
+
+  private completeHarvestStage(): void {
+    const stage = sharkHarvestStage(this.harvestIndex);
+    if (!stage) return;
+    const settlement = this.onHarvest({ ...stage.loot }, this.model.position.clone());
+    const acceptedLabel = bundleLabel(settlement.accepted);
+    const rejected = Object.values(settlement.rejected).some((amount) => (amount ?? 0) > 0);
+    if (rejected && !settlement.worldDropped) {
+      this.audio.playDenied();
+      this.showNotice('战利品暂时无法系成漂浮包');
+      this.harvestHeld = false;
+      this.harvestProgress = 0;
+      return;
+    }
+    this.harvestIndex += 1;
+    this.harvestEvents += 1;
+    this.harvestProgress = 0;
+    this.audio.playSharkHarvest(this.harvestIndex >= SHARK_HARVEST_STAGES.length, rejected);
+    this.splashes.spawnSharkHarvest(this.model.position, this.harvestIndex >= SHARK_HARVEST_STAGES.length);
+    this.onImpact(0.07);
+    this.updateHarvestMarks();
+    this.showNotice(
+      acceptedLabel
+        ? rejected ? `${acceptedLabel} · 余料已系成漂浮包` : acceptedLabel
+        : `${stage.label}已系成漂浮包`,
+    );
+    if (this.harvestIndex >= SHARK_HARVEST_STAGES.length) this.beginCarcassSinking(true);
+    else this.onStateChange();
+  }
+
+  private beginCarcassSinking(harvested: boolean): void {
+    this.lifecycle = 'cooldown';
+    this.carcassPhase = 'sinking';
+    this.cooldownRemaining = SHARK_RESPAWN_SECONDS;
+    this.harvestHeld = false;
+    this.harvestProgress = 0;
+    this.carcassFocused = false;
+    this.carcassFocusRing.visible = false;
+    this.clearCarcassPrompt();
+    this.setMode('retreating');
+    this.audio.playSharkCarcassSink(harvested);
+    this.showNotice(harvested ? '鲨体已取尽，正在沉入深水' : '鲨体随浪流失，正在沉入深水');
+    this.onStateChange();
+  }
+
+  private updateHarvestMarks(): void {
+    for (let index = 0; index < this.harvestMarks.length; index += 1) {
+      this.harvestMarks[index].visible = this.harvestIndex > index && this.lifecycle !== 'active';
+    }
+  }
+
+  private cancelCarcassInteraction(): void {
+    this.carcassFocused = false;
+    this.harvestHeld = false;
+    this.harvestProgress = 0;
+    this.carcassFocusRing.visible = false;
+    this.clearCarcassPrompt();
+  }
+
+  private setCarcassPrompt(prompt: string): void {
+    this.lastCarcassPrompt = prompt;
+    useGameStore.getState().setInteraction(prompt, 'shark');
+  }
+
+  private clearCarcassPrompt(): void {
+    const store = useGameStore.getState();
+    if (this.lastCarcassPrompt && store.interaction === this.lastCarcassPrompt) store.setInteraction(null, 'shark');
+    this.lastCarcassPrompt = null;
   }
 
   private updateDistant(time: number, delta: number): void {
@@ -539,20 +928,12 @@ export class SharkSystem {
     this.outward.y = 0;
     if (this.outward.lengthSq() < 0.1) this.outward.set(1, 0, 0);
     this.outward.normalize();
-    this.model.position.addScaledVector(this.outward, delta * (this.defeated ? 2.7 : 2.15));
+    this.model.position.addScaledVector(this.outward, delta * 2.15);
     const surface = sampleWaveHeight(this.model.position.x, this.model.position.z, time);
-    this.model.position.y = surface - 0.75 - (this.defeated ? Math.min(3.8, this.phaseTime * 0.7) : 0);
+    this.model.position.y = surface - 0.75;
     this.lookTarget.copy(this.model.position).add(this.outward);
     this.model.lookAt(this.lookTarget);
-    if (this.defeated && this.phaseTime > 5) this.model.visible = false;
-    if (this.defeated && this.phaseTime > 95) {
-      this.defeated = false;
-      this.health = 100;
-      this.model.visible = true;
-      this.circleAngle += Math.PI * 0.72;
-      this.nextAttackAt = this.totalTime + randomRange(this.random, 52, 75);
-      this.setMode('distant');
-    } else if (!this.defeated && this.phaseTime > 6.2) {
+    if (this.phaseTime > 6.2) {
       this.nextAttackAt = this.totalTime + randomRange(this.random, 48, 70);
       this.setMode('circling');
     }
@@ -578,9 +959,15 @@ export class SharkSystem {
       threat,
       health: this.health,
       visible: this.model.visible && this.mode !== 'distant',
-      target: this.targetingPlayer
+      target: this.lifecycle === 'carcass'
+        ? 'carcass'
+        : this.targetingPlayer
         ? 'player'
         : this.targetCollectionNetId ? 'collectionNet' : this.targetStructureId ? 'structure' : 'raft',
+      harvestProgress: this.harvestProgress / SHARK_HARVEST_HOLD_SECONDS,
+      harvested: this.harvestIndex,
+      harvestTotal: SHARK_HARVEST_STAGES.length,
+      carcassSeconds: Math.ceil(this.carcassRemaining),
     });
   }
 
@@ -597,4 +984,23 @@ export class SharkSystem {
     if (store.selectedTool === 'spear' || store.selectedTool === 'metalSpear') store.setInteraction(message, 'shark');
     else if (store.interaction?.startsWith('鲨鱼')) store.setInteraction(null, 'shark');
   }
+
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (
+      event.code !== 'KeyE'
+      || event.repeat
+      || !this.inputEnabled
+      || this.carcassPhase !== 'available'
+      || !this.carcassFocused
+      || useGameStore.getState().interactionOwner !== 'shark'
+    ) return;
+    event.preventDefault();
+    this.harvestHeld = true;
+  };
+
+  private readonly onKeyUp = (event: KeyboardEvent): void => {
+    if (event.code !== 'KeyE') return;
+    this.harvestHeld = false;
+    this.harvestProgress = 0;
+  };
 }

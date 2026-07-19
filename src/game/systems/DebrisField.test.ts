@@ -1,4 +1,4 @@
-import { MeshStandardMaterial, Scene, Vector3 } from 'three';
+import { Group, MeshStandardMaterial, Scene, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { MaterialLibrary } from '../art/Materials';
 import { DebrisField } from './DebrisField';
@@ -56,6 +56,31 @@ describe('DebrisField salvage settlement', () => {
     field.settleCollection(drift, {}, originalLoot);
     expect(field.activeWorldDropCount).toBe(1);
     expect(field.getSavedDrops()[0]?.loot).toEqual(originalLoot);
+  });
+
+  it('uses the dedicated shark bundle visual and restores it from saved loot', () => {
+    const scene = new Scene();
+    const field = new DebrisField(scene, createSalvageMaterials(), 1);
+    const drop = field.spawnWorldDrop({ sharkMeat: 1, sharkTooth: 2 }, new Vector3(2, 0.1, -3));
+    if (!drop) throw new Error('expected an available shark loot drop');
+    expect(drop?.model.userData.lootKind).toBe('shark');
+    const sharkModel = drop.model.userData.sharkModel as Group;
+    expect(sharkModel.visible).toBe(true);
+    expect((drop?.model.userData.genericModel as Group).visible).toBe(false);
+    expect(sharkModel.getObjectByName('shark-loot-float')?.visible).toBe(true);
+    expect(sharkModel.getObjectByName('shark-loot-hide')?.visible).toBe(false);
+    expect(sharkModel.getObjectByName('shark-meat-cut-0')?.visible).toBe(true);
+    expect(sharkModel.getObjectByName('shark-meat-cut-1')?.visible).toBe(false);
+    expect(sharkModel.getObjectByName('shark-tooth-plate-0')?.visible).toBe(true);
+    expect(sharkModel.getObjectByName('shark-tooth-plate-1')?.visible).toBe(true);
+    field.settleCollection(drop, { sharkMeat: 1, sharkTooth: 2 }, { sharkHide: 1 });
+    expect(sharkModel.getObjectByName('shark-loot-hide')?.visible).toBe(true);
+    expect(sharkModel.getObjectByName('shark-meat-cut-0')?.visible).toBe(false);
+    expect(sharkModel.getObjectByName('shark-tooth-plate-0')?.visible).toBe(false);
+    const saved = field.getSavedDrops();
+    const restored = new DebrisField(new Scene(), createSalvageMaterials(), 1, saved);
+    expect(restored.worldDrops[0].model.userData.lootKind).toBe('shark');
+    expect(restored.getSavedDrops()[0].loot).toEqual({ sharkHide: 1 });
   });
 
   it('merges overflow when all pooled drop slots are active', () => {

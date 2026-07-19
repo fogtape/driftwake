@@ -22,6 +22,7 @@ import {
   RadioTower,
   RefreshCw,
   Sailboat,
+  Scissors,
   ShipWheel,
   Settings,
   ShieldAlert,
@@ -185,6 +186,7 @@ export function Hud({
   onOpenPack,
 }: HudProps) {
   const sharkAlert = shark.mode === 'approaching' || shark.mode === 'attacking';
+  const sharkCarcass = shark.mode === 'carcass';
   const fishingActive = fishing.phase === 'hooked';
   const structureRepair = build.repairTarget;
   const structureReplacement = build.replaceTarget;
@@ -382,17 +384,21 @@ export function Hud({
         </button>
       </div>
 
-      <div className={`shark-warning ${stormAlert ? 'has-weather-alert' : ''} ${sharkAlert ? 'is-visible' : ''}`} aria-live="polite">
-        <TriangleAlert size={18} />
+      <div className={`shark-warning ${stormAlert ? 'has-weather-alert' : ''} ${sharkCarcass ? 'is-harvest' : ''} ${sharkAlert || sharkCarcass ? 'is-visible' : ''}`} aria-live="polite">
+        {sharkCarcass ? <Scissors size={18} /> : <TriangleAlert size={18} />}
         <div>
-          <span>{shark.target === 'player'
+          <span>{sharkCarcass
+            ? `深潮鲨可采集 · ${shark.harvested}/${shark.harvestTotal} · ${shark.carcassSeconds}s`
+            : shark.target === 'player'
             ? (shark.mode === 'attacking' ? '深潮鲨正在扑咬' : '深潮鲨锁定了你')
             : shark.target === 'collectionNet'
               ? (shark.mode === 'attacking' ? '潮兜收集网遭到撕咬' : '外缘网具已被锁定')
             : shark.target === 'structure'
               ? (shark.mode === 'attacking' ? '暴露结构遭到撕咬' : '脆弱结构已被锁定')
               : shark.mode === 'attacking' ? '筏体遭到撕咬' : '深潮鲨正在逼近'}</span>
-          <i><b style={{ width: `${Math.round(shark.threat * 100)}%` }} /></i>
+          <i><b style={{ width: `${Math.round((sharkCarcass
+            ? (shark.harvested + shark.harvestProgress) / Math.max(1, shark.harvestTotal)
+            : shark.threat) * 100)}%` }} /></i>
         </div>
       </div>
 

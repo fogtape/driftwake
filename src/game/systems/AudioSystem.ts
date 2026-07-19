@@ -1368,6 +1368,51 @@ export class AudioSystem {
     oscillator.stop(now + 0.25);
   }
 
+  playSharkDefeat(): void {
+    this.noiseBurstTo(0.42, 260, 0.24, 'lowpass', this.creatures);
+    this.noiseBurstTo(0.13, 1180, 0.11, 'bandpass', this.creatures);
+    if (!this.context || !this.creatures) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(84, now);
+    oscillator.frequency.exponentialRampToValueAtTime(31, now + 0.7);
+    gain.gain.setValueAtTime(0.07, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.74);
+    oscillator.connect(gain).connect(this.creatures);
+    oscillator.start(now);
+    oscillator.stop(now + 0.76);
+  }
+
+  playSharkCarcassSurface(): void {
+    this.noiseBurstTo(0.34, 210, 0.18, 'lowpass', this.creatures);
+    this.noiseBurstTo(0.09, 1450, 0.12, 'bandpass', this.creatures);
+  }
+
+  playSharkHarvest(completed: boolean, bundled: boolean): void {
+    this.noiseBurstTo(completed ? 0.26 : 0.19, 520, completed ? 0.18 : 0.12, 'lowpass', this.creatures);
+    this.noiseBurstTo(0.08, 1760, 0.055, 'bandpass', this.effects);
+    if (bundled) this.noiseBurstTo(0.07, 980, 0.08, 'bandpass', this.effects);
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(completed ? 148 : 184, now);
+    oscillator.frequency.exponentialRampToValueAtTime(completed ? 92 : 128, now + 0.16);
+    gain.gain.setValueAtTime(0.035, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+    oscillator.connect(gain).connect(this.effects);
+    oscillator.start(now);
+    oscillator.stop(now + 0.2);
+  }
+
+  playSharkCarcassSink(harvested: boolean): void {
+    this.noiseBurstTo(harvested ? 0.24 : 0.3, 190, 0.28, 'lowpass', this.creatures);
+    this.noiseBurstTo(0.07, harvested ? 880 : 620, 0.14, 'bandpass', this.creatures);
+  }
+
   playFailure(cause: FailureCause): void {
     if (!this.context || !this.effects) return;
     const target = cause === 'shark' ? this.creatures ?? this.effects : this.effects;

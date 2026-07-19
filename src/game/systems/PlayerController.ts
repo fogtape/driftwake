@@ -18,6 +18,7 @@ import {
   stepVerticalMotion,
   type VerticalMotionState,
 } from '../player/locomotion';
+import { addBoundedWaterImpulse } from '../player/waterImpulse';
 
 const CAMERA_HEIGHT = 1.54;
 const WATER_FLOOR_CLEARANCE = 0.68;
@@ -289,7 +290,7 @@ export class PlayerController {
     this.impulseDirection.copy(this.waterPosition).sub(origin);
     this.impulseDirection.y = Math.max(0.12, this.impulseDirection.y * 0.35);
     if (this.impulseDirection.lengthSq() < 0.01) this.impulseDirection.set(0, 0.18, 1);
-    this.waterVelocity.addScaledVector(this.impulseDirection.normalize(), MathUtils.clamp(strength, 0, 5));
+    addBoundedWaterImpulse(this.waterVelocity, this.impulseDirection.normalize(), strength);
   }
 
   setCollisionResolver(resolver: ((position: Vector3, previous: Vector3, footHeight: number) => void) | null): void {

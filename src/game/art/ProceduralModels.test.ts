@@ -11,6 +11,7 @@ import {
   createHarvestNodeModel,
   createPurifierModel,
   createSharkModel,
+  createSharkLootDropModel,
   createSpearModel,
 } from './ProceduralModels';
 import { createReefModel, createReefNodeModel } from './UnderwaterModels';
@@ -110,7 +111,18 @@ describe('procedural model assets', () => {
     expect(size.z).toBeGreaterThan(3.5);
     expect(size.x).toBeGreaterThan(2);
     expect(shark.userData.tailPivot).toBeDefined();
+    expect(shark.userData.harvestMarks).toHaveLength(3);
   }, 15_000);
+
+  it('builds a distinct bound shark-harvest bundle for rejected loot', () => {
+    const bundle = createSharkLootDropModel(createTestMaterials());
+    const stats = meshStats(bundle);
+    const size = new Box3().setFromObject(bundle).getSize(new Vector3());
+    expect(stats.meshes).toBeGreaterThanOrEqual(8);
+    expect(size.x).toBeGreaterThan(0.8);
+    expect(size.y).toBeGreaterThan(0.3);
+    expect(bundle.userData.kind).toBe('sharkLoot');
+  });
 
   it('gives each first-person tool a distinct detailed mesh assembly', () => {
     const materials = createTestMaterials();

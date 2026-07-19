@@ -1,6 +1,6 @@
 import { Group, MathUtils, Scene, Vector3 } from 'three';
 import type { MaterialLibrary } from '../art/Materials';
-import { createDebrisModel, type DebrisKind, varyModel } from '../art/ProceduralModels';
+import { createDebrisModel, createSharkLootDropModel, type DebrisKind, varyModel } from '../art/ProceduralModels';
 import { salvageLoot, type ItemBundle } from '../domain/items';
 import type { SavedWorldDrop } from '../domain/save';
 import { createSeededRandom, randomRange, type RandomSource } from '../math/random';
@@ -57,6 +57,33 @@ function mergeBundles(first: ItemBundle, second: ItemBundle): ItemBundle {
   return merged;
 }
 
+function hasSharkLoot(bundle: ItemBundle): boolean {
+  return (bundle.sharkMeat ?? 0) > 0 || (bundle.sharkHide ?? 0) > 0 || (bundle.sharkTooth ?? 0) > 0;
+}
+
+function setWorldDropVisual(drop: WorldDrop): void {
+  const sharkLoot = hasSharkLoot(drop.loot);
+  const genericModel = drop.model.userData.genericModel as Group | undefined;
+  const sharkModel = drop.model.userData.sharkModel as Group | undefined;
+  if (genericModel) genericModel.visible = !sharkLoot;
+  if (sharkModel) {
+    sharkModel.visible = sharkLoot;
+    const meatCount = Math.min(3, Math.max(0, Math.floor(drop.loot.sharkMeat ?? 0)));
+    const toothCount = Math.min(2, Math.max(0, Math.floor(drop.loot.sharkTooth ?? 0)));
+    const hide = sharkModel.getObjectByName('shark-loot-hide');
+    if (hide) hide.visible = (drop.loot.sharkHide ?? 0) > 0;
+    for (let index = 0; index < 3; index += 1) {
+      const meat = sharkModel.getObjectByName(`shark-meat-cut-${index}`);
+      if (meat) meat.visible = index < meatCount;
+    }
+    for (let index = 0; index < 2; index += 1) {
+      const tooth = sharkModel.getObjectByName(`shark-tooth-plate-${index}`);
+      if (tooth) tooth.visible = index < toothCount;
+    }
+  }
+  drop.model.userData.lootKind = sharkLoot ? 'shark' : 'salvage';
+}
+
 export class DebrisField {
   readonly items: DebrisItem[] = [];
   readonly worldDrops: WorldDrop[] = [];
@@ -92,8 +119,14 @@ export class DebrisField {
       this.respawn(item, index === 0 ? -3.7 : index < 8 ? -10 - index * 5 : undefined);
     }
     const dropPrototype = createDebrisModel('cache', materials);
+    const sharkDropPrototype = createSharkLootDropModel(materials);
     for (let index = 0; index < WORLD_DROP_POOL_SIZE; index += 1) {
-      const model = dropPrototype.clone(true);
+      const model = new Group();
+      const genericModel = dropPrototype.clone(true);
+      const sharkModel = sharkDropPrototype.clone(true);
+      model.add(genericModel, sharkModel);
+      model.userData.genericModel = genericModel;
+      model.userData.sharkModel = sharkModel;
       model.name = `world-salvage-drop-${index}`;
       model.visible = false;
       model.scale.setScalar(0.58);
@@ -201,6 +234,7 @@ export class DebrisField {
       target.loot = { ...rejected };
       target.active = bundleHasItems(rejected);
       target.model.visible = target.active;
+      setWorldDropVisual(target);
       return;
     }
     if (!bundleHasItems(accepted) && !bundleHasItems(rejected)) {
@@ -222,6 +256,7 @@ export class DebrisField {
         drop.model.position.distanceToSquared(position) < best.model.position.distanceToSquared(position) ? drop : best,
       );
       nearest.loot = mergeBundles(nearest.loot, bundle);
+      setWorldDropVisual(nearest);
       if (relocateOnMerge) {
         nearest.latched = false;
         nearest.model.visible = true;
@@ -239,6 +274,7 @@ export class DebrisField {
     inactive.model.position.x += randomRange(this.random, -0.24, 0.24);
     inactive.model.position.z += randomRange(this.random, -0.18, 0.18);
     inactive.model.rotation.set(0, randomRange(this.random, 0, Math.PI * 2), 0);
+    setWorldDropVisual(inactive);
     return inactive;
   }
 

@@ -87,6 +87,7 @@ export const CONSUMABLE_EFFECTS: Partial<
   ration: { healthDelta: 0, thirstDelta: -2, hungerDelta: 28 },
   palmFruit: { healthDelta: 1, thirstDelta: 12, hungerDelta: 18 },
   rawFish: { healthDelta: -8, thirstDelta: -3, hungerDelta: 9 },
+  sharkMeat: { healthDelta: -10, thirstDelta: -5, hungerDelta: 14 },
   cookedFish: { healthDelta: 3, thirstDelta: 0, hungerDelta: 36 },
   burntFish: { healthDelta: -3, thirstDelta: -4, hungerDelta: 12 },
 };

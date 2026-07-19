@@ -1,7 +1,7 @@
 # 原创资产清单
 
-> 更新日期：2026-07-18
-> 状态：第十三轮双手钩具专用材质与近景交互基线，发布前仍需做最终授权、DCC 替换与相似性复核
+> 更新日期：2026-07-19
+> 状态：第十四轮鲨体采集、战利品浮包与分层反馈基线，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -388,7 +388,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 ## 代码原生模型与动画
 
-本轮新增的补给桶、海面剩余物资、近距聚焦环和双手钩具装配全部由代码原生形体驱动；双手主体已改用独立审定的 TEX-015，掌垫、袖口、绳边与扣件继续按材质分层。战利品、对象池、耐久和 v11 存档均不依赖视觉对象作为玩法真值；没有因本机软件 WebGL 复验失败而降低运行时贴图质量。
+本轮新增鲨体分段伤痕、海面聚焦环和鲨鱼战利品捆扎浮包，继续由代码原生形体驱动；鲨皮沿用独立 TEX-003 PBR，肉、皮、齿、绳结和浮托按材质与轮廓分层。采集段、对象池、耐久与 v18 存档均不依赖视觉对象作为玩法真值；没有因本机软件 WebGL 复验失败而降低运行时贴图质量。
 
 | ID | 资产 | 位置 | 当前状态 |
 | --- | --- | --- | --- |
@@ -399,7 +399,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | MOD-005 | 建造锤：木柄、金属锤头、撞面、拔钉爪、六圈绑带 | `src/game/art/ProceduralModels.ts` | 已进入第一视角建造与修补 |
 | MOD-006 | 木矛：长杆、金属尖端与五圈扎结 | `src/game/art/ProceduralModels.ts` | 已进入第一视角刺击 |
 | MOD-007 | 钓竿、卷线轮、浮标与银脊鱼 | `src/game/art/ProceduralModels.ts` | 已进入抛投、鱼讯、挣扎和收获循环 |
-| MOD-008 | 深潮鲨：车削躯干、背鳍、胸鳍、尾柄、双叶尾、眼、口与鳃 | `src/game/art/ProceduralModels.ts` | 12+ 独立网格，已接巡游、袭击与受击动画 |
+| MOD-008 | 深潮鲨：车削躯干、背鳍、胸鳍、尾柄、双叶尾、眼、口、鳃与三段采集伤痕 | `src/game/art/ProceduralModels.ts` | 15+ 独立网格，已接巡游、袭击、受击、侧翻浮尸与采集阶段 |
 | MOD-009 | 潮汐净水器：绑扎木架、火盆、海水槽、编织蒸馏罩、冷凝沟、滴管与透明杯具 | `src/game/art/ProceduralModels.ts` | 35+ 独立网格，运行阶段驱动海水/净水水位和滴水 |
 | MOD-010 | 折铁烤架：绑扎木架、折铁火盆、九根炉条、横撑、把手与银脊鱼 | `src/game/art/ProceduralModels.ts` | 40+ 独立网格，食物按生/熟/焦状态改变颜色与粗糙度 |
 | MOD-011 | 盐冠浅滩：2115 顶点高度场、顶点色分层、5 个岩石地标、22 个灌木和 30 条岸浪 | `src/game/art/ProceduralModels.ts` | 已进入接近、靠岸、登岛、离流和重生周期 |
@@ -427,12 +427,13 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | MOD-033 | 盐封打捞手套：双前臂、编织袖口、掌垫、指节护条、金属扣具、八组双段手指与双拇指 | `src/game/art/FirstPersonModels.ts` | 双手与钩具合计 40+ 网格；主体使用独立 TEX-015，麻编/金属/绳边分层，腕、指、导绳点和投射起点独立驱动 |
 | MOD-034 | 木筏结构套件：交错承力墙、绳铰板门、盐封承重柱、双梁七级楼梯、上层拼板和编叶斜顶 | `src/game/art/RaftStructureParts.ts` | 六类结构使用木材/深木/绳/金属/纤维分件和一致尺度语法；门框/门扇分离，运行时合并为最多七个实例批次 |
 | MOD-035 | 潮兜收集网：盐蚀木框、铁卡扣、双侧承臂、悬垂绳格、绳结、三浮子、六档装载物、磨损绳与满载标记 | `src/game/art/CollectionNetModel.ts` | 原创程序模型；静态木框/铁件/绳床/浮子按材质合批，货物和健康阶段保持独立动画，筏缘局部坐标防止航行或靠岛时脱离 |
+| MOD-036 | 鲨鱼战利品浮包：盐封浮托、交叉绑绳、分件鲨肉、折叠鲨皮与齿板 | `src/game/art/ProceduralModels.ts` | 只用于背包拒收的真实鲨鱼战利品；按内容显隐并复用八槽世界掉落池，不把普通漂流物换皮 |
 | ANI-001 | 木筏三轴波浪升沉 | `src/game/systems/RaftSystem.ts` | 已实现 |
 | ANI-002 | 第一人称移动、镜头与木筏局部坐标 | `src/game/systems/PlayerController.ts` | 已实现基础版 |
 | ANI-003 | 双手钩具待机、蓄力、放绳跟随、受力抓握、交替回收、抛射旋转、拖回、耐久损耗与断裂恢复 | `src/game/systems/HookSystem.ts`、`src/game/presentation/hookPresentation.ts` | 代码原生腕/指关节、19 点张力绳和手持/抛出唯一所有权已接通；最终蒙皮仍待 DCC |
 | ANI-004 | 建造锤挥击、筏格预览、放置、修补与拆除 | `src/game/systems/BuildSystem.ts` | 已实现交互切片 |
 | ANI-005 | 钓竿抛投、浮标升沉、鱼体绕线、张力和收杆 | `src/game/systems/FishingSystem.ts` | 已实现完整单次循环 |
-| ANI-006 | 鲨鱼尾摆、巡游、逼近、扑咬、受击、撤退与下潜 | `src/game/systems/SharkSystem.ts` | 已实现第一轮威胁循环 |
+| ANI-006 | 鲨鱼尾摆、巡游、逼近、扑咬、受击、撤退、失力侧翻、随浪浮尸与下沉 | `src/game/systems/SharkSystem.ts` | 威胁循环与尸体生命周期共享状态真值 |
 | ANI-007 | 设备朝向预览、筏格放置、运行、收取、拆解、碰撞与落海 | `src/game/systems/DeviceSystem.ts` | 已接净水器和烤架完整周期，并保存阶段与进度 |
 | ANI-008 | 木筏/岛屿双表面移动、岸线切换、地形贴合和障碍滑移 | `src/game/systems/PlayerController.ts` | 无独立场景切换，可保存玩家所在表面 |
 | ANI-009 | 石斧挥动、命中帧、棕榈受击抖动、倒伏和树桩切换 | `src/game/systems/IslandSystem.ts` | 三击状态与收获、粒子、音效同步 |
@@ -449,6 +450,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | ANI-020 | 结构分件幽灵预览、旋转/层高切换、板门开合、连续楼梯登层、上层落地/分层碰撞、楼板/斜顶撞顶、三档受损色泽/确定性松动和承重级联 | `src/game/systems/BuildSystem.ts`、`RaftStructureSystem.ts`、`PlayerController.ts` | 与材料、锤耐久、共享占位、四向楼梯入口、材质撞顶音尘、鲨鱼外沿择靶、修补 HUD、支撑拓扑和 v15 恢复同步；不增加结构实例批次 |
 | ANI-021 | 收集网边缘预览、四向固定、网床波动/装载下沉、六档货物显隐、两档磨损绳、满载脉冲、被动入网、鲨鱼撕咬、修补、收取、锤拆与失托落海 | `src/game/art/CollectionNetModel.ts`、`src/game/systems/CollectionNetSystem.ts` | 与动态筏缘、未钩漂流物、12 件容量、真实生命、背包接收、锤耐久、世界掉落和 v17 恢复同步 |
 | ANI-022 | 潮铸筏缘护甲预览、安装、盐蚀合金四边导轨、锈蚀角片、铆固件和拆卸返料 | `src/game/systems/BuildSystem.ts`、`src/game/systems/RaftSystem.ts` | 固定实例预算随动态筏格姿态和 v17 `reinforced` 真值同步，保护同格基础、暴露结构和边挂网具 |
+| ANI-023 | 鲨体四段按住割取、伤痕逐段显现、聚焦环呼吸、取尽下沉与健康重生 | `src/game/systems/SharkSystem.ts` | 与 0.86 秒分段进度、52 秒窗口、满包落海、48 秒冷却和 v18 恢复同步；起手精确瞄准，持续阶段允许有限水面晃动 |
 | VFX-001 | 入水粒子 | `src/game/systems/SplashSystem.ts` | 已实现 |
 | VFX-002 | 木屑、纤维屑、修补金屑、拆除、武器和咬击冲击粒子 | `src/game/systems/SplashSystem.ts` | 结构撕咬按生命/是否毁损分双层数量、色泽、尺寸和抛速；锤修按木材/纤维分层 |
 | VFX-003 | 五层加色火焰、动态点光、五块余烬和八层烟雾 | `src/game/art/ProceduralModels.ts` | 火势与设备阶段联动，焦鱼阶段转为深色烟 |
@@ -463,6 +465,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | VFX-012 | 磷光扫描束/信号点、相位灯、三层阵列传播环、四层中继脉冲和距离驱动显隐 | `src/game/systems/NavigationSystem.ts` | 所有发光与脉冲由在线、电量、目标与真实世界距离驱动；断电状态不保留假扫描 |
 | VFX-013 | 近距打捞聚焦环、分类拾取冲击与池化海面剩余物资 | `src/game/systems/SalvageSystem.ts`、`DebrisField.ts` | 注视角、距离、背包接收结果和 v11 世界掉落状态共同驱动，不静默吞物资 |
 | VFX-014 | 收集网固定冲击、分类入网飞沫、装载下沉、满载灯、鲨鱼受击/毁坏、锤修金屑、锤拆碎屑和失托落海双层水花 | `src/game/systems/CollectionNetSystem.ts`、`CollectionNetModel.ts` | 所有状态由真实网具容量、生命、筏格 revision、缘甲减伤和漂流物结算驱动，不使用菜单假状态 |
+| VFX-015 | 鲨鱼失力冲击、浮尸出水、四段肉屑/水滴、青色聚焦环和取尽/超时下沉 | `src/game/systems/SplashSystem.ts`、`SharkSystem.ts` | 粒子、镜头反馈和伤痕只由实际击杀/采集事务触发，满包拒收不会伪造入包反馈 |
 
 ## 程序音频分层
 
@@ -487,7 +490,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | SFX-PLANT | 土壤落种、倒水低通/水滴音、成熟三音提示、干裂叶响和收获层 | `src/game/systems/AudioSystem.ts` |
 | SFX-RESEARCH | 开台、样本落盘/刻度确认、项目学习和纸页/金属拨盘反馈 | `src/game/systems/AudioSystem.ts` |
 | SFX-FORGE | 湿砖落架、干砖裂响、矿石/细砂/燃料装填、持续炉火、金属或玻璃完成凝固与收取层 | `src/game/systems/AudioSystem.ts` |
-| CREATURE | 鲨鱼低频预兆、扑咬冲击与武器命中；盐翼盗鸟警报、啄食和惊飞 | `src/game/systems/AudioSystem.ts` |
+| CREATURE | 鲨鱼低频预兆、扑咬冲击、武器命中、失力低频、浮尸水层、分段割取和取尽/流失下沉；盐翼盗鸟警报、啄食和惊飞 | `src/game/systems/AudioSystem.ts` |
 | UI | 短促确认、拒绝和工具切换 | `src/game/systems/AudioSystem.ts` |
 
 设置界面分别控制 `master`、`music`、`ambience`、`effects`、`creatures` 和 `ui` 六个增益总线，偏好写入独立版本化配置。世界音效经过随相机世界位置、前向和上方向更新的监听器；M2 打捞事件使用 HRTF 反距离定位，UI 确认不进入空间节点。
