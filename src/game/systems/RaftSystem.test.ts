@@ -77,6 +77,19 @@ describe('RaftSystem topology', () => {
     expect(raft.tileCount).toBe(1);
   });
 
+  it('only installs armor on an exposed healthy tile and reduces shark damage by 55 percent', () => {
+    const raft = new RaftSystem(createTestMaterials(), [
+      { x: 0, z: 0, health: 100 },
+      { x: 1, z: 0, health: 100 },
+    ]);
+    expect(raft.canReinforceTile({ x: 0, z: 0 })).toBe(true);
+    expect(raft.reinforceTile({ x: 0, z: 0 }).changed).toBe(true);
+    expect(raft.sharkDamageForTile({ x: 0, z: 0 }, 34)).toBeCloseTo(15.3);
+    expect(raft.damageTile({ x: 0, z: 0 }, Math.round(raft.sharkDamageForTile({ x: 0, z: 0 }, 34))).tile?.health).toBe(85);
+    expect(raft.getSavedTiles()[0]?.reinforced).toBe(true);
+    expect(raft.removeReinforcement({ x: 0, z: 0 }).changed).toBe(true);
+  });
+
   it('rejects removals that would split the remaining raft', () => {
     const raft = new RaftSystem(createTestMaterials(), [
       { x: -1, z: 0, health: 100 },

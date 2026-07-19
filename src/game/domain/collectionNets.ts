@@ -14,6 +14,8 @@ import {
 export const MAX_COLLECTION_NETS = 12;
 export const COLLECTION_NET_CAPACITY = 12;
 export const COLLECTION_NET_MAX_HEALTH = 80;
+export const COLLECTION_NET_REPAIR_AMOUNT = 36;
+export const COLLECTION_NET_REPAIR_COST: ItemBundle = { timber: 1, rope: 1 };
 
 export type CollectionNetRotation = RaftRotation;
 
@@ -43,6 +45,13 @@ export interface CollectionNetCaptureResult {
   net: SavedCollectionNet;
   accepted: ItemBundle;
   rejected: ItemBundle;
+}
+
+export interface CollectionNetDamageResult {
+  changed: boolean;
+  destroyed: boolean;
+  net: SavedCollectionNet | null;
+  released: ItemBundle;
 }
 
 function coordinateKey(x: number, z: number): string {
@@ -77,6 +86,35 @@ export function collectionNetOutsideCoordinate(
   if (net.rotation === 1) return { x: net.x + 1, z: net.z };
   if (net.rotation === 2) return { x: net.x, z: net.z + 1 };
   return { x: net.x - 1, z: net.z };
+}
+
+export function selectSharkAttackCollectionNet(
+  nets: readonly SavedCollectionNet[],
+  fromRaftX: number,
+  fromRaftZ: number,
+): SavedCollectionNet | null {
+  const length = Math.hypot(fromRaftX, fromRaftZ) || 1;
+  const directionX = fromRaftX / length;
+  const directionZ = fromRaftZ / length;
+  let selected: SavedCollectionNet | null = null;
+  let selectedScore = Number.NEGATIVE_INFINITY;
+
+  for (const net of nets) {
+    const outside = collectionNetOutsideCoordinate(net);
+    const outwardX = outside.x - net.x;
+    const outwardZ = outside.z - net.z;
+    const facing = outwardX * directionX + outwardZ * directionZ;
+    if (facing < 0.25) continue;
+    const attackX = net.x + outwardX * 0.72;
+    const attackZ = net.z + outwardZ * 0.72;
+    const damageBias = (1 - net.health / COLLECTION_NET_MAX_HEALTH) * 1.35;
+    const score = attackX * directionX + attackZ * directionZ + damageBias + facing * 0.4;
+    if (score > selectedScore || (score === selectedScore && net.id < (selected?.id ?? ''))) {
+      selected = net;
+      selectedScore = score;
+    }
+  }
+  return selected;
 }
 
 export function collectionNetStoredUnits(storage: ItemBundle): number {
@@ -158,6 +196,47 @@ export function captureIntoCollectionNet(
     net: { ...net, storage },
     accepted,
     rejected,
+  };
+}
+
+export function damageCollectionNet(
+  net: SavedCollectionNet,
+  amount: number,
+): CollectionNetDamageResult {
+  const damage = Number.isFinite(amount) ? Math.max(0, amount) : 0;
+  if (damage <= 0 || net.health <= 0) {
+    return { changed: false, destroyed: net.health <= 0, net, released: {} };
+  }
+  const health = Math.max(0, net.health - damage);
+  if (health <= 0) {
+    return {
+      changed: true,
+      destroyed: true,
+      net: null,
+      released: { ...net.storage },
+    };
+  }
+  return {
+    changed: true,
+    destroyed: false,
+    net: { ...net, health },
+    released: {},
+  };
+}
+
+export function repairCollectionNet(
+  net: SavedCollectionNet,
+  amount = COLLECTION_NET_REPAIR_AMOUNT,
+): CollectionNetDamageResult {
+  const repair = Number.isFinite(amount) ? Math.max(0, amount) : 0;
+  if (repair <= 0 || net.health <= 0 || net.health >= COLLECTION_NET_MAX_HEALTH) {
+    return { changed: false, destroyed: net.health <= 0, net, released: {} };
+  }
+  return {
+    changed: true,
+    destroyed: false,
+    net: { ...net, health: Math.min(COLLECTION_NET_MAX_HEALTH, net.health + repair) },
+    released: {},
   };
 }
 

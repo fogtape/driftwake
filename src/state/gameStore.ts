@@ -88,7 +88,7 @@ export interface SharkFeedback {
   threat: number;
   health: number;
   visible: boolean;
-  target: 'raft' | 'structure' | 'player';
+  target: 'raft' | 'structure' | 'collectionNet' | 'player';
 }
 
 export interface PlayerFeedback {

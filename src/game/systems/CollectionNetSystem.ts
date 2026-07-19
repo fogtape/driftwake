@@ -19,12 +19,17 @@ import type { MaterialLibrary } from '../art/Materials';
 import {
   COLLECTION_NET_CAPACITY,
   COLLECTION_NET_MAX_HEALTH,
+  COLLECTION_NET_REPAIR_AMOUNT,
+  COLLECTION_NET_REPAIR_COST,
   canPlaceCollectionNet,
   captureIntoCollectionNet,
   collectionNetBlocksFoundationAt,
   collectionNetBlocksStructure,
   collectionNetOutsideCoordinate,
   collectionNetStoredUnits,
+  damageCollectionNet,
+  repairCollectionNet,
+  selectSharkAttackCollectionNet,
   type CollectionNetPlacementReason,
   type CollectionNetRotation,
   type SavedCollectionNet,
@@ -48,6 +53,13 @@ interface CollectionNetRuntime {
   model: Group;
   visuals: CollectionNetModelVisuals;
   nextCaptureAt: number;
+}
+
+export interface CollectionNetSharkMutation {
+  changed: boolean;
+  destroyed: boolean;
+  health: number;
+  released: ItemBundle;
 }
 
 const PLACEMENT_LABELS: Record<Exclude<CollectionNetPlacementReason, 'valid'>, string> = {
@@ -107,6 +119,7 @@ export class CollectionNetSystem {
   private noticeTimer: number | null = null;
   private serial = 0;
   private captureEvents = 0;
+  private damageEvents = 0;
   private nextDiagnosticAt = 0;
   private nearestDriftDiagnostic: string | null = null;
 
@@ -120,7 +133,7 @@ export class CollectionNetSystem {
     private readonly splashes: SplashSystem,
     savedNets: readonly SavedCollectionNet[],
     private readonly onChanged: () => void = () => undefined,
-    private readonly onHammerUsed: () => void = () => undefined,
+    private readonly onHammerUsed: (action: 'repair' | 'dismantle') => void = () => undefined,
     private readonly occupiedStructureEdges: () => ReadonlySet<string> = () => new Set(),
   ) {
     this.preview = this.createPreview();
@@ -208,6 +221,54 @@ export class CollectionNetSystem {
     );
   }
 
+  findSharkTarget(fromRaftX: number, fromRaftZ: number): SavedCollectionNet | null {
+    const selected = selectSharkAttackCollectionNet(
+      [...this.nets.values()].map(({ state }) => state),
+      fromRaftX,
+      fromRaftZ,
+    );
+    return selected ? { ...selected, storage: { ...selected.storage } } : null;
+  }
+
+  getLocalImpactPosition(id: string, target: Vector3): boolean {
+    const runtime = this.nets.get(id);
+    if (!runtime) return false;
+    this.localCaptureCenter(runtime.state, target);
+    target.y = -0.05;
+    return true;
+  }
+
+  damageByShark(id: string, amount: number): CollectionNetSharkMutation {
+    const runtime = this.nets.get(id);
+    if (!runtime) return { changed: false, destroyed: false, health: 0, released: {} };
+    this.localCaptureCenter(runtime.state, this.localCenter);
+    this.raft.localPointToWorld(this.localCenter, this.worldImpact);
+    const result = damageCollectionNet(runtime.state, amount);
+    if (!result.changed) {
+      return { changed: false, destroyed: result.destroyed, health: runtime.state.health, released: {} };
+    }
+    this.damageEvents += 1;
+    if (result.destroyed) {
+      if (collectionNetStoredUnits(result.released) > 0) {
+        this.debris.spawnWorldDrop(result.released, this.worldImpact, true);
+      }
+      if (this.focused === runtime) this.focused = null;
+      this.removeRuntime(runtime);
+      this.audio.playCollectionNetLost(this.worldImpact);
+      this.splashes.spawnImpact(this.worldImpact, 0x8f5742, 26);
+    } else if (result.net) {
+      runtime.state = result.net;
+    }
+    this.publishFeedback();
+    this.onChanged();
+    return {
+      changed: true,
+      destroyed: result.destroyed,
+      health: result.net?.health ?? 0,
+      released: result.released,
+    };
+  }
+
   getDiagnostics(): {
     count: number;
     stored: number;
@@ -215,6 +276,8 @@ export class CollectionNetSystem {
     placement: string | null;
     placementValid: boolean;
     captures: number;
+    damageEvents: number;
+    firstHealth: number;
     mount: string | null;
     nearestDrift: string | null;
   } {
@@ -228,8 +291,26 @@ export class CollectionNetSystem {
         : null,
       placementValid: this.placementValid,
       captures: this.captureEvents,
+      damageEvents: this.damageEvents,
+      firstHealth: first?.state.health ?? 0,
       mount: first ? `${first.state.x},${first.state.z},${first.state.rotation}` : null,
       nearestDrift: this.nearestDriftDiagnostic,
+    };
+  }
+
+  getAimDiagnostics(): {
+    camera: [number, number, number];
+    forward: [number, number, number];
+    firstNet: { id: string; center: [number, number, number] } | null;
+  } {
+    const first = this.nets.values().next().value as CollectionNetRuntime | undefined;
+    if (first) this.localCaptureCenter(first.state, this.localCenter);
+    return {
+      camera: [this.localOrigin.x, this.localOrigin.y, this.localOrigin.z],
+      forward: [this.localDirection.x, this.localDirection.y, this.localDirection.z],
+      firstNet: first
+        ? { id: first.state.id, center: [this.localCenter.x, -0.05, this.localCenter.z] }
+        : null,
     };
   }
 
@@ -461,7 +542,13 @@ export class CollectionNetSystem {
     }
     const stored = collectionNetStoredUnits(best.state.storage);
     if (useGameStore.getState().selectedTool === 'hammer') {
-      this.setPrompt(`潮兜收集网 · 右键拆除 · ${stored}/${COLLECTION_NET_CAPACITY}`);
+      if (best.state.health < COLLECTION_NET_MAX_HEALTH) {
+        this.setPrompt(
+          `E 修补潮兜收集网 ${Math.round(best.state.health)}/${COLLECTION_NET_MAX_HEALTH} · ${bundleLabel(COLLECTION_NET_REPAIR_COST)} · 右键拆除`,
+        );
+      } else {
+        this.setPrompt(`潮兜收集网 · 右键拆除 · ${stored}/${COLLECTION_NET_CAPACITY}`);
+      }
     } else if (stored > 0) {
       this.setPrompt(`E 收取潮兜物资 · ${stored}/${COLLECTION_NET_CAPACITY}`);
     } else {
@@ -490,6 +577,37 @@ export class CollectionNetSystem {
     this.updateFocus();
   }
 
+  private repairFocused(): void {
+    const runtime = this.focused;
+    if (!runtime) return;
+    const store = useGameStore.getState();
+    if (runtime.state.health >= COLLECTION_NET_MAX_HEALTH || !store.spendItems(COLLECTION_NET_REPAIR_COST)) {
+      this.audio.playDenied();
+      if (runtime.state.health < COLLECTION_NET_MAX_HEALTH) this.showNotice('缺少修补收集网所需材料');
+      return;
+    }
+    const result = repairCollectionNet(runtime.state, COLLECTION_NET_REPAIR_AMOUNT);
+    if (!result.changed || !result.net) {
+      store.addItemBundle(COLLECTION_NET_REPAIR_COST);
+      this.audio.playDenied();
+      return;
+    }
+    runtime.state = result.net;
+    this.localCaptureCenter(runtime.state, this.localCenter);
+    this.raft.localPointToWorld(this.localCenter, this.worldImpact);
+    this.splashes.spawnRepair(this.worldImpact);
+    this.audio.playRepair(this.worldImpact);
+    this.showNotice(
+      runtime.state.health >= COLLECTION_NET_MAX_HEALTH
+        ? '潮兜收集网已完全修复'
+        : `潮兜收集网已修补 · ${Math.round(runtime.state.health)}/${COLLECTION_NET_MAX_HEALTH}`,
+    );
+    this.publishFeedback();
+    this.onHammerUsed('repair');
+    this.onChanged();
+    this.updateFocus();
+  }
+
   private dismantleFocused(): boolean {
     const runtime = this.focused;
     if (!runtime) return false;
@@ -510,7 +628,7 @@ export class CollectionNetSystem {
     this.audio.playCollectionNetLost(this.worldImpact);
     this.showNotice('收集网与网中物资已收回');
     this.publishFeedback();
-    this.onHammerUsed();
+    this.onHammerUsed('dismantle');
     this.onChanged();
     return true;
   }
@@ -621,6 +739,14 @@ export class CollectionNetSystem {
       || this.placementActive
       || useGameStore.getState().interactionOwner !== 'collectionNet'
     ) return;
-    this.collectFocused();
+    if (
+      useGameStore.getState().selectedTool === 'hammer'
+      && this.focused
+      && this.focused.state.health < COLLECTION_NET_MAX_HEALTH
+    ) {
+      this.repairFocused();
+    } else {
+      this.collectFocused();
+    }
   };
 }

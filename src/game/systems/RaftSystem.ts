@@ -19,10 +19,12 @@ import { RAFT_TILE_X, RAFT_TILE_Z } from '../domain/raftStructures';
 
 export { RAFT_TILE_X, RAFT_TILE_Z };
 export const RAFT_TILE_MAX_HEALTH = 100;
+export const RAFT_REINFORCEMENT_DAMAGE_MULTIPLIER = 0.45;
 const MAX_TILES = 81;
 
-export interface RaftTileState extends SavedRaftTile {
+export interface RaftTileState extends Omit<SavedRaftTile, 'reinforced'> {
   health: number;
+  reinforced: boolean;
 }
 
 export interface GridCoordinate {
@@ -56,6 +58,8 @@ export class RaftSystem {
   private readonly plankMeshes: InstancedMesh[];
   private readonly beams: InstancedMesh;
   private readonly nails: InstancedMesh;
+  private readonly reinforcementRails: InstancedMesh;
+  private readonly reinforcementCorners: InstancedMesh;
   private readonly matrix = new Matrix4();
   private readonly position = new Vector3();
   private readonly rotation = new Quaternion();
@@ -72,12 +76,22 @@ export class RaftSystem {
     const plankGeometry = new RoundedBoxGeometry(1.36, 0.16, 0.42, 3, 0.035);
     const beamGeometry = new BoxGeometry(1.45, 0.1, 0.085);
     const nailGeometry = new CylinderGeometry(0.025, 0.03, 0.02, 7);
+    const reinforcementRailGeometry = new RoundedBoxGeometry(1.28, 0.11, 0.09, 2, 0.025);
+    const reinforcementCornerGeometry = new RoundedBoxGeometry(0.22, 0.075, 0.22, 2, 0.025);
     this.plankMeshes = materials.wood.map(
       (material) => new InstancedMesh(plankGeometry, material, MAX_TILES * 3),
     );
     this.beams = new InstancedMesh(beamGeometry, materials.darkWood, MAX_TILES * 2);
     this.nails = new InstancedMesh(nailGeometry, materials.rustMetal, MAX_TILES * 4);
-    for (const mesh of [...this.plankMeshes, this.beams, this.nails]) {
+    this.reinforcementRails = new InstancedMesh(reinforcementRailGeometry, materials.navigationAlloy, MAX_TILES * 4);
+    this.reinforcementCorners = new InstancedMesh(reinforcementCornerGeometry, materials.rustMetal, MAX_TILES * 4);
+    for (const mesh of [
+      ...this.plankMeshes,
+      this.beams,
+      this.nails,
+      this.reinforcementRails,
+      this.reinforcementCorners,
+    ]) {
       mesh.instanceMatrix.setUsage(DynamicDrawUsage);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -90,6 +104,7 @@ export class RaftSystem {
         x,
         z,
         health: MathUtils.clamp(tile.health, 1, RAFT_TILE_MAX_HEALTH),
+        reinforced: tile.reinforced === true,
       });
     }
     this.rebuildInstances();
@@ -187,7 +202,12 @@ export class RaftSystem {
   }
 
   getSavedTiles(): SavedRaftTile[] {
-    return this.getTiles().map(({ x, z, health }) => ({ x, z, health: Math.round(health) }));
+    return this.getTiles().map(({ x, z, health, reinforced }) => ({
+      x,
+      z,
+      health: Math.round(health),
+      reinforced,
+    }));
   }
 
   canAddTile(coordinate: GridCoordinate): boolean {
@@ -207,6 +227,7 @@ export class RaftSystem {
       x: coordinate.x,
       z: coordinate.z,
       health: RAFT_TILE_MAX_HEALTH,
+      reinforced: false,
     });
     this.rebuildInstances();
     return true;
@@ -265,6 +286,47 @@ export class RaftSystem {
     return { changed: true, destroyed: false, tile: { ...tile } };
   }
 
+  canReinforceTile(coordinate: GridCoordinate): boolean {
+    const tile = this.getTile(coordinate);
+    if (!tile || tile.reinforced || tile.health < RAFT_TILE_MAX_HEALTH) return false;
+    return [
+      [tile.x + 1, tile.z],
+      [tile.x - 1, tile.z],
+      [tile.x, tile.z + 1],
+      [tile.x, tile.z - 1],
+    ].some(([x, z]) => !this.tiles.has(tileKey(x, z)));
+  }
+
+  reinforceTile(coordinate: GridCoordinate): RaftMutation {
+    const tile = this.getTile(coordinate);
+    if (!tile || !this.canReinforceTile(coordinate)) {
+      return { changed: false, destroyed: false, tile };
+    }
+    tile.reinforced = true;
+    this.rebuildInstances();
+    return { changed: true, destroyed: false, tile: { ...tile } };
+  }
+
+  removeReinforcement(coordinate: GridCoordinate): RaftMutation {
+    const tile = this.getTile(coordinate);
+    if (!tile || !tile.reinforced) return { changed: false, destroyed: false, tile };
+    tile.reinforced = false;
+    this.rebuildInstances();
+    return { changed: true, destroyed: false, tile: { ...tile } };
+  }
+
+  sharkDamageForTile(coordinate: GridCoordinate, amount: number): number {
+    const tile = this.getTile(coordinate);
+    const damage = Number.isFinite(amount) ? Math.max(0, amount) : 0;
+    return tile?.reinforced ? damage * RAFT_REINFORCEMENT_DAMAGE_MULTIPLIER : damage;
+  }
+
+  get reinforcedTileCount(): number {
+    let count = 0;
+    for (const tile of this.tiles.values()) if (tile.reinforced) count += 1;
+    return count;
+  }
+
   getEdgeTiles(): RaftTileState[] {
     return [...this.tiles.values()].filter((tile) =>
       [
@@ -318,6 +380,8 @@ export class RaftSystem {
     const plankCounts = this.plankMeshes.map(() => 0);
     let beamCount = 0;
     let nailCount = 0;
+    let reinforcementRailCount = 0;
+    let reinforcementCornerCount = 0;
 
     const orderedTiles = [...this.tiles.values()].sort((a, b) => a.z - b.z || a.x - b.x);
     for (const tile of orderedTiles) {
@@ -362,6 +426,38 @@ export class RaftSystem {
           nailCount += 1;
         }
       }
+
+      if (tile.reinforced) {
+        for (const offsetZ of [-0.61, 0.61]) {
+          this.position.set(tile.x * RAFT_TILE_X, 0.13, tile.z * RAFT_TILE_Z + offsetZ);
+          this.euler.set(0, tileRotation, 0);
+          this.rotation.setFromEuler(this.euler);
+          this.scale.set(1, 1, 1);
+          this.matrix.compose(this.position, this.rotation, this.scale);
+          this.reinforcementRails.setMatrixAt(reinforcementRailCount, this.matrix);
+          reinforcementRailCount += 1;
+        }
+        for (const offsetX of [-0.65, 0.65]) {
+          this.position.set(tile.x * RAFT_TILE_X + offsetX, 0.13, tile.z * RAFT_TILE_Z);
+          this.euler.set(0, Math.PI / 2 + tileRotation, 0);
+          this.rotation.setFromEuler(this.euler);
+          this.scale.set(RAFT_TILE_Z / RAFT_TILE_X, 1, 1);
+          this.matrix.compose(this.position, this.rotation, this.scale);
+          this.reinforcementRails.setMatrixAt(reinforcementRailCount, this.matrix);
+          reinforcementRailCount += 1;
+        }
+        for (const offsetX of [-0.61, 0.61]) {
+          for (const offsetZ of [-0.58, 0.58]) {
+            this.position.set(tile.x * RAFT_TILE_X + offsetX, 0.18, tile.z * RAFT_TILE_Z + offsetZ);
+            this.euler.set(0, tileRotation + (offsetX * offsetZ > 0 ? 0.09 : -0.09), 0);
+            this.rotation.setFromEuler(this.euler);
+            this.scale.set(1, 1, 1);
+            this.matrix.compose(this.position, this.rotation, this.scale);
+            this.reinforcementCorners.setMatrixAt(reinforcementCornerCount, this.matrix);
+            reinforcementCornerCount += 1;
+          }
+        }
+      }
     }
 
     this.plankMeshes.forEach((mesh, index) => {
@@ -377,6 +473,12 @@ export class RaftSystem {
     this.nails.count = nailCount;
     this.nails.instanceMatrix.needsUpdate = true;
     this.nails.computeBoundingSphere();
+    this.reinforcementRails.count = reinforcementRailCount;
+    this.reinforcementRails.instanceMatrix.needsUpdate = true;
+    this.reinforcementRails.computeBoundingSphere();
+    this.reinforcementCorners.count = reinforcementCornerCount;
+    this.reinforcementCorners.instanceMatrix.needsUpdate = true;
+    this.reinforcementCorners.computeBoundingSphere();
     this.revision += 1;
   }
 }

@@ -4,6 +4,7 @@ import { createSharkModel } from '../art/ProceduralModels';
 import { createSeededRandom, randomRange } from '../math/random';
 import { sampleWaveHeight } from '../math/waves';
 import { useGameStore, type SharkMode } from '../../state/gameStore';
+import { COLLECTION_NET_MAX_HEALTH, collectionNetOutsideCoordinate } from '../domain/collectionNets';
 import {
   RAFT_STRUCTURE_DEFINITIONS,
   raftStructureDamageStage,
@@ -11,13 +12,14 @@ import {
   type SavedRaftStructure,
 } from '../domain/raftStructures';
 import type { AudioSystem } from './AudioSystem';
+import type { CollectionNetSystem } from './CollectionNetSystem';
 import type { GridCoordinate, RaftSystem } from './RaftSystem';
 import type { RaftStructureSystem } from './RaftStructureSystem';
 import type { SplashSystem } from './SplashSystem';
 import type { PlayerController } from './PlayerController';
 
 export interface SharkRaftMutation {
-  kind: 'foundation' | 'structure';
+  kind: 'foundation' | 'structure' | 'collectionNet';
   targetId: string;
   health: number;
   destroyed: boolean;
@@ -25,13 +27,14 @@ export interface SharkRaftMutation {
 }
 
 export interface SharkDiagnostics {
-  targetKind: 'none' | 'foundation' | 'structure' | 'player';
+  targetKind: 'none' | 'foundation' | 'structure' | 'collectionNet' | 'player';
   targetId: string | null;
-  lastRaftTargetKind: 'none' | 'foundation' | 'structure';
+  lastRaftTargetKind: 'none' | 'foundation' | 'structure' | 'collectionNet';
   lastRaftTargetId: string | null;
   lastRaftTargetHealth: number;
   structureDamageEvents: number;
   foundationDamageEvents: number;
+  collectionNetDamageEvents: number;
 }
 
 export class SharkSystem {
@@ -54,6 +57,7 @@ export class SharkSystem {
   private nextAttackAt = 34;
   private targetTile: GridCoordinate | null = null;
   private targetStructureId: string | null = null;
+  private targetCollectionNetId: string | null = null;
   private biteIndex = 0;
   private hitsDuringAttack = 0;
   private health = 100;
@@ -67,6 +71,7 @@ export class SharkSystem {
   private lastRaftTargetHealth = 0;
   private structureDamageEvents = 0;
   private foundationDamageEvents = 0;
+  private collectionNetDamageEvents = 0;
 
   constructor(
     private readonly scene: Scene,
@@ -78,6 +83,7 @@ export class SharkSystem {
     private readonly splashes: SplashSystem,
     private readonly onImpact: (strength: number) => void,
     private readonly onRaftMutation: (mutation: SharkRaftMutation) => void = () => undefined,
+    private readonly collectionNets: CollectionNetSystem | null = null,
   ) {
     this.model = createSharkModel(materials);
     this.model.position.set(12, -0.8, 8);
@@ -86,7 +92,14 @@ export class SharkSystem {
       this.model.position.x - this.raft.group.position.x,
       this.model.position.z - this.raft.group.position.z,
     );
-    if (exposedWeakPoint && raftStructureDamageStage(exposedWeakPoint) !== 'intact') this.nextAttackAt = 6.5;
+    const exposedWeakNet = this.collectionNets?.findSharkTarget(
+      this.model.position.x - this.raft.group.position.x,
+      this.model.position.z - this.raft.group.position.z,
+    ) ?? null;
+    if (
+      (exposedWeakPoint && raftStructureDamageStage(exposedWeakPoint) !== 'intact')
+      || (exposedWeakNet && exposedWeakNet.health < COLLECTION_NET_MAX_HEALTH * 0.72)
+    ) this.nextAttackAt = 6.5;
     this.tailPivot = this.model.userData.tailPivot as Group;
     this.scene.add(this.model);
   }
@@ -148,15 +161,20 @@ export class SharkSystem {
     return {
       targetKind: this.targetingPlayer
         ? 'player'
-        : this.targetStructureId
-          ? 'structure'
-          : this.targetTile ? 'foundation' : 'none',
-      targetId: this.targetStructureId ?? (this.targetTile ? `${this.targetTile.x},${this.targetTile.z}` : null),
+        : this.targetCollectionNetId
+          ? 'collectionNet'
+          : this.targetStructureId
+            ? 'structure'
+            : this.targetTile ? 'foundation' : 'none',
+      targetId: this.targetCollectionNetId
+        ?? this.targetStructureId
+        ?? (this.targetTile ? `${this.targetTile.x},${this.targetTile.z}` : null),
       lastRaftTargetKind: this.lastRaftTargetKind,
       lastRaftTargetId: this.lastRaftTargetId,
       lastRaftTargetHealth: this.lastRaftTargetHealth,
       structureDamageEvents: this.structureDamageEvents,
       foundationDamageEvents: this.foundationDamageEvents,
+      collectionNetDamageEvents: this.collectionNetDamageEvents,
     };
   }
 
@@ -194,15 +212,26 @@ export class SharkSystem {
     const fromRaftX = this.model.position.x - this.raft.group.position.x;
     const fromRaftZ = this.model.position.z - this.raft.group.position.z;
     const exposedStructure = this.structures.findSharkTarget(edges, fromRaftX, fromRaftZ);
-    const chooseStructure = exposedStructure && (
+    const exposedNet = this.collectionNets?.findSharkTarget(fromRaftX, fromRaftZ) ?? null;
+    const chooseNet = Boolean(exposedNet && (
+      exposedNet.health < 0.72 * COLLECTION_NET_MAX_HEALTH
+      || this.random() < 0.68
+    ));
+    const chooseStructure = !chooseNet && exposedStructure && (
       raftStructureDamageStage(exposedStructure) !== 'intact'
       || this.random() < 0.72
     );
     let targetCoordinate: GridCoordinate;
-    if (chooseStructure && exposedStructure) {
+    if (chooseNet && exposedNet) {
+      this.targetCollectionNetId = exposedNet.id;
+      this.targetStructureId = null;
+      targetCoordinate = { x: exposedNet.x, z: exposedNet.z };
+    } else if (chooseStructure && exposedStructure) {
+      this.targetCollectionNetId = null;
       this.targetStructureId = exposedStructure.id;
       targetCoordinate = { x: exposedStructure.x, z: exposedStructure.z };
     } else {
+      this.targetCollectionNetId = null;
       this.targetStructureId = null;
       let best = edges[0];
       let bestScore = Number.NEGATIVE_INFINITY;
@@ -218,7 +247,12 @@ export class SharkSystem {
     this.targetTile = targetCoordinate;
     this.targetingPlayer = false;
     if (!this.updateRaftTargetWorld()) return;
-    this.outward.set(targetCoordinate.x, 0, targetCoordinate.z);
+    if (chooseNet && exposedNet) {
+      const outside = collectionNetOutsideCoordinate(exposedNet);
+      this.outward.set(outside.x - exposedNet.x, 0, outside.z - exposedNet.z);
+    } else {
+      this.outward.set(targetCoordinate.x, 0, targetCoordinate.z);
+    }
     if (this.outward.lengthSq() < 0.2) {
       this.outward.set(fromRaftX, 0, fromRaftZ);
     }
@@ -232,7 +266,11 @@ export class SharkSystem {
     const definition = exposedStructure && chooseStructure
       ? RAFT_STRUCTURE_DEFINITIONS[exposedStructure.type]
       : null;
-    this.showNotice(definition ? `${definition.shortName}附近传来急促水声` : '木筏外沿传来急促水声');
+    this.showNotice(
+      chooseNet
+        ? '潮兜收集网下方传来急促水声'
+        : definition ? `${definition.shortName}附近传来急促水声` : '木筏外沿传来急促水声',
+    );
   }
 
   private updateApproach(time: number, delta: number): void {
@@ -252,7 +290,11 @@ export class SharkSystem {
     if (this.model.position.distanceTo(this.approachWorld) < 0.42 || this.phaseTime > 5.2) {
       this.setMode('attacking');
     }
-    this.updateSpearInteraction(this.targetStructureId ? '鲨鱼逼近暴露结构' : '鲨鱼进入刺击距离');
+    this.updateSpearInteraction(
+      this.targetCollectionNetId
+        ? '鲨鱼逼近潮兜收集网'
+        : this.targetStructureId ? '鲨鱼逼近暴露结构' : '鲨鱼进入刺击距离',
+    );
   }
 
   private updateAttack(time: number): void {
@@ -276,11 +318,50 @@ export class SharkSystem {
       this.biteIndex += 1;
     }
     if (this.phaseTime > 3.35) this.beginRetreat();
-    this.updateSpearInteraction(this.targetStructureId ? '鲨鱼正在撕咬暴露结构' : '鲨鱼正在撕咬筏格');
+    this.updateSpearInteraction(
+      this.targetCollectionNetId
+        ? '鲨鱼正在撕咬潮兜收集网'
+        : this.targetStructureId ? '鲨鱼正在撕咬暴露结构' : '鲨鱼正在撕咬筏格',
+    );
   }
 
   private performBite(): void {
     if (!this.targetTile) return;
+    const reinforced = this.raft.getTile(this.targetTile)?.reinforced === true;
+    const biteDamage = Math.max(1, Math.round(this.raft.sharkDamageForTile(this.targetTile, 34)));
+    const protectionLabel = reinforced ? ' · 筏缘护甲吸收冲击' : '';
+    if (this.targetCollectionNetId) {
+      const targetId = this.targetCollectionNetId;
+      const result = this.collectionNets?.damageByShark(targetId, biteDamage);
+      if (!result?.changed) {
+        this.beginRetreat();
+        return;
+      }
+      const healthRatio = result.health / COLLECTION_NET_MAX_HEALTH;
+      this.audio.playSharkBite();
+      this.audio.playStructureDamage(this.targetWorld, 1 - healthRatio, result.destroyed);
+      this.splashes.spawnImpact(this.targetWorld, 0x6d806c, result.destroyed ? 26 : 18);
+      this.splashes.spawnStructureDamage(this.targetWorld, healthRatio, result.destroyed);
+      this.onImpact(result.destroyed ? 0.34 : reinforced ? 0.14 : 0.22);
+      this.collectionNetDamageEvents += 1;
+      this.lastRaftTargetKind = 'collectionNet';
+      this.lastRaftTargetId = targetId;
+      this.lastRaftTargetHealth = result.health;
+      this.onRaftMutation({
+        kind: 'collectionNet',
+        targetId,
+        health: result.health,
+        destroyed: result.destroyed,
+        removed: [],
+      });
+      this.showNotice(
+        result.destroyed
+          ? '潮兜收集网被撕碎，网中物资落海'
+          : `潮兜收集网受损 · ${Math.round(result.health)}/${COLLECTION_NET_MAX_HEALTH}${protectionLabel}`,
+      );
+      if (result.destroyed) this.beginRetreat();
+      return;
+    }
     if (this.targetStructureId) {
       const target = this.structures.getStructure(this.targetStructureId);
       if (!target) {
@@ -289,7 +370,7 @@ export class SharkSystem {
       }
       this.structures.getLocalImpactPosition(target, this.targetWorld);
       this.raft.localPointToWorld(this.targetWorld, this.targetWorld);
-      const result = this.structures.damage(target.id, 34);
+      const result = this.structures.damage(target.id, biteDamage);
       if (!result.changed) return;
       const definition = RAFT_STRUCTURE_DEFINITIONS[target.type];
       const health = result.structure?.health ?? 0;
@@ -308,7 +389,7 @@ export class SharkSystem {
         this.raft.localPointToWorld(this.cascadeWorld, this.cascadeWorld);
         this.splashes.spawnStructureDamage(this.cascadeWorld, 0, true, removed.type === 'roof');
       }
-      this.onImpact(result.destroyed ? 0.38 : 0.24);
+      this.onImpact(result.destroyed ? 0.38 : reinforced ? 0.15 : 0.24);
       this.structureDamageEvents += 1;
       this.lastRaftTargetKind = 'structure';
       this.lastRaftTargetId = target.id;
@@ -323,19 +404,19 @@ export class SharkSystem {
       this.showNotice(
         result.destroyed
           ? `${definition.shortName}被撕碎${result.removed.length > 1 ? ` · ${result.removed.length - 1}件失去支撑` : ''}`
-          : `${definition.shortName}受损 · ${health}/${definition.maxHealth}`,
+          : `${definition.shortName}受损 · ${Math.round(health)}/${definition.maxHealth}${protectionLabel}`,
       );
       if (result.destroyed) this.beginRetreat();
       return;
     }
 
-    const result = this.raft.damageTile(this.targetTile, 34);
+    const result = this.raft.damageTile(this.targetTile, biteDamage);
     if (!result.changed) return;
     this.audio.playSharkBite();
     this.audio.playStructureDamage(this.targetWorld, result.destroyed ? 1 : 1 - (result.tile?.health ?? 0) / 100, result.destroyed);
     this.splashes.spawn(this.targetWorld);
     this.splashes.spawnStructureDamage(this.targetWorld, (result.tile?.health ?? 0) / 100, result.destroyed);
-    this.onImpact(0.2);
+    this.onImpact(reinforced ? 0.13 : 0.2);
     useGameStore.getState().setRaft(this.raft.getIntegrityStats());
     const removed = result.destroyed ? this.structures.handleFoundationLoss() : [];
     for (const structure of removed) {
@@ -358,7 +439,7 @@ export class SharkSystem {
     this.showNotice(
       result.destroyed
         ? `外围筏格被撕碎${removed.length > 0 ? ` · ${removed.length}件结构失去支撑` : ''}`
-        : '木筏结构受损',
+        : `木筏结构受损${protectionLabel}`,
     );
     if (result.destroyed) {
       this.beginRetreat();
@@ -367,7 +448,9 @@ export class SharkSystem {
 
   private updateRaftTargetWorld(): boolean {
     if (!this.targetTile || !this.raft.hasTile(this.targetTile)) return false;
-    if (this.targetStructureId) {
+    if (this.targetCollectionNetId) {
+      if (!this.collectionNets?.getLocalImpactPosition(this.targetCollectionNetId, this.targetWorld)) return false;
+    } else if (this.targetStructureId) {
       const structure = this.structures.getStructure(this.targetStructureId);
       if (!structure) return false;
       this.structures.getLocalImpactPosition(structure, this.targetWorld);
@@ -382,6 +465,7 @@ export class SharkSystem {
     this.targetingPlayer = true;
     this.targetTile = null;
     this.targetStructureId = null;
+    this.targetCollectionNetId = null;
     this.hitsDuringAttack = 0;
     this.nextPlayerBiteAt = 0;
     this.audio.playSharkWarning();
@@ -444,6 +528,7 @@ export class SharkSystem {
   private beginRetreat(): void {
     this.targetTile = null;
     this.targetStructureId = null;
+    this.targetCollectionNetId = null;
     this.targetingPlayer = false;
     this.setMode('retreating');
     useGameStore.getState().setInteraction(null, 'shark');
@@ -493,7 +578,9 @@ export class SharkSystem {
       threat,
       health: this.health,
       visible: this.model.visible && this.mode !== 'distant',
-      target: this.targetingPlayer ? 'player' : this.targetStructureId ? 'structure' : 'raft',
+      target: this.targetingPlayer
+        ? 'player'
+        : this.targetCollectionNetId ? 'collectionNet' : this.targetStructureId ? 'structure' : 'raft',
     });
   }
 

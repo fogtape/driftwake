@@ -30,7 +30,7 @@ describe('save schema', () => {
     });
     expect(save?.player.survival).toEqual({ health: 100, thirst: 34, hunger: 0, oxygen: 100 });
     expect(save?.player.playSeconds).toBe(42);
-    expect(save?.raft.tiles).toEqual([{ x: 0, z: 0, health: 75 }]);
+    expect(save?.raft.tiles).toEqual([{ x: 0, z: 0, health: 75, reinforced: false }]);
     expect(save?.raft.structures).toEqual([]);
     expect(save?.raft.devices).toMatchObject([
       { id: 'p', type: 'purifier', x: 0, z: 0, rotation: Math.PI / 2, phase: 'working', elapsed: 9 },
@@ -38,7 +38,7 @@ describe('save schema', () => {
   });
 
   it('rejects unsupported versions and provides a stable starting raft', () => {
-    expect(sanitizeSave({ version: 17 })).toBeNull();
+    expect(sanitizeSave({ version: SAVE_VERSION + 1 })).toBeNull();
     expect(createDefaultRaftTiles()).toHaveLength(9);
   });
 
@@ -64,7 +64,7 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v16');
+    expect(SAVE_KEY).toBe('driftwake.save.v17');
     expect(save?.version).toBe(SAVE_VERSION);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
@@ -87,6 +87,21 @@ describe('save schema', () => {
     });
     expect(save?.version).toBe(SAVE_VERSION);
     expect(save?.raft.collectionNets).toEqual([]);
+  });
+
+  it('migrates v16 foundations without armor and preserves valid v17 reinforcement', () => {
+    const legacy = sanitizeSave({
+      version: 16,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 12 },
+      raft: { tiles: [{ x: 0, z: 0, health: 100, reinforced: true }] },
+    });
+    const current = sanitizeSave({
+      version: SAVE_VERSION,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 12 },
+      raft: { tiles: [{ x: 0, z: 0, health: 100, reinforced: true }] },
+    });
+    expect(legacy?.raft.tiles[0]?.reinforced).toBe(false);
+    expect(current?.raft.tiles[0]?.reinforced).toBe(true);
   });
 
   it('sanitizes v16 collection nets against dynamic raft edges', () => {

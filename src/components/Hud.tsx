@@ -111,6 +111,7 @@ function clampPercent(value: number): number {
 
 function BuildPieceIcon({ piece, size = 18 }: { piece: RaftBuildPiece; size?: number }) {
   if (piece === 'foundation') return <Square size={size} />;
+  if (piece === 'reinforcement') return <ShieldCheck size={size} />;
   if (piece === 'wall') return <BrickWall size={size} />;
   if (piece === 'door') return <DoorOpen size={size} />;
   if (piece === 'pillar') return <Columns3 size={size} />;
@@ -367,6 +368,8 @@ export function Hud({
         <div>
           <span>{shark.target === 'player'
             ? (shark.mode === 'attacking' ? '深潮鲨正在扑咬' : '深潮鲨锁定了你')
+            : shark.target === 'collectionNet'
+              ? (shark.mode === 'attacking' ? '潮兜收集网遭到撕咬' : '外缘网具已被锁定')
             : shark.target === 'structure'
               ? (shark.mode === 'attacking' ? '暴露结构遭到撕咬' : '脆弱结构已被锁定')
               : shark.mode === 'attacking' ? '筏体遭到撕咬' : '深潮鲨正在逼近'}</span>
@@ -423,7 +426,9 @@ export function Hud({
         className={`build-palette ${selectedTool === 'hammer' && !placementDevice ? 'is-visible' : ''} is-${build.mode} ${build.valid ? 'is-valid' : 'is-invalid'}`}
         aria-label={structureRepair && structureRepairDefinition
           ? `修补${structureRepairDefinition.name}，完整度 ${structureRepair.health}/${structureRepair.maxHealth}`
-          : `${RAFT_BUILD_PIECE_DEFINITIONS[build.piece].name}，${build.level + 1}层，朝向${['北', '东', '南', '西'][build.rotation]}，筏上结构 ${build.structures} 件`}
+          : build.piece === 'reinforcement'
+            ? `${RAFT_BUILD_PIECE_DEFINITIONS[build.piece].name}，鲨鱼伤害降低百分之五十五`
+            : `${RAFT_BUILD_PIECE_DEFINITIONS[build.piece].name}，${build.level + 1}层，朝向${['北', '东', '南', '西'][build.rotation]}，筏上结构 ${build.structures} 件`}
       >
         <div className="build-palette__pieces" aria-hidden="true">
           {RAFT_BUILD_PIECES.map((piece) => (
@@ -437,7 +442,9 @@ export function Hud({
           <span>
             {structureRepair
               ? <><ShieldAlert size={12} />{structureRepair.health}/{structureRepair.maxHealth}</>
-              : <><RotateCw size={12} />{['北', '东', '南', '西'][build.rotation]}<small>{build.level + 1}层</small></>}
+              : build.piece === 'reinforcement'
+                ? <><ShieldCheck size={12} />55%<small>减伤</small></>
+                : <><RotateCw size={12} />{['北', '东', '南', '西'][build.rotation]}<small>{build.level + 1}层</small></>}
           </span>
           <div aria-label={structureRepair ? '修补成本' : '建造成本'}>
             {(Object.entries(displayedBuildCost) as [keyof Inventory, number][]).map(([itemId, amount]) => (

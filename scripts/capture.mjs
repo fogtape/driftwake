@@ -854,7 +854,7 @@ const structureDamageSave = {
 
 const collectionNetSave = {
   ...seededSave,
-  version: 16,
+  version: 17,
   player: {
     ...seededSave.player,
     inventory: {
@@ -884,6 +884,51 @@ const collectionNetSave = {
     ...seededSave.world,
     island: { ...seededSave.world.island, dockVersion: 1, phase: 'approaching', elapsed: 0 },
     drops: [],
+  },
+};
+
+const perimeterDefenseSave = {
+  ...collectionNetSave,
+  player: {
+    ...collectionNetSave.player,
+    inventory: {
+      hook: 1,
+      hammer: 1,
+      timber: 6,
+      rope: 4,
+      metalIngot: 2,
+      scrap: 4,
+    },
+    toolDurability: { hook: 24, hammer: 80 },
+    selectedTool: 'hammer',
+  },
+  raft: {
+    ...collectionNetSave.raft,
+    tiles: collectionNetSave.raft.tiles.map((tile) => ({ ...tile, health: 100, reinforced: false })),
+    collectionNets: [],
+  },
+};
+
+const perimeterDefenseVisualSave = {
+  ...perimeterDefenseSave,
+  player: {
+    ...perimeterDefenseSave.player,
+    selectedTool: 'hammer',
+  },
+  raft: {
+    ...perimeterDefenseSave.raft,
+    tiles: perimeterDefenseSave.raft.tiles.map((tile) => ({
+      ...tile,
+      reinforced: tile.z === -1,
+    })),
+    collectionNets: [{
+      id: 'defense-visual-net',
+      x: 0,
+      z: -1,
+      rotation: 0,
+      health: 80,
+      storage: { timber: 3, fiber: 2, polymer: 1 },
+    }],
   },
 };
 
@@ -949,7 +994,7 @@ async function openDesktopPage(label, options = {}) {
   if (options.seedSave) {
     await context.addInitScript((save) => {
       localStorage.setItem(`driftwake.save.v${save.version}`, JSON.stringify(save));
-    }, options.collectionNetStart ? collectionNetSave : options.failureStart ? failureSave : options.survivalPressureStart ? survivalPressureSave : options.structureDamageStart ? structureDamageSave : options.structureFloorCeilingStart ? structureFloorCeilingSave : options.structureRoofCeilingStart ? structureRoofCeilingSave : options.structureTraversalStart ? structureTraversalSave : options.structureVisualStart ? structureVisualSave : options.structureBuildStart ? structureBuildSave : options.durabilityHammerStart ? durabilityHammerSave : options.durabilityFishingStart ? durabilityFishingSave : options.durabilityAxeStart ? durabilityAxeSave : options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
+    }, options.perimeterDefenseVisualStart ? perimeterDefenseVisualSave : options.perimeterDefenseStart ? perimeterDefenseSave : options.collectionNetStart ? collectionNetSave : options.failureStart ? failureSave : options.survivalPressureStart ? survivalPressureSave : options.structureDamageStart ? structureDamageSave : options.structureFloorCeilingStart ? structureFloorCeilingSave : options.structureRoofCeilingStart ? structureRoofCeilingSave : options.structureTraversalStart ? structureTraversalSave : options.structureVisualStart ? structureVisualSave : options.structureBuildStart ? structureBuildSave : options.durabilityHammerStart ? durabilityHammerSave : options.durabilityFishingStart ? durabilityFishingSave : options.durabilityAxeStart ? durabilityAxeSave : options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
   }
   const page = await context.newPage();
   monitorPage(page, label);
@@ -1292,7 +1337,7 @@ async function captureCrafting() {
   await ropeRecipe.getByRole('button', { name: '将3个编织绳加入制作队列' }).click({ force: true });
   await page.waitForFunction(() => {
     const mount = document.querySelector('.game-mount');
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return mount?.dataset.craftingQueueLength === '3'
       && saved?.version === 13
       && saved?.player?.inventory?.fiber === 8
@@ -1302,13 +1347,13 @@ async function captureCrafting() {
   await cancelButtons.nth(2).click({ force: true });
   await page.waitForFunction(() => {
     const mount = document.querySelector('.game-mount');
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return mount?.dataset.craftingQueueLength === '2'
       && saved?.player?.inventory?.fiber === 10
       && saved?.player?.crafting?.entries?.length === 2;
   });
   const queuedState = await page.evaluate(() => {
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     const mount = document.querySelector('.game-mount');
     const dialog = document.querySelector('.field-pack');
     const catalog = document.querySelector('.crafting-catalog');
@@ -1359,7 +1404,7 @@ async function captureCrafting() {
   await dialog.getByRole('button', { name: '取消编织绳并返还材料' }).last().click({ force: true });
   await page.waitForFunction(() => {
     const mount = document.querySelector('.game-mount');
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return mount?.dataset.craftingQueueLength === '1'
       && saved?.player?.inventory?.fiber === 12
       && saved?.player?.crafting?.entries?.length === 1;
@@ -1377,7 +1422,7 @@ async function captureCrafting() {
     && Number(document.querySelector('.game-mount')?.dataset.craftingCompletedCount) >= 1
   ), 60_000);
   const completedState = await page.evaluate(() => {
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     const data = document.querySelector('.game-mount')?.dataset;
     return {
       queueLength: Number(data?.craftingQueueLength),
@@ -1464,7 +1509,7 @@ async function captureSurvivalPressure() {
 
   const recoveryState = await page.evaluate(() => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     const dialog = document.querySelector('.field-pack')?.getBoundingClientRect();
     const feedback = document.querySelector('.field-pack__feedback')?.getBoundingClientRect();
     return {
@@ -1542,7 +1587,7 @@ async function captureToolDurability() {
   );
   const hammerState = await hammerRun.page.evaluate(() => {
     const mount = document.querySelector('.game-mount');
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return {
       wearEvents: Number(mount?.dataset.toolWearEventCount),
       lastWear: mount?.dataset.lastToolWear,
@@ -1676,7 +1721,7 @@ async function captureToolDurability() {
   );
   const fishingState = await fishingRun.page.evaluate(() => {
     const mount = document.querySelector('.game-mount');
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return {
       phase: mount?.dataset.fishingPhase,
       wearEvents: Number(mount?.dataset.toolWearEventCount),
@@ -1758,7 +1803,7 @@ async function captureToolDurability() {
   );
   const axeState = await axeRun.page.evaluate(() => {
     const mount = document.querySelector('.game-mount');
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return {
       wearEvents: Number(mount?.dataset.toolWearEventCount),
       lastWear: mount?.dataset.lastToolWear,
@@ -1876,7 +1921,7 @@ async function captureBuildingStructures() {
   await page.keyboard.press('KeyE');
   await waitForRuntime(page, () => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return data?.structureOpenDoors === '0'
       && saved?.raft?.structures?.find((structure) => structure.id === 'showcase-door')?.open === false;
   }, 5_000);
@@ -1960,7 +2005,7 @@ async function captureBuildingStructures() {
   await page.waitForTimeout(400);
   const state = await page.evaluate(() => {
     const mount = document.querySelector('.game-mount');
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     const palette = document.querySelector('.build-palette');
     const paletteRect = palette?.getBoundingClientRect();
     return {
@@ -2104,13 +2149,13 @@ async function captureBuildingTraversal() {
   await page.keyboard.up('KeyW');
   await page.evaluate(() => window.dispatchEvent(new Event('beforeunload')));
   await waitForRuntime(page, () => {
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return saved?.player?.navigation?.surface === 'raft'
       && Math.abs((saved?.player?.navigation?.y ?? 0) - 2.18) < 0.02;
   }, 5_000);
   const upperBeforeReload = await page.evaluate(() => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return {
       footY: Number(data?.playerRaftFootY),
       surface: data?.playerRaftSurface,
@@ -2118,12 +2163,12 @@ async function captureBuildingTraversal() {
       savedNavigation: saved?.player?.navigation,
     };
   });
-  const upperSave = await page.evaluate(() => JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null'));
+  const upperSave = await page.evaluate(() => JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null'));
 
   await context.close();
   context = await browser.newContext({ viewport: { width: 1024, height: 640 }, deviceScaleFactor: 1 });
   await context.addInitScript((save) => {
-    localStorage.setItem('driftwake.save.v16', JSON.stringify(save));
+    localStorage.setItem('driftwake.save.v17', JSON.stringify(save));
   }, upperSave);
   page = await context.newPage();
   monitorPage(page, 'building-traversal-restored');
@@ -2174,7 +2219,7 @@ async function captureBuildingTraversal() {
   await page.waitForTimeout(250);
   const final = await page.evaluate(() => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return {
       contextHealthy: data?.contextHealthy,
       simulationActive: data?.simulationActive,
@@ -2299,14 +2344,14 @@ async function captureBuildingDamageRepair() {
   await enterGame(page);
   await waitForRuntime(page, () => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return data?.raftStructureCount === '1'
       && saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health === 75;
   }, 10_000);
   try {
     await waitForRuntime(page, () => {
       const data = document.querySelector('.game-mount')?.dataset;
-      const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
       return Number(data?.sharkStructureDamageCount) >= 2
         && data?.sharkLastRaftTargetKind === 'structure'
         && data?.sharkLastRaftTargetId === 'damage-wall'
@@ -2316,7 +2361,7 @@ async function captureBuildingDamageRepair() {
   } catch (error) {
     const diagnostics = await page.evaluate(() => {
       const data = document.querySelector('.game-mount')?.dataset;
-      const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
       return {
         simulationTicks: data?.simulationTickCount,
         simulationActive: data?.simulationActive,
@@ -2341,7 +2386,7 @@ async function captureBuildingDamageRepair() {
   }
   const damagedState = await page.evaluate(() => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return {
       damageEvents: Number(data?.sharkStructureDamageCount),
       foundationEvents: Number(data?.sharkFoundationDamageCount),
@@ -2355,7 +2400,7 @@ async function captureBuildingDamageRepair() {
       notices: globalThis.__driftwakeCaptureNotices ?? [],
     };
   });
-  const damagedSave = await page.evaluate(() => JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null'));
+  const damagedSave = await page.evaluate(() => JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null'));
   if (
     damagedState.damageEvents !== 2
     || damagedState.foundationEvents !== 0
@@ -2374,7 +2419,7 @@ async function captureBuildingDamageRepair() {
   await context.close();
   context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
   await context.addInitScript((save) => {
-    localStorage.setItem('driftwake.save.v16', JSON.stringify(save));
+    localStorage.setItem('driftwake.save.v17', JSON.stringify(save));
   }, damagedSave);
   page = await context.newPage();
   monitorPage(page, 'building-damage-restored');
@@ -2384,7 +2429,7 @@ async function captureBuildingDamageRepair() {
   await enterGame(page);
   await waitForRuntime(page, () => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return data?.raftCriticalStructureCount === '1'
       && saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health === 7;
   }, 10_000);
@@ -2447,7 +2492,7 @@ async function captureBuildingDamageRepair() {
   await page.mouse.click(viewport.width / 2, viewport.height / 2);
   await waitForRuntime(page, () => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return data?.lastToolWear === 'repair:hammer:79'
       && data?.buildRepairHealth === '51'
       && saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health === 51
@@ -2457,7 +2502,7 @@ async function captureBuildingDamageRepair() {
   await page.mouse.click(viewport.width / 2, viewport.height / 2);
   await waitForRuntime(page, () => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return data?.lastToolWear === 'repair:hammer:78'
       && data?.buildRepairHealth === '95'
       && saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health === 95
@@ -2467,7 +2512,7 @@ async function captureBuildingDamageRepair() {
   await page.mouse.click(viewport.width / 2, viewport.height / 2);
   await waitForRuntime(page, () => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return data?.lastToolWear === 'repair:hammer:77'
       && data?.raftDamagedStructureCount === '0'
       && data?.buildRepairTarget === 'none'
@@ -2480,7 +2525,7 @@ async function captureBuildingDamageRepair() {
   );
   const final = await page.evaluate(() => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return {
       contextHealthy: data?.contextHealthy,
       simulationActive: data?.simulationActive,
@@ -2848,6 +2893,57 @@ async function captureSignalNetwork() {
 
 async function readInteractionPrompt(page) {
   return page.evaluate(() => document.querySelector('.interaction-prompt')?.textContent?.trim() ?? '');
+}
+
+async function aimLocalPointToPrompt(page, target, expected, iterations = 6) {
+  await page.waitForFunction(() => {
+    const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.collectionNetAim ?? '{}');
+    return Array.isArray(aim.camera)
+      && Array.isArray(aim.forward)
+      && Math.hypot(...aim.forward) > 0.5;
+  }, undefined, { timeout: 8_000 });
+  let prompt = await readInteractionPrompt(page);
+  for (let iteration = 0; iteration < iterations && !prompt.includes(expected); iteration += 1) {
+    await page.evaluate(([targetX, targetY, targetZ]) => {
+      const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.collectionNetAim ?? '{}');
+      const [cameraX, cameraY, cameraZ] = aim.camera;
+      const [forwardX, forwardY, forwardZ] = aim.forward;
+      const deltaX = targetX - cameraX;
+      const deltaY = targetY - cameraY;
+      const deltaZ = targetZ - cameraZ;
+      const distance = Math.hypot(deltaX, deltaY, deltaZ);
+      const desiredYaw = Math.atan2(-deltaX / distance, -deltaZ / distance);
+      const desiredPitch = Math.asin(deltaY / distance);
+      const currentYaw = Math.atan2(-forwardX, -forwardZ);
+      const currentPitch = Math.asin(forwardY);
+      const movement = new MouseEvent('mousemove');
+      Object.defineProperties(movement, {
+        movementX: {
+          value: Math.atan2(
+            Math.sin(currentYaw - desiredYaw),
+            Math.cos(currentYaw - desiredYaw),
+          ) / 0.00175,
+        },
+        movementY: { value: (currentPitch - desiredPitch) / 0.00155 },
+      });
+      document.dispatchEvent(movement);
+    }, target);
+    await page.waitForTimeout(280);
+    prompt = await readInteractionPrompt(page);
+  }
+  return prompt;
+}
+
+async function aimCollectionNetToPrompt(page, id, expected) {
+  await page.waitForFunction((targetId) => {
+    const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.collectionNetAim ?? '{}');
+    return aim.firstNet?.id === targetId && Array.isArray(aim.firstNet.center);
+  }, id, { timeout: 8_000 });
+  const center = await page.evaluate(() => {
+    const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.collectionNetAim ?? '{}');
+    return aim.firstNet.center;
+  });
+  return aimLocalPointToPrompt(page, center, expected);
 }
 
 async function aimDownToPrompt(page, expected, steps = 50) {
@@ -3581,9 +3677,9 @@ async function captureSalvage() {
   await context.close();
 }
 
-async function openCollectionNetColdPage(label, save, accelerated = false) {
+async function openCollectionNetColdPage(label, save, accelerated = false, options = {}) {
   const context = await browser.newContext({
-    viewport: { width: desktopWidth, height: desktopHeight },
+    viewport: { width: options.width ?? desktopWidth, height: options.height ?? desktopHeight },
     deviceScaleFactor: 1,
   });
   if (accelerated) {
@@ -3594,10 +3690,10 @@ async function openCollectionNetColdPage(label, save, accelerated = false) {
         configurable: true,
         value: () => origin + (nativeNow() - origin) * scale,
       });
-    }, 4);
+    }, options.simulationTimeScale ?? 4);
   }
   await context.addInitScript(({ currentSave, quality }) => {
-    localStorage.setItem('driftwake.save.v16', JSON.stringify(currentSave));
+    localStorage.setItem('driftwake.save.v17', JSON.stringify(currentSave));
     localStorage.setItem('driftwake.preferences.v2', JSON.stringify({
       version: 2,
       audioEnabled: false,
@@ -3640,13 +3736,13 @@ async function captureCollectionNet() {
   await page.mouse.click(desktopWidth / 2, desktopHeight / 2);
   await waitForRuntime(page, () => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return data?.collectionNetCount === '1'
-      && saved?.version === 16
+      && saved?.version === 17
       && saved?.raft?.collectionNets?.length === 1
       && !saved?.player?.inventory?.collectionNetKit;
   }, 6_000);
-  const placedSave = await page.evaluate(() => JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null'));
+  const placedSave = await page.evaluate(() => JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null'));
   await context.close();
 
   const { context: captureContext, page: capturePage } = await openCollectionNetColdPage(
@@ -3664,7 +3760,7 @@ async function captureCollectionNet() {
   } catch (error) {
     const diagnostic = await capturePage.evaluate(() => {
       const data = document.querySelector('.game-mount')?.dataset;
-      const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
       return {
         mount: data?.collectionNetMount,
         nearestDrift: data?.collectionNetNearestDrift,
@@ -3687,7 +3783,7 @@ async function captureCollectionNet() {
   }
   const captured = await capturePage.evaluate(() => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     const storage = saved?.raft?.collectionNets?.[0]?.storage ?? {};
     return {
       count: Number(data?.collectionNetCount ?? 0),
@@ -3717,14 +3813,14 @@ async function captureCollectionNet() {
   await capturePage.keyboard.press('KeyE');
   await waitForRuntime(capturePage, () => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     const storage = saved?.raft?.collectionNets?.[0]?.storage ?? {};
     return data?.collectionNetStored === '0'
       && Object.values(storage).every((amount) => Number(amount ?? 0) <= 0);
   }, 15_000);
-  const finalSave = await capturePage.evaluate(() => JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null'));
-  if (finalSave?.version !== 16 || finalSave?.raft?.collectionNets?.length !== 1) {
-    throw new Error(`Collection-net v16 save missing after collection: ${JSON.stringify(finalSave?.raft?.collectionNets)}`);
+  const finalSave = await capturePage.evaluate(() => JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null'));
+  if (finalSave?.version !== 17 || finalSave?.raft?.collectionNets?.length !== 1) {
+    throw new Error(`Collection-net v17 save missing after collection: ${JSON.stringify(finalSave?.raft?.collectionNets)}`);
   }
   await captureContext.close();
 
@@ -3734,10 +3830,10 @@ async function captureCollectionNet() {
   );
   await waitForRuntime(reloadPage, () => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return data?.collectionNetCount === '1'
       && data?.collectionNetStored === '0'
-      && saved?.version === 16
+      && saved?.version === 17
       && saved?.raft?.collectionNets?.length === 1;
   }, 8_000);
   await inspectCanvasPixels(reloadPage, 'collection-net-cold-reload');
@@ -3749,7 +3845,7 @@ async function captureCollectionNet() {
   await reloadPage.mouse.click(desktopWidth / 2, desktopHeight / 2, { button: 'right' });
   await waitForRuntime(reloadPage, () => {
     const data = document.querySelector('.game-mount')?.dataset;
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return data?.collectionNetCount === '0'
       && saved?.raft?.collectionNets?.length === 0
       && saved?.player?.inventory?.collectionNetKit === 1
@@ -3757,6 +3853,335 @@ async function captureCollectionNet() {
   }, 15_000);
   console.log(`Collection net loop: ${JSON.stringify(captured)}; cold reload and dismantle: ok`);
   await reloadContext.close();
+}
+
+async function selectReinforcementPiece(page) {
+  await page.keyboard.press('Digit2');
+  await page.evaluate(() => {
+    document.querySelector('canvas')?.dispatchEvent(new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaY: 120,
+    }));
+  });
+  await waitForRuntime(
+    page,
+    () => document.querySelector('.game-mount')?.dataset.buildPiece === 'reinforcement',
+    5_000,
+  );
+}
+
+async function verifyCollectionNetDestruction(destructionSave, viewport) {
+  const destruction = await openCollectionNetColdPage('perimeter-defense-destruction', destructionSave, true, {
+    ...viewport,
+    simulationTimeScale: 10,
+  });
+  try {
+    await waitForRuntime(destruction.page, () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+      return data?.collectionNetCount === '0'
+        && Number(data?.worldDropCount ?? 0) >= 1
+        && Number(data?.sharkCollectionNetDamageCount ?? 0) >= 1
+        && data?.sharkLastRaftTargetKind === 'collectionNet'
+        && saved?.raft?.collectionNets?.length === 0
+        && saved?.world?.drops?.some((drop) => drop.loot?.timber >= 2 && drop.loot?.fiber >= 1);
+    }, 90_000);
+  } catch (error) {
+    const diagnostics = await destruction.page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+      return {
+        simulationTicks: data?.simulationTickCount,
+        simulationActive: data?.simulationActive,
+        targetKind: data?.sharkRaftTargetKind,
+        targetId: data?.sharkRaftTargetId,
+        lastKind: data?.sharkLastRaftTargetKind,
+        lastId: data?.sharkLastRaftTargetId,
+        lastHealth: data?.sharkLastRaftTargetHealth,
+        netDamageEvents: data?.sharkCollectionNetDamageCount,
+        foundationDamageEvents: data?.sharkFoundationDamageCount,
+        netHealth: data?.collectionNetFirstHealth,
+        netCount: data?.collectionNetCount,
+        worldDropCount: data?.worldDropCount,
+        mutation: data?.lastRaftMutation,
+        saveNets: saved?.raft?.collectionNets ?? null,
+        saveDrops: saved?.world?.drops ?? null,
+      };
+    });
+    throw new Error(`Collection-net destruction timed out: ${JSON.stringify(diagnostics)}`, { cause: error });
+  }
+  const result = await destruction.page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+    return {
+      damageEvents: Number(data?.sharkCollectionNetDamageCount ?? 0),
+      worldDrops: Number(data?.worldDropCount ?? 0),
+      mutation: data?.lastRaftMutation,
+      savedDrops: saved?.world?.drops ?? [],
+    };
+  });
+  await destruction.context.close();
+  return result;
+}
+
+async function capturePerimeterDestructionProbe() {
+  const viewport = { width: 768, height: 480 };
+  const destructionSave = {
+    ...perimeterDefenseSave,
+    player: { ...perimeterDefenseSave.player, selectedTool: 'hook' },
+    raft: {
+      ...perimeterDefenseSave.raft,
+      collectionNets: [{
+        id: 'defense-net',
+        x: 0,
+        z: 1,
+        rotation: 2,
+        health: 20,
+        storage: { timber: 2, fiber: 1 },
+      }],
+    },
+  };
+  const result = await verifyCollectionNetDestruction(destructionSave, viewport);
+  console.log(`Perimeter destruction probe: ${JSON.stringify(result)}`);
+}
+
+async function capturePerimeterDefenseVisual() {
+  const viewport = { width: 1024, height: 640 };
+  const visual = await openDesktopPage('perimeter-defense-visual', {
+    seedSave: true,
+    perimeterDefenseVisualStart: true,
+    ...viewport,
+  });
+  await enterGame(visual.page);
+  await selectReinforcementPiece(visual.page);
+  const prompt = await aimCollectionNetToPrompt(
+    visual.page,
+    'defense-visual-net',
+    '右键拆除',
+  );
+  if (!prompt.includes('右键拆除')) {
+    throw new Error(`Perimeter defense visual focus failed: ${prompt}`);
+  }
+  await waitForRuntime(
+    visual.page,
+    () => document.querySelector('.game-mount')?.dataset.raftReinforcedTileCount === '3',
+    8_000,
+  );
+  await captureCompositedPage(
+    visual.page,
+    new URL('perimeter-defense-visual-desktop.png', outputDir).pathname,
+  );
+  await inspectCanvasPixels(visual.page, 'perimeter-defense-visual');
+  console.log('Perimeter defense visual: three armored foundations, loaded net and reinforcement HUD captured');
+  await visual.context.close();
+}
+
+async function capturePerimeterDefense() {
+  const viewport = { width: 768, height: 480 };
+  const placement = await openDesktopPage('perimeter-defense-placement', {
+    seedSave: true,
+    perimeterDefenseStart: true,
+    ...viewport,
+  });
+  await enterGame(placement.page);
+  await selectReinforcementPiece(placement.page);
+  const placementPrompt = await aimDownToPrompt(placement.page, '潮铸筏缘护甲', 70);
+  if (!placementPrompt.includes('潮铸筏缘护甲')) {
+    const diagnostics = await placement.page.evaluate(() => ({
+      prompt: document.querySelector('.interaction-prompt')?.textContent?.trim() ?? '',
+      build: { ...document.querySelector('.game-mount')?.dataset },
+    }));
+    await placement.page.screenshot({ path: new URL('perimeter-defense-placement-diagnostic.png', outputDir).pathname });
+    throw new Error(`Perimeter reinforcement focus failed: ${JSON.stringify(diagnostics)}`);
+  }
+  await placement.page.mouse.click(viewport.width / 2, viewport.height / 2);
+  await waitForRuntime(placement.page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+    const host = saved?.raft?.tiles?.find((tile) => tile.x === 0 && tile.z === -1);
+    return data?.raftReinforcedTileCount === '1'
+      && host?.reinforced === true
+      && saved?.player?.inventory?.metalIngot === 1
+      && saved?.player?.inventory?.scrap === 2
+      && saved?.player?.toolDurability?.hammer === 79;
+  }, 10_000);
+  if (process.env.CAPTURE_FAST !== '1') {
+    await inspectCanvasPixels(placement.page, 'perimeter-defense-armored');
+    await captureCompositedPage(
+      placement.page,
+      new URL('perimeter-defense-armored-desktop.png', outputDir).pathname,
+    );
+  }
+  const installedSave = await placement.page.evaluate(
+    () => JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null'),
+  );
+  console.log('Perimeter defense stage: reinforcement installed');
+  await placement.context.close();
+
+  const attackSave = {
+    ...installedSave,
+    raft: {
+      ...installedSave.raft,
+      tiles: installedSave.raft.tiles.map((tile) => ({
+        ...tile,
+        reinforced: tile.x === 0 && tile.z === 1,
+      })),
+      collectionNets: [{
+        id: 'defense-net',
+        x: 0,
+        z: 1,
+        rotation: 2,
+        health: 52,
+        storage: { timber: 2, fiber: 1 },
+      }],
+    },
+  };
+  const attack = await openCollectionNetColdPage('perimeter-defense-attack', attackSave, true, {
+    ...viewport,
+    simulationTimeScale: 10,
+  });
+  try {
+    await waitForRuntime(attack.page, () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+      return Number(data?.sharkCollectionNetDamageCount ?? 0) >= 2
+        && data?.sharkLastRaftTargetKind === 'collectionNet'
+        && data?.sharkLastRaftTargetId === 'defense-net'
+        && data?.collectionNetFirstHealth === '22'
+        && saved?.raft?.collectionNets?.[0]?.health === 22
+        && saved?.raft?.tiles?.find((tile) => tile.x === 0 && tile.z === 1)?.reinforced === true;
+    }, 90_000);
+  } catch (error) {
+    const diagnostics = await attack.page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+      return {
+        simulationTicks: data?.simulationTickCount,
+        simulationActive: data?.simulationActive,
+        targetKind: data?.sharkRaftTargetKind,
+        targetId: data?.sharkRaftTargetId,
+        lastKind: data?.sharkLastRaftTargetKind,
+        lastId: data?.sharkLastRaftTargetId,
+        lastHealth: data?.sharkLastRaftTargetHealth,
+        netDamageEvents: data?.sharkCollectionNetDamageCount,
+        foundationDamageEvents: data?.sharkFoundationDamageCount,
+        netHealth: data?.collectionNetFirstHealth,
+        netCount: data?.collectionNetCount,
+        reinforcedTiles: data?.raftReinforcedTileCount,
+        mutation: data?.lastRaftMutation,
+        saveNet: saved?.raft?.collectionNets?.[0] ?? null,
+        host: saved?.raft?.tiles?.find((tile) => tile.x === 0 && tile.z === -1) ?? null,
+      };
+    });
+    throw new Error(`Perimeter defense attack timed out: ${JSON.stringify(diagnostics)}`, { cause: error });
+  }
+  const damaged = await attack.page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+    return {
+      damageEvents: Number(data?.sharkCollectionNetDamageCount ?? 0),
+      health: Number(data?.collectionNetFirstHealth ?? 0),
+      reinforcedTiles: Number(data?.raftReinforcedTileCount ?? 0),
+      mutation: data?.lastRaftMutation,
+      savedHealth: saved?.raft?.collectionNets?.[0]?.health,
+    };
+  });
+  if (
+    damaged.damageEvents !== 2
+    || damaged.health !== 22
+    || damaged.savedHealth !== 22
+    || damaged.reinforcedTiles !== 1
+    || damaged.mutation !== 'collectionNet:defense-net:22:false'
+  ) {
+    throw new Error(`Perimeter defense reduction failed: ${JSON.stringify(damaged)}`);
+  }
+  console.log(`Perimeter defense stage: armored attack ${JSON.stringify(damaged)}`);
+  const damagedSave = await attack.page.evaluate(
+    () => JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null'),
+  );
+  await attack.context.close();
+
+  const repair = await openCollectionNetColdPage('perimeter-defense-repair', damagedSave, false, viewport);
+  await waitForRuntime(repair.page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+    return data?.collectionNetFirstHealth === '22'
+      && saved?.raft?.collectionNets?.[0]?.health === 22
+      && saved?.raft?.tiles?.find((tile) => tile.x === 0 && tile.z === 1)?.reinforced === true;
+  }, 8_000);
+  if (process.env.CAPTURE_FAST !== '1') {
+    await inspectCanvasPixels(repair.page, 'perimeter-defense-damaged-net');
+    await captureCompositedPage(
+      repair.page,
+      new URL('perimeter-defense-damaged-net-desktop.png', outputDir).pathname,
+    );
+  }
+  await ensurePointerLock(repair.page);
+  const repairPrompt = await aimCollectionNetToPrompt(repair.page, 'defense-net', '修补潮兜收集网');
+  if (!repairPrompt.includes('修补潮兜收集网')) {
+    throw new Error(`Damaged collection-net repair focus failed: ${repairPrompt}`);
+  }
+  await repair.page.keyboard.press('KeyE');
+  await waitForRuntime(repair.page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+    return data?.collectionNetFirstHealth === '58'
+      && saved?.raft?.collectionNets?.[0]?.health === 58
+      && saved?.player?.inventory?.timber === 5
+      && saved?.player?.inventory?.rope === 3
+      && saved?.player?.toolDurability?.hammer === 78;
+  }, 12_000);
+  const repairedSave = await repair.page.evaluate(
+    () => JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null'),
+  );
+  console.log('Perimeter defense stage: collection net repaired');
+  await repair.context.close();
+
+  const reload = await openCollectionNetColdPage('perimeter-defense-cold-reload', repairedSave, false, viewport);
+  await waitForRuntime(reload.page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+    return data?.raftReinforcedTileCount === '1'
+      && data?.collectionNetFirstHealth === '58'
+      && saved?.raft?.tiles?.find((tile) => tile.x === 0 && tile.z === 1)?.reinforced === true;
+  }, 8_000);
+  await selectReinforcementPiece(reload.page);
+  const dismantlePrompt = await aimLocalPointToPrompt(reload.page, [0, 0.16, 1.38], '此筏格已有护甲');
+  if (!dismantlePrompt.includes('此筏格已有护甲')) {
+    throw new Error(`Perimeter reinforcement dismantle focus failed: ${dismantlePrompt}`);
+  }
+  await reload.page.mouse.click(viewport.width / 2, viewport.height / 2, { button: 'right' });
+  await waitForRuntime(reload.page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+    const host = saved?.raft?.tiles?.find((tile) => tile.x === 0 && tile.z === 1);
+    return data?.raftReinforcedTileCount === '0'
+      && host?.reinforced === false
+      && saved?.player?.inventory?.metalIngot === 2
+      && saved?.player?.inventory?.scrap === 3
+      && saved?.player?.toolDurability?.hammer === 77;
+  }, 12_000);
+  const unarmoredSave = await reload.page.evaluate(
+    () => JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null'),
+  );
+  console.log('Perimeter defense stage: v17 reload and reinforcement dismantle');
+  await reload.context.close();
+
+  const destructionSave = {
+    ...unarmoredSave,
+    player: { ...unarmoredSave.player, selectedTool: 'hook' },
+    raft: {
+      ...unarmoredSave.raft,
+      collectionNets: unarmoredSave.raft.collectionNets.map((net) => ({
+        ...net,
+        health: 20,
+        storage: { timber: 2, fiber: 1 },
+      })),
+    },
+  };
+  const destruction = await verifyCollectionNetDestruction(destructionSave, viewport);
+  console.log(`Perimeter defense loop: ${JSON.stringify(damaged)}; destruction ${JSON.stringify(destruction)}; repair, v17 reload and armor dismantle: ok`);
 }
 
 async function captureFailureRecovery() {
@@ -3771,7 +4196,7 @@ async function captureFailureRecovery() {
   const failed = await page.evaluate(() => {
     const mount = document.querySelector('.game-mount');
     const content = document.querySelector('.failure-screen__content')?.getBoundingClientRect();
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return {
       pointerLocked: Boolean(document.pointerLockElement),
       simulationActive: mount?.dataset.simulationActive,
@@ -3841,13 +4266,13 @@ async function captureFailureRecovery() {
   try {
     await page.locator('.failure-screen').waitFor({ state: 'detached', timeout: 8_000 });
     await page.waitForFunction(() => {
-      const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
       return saved?.player?.failure === null && saved?.player?.navigation?.surface === 'raft';
     }, null, { timeout: 8_000 });
   } catch (error) {
     const diagnostic = await page.evaluate(() => {
       const mount = document.querySelector('.game-mount');
-      const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
       return {
         contextHealthy: mount?.dataset.contextHealthy,
         simulationActive: mount?.dataset.simulationActive,
@@ -3863,7 +4288,7 @@ async function captureFailureRecovery() {
   }
   const recovered = await page.evaluate(() => {
     const mount = document.querySelector('.game-mount');
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v16') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
     return {
       failureCause: mount?.dataset.failureCause,
       worldDropCount: mount?.dataset.worldDropCount,
@@ -3914,6 +4339,9 @@ try {
   if (captureOnly === 'all' || captureOnly === 'hook') await captureHook();
   if (captureOnly === 'all' || captureOnly === 'salvage') await captureSalvage();
   if (captureOnly === 'all' || captureOnly === 'collection-net') await captureCollectionNet();
+  if (captureOnly === 'all' || captureOnly === 'perimeter-defense') await capturePerimeterDefense();
+  if (captureOnly === 'perimeter-destruction') await capturePerimeterDestructionProbe();
+  if (captureOnly === 'perimeter-defense-visual') await capturePerimeterDefenseVisual();
   if (captureOnly === 'all' || captureOnly === 'failure') await captureFailureRecovery();
   if (captureOnly === 'all' || captureOnly === 'pack') await capturePack();
   if (captureOnly === 'all' || captureOnly === 'crafting') await captureCrafting();

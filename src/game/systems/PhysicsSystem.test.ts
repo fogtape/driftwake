@@ -4,7 +4,7 @@ import type { RaftTileState } from './RaftSystem';
 
 const identity = { x: 0, y: 0, z: 0, w: 1 };
 const origin = { x: 0, y: 0, z: 0 };
-const tile = (x: number, z: number): RaftTileState => ({ x, z, health: 100 });
+const tile = (x: number, z: number): RaftTileState => ({ x, z, health: 100, reinforced: false });
 
 describe('PhysicsSystem dynamic raft collision', () => {
   let physics: PhysicsSystem;

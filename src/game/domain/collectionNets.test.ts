@@ -2,13 +2,17 @@ import { describe, expect, it } from 'vitest';
 import {
   COLLECTION_NET_CAPACITY,
   COLLECTION_NET_MAX_HEALTH,
+  COLLECTION_NET_REPAIR_AMOUNT,
   MAX_COLLECTION_NETS,
   canPlaceCollectionNet,
   captureIntoCollectionNet,
+  damageCollectionNet,
   collectionNetBlocksFoundationAt,
   collectionNetBlocksStructure,
   collectionNetOutsideCoordinate,
   collectionNetStoredUnits,
+  repairCollectionNet,
+  selectSharkAttackCollectionNet,
   sanitizeCollectionNets,
   type SavedCollectionNet,
 } from './collectionNets';
@@ -71,6 +75,23 @@ describe('collection nets', () => {
     expect(result.rejected).toEqual({ fiber: 2 });
     expect(result.net.storage).toEqual({ timber: 10, polymer: 1, fiber: 1 });
     expect(collectionNetStoredUnits(result.net.storage)).toBe(COLLECTION_NET_CAPACITY);
+  });
+
+  it('damages, repairs and releases stored cargo only when a net is destroyed', () => {
+    const damaged = damageCollectionNet(net({ health: 80, storage: { timber: 3 } }), 34);
+    expect(damaged).toMatchObject({ changed: true, destroyed: false, net: { health: 46 }, released: {} });
+    const repaired = repairCollectionNet(damaged.net!, COLLECTION_NET_REPAIR_AMOUNT);
+    expect(repaired.net?.health).toBe(80);
+    const destroyed = damageCollectionNet(repaired.net!, 120);
+    expect(destroyed).toEqual({ changed: true, destroyed: true, net: null, released: { timber: 3 } });
+  });
+
+  it('only exposes collection nets facing the shark approach side', () => {
+    const north = net({ id: 'north', rotation: 0, health: 20 });
+    const south = net({ id: 'south', rotation: 2, health: 80 });
+    expect(selectSharkAttackCollectionNet([north, south], 0, 8)?.id).toBe('south');
+    expect(selectSharkAttackCollectionNet([north], 0, 8)).toBeNull();
+    expect(selectSharkAttackCollectionNet([north], 0, -8)?.id).toBe('north');
   });
 
   it('sanitizes malformed state, duplicate edges, interior mounts and over-capacity storage', () => {

@@ -49,9 +49,9 @@ import {
 } from './raftStructures';
 import { sanitizeCollectionNets, type SavedCollectionNet } from './collectionNets';
 
-export const SAVE_VERSION = 16;
-export const SAVE_KEY = 'driftwake.save.v16';
-export const LEGACY_SAVE_KEYS = ['driftwake.save.v15', 'driftwake.save.v14', 'driftwake.save.v13', 'driftwake.save.v12', 'driftwake.save.v11', 'driftwake.save.v10', 'driftwake.save.v9', 'driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
+export const SAVE_VERSION = 17;
+export const SAVE_KEY = 'driftwake.save.v17';
+export const LEGACY_SAVE_KEYS = ['driftwake.save.v16', 'driftwake.save.v15', 'driftwake.save.v14', 'driftwake.save.v13', 'driftwake.save.v12', 'driftwake.save.v11', 'driftwake.save.v10', 'driftwake.save.v9', 'driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
 
 export type PlayerSurface = 'raft' | 'island' | 'water';
 
@@ -66,6 +66,7 @@ export interface SavedRaftTile {
   x: number;
   z: number;
   health: number;
+  reinforced?: boolean;
 }
 
 export interface SavedWorldDrop {
@@ -165,7 +166,7 @@ function sanitizeNavigation(
 export function createDefaultRaftTiles(): SavedRaftTile[] {
   const tiles: SavedRaftTile[] = [];
   for (let x = -1; x <= 1; x += 1) {
-    for (let z = -1; z <= 1; z += 1) tiles.push({ x, z, health: 100 });
+    for (let z = -1; z <= 1; z += 1) tiles.push({ x, z, health: 100, reinforced: false });
   }
   return tiles;
 }
@@ -222,6 +223,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       x: finiteInteger(tile?.x),
       z: finiteInteger(tile?.z),
       health: Math.max(1, Math.min(100, finiteInteger(tile?.health, 100))),
+      reinforced: version >= 17 && tile?.reinforced === true,
     }))
     .filter((tile) => {
       const key = `${tile.x}:${tile.z}`;

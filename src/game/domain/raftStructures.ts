@@ -12,7 +12,7 @@ export const MAX_RAFT_STRUCTURE_LEVEL = 2;
 
 export type RaftRotation = 0 | 1 | 2 | 3;
 export type RaftStructureType = 'floor' | 'wall' | 'door' | 'pillar' | 'stairs' | 'roof';
-export type RaftBuildPiece = 'foundation' | RaftStructureType;
+export type RaftBuildPiece = 'foundation' | 'reinforcement' | RaftStructureType;
 export type RaftStructureDamageStage = 'intact' | 'worn' | 'critical';
 export type StructurePlacementReason =
   | 'valid'
@@ -136,6 +136,7 @@ export const RAFT_STRUCTURE_DEFINITIONS: Record<RaftStructureType, RaftStructure
 
 export const RAFT_BUILD_PIECES: readonly RaftBuildPiece[] = [
   'foundation',
+  'reinforcement',
   'wall',
   'door',
   'pillar',
@@ -149,6 +150,11 @@ export const RAFT_BUILD_PIECE_DEFINITIONS: Record<RaftBuildPiece, RaftBuildPiece
     name: '基础漂木筏格',
     shortName: '基础筏格',
     cost: { timber: 2, polymer: 1 },
+  },
+  reinforcement: {
+    name: '潮铸筏缘护甲',
+    shortName: '筏缘护甲',
+    cost: { metalIngot: 1, scrap: 2 },
   },
   floor: RAFT_STRUCTURE_DEFINITIONS.floor,
   wall: RAFT_STRUCTURE_DEFINITIONS.wall,

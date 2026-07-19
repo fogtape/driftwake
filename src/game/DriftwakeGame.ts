@@ -246,6 +246,9 @@ export class DriftwakeGame {
     this.mount.dataset.collectionNetPlacement = 'none';
     this.mount.dataset.collectionNetPlacementValid = 'false';
     this.mount.dataset.collectionNetCaptures = '0';
+    this.mount.dataset.collectionNetDamageCount = '0';
+    this.mount.dataset.collectionNetFirstHealth = '0';
+    this.mount.dataset.collectionNetAim = '{}';
     this.mount.dataset.collectionNetMount = 'none';
     this.mount.dataset.collectionNetNearestDrift = 'none';
     this.mount.dataset.failureCause = 'none';
@@ -405,7 +408,7 @@ export class DriftwakeGame {
         this.splashes,
         save?.raft.collectionNets ?? [],
         () => this.saveNow(),
-        () => this.applyToolWear('hammer', 'dismantle'),
+        (action) => this.applyToolWear('hammer', action),
         () => new Set(
           (this.structures?.getSavedStructures() ?? [])
             .filter((structure) => structure.level === 0 && (structure.type === 'wall' || structure.type === 'door'))
@@ -528,6 +531,7 @@ export class DriftwakeGame {
           this.mount.dataset.lastRaftMutation = `${mutation.kind}:${mutation.targetId}:${mutation.health}:${mutation.destroyed}`;
           this.saveNow();
         },
+        this.collectionNets,
       );
       this.spear = new SpearSystem(
         this.renderer,
@@ -872,6 +876,8 @@ export class DriftwakeGame {
       this.mount.dataset.sharkLastRaftTargetHealth = String(sharkDiagnostics.lastRaftTargetHealth);
       this.mount.dataset.sharkStructureDamageCount = String(sharkDiagnostics.structureDamageEvents);
       this.mount.dataset.sharkFoundationDamageCount = String(sharkDiagnostics.foundationDamageEvents);
+      this.mount.dataset.sharkCollectionNetDamageCount = String(sharkDiagnostics.collectionNetDamageEvents);
+      this.mount.dataset.raftReinforcedTileCount = String(this.raft?.reinforcedTileCount ?? 0);
     }
     this.devices?.update(simulationSeconds, stepSeconds);
     this.navigation?.update(simulationSeconds, stepSeconds);
@@ -886,8 +892,13 @@ export class DriftwakeGame {
       this.mount.dataset.collectionNetPlacement = collectionNetDiagnostics.placement ?? 'none';
       this.mount.dataset.collectionNetPlacementValid = String(collectionNetDiagnostics.placementValid);
       this.mount.dataset.collectionNetCaptures = String(collectionNetDiagnostics.captures);
+      this.mount.dataset.collectionNetDamageCount = String(collectionNetDiagnostics.damageEvents);
+      this.mount.dataset.collectionNetFirstHealth = String(Math.round(collectionNetDiagnostics.firstHealth));
       this.mount.dataset.collectionNetMount = collectionNetDiagnostics.mount ?? 'none';
       this.mount.dataset.collectionNetNearestDrift = collectionNetDiagnostics.nearestDrift ?? 'none';
+      if (this.simulationTickCount % 6 === 0) {
+        this.mount.dataset.collectionNetAim = JSON.stringify(this.collectionNets?.getAimDiagnostics());
+      }
     }
     this.structures?.updateDoorFocus(this.camera);
     const structureDiagnostics = this.structures?.getDiagnostics();

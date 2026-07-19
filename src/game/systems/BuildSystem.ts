@@ -44,6 +44,8 @@ export type HammerAction = 'build' | 'repair' | 'dismantle';
 const FOUNDATION_COST: ItemBundle = RAFT_BUILD_PIECE_DEFINITIONS.foundation.cost;
 const REPAIR_COST: ItemBundle = { timber: 1 };
 const FOUNDATION_REFUND: ItemBundle = { timber: 1 };
+const REINFORCEMENT_COST: ItemBundle = RAFT_BUILD_PIECE_DEFINITIONS.reinforcement.cost;
+const REINFORCEMENT_REFUND: ItemBundle = { metalIngot: 1, scrap: 1 };
 const PLACEMENT_REASON_LABEL: Record<Exclude<StructurePlacementReason, 'valid'>, string> = {
   occupied: '此处已有同类承位结构',
   unsupported: '缺少足够的下层承重结构',
@@ -83,6 +85,7 @@ export class BuildSystem {
   private readonly foundationPreview: Group;
   private readonly foundationPreviewMaterials: MeshStandardMaterial[] = [];
   private readonly structurePreview = new Group();
+  private readonly reinforcementPreview = new Group();
   private readonly structurePreviewMaterial = new MeshStandardMaterial({
     color: 0x72d4b3,
     roughness: 0.68,
@@ -163,6 +166,11 @@ export class BuildSystem {
     this.structurePreview.visible = false;
     this.structurePreview.renderOrder = 3;
     this.raft.group.add(this.structurePreview);
+    this.reinforcementPreview.name = 'raft-reinforcement-preview';
+    this.reinforcementPreview.visible = false;
+    this.reinforcementPreview.renderOrder = 3;
+    this.raft.group.add(this.reinforcementPreview);
+    this.rebuildReinforcementPreview();
     this.rebuildStructurePreview();
 
     this.renderer.domElement.addEventListener('mousedown', this.onPointerDown);
@@ -240,7 +248,7 @@ export class BuildSystem {
     window.removeEventListener('keydown', this.onKeyDown);
     if (this.noticeTimer !== null) window.clearTimeout(this.noticeTimer);
     this.camera.remove(this.viewModel);
-    this.raft.group.remove(this.foundationPreview, this.structurePreview);
+    this.raft.group.remove(this.foundationPreview, this.structurePreview, this.reinforcementPreview);
     this.foundationPreviewMaterials.forEach((material) => material.dispose());
     this.structurePreviewMaterial.dispose();
     this.previewBoxGeometry.dispose();
@@ -274,6 +282,7 @@ export class BuildSystem {
     }
     this.ray.at(distance, this.localHit);
     if (this.selectedPiece === 'foundation') this.updateFoundationPreview();
+    else if (this.selectedPiece === 'reinforcement') this.updateReinforcementPreview();
     else this.updateStructurePreview();
   }
 
@@ -313,7 +322,7 @@ export class BuildSystem {
   }
 
   private updateStructurePreview(): void {
-    if (this.selectedPiece === 'foundation') return;
+    if (this.selectedPiece === 'foundation' || this.selectedPiece === 'reinforcement') return;
     const structureType = this.selectedPiece;
     const coordinate = this.raft.localToGrid(this.localHit);
     this.hoveredTileCoordinate = this.raft.hasTile(coordinate) ? coordinate : null;
@@ -334,6 +343,7 @@ export class BuildSystem {
     const affordable = hasItems(inventory, cost);
     this.mode = reason === 'valid' ? 'build' : 'invalid';
     this.foundationPreview.visible = false;
+    this.reinforcementPreview.visible = false;
     this.structurePreview.visible = true;
     this.structures.positionObject(this.structurePreview, this.structures.createCandidate(candidate));
     this.applyPreviewColor(reason === 'valid' && affordable ? this.validColor : this.invalidColor, reason === 'valid' && affordable ? 0.54 : 0.34);
@@ -348,12 +358,50 @@ export class BuildSystem {
     this.publishFeedback(reason === 'valid' && affordable);
   }
 
+  private updateReinforcementPreview(): void {
+    const coordinate = this.raft.localToGrid(this.localHit);
+    const tile = this.raft.getTile(coordinate);
+    const inventory = useGameStore.getState().inventory;
+    const affordable = hasItems(inventory, REINFORCEMENT_COST);
+    const healthy = Boolean(tile && tile.health >= 100);
+    const valid = healthy && this.raft.canReinforceTile(coordinate);
+
+    this.targetCoordinate = tile ? coordinate : null;
+    this.hoveredTileCoordinate = tile ? coordinate : null;
+    this.targetStructure = null;
+    this.mode = valid ? 'build' : 'invalid';
+    this.foundationPreview.visible = false;
+    this.structurePreview.visible = false;
+    this.reinforcementPreview.visible = Boolean(tile);
+    this.reinforcementPreview.position.set(coordinate.x * RAFT_TILE_X, 0, coordinate.z * RAFT_TILE_Z);
+    this.applyPreviewColor(
+      valid && affordable ? this.validColor : this.invalidColor,
+      valid && affordable ? 0.58 : 0.36,
+    );
+
+    if (!tile) {
+      useGameStore.getState().setInteraction('筏缘护甲需要加装在基础筏格上', 'build');
+    } else if (tile.reinforced) {
+      useGameStore.getState().setInteraction('此筏格已有护甲 · 右键拆卸', 'build');
+    } else if (!healthy) {
+      useGameStore.getState().setInteraction('先修补受损筏格，再加装护甲', 'build');
+    } else if (!this.raft.canReinforceTile(coordinate)) {
+      useGameStore.getState().setInteraction('护甲只能初装在当前外围筏格', 'build');
+    } else if (!affordable) {
+      useGameStore.getState().setInteraction(`缺少 ${missingCostLabel(REINFORCEMENT_COST, inventory)}`, 'build');
+    } else {
+      useGameStore.getState().setInteraction(`潮铸筏缘护甲 · ${costLabel(REINFORCEMENT_COST)}`, 'build');
+    }
+    this.publishFeedback(valid && affordable);
+  }
+
   private setFoundationPreview(coordinate: GridCoordinate, mode: PreviewMode, affordable: boolean): void {
     const changedTarget = !coordinateEquals(this.targetCoordinate, coordinate) || this.mode !== mode;
     this.targetCoordinate = coordinate;
     this.mode = mode;
     this.foundationPreview.visible = true;
     this.structurePreview.visible = false;
+    this.reinforcementPreview.visible = false;
     this.foundationPreview.position.set(
       coordinate.x * RAFT_TILE_X,
       mode === 'repair' ? 0.045 : 0.015,
@@ -393,6 +441,7 @@ export class BuildSystem {
     this.mode = 'repair';
     this.foundationPreview.visible = false;
     this.structurePreview.visible = false;
+    this.reinforcementPreview.visible = false;
     useGameStore.getState().setInteraction(
       affordable
         ? `修补${definition.shortName} ${structure.health}/${definition.maxHealth} · ${costLabel(definition.repairCost)}`
@@ -405,6 +454,7 @@ export class BuildSystem {
   private hidePlacementOnly(): void {
     this.foundationPreview.visible = false;
     this.structurePreview.visible = false;
+    this.reinforcementPreview.visible = false;
     this.mode = 'hidden';
     this.targetCoordinate = null;
     this.hoveredTileCoordinate = null;
@@ -438,6 +488,10 @@ export class BuildSystem {
       && this.hoveredStructure.health < RAFT_STRUCTURE_DEFINITIONS[this.hoveredStructure.type].maxHealth
     ) {
       this.performStructureRepair();
+      return;
+    }
+    if (this.selectedPiece === 'reinforcement') {
+      this.performReinforcementBuild();
       return;
     }
     if (this.selectedPiece !== 'foundation') {
@@ -485,6 +539,33 @@ export class BuildSystem {
     store.setRaft(this.raft.getIntegrityStats());
     this.updatePreview();
     this.onHammerUsed(action);
+  }
+
+  private performReinforcementBuild(): void {
+    if (!this.targetCoordinate || !this.raft.canReinforceTile(this.targetCoordinate)) {
+      this.audio.playDenied();
+      return;
+    }
+    const store = useGameStore.getState();
+    if (!store.spendItems(REINFORCEMENT_COST)) {
+      this.audio.playDenied();
+      return;
+    }
+    const coordinate = { ...this.targetCoordinate };
+    const result = this.raft.reinforceTile(coordinate);
+    if (!result.changed) {
+      store.addItemBundle(REINFORCEMENT_COST);
+      this.audio.playDenied();
+      return;
+    }
+    this.raft.gridToLocal(coordinate, this.worldHit);
+    this.raft.localPointToWorld(this.worldHit, this.worldHit);
+    this.splashes.spawnImpact(this.worldHit, 0x8fa7a4, 24);
+    this.audio.playBuild();
+    this.swing = 0.34;
+    this.showNotice('潮铸筏缘护甲已铆固 · 鲨鱼撕咬减伤 55%');
+    this.updatePreview();
+    this.onHammerUsed('build');
   }
 
   private performStructureRepair(): void {
@@ -552,6 +633,10 @@ export class BuildSystem {
   }
 
   private performDismantle(): void {
+    if (this.selectedPiece === 'reinforcement') {
+      this.performReinforcementDismantle();
+      return;
+    }
     if (this.hoveredStructure) {
       const definition = RAFT_STRUCTURE_DEFINITIONS[this.hoveredStructure.type];
       const store = useGameStore.getState();
@@ -594,6 +679,11 @@ export class BuildSystem {
       this.onHammerUsed('dismantle');
       return;
     }
+    if (this.hoveredTileCoordinate && this.raft.getTile(this.hoveredTileCoordinate)?.reinforced) {
+      this.audio.playDenied();
+      this.showNotice('先切换至筏缘护甲并拆下金属件');
+      return;
+    }
     if (this.hoveredTileCoordinate && !this.structures.canRemoveFoundation(this.hoveredTileCoordinate)) {
       this.audio.playDenied();
       this.showNotice('先拆除依赖该筏格的承重结构');
@@ -627,9 +717,39 @@ export class BuildSystem {
     this.onHammerUsed('dismantle');
   }
 
+  private performReinforcementDismantle(): void {
+    const coordinate = this.hoveredTileCoordinate;
+    const tile = coordinate ? this.raft.getTile(coordinate) : null;
+    if (!coordinate || !tile?.reinforced) {
+      this.audio.playDenied();
+      this.showNotice('准星下没有可拆卸的筏缘护甲');
+      return;
+    }
+    const store = useGameStore.getState();
+    if (Object.keys(addItems(store.inventory, REINFORCEMENT_REFUND, INVENTORY_SLOT_CAPACITY).rejected).length > 0) {
+      this.audio.playDenied();
+      this.showNotice('背包没有空间收回护甲材料');
+      return;
+    }
+    const result = this.raft.removeReinforcement(coordinate);
+    if (!result.changed) {
+      this.audio.playDenied();
+      return;
+    }
+    store.addItemBundle(REINFORCEMENT_REFUND);
+    this.raft.gridToLocal(coordinate, this.worldHit);
+    this.raft.localPointToWorld(this.worldHit, this.worldHit);
+    this.splashes.spawnImpact(this.worldHit, 0x8f5742, 22);
+    this.audio.playBuild();
+    this.swing = 0.34;
+    this.showNotice(`筏缘护甲已拆卸 · ${costLabel(REINFORCEMENT_REFUND)}`);
+    this.updatePreview();
+    this.onHammerUsed('dismantle');
+  }
+
   private rebuildStructurePreview(): void {
     this.structurePreview.clear();
-    if (this.selectedPiece === 'foundation') return;
+    if (this.selectedPiece === 'foundation' || this.selectedPiece === 'reinforcement') return;
     const structureType = this.selectedPiece;
     for (const part of createRaftStructureParts(structureType, false)) {
       const geometry = part.geometry === 'box' ? this.previewBoxGeometry : this.previewCylinderGeometry;
@@ -640,6 +760,23 @@ export class BuildSystem {
       mesh.castShadow = false;
       mesh.receiveShadow = false;
       this.structurePreview.add(mesh);
+    }
+  }
+
+  private rebuildReinforcementPreview(): void {
+    this.reinforcementPreview.clear();
+    const addPart = (x: number, y: number, z: number, scaleX: number, scaleY: number, scaleZ: number): void => {
+      const mesh = new Mesh(this.previewBoxGeometry, this.structurePreviewMaterial);
+      mesh.position.set(x, y, z);
+      mesh.scale.set(scaleX, scaleY, scaleZ);
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      this.reinforcementPreview.add(mesh);
+    };
+    for (const z of [-0.61, 0.61]) addPart(0, 0.16, z, 1.3, 0.11, 0.09);
+    for (const x of [-0.65, 0.65]) addPart(x, 0.16, 0, 0.09, 0.11, 1.24);
+    for (const x of [-0.61, 0.61]) {
+      for (const z of [-0.58, 0.58]) addPart(x, 0.21, z, 0.22, 0.08, 0.22);
     }
   }
 
