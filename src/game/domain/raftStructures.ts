@@ -13,6 +13,7 @@ export const MAX_RAFT_STRUCTURE_LEVEL = 2;
 export type RaftRotation = 0 | 1 | 2 | 3;
 export type RaftStructureType = 'floor' | 'wall' | 'door' | 'pillar' | 'stairs' | 'roof';
 export type RaftBuildPiece = 'foundation' | 'reinforcement' | RaftStructureType;
+export type RaftBuildCategory = 'hull' | 'frame' | 'deck';
 export type RaftStructureDamageStage = 'intact' | 'worn' | 'critical';
 export type StructurePlacementReason =
   | 'valid'
@@ -144,6 +145,36 @@ export const RAFT_BUILD_PIECES: readonly RaftBuildPiece[] = [
   'floor',
   'roof',
 ];
+
+export interface RaftBuildCategoryDefinition {
+  name: string;
+  pieces: readonly RaftBuildPiece[];
+}
+
+export const RAFT_BUILD_CATEGORY_ORDER: readonly RaftBuildCategory[] = ['hull', 'frame', 'deck'];
+
+export const RAFT_BUILD_CATEGORY_DEFINITIONS: Record<RaftBuildCategory, RaftBuildCategoryDefinition> = {
+  hull: { name: '筏体', pieces: ['foundation', 'reinforcement'] },
+  frame: { name: '框架', pieces: ['wall', 'door', 'pillar'] },
+  deck: { name: '层面', pieces: ['stairs', 'floor', 'roof'] },
+};
+
+export function raftBuildCategoryForPiece(piece: RaftBuildPiece): RaftBuildCategory {
+  if (piece === 'foundation' || piece === 'reinforcement') return 'hull';
+  if (piece === 'wall' || piece === 'door' || piece === 'pillar') return 'frame';
+  return 'deck';
+}
+
+export function nextRaftBuildCategory(
+  category: RaftBuildCategory,
+  delta: number,
+): RaftBuildCategory {
+  const current = RAFT_BUILD_CATEGORY_ORDER.indexOf(category);
+  const direction = Number.isFinite(delta) && delta < 0 ? -1 : 1;
+  return RAFT_BUILD_CATEGORY_ORDER[
+    (current + direction + RAFT_BUILD_CATEGORY_ORDER.length) % RAFT_BUILD_CATEGORY_ORDER.length
+  ];
+}
 
 export const RAFT_BUILD_PIECE_DEFINITIONS: Record<RaftBuildPiece, RaftBuildPieceDefinition> = {
   foundation: {

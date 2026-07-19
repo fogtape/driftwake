@@ -41,7 +41,12 @@ import type { IslandPhase } from '../game/domain/island';
 import type { NavigationDeviceType, NavigationRouteMode, NavigationWeatherPhase, SignalArrayStatus } from '../game/domain/navigation';
 import type { PlayerSurface } from '../game/domain/save';
 import type { CameraMotionMode } from '../game/domain/settings';
-import type { RaftBuildPiece, RaftRotation, RaftStructureType } from '../game/domain/raftStructures';
+import type {
+  RaftBuildCategory,
+  RaftBuildPiece,
+  RaftRotation,
+  RaftStructureType,
+} from '../game/domain/raftStructures';
 import {
   applyToolWear,
   freshToolDurability,
@@ -105,6 +110,7 @@ export interface RaftFeedback {
 
 export interface BuildFeedback {
   piece: RaftBuildPiece;
+  category: RaftBuildCategory;
   rotation: RaftRotation;
   level: number;
   mode: 'hidden' | 'build' | 'repair' | 'invalid';
@@ -412,6 +418,7 @@ function defaultProgression(): ProgressionFeedback {
 function defaultBuild(): BuildFeedback {
   return {
     piece: 'foundation',
+    category: 'hull',
     rotation: 0,
     level: 0,
     mode: 'hidden',

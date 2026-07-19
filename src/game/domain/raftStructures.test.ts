@@ -4,12 +4,17 @@ import {
   canRemoveFoundationUnderStructures,
   canRemoveRaftStructure,
   pruneUnsupportedRaftStructures,
+  RAFT_BUILD_CATEGORY_DEFINITIONS,
+  RAFT_BUILD_CATEGORY_ORDER,
+  RAFT_BUILD_PIECES,
   RAFT_FLOOR_UNDERSIDE_OFFSET,
   RAFT_STRUCTURE_LEVEL_HEIGHT,
   RAFT_STRUCTURE_DEFINITIONS,
   RAFT_TILE_X,
   RAFT_TILE_Z,
   raftStructureDamageStage,
+  nextRaftBuildCategory,
+  raftBuildCategoryForPiece,
   sampleRaftOverheadSurfaces,
   sampleRaftWalkableSurfaces,
   sanitizeRaftStructures,
@@ -39,6 +44,22 @@ function structure(
 }
 
 describe('raft structure topology', () => {
+  it('partitions every build piece into stable keyboard-selectable categories', () => {
+    const grouped = RAFT_BUILD_CATEGORY_ORDER.flatMap(
+      (category) => RAFT_BUILD_CATEGORY_DEFINITIONS[category].pieces,
+    );
+    expect(grouped).toEqual(RAFT_BUILD_PIECES);
+    expect(new Set(grouped).size).toBe(RAFT_BUILD_PIECES.length);
+    for (const category of RAFT_BUILD_CATEGORY_ORDER) {
+      for (const piece of RAFT_BUILD_CATEGORY_DEFINITIONS[category].pieces) {
+        expect(raftBuildCategoryForPiece(piece)).toBe(category);
+      }
+    }
+    expect(nextRaftBuildCategory('hull', 1)).toBe('frame');
+    expect(nextRaftBuildCategory('hull', -1)).toBe('deck');
+    expect(nextRaftBuildCategory('deck', 1)).toBe('hull');
+  });
+
   it('normalizes opposite wall anchors into one shared edge slot', () => {
     expect(structurePlacementKey(structure('north', 'wall', 0, 0, 0, 0))).toBe(
       structurePlacementKey(structure('south', 'door', 0, -1, 0, 2)),

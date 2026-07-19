@@ -8,6 +8,7 @@ import { TitleScreen } from './components/TitleScreen';
 import type { DriftwakeGame } from './game/DriftwakeGame';
 import { ITEM_DEFINITIONS, type ItemId, type ToolId } from './game/domain/items';
 import { RECIPES, type RecipeId } from './game/domain/recipes';
+import type { RaftBuildCategory, RaftBuildPiece } from './game/domain/raftStructures';
 import { RESEARCH_PROJECTS, type ResearchProjectId, type ResearchSampleId } from './game/domain/progression';
 import { loadPreferences, writePreferences } from './game/domain/preferences';
 import type { CameraMotionMode } from './game/domain/settings';
@@ -199,6 +200,12 @@ export function App() {
     gameRef.current?.playUi(selected);
     if (!selected) showTransientNotice('需要先制作该工具');
   };
+  const selectBuildPiece = (piece: RaftBuildPiece) => {
+    if (!gameRef.current?.selectBuildPiece(piece)) gameRef.current?.playUi(false);
+  };
+  const selectBuildCategory = (category: RaftBuildCategory) => {
+    if (!gameRef.current?.selectBuildCategory(category)) gameRef.current?.playUi(false);
+  };
   const openPack = (panel: Exclude<OverlayPanel, null>) => {
     gameRef.current?.pauseInput();
     gameRef.current?.closeStorage();
@@ -335,6 +342,8 @@ export function App() {
         onSettings={openSettings}
         onToggleAudio={() => changeAudio(!audioEnabled)}
         onSelectTool={selectTool}
+        onSelectBuildPiece={selectBuildPiece}
+        onSelectBuildCategory={selectBuildCategory}
         onOpenPack={() => openPack('pack')}
       />
       <FailureScreen

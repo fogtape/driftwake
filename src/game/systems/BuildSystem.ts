@@ -24,9 +24,13 @@ import {
 } from '../domain/items';
 import {
   RAFT_BUILD_PIECES,
+  RAFT_BUILD_CATEGORY_DEFINITIONS,
   RAFT_BUILD_PIECE_DEFINITIONS,
   RAFT_STRUCTURE_DEFINITIONS,
   normalizeRaftRotation,
+  nextRaftBuildCategory,
+  raftBuildCategoryForPiece,
+  type RaftBuildCategory,
   type RaftBuildPiece,
   type RaftRotation,
   type SavedRaftStructure,
@@ -112,6 +116,11 @@ export class BuildSystem {
   private targetStructure: StructurePlacementCandidate | null = null;
   private foundationBlocked = false;
   private selectedPiece: RaftBuildPiece = 'foundation';
+  private readonly selectedByCategory: Record<RaftBuildCategory, RaftBuildPiece> = {
+    hull: 'foundation',
+    frame: 'wall',
+    deck: 'stairs',
+  };
   private selectedRotation: RaftRotation = 0;
   private selectedLevel = 0;
   private mode: PreviewMode = 'hidden';
@@ -197,6 +206,7 @@ export class BuildSystem {
     target: GridCoordinate | null;
     hovered: GridCoordinate | null;
     piece: RaftBuildPiece;
+    category: RaftBuildCategory;
     rotation: RaftRotation;
     level: number;
     hoveredStructure: string | null;
@@ -210,6 +220,7 @@ export class BuildSystem {
       target: this.targetCoordinate ? { ...this.targetCoordinate } : null,
       hovered: this.hoveredTileCoordinate ? { ...this.hoveredTileCoordinate } : null,
       piece: this.selectedPiece,
+      category: raftBuildCategoryForPiece(this.selectedPiece),
       rotation: this.selectedRotation,
       level: this.selectedLevel,
       hoveredStructure: this.hoveredStructure?.id ?? null,
@@ -239,6 +250,16 @@ export class BuildSystem {
     this.viewModel.rotation.set(-0.18 - strike * 0.72, -0.28, -0.32 + strike * 0.22);
     this.viewModel.position.x += Math.sin(time * 1.6) * 0.008;
     if (this.inputEnabled) this.updatePreview();
+  }
+
+  selectBuildPiece(piece: RaftBuildPiece): boolean {
+    if (!this.equipped || !this.inputEnabled || !RAFT_BUILD_PIECES.includes(piece)) return false;
+    return this.applySelectedPiece(piece);
+  }
+
+  selectBuildCategory(category: RaftBuildCategory): boolean {
+    if (!this.equipped || !this.inputEnabled || !RAFT_BUILD_CATEGORY_DEFINITIONS[category]) return false;
+    return this.applySelectedPiece(this.selectedByCategory[category]);
   }
 
   dispose(): void {
@@ -787,12 +808,29 @@ export class BuildSystem {
 
   private selectPiece(indexDelta: number): void {
     const current = RAFT_BUILD_PIECES.indexOf(this.selectedPiece);
-    this.selectedPiece = RAFT_BUILD_PIECES[(current + indexDelta + RAFT_BUILD_PIECES.length) % RAFT_BUILD_PIECES.length];
+    this.applySelectedPiece(
+      RAFT_BUILD_PIECES[(current + indexDelta + RAFT_BUILD_PIECES.length) % RAFT_BUILD_PIECES.length],
+    );
+  }
+
+  private selectCategory(indexDelta: number): void {
+    const current = raftBuildCategoryForPiece(this.selectedPiece);
+    this.applySelectedPiece(this.selectedByCategory[nextRaftBuildCategory(current, indexDelta)]);
+  }
+
+  private applySelectedPiece(piece: RaftBuildPiece): boolean {
+    if (piece === this.selectedPiece) {
+      this.publishFeedback();
+      return true;
+    }
+    this.selectedPiece = piece;
+    this.selectedByCategory[raftBuildCategoryForPiece(piece)] = piece;
     this.selectedLevel = pieceLevel(this.selectedPiece);
     this.rebuildStructurePreview();
     this.audio.playUi();
     this.updatePreview();
     this.publishFeedback();
+    return true;
   }
 
   private publishFeedback(valid = this.mode !== 'invalid' && this.mode !== 'hidden'): void {
@@ -808,6 +846,7 @@ export class BuildSystem {
       : null;
     useGameStore.getState().setBuild({
       piece: this.selectedPiece,
+      category: raftBuildCategoryForPiece(this.selectedPiece),
       rotation: this.selectedRotation,
       level: this.selectedLevel,
       mode: this.equipped ? this.mode : 'hidden',
@@ -846,10 +885,17 @@ export class BuildSystem {
       !this.equipped
       || !this.inputEnabled
       || event.repeat
-      || (event.code !== 'KeyR' && event.code !== 'KeyF')
-      || (event.code === 'KeyF' && this.selectedPiece === 'foundation')
+      || (event.code !== 'KeyR' && event.code !== 'KeyF' && event.code !== 'KeyQ')
+      || (
+        event.code === 'KeyF'
+        && (this.selectedPiece === 'foundation' || this.selectedPiece === 'reinforcement')
+      )
     ) return;
     event.preventDefault();
+    if (event.code === 'KeyQ') {
+      this.selectCategory(event.shiftKey ? -1 : 1);
+      return;
+    }
     if (event.code === 'KeyR') {
       this.selectedRotation = normalizeRaftRotation(this.selectedRotation + 1);
     } else {

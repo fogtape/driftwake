@@ -39,7 +39,11 @@ import { createDefaultPlantingState } from './domain/planting';
 import { createDefaultProgressionState, type ProgressionDeviceType } from './domain/progression';
 import type { FailureRecord } from './domain/failure';
 import type { CameraMotionMode } from './domain/settings';
-import { structurePlacementKey } from './domain/raftStructures';
+import {
+  structurePlacementKey,
+  type RaftBuildCategory,
+  type RaftBuildPiece,
+} from './domain/raftStructures';
 import { AudioSystem } from './systems/AudioSystem';
 import { BuildSystem, type HammerAction } from './systems/BuildSystem';
 import { CollectionNetSystem } from './systems/CollectionNetSystem';
@@ -694,6 +698,14 @@ export class DriftwakeGame {
     else this.audio.playDenied();
   }
 
+  selectBuildPiece(piece: RaftBuildPiece): boolean {
+    return this.build?.selectBuildPiece(piece) ?? false;
+  }
+
+  selectBuildCategory(category: RaftBuildCategory): boolean {
+    return this.build?.selectBuildCategory(category) ?? false;
+  }
+
   notifyCraftQueued(count: number, success: boolean): void {
     if (!success) {
       this.audio.playDenied();
@@ -871,6 +883,7 @@ export class DriftwakeGame {
         ? `${buildDiagnostics.hovered.x},${buildDiagnostics.hovered.z}`
         : 'none';
       this.mount.dataset.buildPiece = buildDiagnostics.piece;
+      this.mount.dataset.buildCategory = buildDiagnostics.category;
       this.mount.dataset.buildRotation = String(buildDiagnostics.rotation);
       this.mount.dataset.buildLevel = String(buildDiagnostics.level);
       this.mount.dataset.buildStructureTarget = buildDiagnostics.structureTarget ?? 'none';

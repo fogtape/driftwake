@@ -1896,13 +1896,31 @@ async function captureBuildingStructures() {
   await enterGame(page);
   await waitForRuntime(page, () => {
     const data = document.querySelector('.game-mount')?.dataset;
-    return data?.raftStructureCount === '10' && data?.buildPiece === 'foundation';
+    return data?.raftStructureCount === '10'
+      && data?.buildPiece === 'foundation'
+      && data?.buildCategory === 'hull';
   }, 10_000);
   await page.keyboard.press('Digit1');
-  await page.waitForFunction(() => {
-    const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.structureDoorAim ?? '{}');
-    return Boolean(aim.closestDoor?.center);
-  }, undefined, { timeout: 8_000 });
+  try {
+    await page.waitForFunction(() => {
+      const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.structureDoorAim ?? '{}');
+      return Boolean(aim.closestDoor?.center);
+    }, undefined, { timeout: 8_000 });
+  } catch (error) {
+    const diagnostics = await page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+      return {
+        aim: JSON.parse(data?.structureDoorAim ?? '{}'),
+        structures: data?.raftStructureCount,
+        savedStructures: saved?.raft?.structures,
+        simulationActive: data?.simulationActive,
+        selectedTool: saved?.player?.selectedTool,
+        activeTool: document.querySelector('.hotbar-slot.is-active')?.getAttribute('aria-label'),
+      };
+    });
+    throw new Error(`Building door diagnostics unavailable: ${JSON.stringify(diagnostics)}`, { cause: error });
+  }
   const doorMovement = { x: 0, y: 0 };
   for (let iteration = 0; iteration < 4; iteration += 1) {
     const correction = await page.evaluate(() => {
@@ -1971,6 +1989,11 @@ async function captureBuildingStructures() {
     document.dispatchEvent(movement);
   }, doorMovement);
   await page.keyboard.press('Digit2');
+  await page.keyboard.press('KeyQ');
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.buildCategory === 'frame' && data?.buildPiece === 'wall';
+  }, 5_000);
   await page.evaluate(() => {
     document.querySelector('canvas')?.dispatchEvent(new WheelEvent('wheel', {
       bubbles: true,
@@ -1978,7 +2001,74 @@ async function captureBuildingStructures() {
       deltaY: 120,
     }));
   });
+  await waitForRuntime(page, () => document.querySelector('.game-mount')?.dataset.buildPiece === 'door', 5_000);
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('.build-palette__pieces > button')]
+      .find((candidate) => candidate.getAttribute('aria-label') === '选择盐封承重柱');
+    if (!(button instanceof HTMLButtonElement)) throw new Error('Pillar build selector is missing');
+    button.click();
+  });
+  await waitForRuntime(page, () => document.querySelector('.game-mount')?.dataset.buildPiece === 'pillar', 5_000);
+  await page.keyboard.press('KeyQ');
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.buildCategory === 'deck' && data?.buildPiece === 'stairs';
+  }, 5_000);
+  await page.keyboard.press('Shift+KeyQ');
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.buildCategory === 'frame' && data?.buildPiece === 'pillar';
+  }, 5_000);
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('.build-palette__pieces > button')]
+      .find((candidate) => candidate.getAttribute('aria-label') === '选择交错承力木墙');
+    if (!(button instanceof HTMLButtonElement)) throw new Error('Wall build selector is missing');
+    button.click();
+  });
   await waitForRuntime(page, () => document.querySelector('.game-mount')?.dataset.buildPiece === 'wall', 5_000);
+  const selectionState = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+    return {
+      category: data?.buildCategory,
+      piece: data?.buildPiece,
+      structures: Number(data?.raftStructureCount),
+      timber: saved?.player?.inventory?.timber,
+      rope: saved?.player?.inventory?.rope,
+      hammer: saved?.player?.toolDurability?.hammer,
+      activeCategories: document.querySelectorAll('.build-palette__categories > .is-active').length,
+      visiblePieces: document.querySelectorAll('.build-palette__pieces > button').length,
+      activePieces: document.querySelectorAll('.build-palette__pieces > .is-active').length,
+    };
+  });
+  if (
+    selectionState.category !== 'frame'
+    || selectionState.piece !== 'wall'
+    || selectionState.structures !== 10
+    || selectionState.timber !== 48
+    || selectionState.rope !== 24
+    || selectionState.hammer !== 80
+    || selectionState.activeCategories !== 1
+    || selectionState.visiblePieces !== 3
+    || selectionState.activePieces !== 1
+  ) {
+    throw new Error(`Building selector transaction isolation failed: ${JSON.stringify(selectionState)}`);
+  }
+  await page.keyboard.press('Digit1');
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.buildMode === 'hidden'
+      && data?.buildCategory === 'frame'
+      && data?.buildPiece === 'wall'
+      && !document.querySelector('.build-palette')?.classList.contains('is-visible');
+  }, 5_000);
+  await page.keyboard.press('Digit2');
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.buildCategory === 'frame'
+      && data?.buildPiece === 'wall'
+      && document.querySelector('.build-palette')?.classList.contains('is-visible');
+  }, 5_000);
   await page.keyboard.press('KeyR');
   await waitForRuntime(page, () => document.querySelector('.game-mount')?.dataset.buildRotation === '1', 5_000);
   const wallMovement = { x: 0, y: 0 };
@@ -2032,12 +2122,29 @@ async function captureBuildingStructures() {
   }, 8_000);
   await page.waitForTimeout(450);
   await page.keyboard.press('KeyF');
-  await waitForRuntime(page, () => {
-    const data = document.querySelector('.game-mount')?.dataset;
-    return data?.buildLevel === '1'
-      && data?.buildMode === 'invalid'
-      && data?.buildStructureTarget === 'wall:1,-1:1:1';
-  }, 5_000);
+  try {
+    await waitForRuntime(page, () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return data?.buildLevel === '1'
+        && data?.buildMode === 'invalid'
+        && data?.buildStructureTarget === 'wall:1,-1:1:1';
+    }, 5_000);
+  } catch (error) {
+    const diagnostics = await page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return {
+        piece: data?.buildPiece,
+        category: data?.buildCategory,
+        level: data?.buildLevel,
+        mode: data?.buildMode,
+        target: data?.buildTarget,
+        structureTarget: data?.buildStructureTarget,
+        reason: data?.buildReason,
+        prompt: document.querySelector('.interaction-prompt')?.textContent,
+      };
+    });
+    throw new Error(`Building upper-level preview failed: ${JSON.stringify(diagnostics)}`, { cause: error });
+  }
   await page.mouse.click(viewport.width / 2, viewport.height / 2);
   await page.waitForTimeout(400);
   const state = await page.evaluate(() => {
@@ -2047,6 +2154,7 @@ async function captureBuildingStructures() {
     const paletteRect = palette?.getBoundingClientRect();
     return {
       piece: mount?.dataset.buildPiece,
+      category: mount?.dataset.buildCategory,
       rotation: mount?.dataset.buildRotation,
       level: mount?.dataset.buildLevel,
       mode: mount?.dataset.buildMode,
@@ -2063,6 +2171,8 @@ async function captureBuildingStructures() {
         bottom: paletteRect.bottom,
       } : null,
       activePieces: document.querySelectorAll('.build-palette__pieces > .is-active').length,
+      activeCategories: document.querySelectorAll('.build-palette__categories > .is-active').length,
+      visiblePieces: document.querySelectorAll('.build-palette__pieces > button').length,
       doorOpen: saved?.raft?.structures?.find((structure) => structure.id === 'showcase-door')?.open,
     };
   });
@@ -2075,6 +2185,7 @@ async function captureBuildingStructures() {
   );
   if (
     state.piece !== 'wall'
+    || state.category !== 'frame'
     || state.rotation !== '1'
     || state.level !== '1'
     || state.mode !== 'invalid'
@@ -2088,6 +2199,8 @@ async function captureBuildingStructures() {
     || !state.notices.some((notice) => notice.includes('木墙已固定'))
     || !state.notices.some((notice) => notice.includes('板门已合拢'))
     || state.activePieces !== 1
+    || state.activeCategories !== 1
+    || state.visiblePieces !== 3
     || !state.palette
     || state.palette.left < 0
     || state.palette.right > viewport.width
@@ -2096,6 +2209,7 @@ async function captureBuildingStructures() {
   ) {
     throw new Error(`Building structure transaction failed: ${JSON.stringify(state)}`);
   }
+  console.log(`Building selector isolation: ${JSON.stringify(selectionState)}`);
   console.log(`Building structure gate: ${JSON.stringify({ ...state, savedStructures: state.savedStructures.length })}`);
   await context.close();
   if (process.env.CAPTURE_FAST === '1' || buildingPart === 'behavior') return;
@@ -2114,9 +2228,16 @@ async function captureBuildingStructureVisual() {
     height: 320,
   });
   await enterGame(visual.page);
+  await visual.page.keyboard.press('Digit2');
+  await visual.page.keyboard.press('KeyQ');
   await waitForRuntime(
     visual.page,
-    () => document.querySelector('.game-mount')?.dataset.raftStructureCount === '11',
+    () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return data?.raftStructureCount === '11'
+        && data?.buildCategory === 'frame'
+        && data?.buildPiece === 'wall';
+    },
     10_000,
   );
   await visual.page.waitForTimeout(500);
@@ -2129,12 +2250,21 @@ async function captureBuildingStructureVisual() {
     const palette = box('.build-palette');
     const prompt = box('.interaction-prompt.is-visible');
     const hotbar = box('.hotbar');
+    const categoryButtons = [...document.querySelectorAll('.build-palette__categories > button')];
+    const pieceButtons = [...document.querySelectorAll('.build-palette__pieces > button')];
     return {
       palette,
       prompt,
       hotbar,
       palettePromptOverlap: overlaps(palette, prompt),
       paletteHotbarOverlap: overlaps(palette, hotbar),
+      categoryCount: categoryButtons.length,
+      activeCategories: categoryButtons.filter((button) => button.classList.contains('is-active')).length,
+      pieceCount: pieceButtons.length,
+      activePieces: pieceButtons.filter((button) => button.classList.contains('is-active')).length,
+      clippedLabels: [...categoryButtons, ...pieceButtons].filter(
+        (button) => button.scrollWidth > button.clientWidth || button.scrollHeight > button.clientHeight,
+      ).map((button) => button.getAttribute('aria-label')),
       width: innerWidth,
       height: innerHeight,
     };
@@ -2148,10 +2278,16 @@ async function captureBuildingStructureVisual() {
     || layout.palette.bottom > layout.height
     || layout.palettePromptOverlap
     || layout.paletteHotbarOverlap
+    || layout.categoryCount !== 3
+    || layout.activeCategories !== 1
+    || layout.pieceCount !== 3
+    || layout.activePieces !== 1
+    || layout.clippedLabels.length > 0
   ) {
     throw new Error(`Building visual layout failed: ${JSON.stringify(layout)}`);
   }
   console.log(`Building visual layout: ${JSON.stringify(layout)}`);
+  await inspectCanvasPixels(visual.page, 'building-selector-visual');
   await captureCompositedPage(
     visual.page,
     new URL('building-structures-desktop.png', outputDir).pathname,

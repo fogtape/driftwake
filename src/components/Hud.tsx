@@ -41,9 +41,11 @@ import { survivalBand } from '../game/domain/survival';
 import { ISLAND_APPROACH_SECONDS, ISLAND_DEPART_SECONDS, ISLAND_DOCK_SECONDS } from '../game/domain/island';
 import { cardinalLabel } from '../game/domain/navigation';
 import {
-  RAFT_BUILD_PIECES,
+  RAFT_BUILD_CATEGORY_DEFINITIONS,
+  RAFT_BUILD_CATEGORY_ORDER,
   RAFT_BUILD_PIECE_DEFINITIONS,
   RAFT_STRUCTURE_DEFINITIONS,
+  type RaftBuildCategory,
   type RaftBuildPiece,
 } from '../game/domain/raftStructures';
 import type {
@@ -95,6 +97,8 @@ interface HudProps {
   onSettings: () => void;
   onToggleAudio: () => void;
   onSelectTool: (tool: ToolId) => void;
+  onSelectBuildPiece: (piece: RaftBuildPiece) => void;
+  onSelectBuildCategory: (category: RaftBuildCategory) => void;
   onOpenPack: () => void;
 }
 
@@ -118,6 +122,12 @@ function BuildPieceIcon({ piece, size = 18 }: { piece: RaftBuildPiece; size?: nu
   if (piece === 'stairs') return <ChartNoAxesGantt size={size} />;
   if (piece === 'floor') return <Layers3 size={size} />;
   return <PanelTop size={size} />;
+}
+
+function BuildCategoryIcon({ category, size = 15 }: { category: RaftBuildCategory; size?: number }) {
+  if (category === 'hull') return <Grid3X3 size={size} />;
+  if (category === 'frame') return <Columns3 size={size} />;
+  return <Layers3 size={size} />;
 }
 
 function Gauge({ icon, value, tone, label }: GaugeProps) {
@@ -169,6 +179,8 @@ export function Hud({
   onSettings,
   onToggleAudio,
   onSelectTool,
+  onSelectBuildPiece,
+  onSelectBuildCategory,
   onOpenPack,
 }: HudProps) {
   const sharkAlert = shark.mode === 'approaching' || shark.mode === 'attacking';
@@ -179,6 +191,7 @@ export function Hud({
     : null;
   const displayedBuildCost = structureRepairDefinition?.repairCost
     ?? RAFT_BUILD_PIECE_DEFINITIONS[build.piece].cost;
+  const visibleBuildPieces = RAFT_BUILD_CATEGORY_DEFINITIONS[build.category].pieces;
   const placedDeviceTypes = island.ashore
     ? []
     : (['purifier', 'grill', 'solarPurifier', 'tripleGrill', 'locker'] as const)
@@ -430,11 +443,38 @@ export function Hud({
             ? `${RAFT_BUILD_PIECE_DEFINITIONS[build.piece].name}，鲨鱼伤害降低百分之五十五`
             : `${RAFT_BUILD_PIECE_DEFINITIONS[build.piece].name}，${build.level + 1}层，朝向${['北', '东', '南', '西'][build.rotation]}，筏上结构 ${build.structures} 件`}
       >
-        <div className="build-palette__pieces" aria-hidden="true">
-          {RAFT_BUILD_PIECES.map((piece) => (
-            <span className={piece === build.piece ? 'is-active' : ''} key={piece}>
-              <BuildPieceIcon piece={piece} size={17} />
-            </span>
+        <div className="build-palette__categories" role="tablist" aria-label="建造类别">
+          {RAFT_BUILD_CATEGORY_ORDER.map((category) => (
+            <button
+              className={category === build.category ? 'is-active' : ''}
+              type="button"
+              role="tab"
+              aria-selected={category === build.category}
+              aria-label={`选择${RAFT_BUILD_CATEGORY_DEFINITIONS[category].name}类别`}
+              title={RAFT_BUILD_CATEGORY_DEFINITIONS[category].name}
+              onClick={() => onSelectBuildCategory(category)}
+              key={category}
+            >
+              <BuildCategoryIcon category={category} />
+              <span>{RAFT_BUILD_CATEGORY_DEFINITIONS[category].name}</span>
+            </button>
+          ))}
+        </div>
+        <div className="build-palette__pieces" role="listbox" aria-label={`${RAFT_BUILD_CATEGORY_DEFINITIONS[build.category].name}建造件`}>
+          {visibleBuildPieces.map((piece) => (
+            <button
+              className={piece === build.piece ? 'is-active' : ''}
+              type="button"
+              role="option"
+              aria-selected={piece === build.piece}
+              aria-label={`选择${RAFT_BUILD_PIECE_DEFINITIONS[piece].name}`}
+              title={RAFT_BUILD_PIECE_DEFINITIONS[piece].name}
+              onClick={() => onSelectBuildPiece(piece)}
+              key={piece}
+            >
+              <BuildPieceIcon piece={piece} size={16} />
+              <span>{RAFT_BUILD_PIECE_DEFINITIONS[piece].shortName}</span>
+            </button>
           ))}
         </div>
         <div className="build-palette__meta">
