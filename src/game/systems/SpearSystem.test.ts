@@ -7,7 +7,7 @@ describe('SpearSystem impact transaction', () => {
     const onSpearHit = vi.fn();
 
     expect(resolveSpearImpact(false, strikeTarget, onSpearHit)).toBe(false);
-    expect(strikeTarget).toHaveBeenCalledWith(34);
+    expect(strikeTarget).toHaveBeenCalledWith(34, false);
     expect(onSpearHit).not.toHaveBeenCalled();
   });
 
@@ -20,8 +20,17 @@ describe('SpearSystem impact transaction', () => {
 
     expect(resolveSpearImpact(upgraded, strikeTarget, onSpearHit)).toBe(true);
     expect(strikeTarget).toHaveBeenCalledTimes(1);
-    expect(strikeTarget).toHaveBeenCalledWith(damage);
+    expect(strikeTarget).toHaveBeenCalledWith(damage, false);
     expect(onSpearHit).toHaveBeenCalledOnce();
     expect(onSpearHit).toHaveBeenCalledWith(upgraded);
+  });
+
+  it('forwards the counter eligibility captured when the thrust started', () => {
+    const strikeTarget = vi.fn(() => true);
+    const onSpearHit = vi.fn();
+
+    expect(resolveSpearImpact(false, strikeTarget, onSpearHit, true)).toBe(true);
+    expect(strikeTarget).toHaveBeenCalledWith(34, true);
+    expect(onSpearHit).toHaveBeenCalledWith(false);
   });
 });

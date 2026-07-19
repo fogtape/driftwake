@@ -885,6 +885,7 @@ button:focus-visible {
 
 .crosshair.is-nibble i { background: var(--sun); box-shadow: 0 0 9px rgba(239, 195, 92, 0.78); }
 .crosshair.is-danger i { background: #ff8b70; box-shadow: 0 0 8px rgba(226, 111, 85, 0.72); }
+.crosshair.is-counter i { background: #79e1cd; box-shadow: 0 0 11px rgba(84, 220, 194, 0.92); }
 
 .hook-charge {
   position: absolute;
@@ -974,6 +975,22 @@ button:focus-visible {
 }
 .shark-warning.is-harvest > svg { color: #8cddd0; }
 .shark-warning.is-harvest i b { background: #78d3c7; }
+.shark-warning.is-windup {
+  color: #fff0be;
+  border-color: rgba(239, 195, 92, 0.58);
+  background: rgba(48, 40, 19, 0.84);
+  box-shadow: 0 0 18px rgba(226, 169, 67, 0.12);
+}
+.shark-warning.is-windup > svg { color: #efc35c; }
+.shark-warning.is-windup i b { background: #efc35c; }
+.shark-warning.is-counter {
+  color: #dcfff7;
+  border-color: rgba(87, 207, 185, 0.68);
+  background: rgba(10, 47, 45, 0.88);
+  box-shadow: 0 0 20px rgba(69, 211, 182, 0.18);
+}
+.shark-warning.is-counter > svg { color: #79e1cd; }
+.shark-warning.is-counter i b { background: #79e1cd; }
 
 .crop-warning {
   position: absolute;

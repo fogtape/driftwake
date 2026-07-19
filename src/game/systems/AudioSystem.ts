@@ -1351,6 +1351,49 @@ export class AudioSystem {
     oscillator.stop(now + 0.8);
   }
 
+  playSharkWindup(playerTarget: boolean, secondBite: boolean): void {
+    if (!this.context || !this.creatures) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const filter = this.context.createBiquadFilter();
+    const gain = this.context.createGain();
+    oscillator.type = 'sawtooth';
+    oscillator.frequency.setValueAtTime(secondBite ? 48 : 42, now);
+    oscillator.frequency.exponentialRampToValueAtTime(playerTarget ? 104 : 86, now + 0.68);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(playerTarget ? 190 : 250, now);
+    filter.frequency.exponentialRampToValueAtTime(playerTarget ? 420 : 520, now + 0.68);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(playerTarget ? 0.06 : 0.048, now + 0.16);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.72);
+    oscillator.connect(filter).connect(gain).connect(this.creatures);
+    oscillator.start(now);
+    oscillator.stop(now + 0.74);
+    this.noiseBurstTo(playerTarget ? 0.2 : 0.14, playerTarget ? 280 : 360, 0.18, 'lowpass', this.creatures);
+  }
+
+  playSharkCounter(): void {
+    this.noiseBurstTo(0.32, 430, 0.16, 'lowpass', this.creatures);
+    this.noiseBurstTo(0.12, 2350, 0.065, 'bandpass', this.effects);
+    if (!this.context || !this.creatures) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(172, now);
+    oscillator.frequency.exponentialRampToValueAtTime(46, now + 0.34);
+    gain.gain.setValueAtTime(0.075, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.36);
+    oscillator.connect(gain).connect(this.creatures);
+    oscillator.start(now);
+    oscillator.stop(now + 0.38);
+  }
+
+  playSharkMiss(): void {
+    this.noiseBurstTo(0.28, 510, 0.22, 'lowpass', this.creatures);
+    this.noiseBurstTo(0.12, 1580, 0.09, 'bandpass', this.effects);
+  }
+
   playSharkBite(): void {
     this.noiseBurstTo(0.34, 310, 0.2, 'lowpass', this.creatures);
     this.noiseBurstTo(0.12, 1850, 0.11, 'bandpass', this.creatures);

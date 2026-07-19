@@ -43,6 +43,7 @@ import type { IslandPhase } from '../game/domain/island';
 import type { NavigationDeviceType, NavigationRouteMode, NavigationWeatherPhase, SignalArrayStatus } from '../game/domain/navigation';
 import type { PlayerSurface } from '../game/domain/save';
 import type { CameraMotionMode } from '../game/domain/settings';
+import type { SharkAttackPhase } from '../game/domain/shark';
 import type {
   RaftBuildCategory,
   RaftBuildPiece,
@@ -100,6 +101,11 @@ export interface SharkFeedback {
   harvested: number;
   harvestTotal: number;
   carcassSeconds: number;
+  attackPhase: SharkAttackPhase;
+  attackProgress: number;
+  counterWindow: boolean;
+  secondsToImpact: number;
+  recoverySeconds: number;
 }
 
 export interface PlayerFeedback {
@@ -365,6 +371,11 @@ function defaultShark(): SharkFeedback {
     harvested: 0,
     harvestTotal: 4,
     carcassSeconds: 0,
+    attackPhase: 'idle',
+    attackProgress: 0,
+    counterWindow: false,
+    secondsToImpact: 0,
+    recoverySeconds: 0,
   };
 }
 
@@ -829,7 +840,12 @@ export const useGameStore = create<GameState>((set, get) => ({
         shark.harvestProgress === state.shark.harvestProgress &&
         shark.harvested === state.shark.harvested &&
         shark.harvestTotal === state.shark.harvestTotal &&
-        shark.carcassSeconds === state.shark.carcassSeconds
+        shark.carcassSeconds === state.shark.carcassSeconds &&
+        shark.attackPhase === state.shark.attackPhase &&
+        shark.attackProgress === state.shark.attackProgress &&
+        shark.counterWindow === state.shark.counterWindow &&
+        shark.secondsToImpact === state.shark.secondsToImpact &&
+        shark.recoverySeconds === state.shark.recoverySeconds
         ? state
         : { shark };
     }),

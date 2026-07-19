@@ -1033,6 +1033,35 @@ const sharkLootWaterSave = {
   },
 };
 
+const sharkCombatRaftSave = {
+  ...sharkLootRaftSave,
+  player: {
+    ...sharkLootRaftSave.player,
+    inventory: { spear: 1, hook: 1, hammer: 1, timber: 6, polymer: 4, rope: 2 },
+    toolDurability: { spear: 45, hook: 48, hammer: 80 },
+    selectedTool: 'spear',
+    survival: { health: 100, thirst: 82, hunger: 74, oxygen: 100 },
+    navigation: { surface: 'raft', x: 0, z: 1.08 },
+  },
+  world: {
+    ...sharkLootRaftSave.world,
+    shark: { lifecycle: 'active', health: 66, x: 0, z: 0, harvestIndex: 0, remainingSeconds: 0 },
+  },
+};
+
+const sharkCombatWaterSave = {
+  ...sharkCombatRaftSave,
+  player: {
+    ...sharkCombatRaftSave.player,
+    navigation: { surface: 'water', x: -3.117, y: -1.45, z: 4.7 },
+    survival: { health: 100, thirst: 82, hunger: 74, oxygen: 100 },
+  },
+  world: {
+    ...sharkCombatRaftSave.world,
+    island: { ...seededSave.world.island, phase: 'docked', elapsed: 12 },
+  },
+};
+
 await mkdir(outputDir, { recursive: true });
 
 const browserRuntime = await launchDriftwakeChromium(chromium, {
@@ -1079,7 +1108,8 @@ async function openDesktopPage(label, options = {}) {
       });
     }, options.simulationTimeScale);
   }
-  if (captureQuality) {
+  const pageQuality = options.quality ?? captureQuality;
+  if (pageQuality) {
     await context.addInitScript((quality) => {
       localStorage.setItem('driftwake.preferences.v2', JSON.stringify({
         version: 2,
@@ -1090,7 +1120,7 @@ async function openDesktopPage(label, options = {}) {
         dynamicResolutionEnabled: true,
         audioMix: { master: 0, music: 0, ambience: 0, effects: 0, creatures: 0, ui: 0 },
       }));
-    }, captureQuality);
+    }, pageQuality);
   }
   if (options.seedSave) {
     await context.addInitScript((save) => {
@@ -4904,6 +4934,321 @@ async function captureFailureRecovery() {
   await context.close();
 }
 
+async function captureSharkCombat() {
+  const viewport = { width: 1024, height: 640 };
+  const runtimeViewport = { width: 512, height: 320, quality: 'low' };
+  const stage = process.env.SHARK_COMBAT_STAGE ?? 'all';
+  const inputMode = process.env.SHARK_COMBAT_INPUT ?? 'observer';
+  if (!['all', 'visual', 'counter', 'water'].includes(stage)) {
+    throw new Error(`Unsupported SHARK_COMBAT_STAGE: ${stage}`);
+  }
+  if (!['mouse', 'observer'].includes(inputMode)) {
+    throw new Error(`Unsupported SHARK_COMBAT_INPUT: ${inputMode}`);
+  }
+  let visualState = null;
+  let counterState = null;
+  let waterState = null;
+  if (stage === 'all' || stage === 'visual') {
+    const visual = await openDesktopPage('shark-combat-visual', {
+      seedSave: true,
+      customSave: sharkCombatRaftSave,
+      ...viewport,
+    });
+    try {
+      await enterGame(visual.page);
+      await visual.page.addStyleTag({ content: '.focus-prompt { display: none !important; }' });
+      await waitForRuntime(visual.page, () => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        return data?.sharkMode === 'approaching';
+      }, 20_000);
+      await aimAtShark(visual.page, 6, 35);
+      await visual.page.waitForFunction(() => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        return data?.sharkAttackPhase === 'windup'
+          && data?.sharkCounterWindow === 'true';
+      }, undefined, { polling: 'raf', timeout: 120_000 });
+      await visual.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+      await waitForRuntime(
+        visual.page,
+        () => document.querySelector('.game-mount')?.dataset.simulationActive === 'false',
+        5_000,
+      );
+      visualState = await visual.page.evaluate(() => {
+        const mount = document.querySelector('.game-mount');
+        const card = document.querySelector('.shark-warning.is-counter');
+        const crosshair = document.querySelector('.crosshair.is-counter');
+        const fill = card?.querySelector('i b');
+        const rect = card?.getBoundingClientRect();
+        return {
+          phase: mount?.dataset.sharkAttackPhase,
+          progress: Number(mount?.dataset.sharkAttackProgress),
+          counterWindow: mount?.dataset.sharkCounterWindow,
+          secondsToImpact: Number(mount?.dataset.sharkSecondsToImpact),
+          telegraphs: Number(mount?.dataset.sharkTelegraphCount),
+          attempts: Number(mount?.dataset.sharkBiteAttemptCount),
+          label: card?.textContent?.replace(/\s+/g, ' ').trim(),
+          counterCard: Boolean(card),
+          counterCrosshair: Boolean(crosshair),
+          fillWidth: fill?.getBoundingClientRect().width ?? 0,
+          card: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null,
+          viewport: { width: innerWidth, height: innerHeight },
+        };
+      });
+      if (
+        visualState.phase !== 'windup'
+        || visualState.counterWindow !== 'true'
+        || visualState.telegraphs !== visualState.attempts + 1
+        || visualState.attempts > 1
+        || visualState.secondsToImpact <= 0.08
+        || visualState.progress < 0.2
+        || !visualState.label?.includes('蓄势')
+        || !visualState.counterCard
+        || !visualState.counterCrosshair
+        || visualState.fillWidth <= 0
+        || !visualState.card
+        || visualState.card.left < 0
+        || visualState.card.top < 0
+        || visualState.card.right > visualState.viewport.width
+        || visualState.card.bottom > visualState.viewport.height
+      ) {
+        throw new Error(`Shark combat windup visual gate failed: ${JSON.stringify(visualState)}`);
+      }
+      const compositedFrame = await inspectCanvasPixels(visual.page, 'shark-combat-windup');
+      if (process.env.CAPTURE_FAST !== '1') {
+        const screenshotPath = new URL('shark-counter-window-desktop.png', outputDir).pathname;
+        if (compositedFrame) await writeFile(screenshotPath, Buffer.from(compositedFrame, 'base64'));
+        else await captureCompositedPage(visual.page, screenshotPath);
+      }
+    } finally {
+      await visual.context.close();
+    }
+  }
+
+  if (stage === 'all' || stage === 'counter') {
+    const counter = await openDesktopPage('shark-combat-counter', {
+      seedSave: true,
+      customSave: sharkCombatRaftSave,
+      ...runtimeViewport,
+    });
+    try {
+      await enterGame(counter.page);
+      await installNoticeHistory(counter.page);
+      await waitForRuntime(counter.page, () => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        return data?.sharkMode === 'approaching';
+      }, 20_000);
+      await aimAtShark(counter.page, 6, 35);
+      await counter.page.evaluate((autoDispatch) => {
+        const mount = document.querySelector('.game-mount');
+        const canvas = document.querySelector('canvas');
+        if (!mount || !canvas) throw new Error('Shark counter observer could not find the game surface');
+        globalThis.__driftwakeSharkCounterHistory = [];
+        globalThis.__driftwakeSharkCounterObserved = false;
+        globalThis.__driftwakeSharkCounterInputDispatched = false;
+        let lastKey = '';
+        const record = () => {
+          const data = mount.dataset;
+          const state = {
+            mode: data.sharkMode,
+            phase: data.sharkAttackPhase,
+            progress: data.sharkAttackProgress,
+            counter: data.sharkCounterWindow,
+            attempts: data.sharkBiteAttemptCount,
+            timedCounters: data.sharkTimedCounterCount,
+          };
+          const key = JSON.stringify(state);
+          if (key !== lastKey) {
+            lastKey = key;
+            globalThis.__driftwakeSharkCounterHistory.push(state);
+            if (globalThis.__driftwakeSharkCounterHistory.length > 80) {
+              globalThis.__driftwakeSharkCounterHistory.shift();
+            }
+          }
+          if (state.counter === 'true' && Number(state.attempts) === 0) {
+            globalThis.__driftwakeSharkCounterObserved = true;
+            if (autoDispatch && !globalThis.__driftwakeSharkCounterInputDispatched) {
+              globalThis.__driftwakeSharkCounterInputDispatched = true;
+              canvas.dispatchEvent(new MouseEvent('mousedown', {
+                bubbles: true,
+                cancelable: true,
+                button: 0,
+              }));
+            }
+          }
+        };
+        new MutationObserver(record).observe(mount, {
+          attributes: true,
+          attributeFilter: [
+            'data-shark-mode',
+            'data-shark-attack-phase',
+            'data-shark-attack-progress',
+            'data-shark-counter-window',
+            'data-shark-bite-attempt-count',
+            'data-shark-timed-counter-count',
+          ],
+        });
+        record();
+      }, inputMode === 'observer');
+      try {
+        await counter.page.waitForFunction(() => {
+          return globalThis.__driftwakeSharkCounterObserved === true;
+        }, undefined, { polling: 'raf', timeout: 120_000 });
+      } catch (error) {
+        const diagnostic = await counter.page.evaluate(() => {
+          const data = document.querySelector('.game-mount')?.dataset;
+          return {
+            mode: data?.sharkMode,
+            phase: data?.sharkAttackPhase,
+            progress: data?.sharkAttackProgress,
+            counterWindow: data?.sharkCounterWindow,
+            attempts: data?.sharkBiteAttemptCount,
+            simulationActive: data?.simulationActive,
+            history: globalThis.__driftwakeSharkCounterHistory ?? [],
+          };
+        });
+        throw new Error(`Shark combat counter window was not observed: ${JSON.stringify(diagnostic)}`, { cause: error });
+      }
+      if (inputMode === 'mouse') {
+        const strike = await counter.page.evaluate(() => {
+          const data = document.querySelector('.game-mount')?.dataset;
+          const aim = JSON.parse(data?.sharkAim ?? '{}');
+          if (!Array.isArray(aim.camera) || !Array.isArray(aim.forward) || !Array.isArray(aim.target)) {
+            return { ready: false, distance: null, dot: null };
+          }
+          const delta = aim.target.map((value, index) => value - aim.camera[index]);
+          const distance = Math.hypot(...delta);
+          const dot = distance > 0
+            ? delta.reduce((total, value, index) => total + value * aim.forward[index], 0) / distance
+            : -1;
+          return { ready: distance >= 0.25 && distance <= 5.8 && dot > 0.69, distance, dot };
+        });
+        if (!strike.ready) throw new Error(`Shark combat counter sightline failed: ${JSON.stringify(strike)}`);
+        const bounds = await counter.page.locator('canvas').boundingBox();
+        if (!bounds) throw new Error('Shark counter canvas bounds unavailable');
+        await counter.page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+      }
+      try {
+        await counter.page.waitForFunction(() => {
+          const data = document.querySelector('.game-mount')?.dataset;
+          return data?.sharkMode === 'retreating'
+            && data?.sharkAttackPhase === 'recovery'
+            && data?.sharkTimedCounterCount === '1';
+        }, undefined, { polling: 'raf', timeout: 120_000 });
+      } catch (error) {
+        const diagnostic = await counter.page.evaluate(() => {
+          const data = document.querySelector('.game-mount')?.dataset;
+          return {
+            mode: data?.sharkMode,
+            phase: data?.sharkAttackPhase,
+            health: data?.sharkHealth,
+            counterWindow: data?.sharkCounterWindow,
+            timedCounters: data?.sharkTimedCounterCount,
+            telegraphs: data?.sharkTelegraphCount,
+            attempts: data?.sharkBiteAttemptCount,
+            lastToolWear: data?.lastToolWear,
+            interaction: document.querySelector('.interaction-prompt.is-visible')?.textContent?.trim(),
+            notice: document.querySelector('.loot-notice.is-visible')?.textContent?.trim(),
+            pointerLocked: document.pointerLockElement === document.querySelector('canvas'),
+            simulationActive: data?.simulationActive,
+            inputDispatched: globalThis.__driftwakeSharkCounterInputDispatched,
+            history: globalThis.__driftwakeSharkCounterHistory ?? [],
+          };
+        });
+        throw new Error(`Shark combat counter did not resolve: ${JSON.stringify(diagnostic)}`, { cause: error });
+      }
+      counterState = await counter.page.evaluate((mode) => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        return {
+          mode: data?.sharkMode,
+          phase: data?.sharkAttackPhase,
+          health: Number(data?.sharkHealth),
+          counterWindow: data?.sharkCounterWindow,
+          timedCounters: Number(data?.sharkTimedCounterCount),
+          telegraphs: Number(data?.sharkTelegraphCount),
+          attempts: Number(data?.sharkBiteAttemptCount),
+          foundationDamage: Number(data?.sharkFoundationDamageCount),
+          structureDamage: Number(data?.sharkStructureDamageCount),
+          netDamage: Number(data?.sharkCollectionNetDamageCount),
+          recoverySeconds: Number(data?.sharkRecoverySeconds),
+          lastToolWear: data?.lastToolWear,
+          inputMode: mode,
+          inputDispatched: globalThis.__driftwakeSharkCounterInputDispatched,
+          history: globalThis.__driftwakeSharkCounterHistory ?? [],
+          notices: globalThis.__driftwakeCaptureNotices ?? [],
+        };
+      }, inputMode);
+      if (
+        counterState.mode !== 'retreating'
+        || counterState.phase !== 'recovery'
+        || counterState.health !== 32
+        || counterState.counterWindow !== 'false'
+        || counterState.timedCounters !== 1
+        || counterState.telegraphs !== 1
+        || counterState.attempts !== 0
+        || counterState.foundationDamage !== 0
+        || counterState.structureDamage !== 0
+        || counterState.netDamage !== 0
+        || counterState.recoverySeconds <= 0
+        || counterState.lastToolWear !== 'spear-hit:spear:44'
+        || (inputMode === 'observer' && !counterState.inputDispatched)
+        || !counterState.notices.some((notice) => notice.includes('抢在扑咬前'))
+      ) {
+        throw new Error(`Shark combat timed counter gate failed: ${JSON.stringify(counterState)}`);
+      }
+    } finally {
+      await counter.context.close();
+    }
+  }
+
+  if (stage === 'all' || stage === 'water') {
+    const water = await openDesktopPage('shark-combat-water', {
+      seedSave: true,
+      customSave: sharkCombatWaterSave,
+      simulationTimeScale: 3,
+      ...runtimeViewport,
+    });
+    try {
+      await enterGame(water.page);
+      await installNoticeHistory(water.page);
+      await water.page.waitForFunction(() => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        return data?.sharkMode === 'retreating'
+          && data?.sharkAttackPhase === 'recovery'
+          && Number(data?.sharkBiteAttemptCount) === 2;
+      }, undefined, { polling: 'raf', timeout: 120_000 });
+      waterState = await water.page.evaluate(() => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        return {
+          mode: data?.sharkMode,
+          phase: data?.sharkAttackPhase,
+          target: data?.sharkRaftTargetKind,
+          telegraphs: Number(data?.sharkTelegraphCount),
+          attempts: Number(data?.sharkBiteAttemptCount),
+          damage: Number(data?.sharkPlayerDamageCount),
+          misses: Number(data?.sharkMissedPlayerBiteCount),
+          recoverySeconds: Number(data?.sharkRecoverySeconds),
+          notices: globalThis.__driftwakeCaptureNotices ?? [],
+        };
+      });
+      if (
+        waterState.mode !== 'retreating'
+        || waterState.phase !== 'recovery'
+        || waterState.target !== 'none'
+        || waterState.telegraphs !== 2
+        || waterState.attempts !== 2
+        || waterState.damage + waterState.misses !== 2
+        || waterState.recoverySeconds <= 0
+        || !waterState.notices.some((notice) => notice.includes('防线') || notice.includes('掠过'))
+      ) {
+        throw new Error(`Water shark combat rhythm gate failed: ${JSON.stringify(waterState)}`);
+      }
+    } finally {
+      await water.context.close();
+    }
+  }
+  console.log(`Shark combat rhythm: ${JSON.stringify({ visual: visualState, counter: counterState, water: waterState })}`);
+}
+
 async function killSharkAndFocusCarcass(page, label) {
   try {
     await waitForRuntime(page, () => {
@@ -5242,6 +5587,7 @@ try {
   if (captureOnly === 'perimeter-destruction') await capturePerimeterDestructionProbe();
   if (captureOnly === 'perimeter-defense-visual') await capturePerimeterDefenseVisual();
   if (captureOnly === 'all' || captureOnly === 'failure') await captureFailureRecovery();
+  if (captureOnly === 'all' || captureOnly === 'shark-combat') await captureSharkCombat();
   if (captureOnly === 'all' || captureOnly === 'shark-loot') await captureSharkLoot();
   if (captureOnly === 'shark-loot-water') {
     const result = await captureSharkLootWater();

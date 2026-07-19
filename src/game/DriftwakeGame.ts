@@ -569,8 +569,9 @@ export class DriftwakeGame {
         this.camera,
         this.materials,
         this.audio,
-        (damage) => this.shark?.receiveSpearStrike(this.camera, damage) ?? false,
+        (damage, counterPrimed) => this.shark?.receiveSpearStrike(this.camera, damage, counterPrimed) ?? false,
         (upgraded) => this.applyToolWear(upgraded ? 'metalSpear' : 'spear', 'spear-hit'),
+        () => this.shark?.isCounterWindowOpen() ?? false,
       );
       store.setRaft(this.raft.getIntegrityStats());
       this.unsubscribeStore = useGameStore.subscribe((state, previous) => {
@@ -923,30 +924,6 @@ export class DriftwakeGame {
       this.mount.dataset.structureCollapseLastId = collapseDiagnostics.lastStructureId ?? 'none';
       this.mount.dataset.structureCollapseLastType = collapseDiagnostics.lastStructureType ?? 'none';
     }
-    const sharkDiagnostics = this.shark?.getDiagnostics();
-    if (sharkDiagnostics) {
-      this.mount.dataset.sharkRaftTargetKind = sharkDiagnostics.targetKind;
-      this.mount.dataset.sharkRaftTargetId = sharkDiagnostics.targetId ?? 'none';
-      this.mount.dataset.sharkLastRaftTargetKind = sharkDiagnostics.lastRaftTargetKind;
-      this.mount.dataset.sharkLastRaftTargetId = sharkDiagnostics.lastRaftTargetId ?? 'none';
-      this.mount.dataset.sharkLastRaftTargetHealth = String(sharkDiagnostics.lastRaftTargetHealth);
-      this.mount.dataset.sharkStructureDamageCount = String(sharkDiagnostics.structureDamageEvents);
-      this.mount.dataset.sharkFoundationDamageCount = String(sharkDiagnostics.foundationDamageEvents);
-      this.mount.dataset.sharkCollectionNetDamageCount = String(sharkDiagnostics.collectionNetDamageEvents);
-      this.mount.dataset.sharkLifecycle = sharkDiagnostics.lifecycle;
-      this.mount.dataset.sharkCarcassPhase = sharkDiagnostics.carcassPhase;
-      this.mount.dataset.sharkCarcassFocused = String(sharkDiagnostics.carcassFocused);
-      this.mount.dataset.sharkHarvestIndex = String(sharkDiagnostics.harvestIndex);
-      this.mount.dataset.sharkHarvestProgress = sharkDiagnostics.harvestProgress.toFixed(3);
-      this.mount.dataset.sharkHarvestEvents = String(sharkDiagnostics.harvestEvents);
-      this.mount.dataset.sharkCarcassSeconds = sharkDiagnostics.carcassSeconds.toFixed(2);
-      this.mount.dataset.sharkCooldownSeconds = sharkDiagnostics.cooldownSeconds.toFixed(2);
-      this.mount.dataset.sharkHealth = String(Math.round(sharkDiagnostics.health));
-      this.mount.dataset.sharkMode = sharkDiagnostics.mode;
-      this.mount.dataset.sharkWorldPosition = JSON.stringify(sharkDiagnostics.worldPosition);
-      this.mount.dataset.sharkAim = JSON.stringify(this.shark?.getAimDiagnostics());
-      this.mount.dataset.raftReinforcedTileCount = String(this.raft?.reinforcedTileCount ?? 0);
-    }
     this.devices?.update(simulationSeconds, stepSeconds);
     this.navigation?.update(simulationSeconds, stepSeconds);
     this.planting?.update(simulationSeconds, stepSeconds);
@@ -993,6 +970,40 @@ export class DriftwakeGame {
     this.underwater?.update(simulationSeconds, stepSeconds);
     this.salvage?.update(simulationSeconds);
     this.shark?.update(simulationSeconds, stepSeconds);
+    const sharkDiagnostics = this.shark?.getDiagnostics();
+    if (sharkDiagnostics) {
+      this.mount.dataset.sharkRaftTargetKind = sharkDiagnostics.targetKind;
+      this.mount.dataset.sharkRaftTargetId = sharkDiagnostics.targetId ?? 'none';
+      this.mount.dataset.sharkLastRaftTargetKind = sharkDiagnostics.lastRaftTargetKind;
+      this.mount.dataset.sharkLastRaftTargetId = sharkDiagnostics.lastRaftTargetId ?? 'none';
+      this.mount.dataset.sharkLastRaftTargetHealth = String(sharkDiagnostics.lastRaftTargetHealth);
+      this.mount.dataset.sharkStructureDamageCount = String(sharkDiagnostics.structureDamageEvents);
+      this.mount.dataset.sharkFoundationDamageCount = String(sharkDiagnostics.foundationDamageEvents);
+      this.mount.dataset.sharkCollectionNetDamageCount = String(sharkDiagnostics.collectionNetDamageEvents);
+      this.mount.dataset.sharkLifecycle = sharkDiagnostics.lifecycle;
+      this.mount.dataset.sharkCarcassPhase = sharkDiagnostics.carcassPhase;
+      this.mount.dataset.sharkCarcassFocused = String(sharkDiagnostics.carcassFocused);
+      this.mount.dataset.sharkHarvestIndex = String(sharkDiagnostics.harvestIndex);
+      this.mount.dataset.sharkHarvestProgress = sharkDiagnostics.harvestProgress.toFixed(3);
+      this.mount.dataset.sharkHarvestEvents = String(sharkDiagnostics.harvestEvents);
+      this.mount.dataset.sharkCarcassSeconds = sharkDiagnostics.carcassSeconds.toFixed(2);
+      this.mount.dataset.sharkCooldownSeconds = sharkDiagnostics.cooldownSeconds.toFixed(2);
+      this.mount.dataset.sharkHealth = String(Math.round(sharkDiagnostics.health));
+      this.mount.dataset.sharkMode = sharkDiagnostics.mode;
+      this.mount.dataset.sharkAttackPhase = sharkDiagnostics.attackPhase;
+      this.mount.dataset.sharkAttackProgress = sharkDiagnostics.attackProgress.toFixed(3);
+      this.mount.dataset.sharkCounterWindow = String(sharkDiagnostics.counterWindow);
+      this.mount.dataset.sharkSecondsToImpact = sharkDiagnostics.secondsToImpact.toFixed(3);
+      this.mount.dataset.sharkTelegraphCount = String(sharkDiagnostics.telegraphEvents);
+      this.mount.dataset.sharkBiteAttemptCount = String(sharkDiagnostics.biteAttempts);
+      this.mount.dataset.sharkPlayerDamageCount = String(sharkDiagnostics.playerDamageEvents);
+      this.mount.dataset.sharkMissedPlayerBiteCount = String(sharkDiagnostics.missedPlayerBites);
+      this.mount.dataset.sharkTimedCounterCount = String(sharkDiagnostics.timedCounterEvents);
+      this.mount.dataset.sharkRecoverySeconds = sharkDiagnostics.recoverySeconds.toFixed(2);
+      this.mount.dataset.sharkWorldPosition = JSON.stringify(sharkDiagnostics.worldPosition);
+      this.mount.dataset.sharkAim = JSON.stringify(this.shark?.getAimDiagnostics());
+      this.mount.dataset.raftReinforcedTileCount = String(this.raft?.reinforcedTileCount ?? 0);
+    }
     this.mount.dataset.salvageFocus = this.salvage?.focusedKind ?? 'none';
     this.mount.dataset.worldDropCount = String(this.debris?.activeWorldDropCount ?? 0);
     this.splashes?.update(stepSeconds);

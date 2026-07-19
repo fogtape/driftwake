@@ -90,6 +90,21 @@ export class SplashSystem {
     this.spawnBurst(position, 0x8fcfd0, 30, 1.02, 0.055, 0.52, 2.18);
   }
 
+  spawnSharkTelegraph(position: Vector3, playerTarget = false): void {
+    this.spawnBurst(position, 0x8edbd5, playerTarget ? 30 : 24, 0.86, 0.05, 0.12, playerTarget ? 1.35 : 1.05);
+    this.spawnBurst(position, 0xe7ffff, playerTarget ? 16 : 12, 0.62, 0.035, 0.28, playerTarget ? 1.75 : 1.42);
+  }
+
+  spawnSharkCounter(position: Vector3): void {
+    this.spawnBurst(position, 0x75dfcd, 24, 0.7, 0.052, 0.22, 1.42);
+    this.spawnBurst(position, 0xc55b55, 16, 0.58, 0.046, 0.12, 0.9);
+  }
+
+  spawnSharkMiss(position: Vector3): void {
+    this.spawnBurst(position, 0xdffcff, 28, 0.78, 0.048, 0.18, 1.58);
+    this.spawnBurst(position, 0x65bfc0, 18, 0.86, 0.042, 0.08, 1.02);
+  }
+
   spawnSharkHarvest(position: Vector3, completed = false): void {
     this.spawnBurst(position, 0xb95f5b, completed ? 22 : 14, 0.62, 0.05, 0.16, 0.92);
     this.spawnBurst(position, 0x789695, completed ? 13 : 8, 0.74, 0.038, 0.22, 1.12);

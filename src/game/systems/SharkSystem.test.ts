@@ -9,6 +9,8 @@ import { RaftSystem } from './RaftSystem';
 import { RaftStructureSystem } from './RaftStructureSystem';
 import { SharkSystem } from './SharkSystem';
 import { useGameStore } from '../../state/gameStore';
+import { SPEAR_THRUST_TO_IMPACT_SECONDS } from '../domain/combat';
+import { SHARK_COUNTER_CLOSE_LEAD_SECONDS } from '../domain/shark';
 
 function createTestMaterials(): MaterialLibrary {
   const material = () => new MeshStandardMaterial();
@@ -54,9 +56,37 @@ function createTestMaterials(): MaterialLibrary {
   };
 }
 
+function createCombatAudio(): AudioSystem {
+  return {
+    playSharkWarning: vi.fn(),
+    playSharkWindup: vi.fn(),
+    playSharkBite: vi.fn(),
+    playSharkCounter: vi.fn(),
+    playSharkMiss: vi.fn(),
+    playStructureDamage: vi.fn(),
+    playPlayerBite: vi.fn(),
+    playSpearHit: vi.fn(),
+  } as unknown as AudioSystem;
+}
+
+function createCombatSplashes(): SplashSystem {
+  return {
+    spawn: vi.fn(),
+    spawnImpact: vi.fn(),
+    spawnStructureDamage: vi.fn(),
+    spawnSharkTelegraph: vi.fn(),
+    spawnSharkCounter: vi.fn(),
+    spawnSharkMiss: vi.fn(),
+  } as unknown as SplashSystem;
+}
+
 describe('SharkSystem structure attacks', () => {
   beforeEach(() => {
     useGameStore.getState().setInteraction(null);
+    useGameStore.setState({
+      phase: 'playing',
+      survival: { health: 100, thirst: 82, hunger: 74, oxygen: 100 },
+    });
     vi.stubGlobal('window', {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
@@ -92,18 +122,8 @@ describe('SharkSystem structure attacks', () => {
       getWorldFootPosition: (target: Vector3) => target.set(0, 0, 0),
       applyWaterImpulse: vi.fn(),
     } as unknown as PlayerController;
-    const audio = {
-      playSharkWarning: vi.fn(),
-      playSharkBite: vi.fn(),
-      playStructureDamage: vi.fn(),
-      playPlayerBite: vi.fn(),
-      playSpearHit: vi.fn(),
-    } as unknown as AudioSystem;
-    const splashes = {
-      spawn: vi.fn(),
-      spawnImpact: vi.fn(),
-      spawnStructureDamage: vi.fn(),
-    } as unknown as SplashSystem;
+    const audio = createCombatAudio();
+    const splashes = createCombatSplashes();
     const onMutation = vi.fn();
     const shark = new SharkSystem(
       scene,
@@ -175,18 +195,8 @@ describe('SharkSystem structure attacks', () => {
       getWorldFootPosition: (target: Vector3) => target.set(0, 0, 0),
       applyWaterImpulse: vi.fn(),
     } as unknown as PlayerController;
-    const audio = {
-      playSharkWarning: vi.fn(),
-      playSharkBite: vi.fn(),
-      playStructureDamage: vi.fn(),
-      playPlayerBite: vi.fn(),
-      playSpearHit: vi.fn(),
-    } as unknown as AudioSystem;
-    const splashes = {
-      spawn: vi.fn(),
-      spawnImpact: vi.fn(),
-      spawnStructureDamage: vi.fn(),
-    } as unknown as SplashSystem;
+    const audio = createCombatAudio();
+    const splashes = createCombatSplashes();
     const onMutation = vi.fn();
     const shark = new SharkSystem(
       scene,
@@ -218,6 +228,139 @@ describe('SharkSystem structure attacks', () => {
     });
     expect(onMutation).toHaveBeenCalledTimes(2);
     expect(raft.getTile({ x: 1, z: 1 })?.health).toBe(100);
+    shark.dispose();
+    structures.dispose();
+  });
+
+  it('opens a readable spear counter window and retreats before dealing raft damage', () => {
+    const materials = createTestMaterials();
+    const scene = new Scene();
+    const raft = new RaftSystem(
+      materials,
+      Array.from({ length: 9 }, (_, index) => ({
+        x: (index % 3) - 1,
+        z: Math.floor(index / 3) - 1,
+        health: 100,
+      })),
+    );
+    const structures = new RaftStructureSystem(raft, materials, []);
+    const player = {
+      getSurface: () => 'raft',
+      getWorldFootPosition: (target: Vector3) => target.set(0, 0, 0),
+      applyWaterImpulse: vi.fn(),
+    } as unknown as PlayerController;
+    const camera = new PerspectiveCamera();
+    const audio = createCombatAudio();
+    const splashes = createCombatSplashes();
+    const onMutation = vi.fn();
+    const shark = new SharkSystem(
+      scene,
+      raft,
+      structures,
+      player,
+      camera,
+      materials,
+      audio,
+      splashes,
+      vi.fn(),
+      onMutation,
+    );
+
+    let counterObserved = false;
+    let countered = false;
+    let counterInputTick: number | null = null;
+    let counterPrimed = false;
+    let promptVisibleAtImpact = true;
+    for (let tick = 0; tick < 2_700 && !countered; tick += 1) {
+      shark.update(tick / 60, 1 / 60);
+      const diagnostics = shark.getDiagnostics();
+      if (diagnostics.counterWindow) counterObserved = true;
+      if (
+        counterInputTick === null
+        && diagnostics.counterWindow
+        && diagnostics.secondsToImpact <= SHARK_COUNTER_CLOSE_LEAD_SECONDS + 0.025
+      ) {
+        counterInputTick = tick;
+        counterPrimed = shark.isCounterWindowOpen();
+      }
+      if (
+        counterInputTick === null
+        || (tick - counterInputTick) / 60 < SPEAR_THRUST_TO_IMPACT_SECONDS
+      ) continue;
+      promptVisibleAtImpact = diagnostics.counterWindow;
+      camera.position.copy(shark.model.position).add(new Vector3(0, 0.24, 3));
+      camera.lookAt(shark.model.position);
+      camera.updateMatrixWorld(true);
+      countered = shark.receiveSpearStrike(camera, 34, counterPrimed);
+    }
+
+    expect(counterObserved).toBe(true);
+    expect(counterInputTick).not.toBeNull();
+    expect(counterPrimed).toBe(true);
+    expect(promptVisibleAtImpact).toBe(false);
+    expect(countered).toBe(true);
+    expect(shark.getDiagnostics()).toMatchObject({
+      health: 66,
+      mode: 'retreating',
+      attackPhase: 'recovery',
+      counterWindow: false,
+      telegraphEvents: 1,
+      biteAttempts: 0,
+      timedCounterEvents: 1,
+      structureDamageEvents: 0,
+      foundationDamageEvents: 0,
+    });
+    expect(onMutation).not.toHaveBeenCalled();
+    expect(vi.mocked(audio.playSharkCounter)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(splashes.spawnSharkCounter)).toHaveBeenCalledTimes(1);
+    shark.dispose();
+    structures.dispose();
+  });
+
+  it('limits one water pursuit to two telegraphed bite attempts', () => {
+    const materials = createTestMaterials();
+    const scene = new Scene();
+    const raft = new RaftSystem(materials, [{ x: 0, z: 0, health: 100 }]);
+    const structures = new RaftStructureSystem(raft, materials, []);
+    const player = {
+      getSurface: () => 'water',
+      getWorldFootPosition: (target: Vector3) => target.set(0, -0.2, 0),
+      applyWaterImpulse: vi.fn(),
+    } as unknown as PlayerController;
+    const audio = createCombatAudio();
+    const splashes = createCombatSplashes();
+    const shark = new SharkSystem(
+      scene,
+      raft,
+      structures,
+      player,
+      new PerspectiveCamera(),
+      materials,
+      audio,
+      splashes,
+      vi.fn(),
+    );
+
+    for (let tick = 0; tick < 1_200; tick += 1) {
+      shark.update(tick / 60, 1 / 60);
+      const diagnostics = shark.getDiagnostics();
+      if (diagnostics.mode === 'retreating' && diagnostics.biteAttempts === 2) break;
+    }
+
+    const diagnostics = shark.getDiagnostics();
+    expect(diagnostics).toMatchObject({
+      mode: 'retreating',
+      attackPhase: 'recovery',
+      targetKind: 'none',
+      telegraphEvents: 2,
+      biteAttempts: 2,
+      playerDamageEvents: 2,
+      missedPlayerBites: 0,
+    });
+    expect(useGameStore.getState().survival.health).toBe(64);
+    expect(vi.mocked(audio.playSharkWindup)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(audio.playPlayerBite)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(splashes.spawnSharkTelegraph)).toHaveBeenCalledTimes(2);
     shark.dispose();
     structures.dispose();
   });

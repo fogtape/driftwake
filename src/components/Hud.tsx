@@ -187,6 +187,19 @@ export function Hud({
 }: HudProps) {
   const sharkAlert = shark.mode === 'approaching' || shark.mode === 'attacking';
   const sharkCarcass = shark.mode === 'carcass';
+  const sharkWindup = shark.mode === 'attacking' && shark.attackPhase === 'windup';
+  const sharkCounter = shark.counterWindow && (selectedTool === 'spear' || selectedTool === 'metalSpear');
+  const sharkAttackLabel = sharkWindup
+    ? `${shark.target === 'player' ? '深潮鲨翻身蓄势' : shark.target === 'collectionNet' ? '网床下方蓄势' : shark.target === 'structure' ? '暴露结构外侧蓄势' : '筏缘外侧蓄势'} · ${shark.secondsToImpact.toFixed(1)}s`
+    : shark.mode === 'attacking' && shark.attackPhase === 'recovery'
+      ? '深潮鲨正在回摆'
+      : shark.target === 'player'
+        ? (shark.mode === 'attacking' ? '深潮鲨正在扑咬' : '深潮鲨锁定了你')
+        : shark.target === 'collectionNet'
+          ? (shark.mode === 'attacking' ? '潮兜收集网遭到撕咬' : '外缘网具已被锁定')
+          : shark.target === 'structure'
+            ? (shark.mode === 'attacking' ? '暴露结构遭到撕咬' : '脆弱结构已被锁定')
+            : shark.mode === 'attacking' ? '筏体遭到撕咬' : '深潮鲨正在逼近';
   const fishingActive = fishing.phase === 'hooked';
   const structureRepair = build.repairTarget;
   const structureReplacement = build.replaceTarget;
@@ -384,21 +397,15 @@ export function Hud({
         </button>
       </div>
 
-      <div className={`shark-warning ${stormAlert ? 'has-weather-alert' : ''} ${sharkCarcass ? 'is-harvest' : ''} ${sharkAlert || sharkCarcass ? 'is-visible' : ''}`} aria-live="polite">
+      <div className={`shark-warning ${stormAlert ? 'has-weather-alert' : ''} ${sharkCarcass ? 'is-harvest' : ''} ${sharkWindup ? 'is-windup' : ''} ${sharkCounter ? 'is-counter' : ''} ${sharkAlert || sharkCarcass ? 'is-visible' : ''}`} aria-live="polite">
         {sharkCarcass ? <Scissors size={18} /> : <TriangleAlert size={18} />}
         <div>
           <span>{sharkCarcass
             ? `深潮鲨可采集 · ${shark.harvested}/${shark.harvestTotal} · ${shark.carcassSeconds}s`
-            : shark.target === 'player'
-            ? (shark.mode === 'attacking' ? '深潮鲨正在扑咬' : '深潮鲨锁定了你')
-            : shark.target === 'collectionNet'
-              ? (shark.mode === 'attacking' ? '潮兜收集网遭到撕咬' : '外缘网具已被锁定')
-            : shark.target === 'structure'
-              ? (shark.mode === 'attacking' ? '暴露结构遭到撕咬' : '脆弱结构已被锁定')
-              : shark.mode === 'attacking' ? '筏体遭到撕咬' : '深潮鲨正在逼近'}</span>
+            : sharkAttackLabel}</span>
           <i><b style={{ width: `${Math.round((sharkCarcass
             ? (shark.harvested + shark.harvestProgress) / Math.max(1, shark.harvestTotal)
-            : shark.threat) * 100)}%` }} /></i>
+            : sharkWindup ? shark.attackProgress : shark.threat) * 100)}%` }} /></i>
         </div>
       </div>
 
@@ -531,7 +538,7 @@ export function Hud({
         </div>
       </div>
 
-      <div className={`crosshair ${fishing.phase === 'nibble' ? 'is-nibble' : ''} ${sharkAlert && (selectedTool === 'spear' || selectedTool === 'metalSpear') ? 'is-danger' : ''}`} aria-hidden="true">
+      <div className={`crosshair ${fishing.phase === 'nibble' ? 'is-nibble' : ''} ${sharkAlert && (selectedTool === 'spear' || selectedTool === 'metalSpear') ? 'is-danger' : ''} ${sharkCounter ? 'is-counter' : ''}`} aria-hidden="true">
         <i /><i /><i /><i />
       </div>
 

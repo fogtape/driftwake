@@ -28,6 +28,7 @@ import type { SplashSystem } from './SplashSystem';
 import type { PlayerController } from './PlayerController';
 import { bundleLabel, type InventoryMutation, type ItemBundle } from '../domain/items';
 import {
+  RAFT_SHARK_ATTACK_RHYTHM,
   SHARK_CARCASS_WINDOW_SECONDS,
   SHARK_CARCASS_HARVEST_REACH,
   SHARK_HARVEST_HOLD_SECONDS,
@@ -36,9 +37,13 @@ import {
   SHARK_RESPAWN_SECONDS,
   SHARK_SPEAR_REACH,
   SHARK_SINK_SECONDS,
+  WATER_SHARK_ATTACK_RHYTHM,
   createDefaultSharkState,
+  sampleSharkAttack,
   sharkHarvestStage,
   type SavedSharkState,
+  type SharkAttackPhase,
+  type SharkAttackSample,
   type SharkLifecycle,
 } from '../domain/shark';
 
@@ -73,6 +78,16 @@ export interface SharkDiagnostics {
   cooldownSeconds: number;
   health: number;
   mode: SharkMode;
+  attackPhase: SharkAttackPhase;
+  attackProgress: number;
+  counterWindow: boolean;
+  secondsToImpact: number;
+  telegraphEvents: number;
+  biteAttempts: number;
+  playerDamageEvents: number;
+  missedPlayerBites: number;
+  timedCounterEvents: number;
+  recoverySeconds: number;
   worldPosition: { x: number; y: number; z: number };
 }
 
@@ -114,6 +129,7 @@ export class SharkSystem {
   private targetStructureId: string | null = null;
   private targetCollectionNetId: string | null = null;
   private biteIndex = 0;
+  private telegraphIndex = -1;
   private hitsDuringAttack = 0;
   private health = SHARK_MAX_HEALTH;
   private lifecycle: SharkLifecycle = 'active';
@@ -128,7 +144,16 @@ export class SharkSystem {
   private inputEnabled = false;
   private lastCarcassPrompt: string | null = null;
   private targetingPlayer = false;
-  private nextPlayerBiteAt = 0;
+  private attackPhase: SharkAttackPhase = 'idle';
+  private attackProgress = 0;
+  private counterWindow = false;
+  private counterStrikeWindow = false;
+  private secondsToImpact = 0;
+  private telegraphEvents = 0;
+  private biteAttempts = 0;
+  private playerDamageEvents = 0;
+  private missedPlayerBites = 0;
+  private timedCounterEvents = 0;
   private feedbackTimer = 0;
   private noticeTimer: number | null = null;
   private lastRaftTargetKind: SharkDiagnostics['lastRaftTargetKind'] = 'none';
@@ -198,7 +223,9 @@ export class SharkSystem {
       }
       return;
     }
-    this.tailPivot.rotation.y = Math.sin(time * (this.mode === 'attacking' ? 9.5 : 5.2)) * (this.mode === 'attacking' ? 0.42 : 0.26);
+    const tailSpeed = this.mode === 'attacking' ? (this.attackPhase === 'windup' ? 12.8 : 9.5) : 5.2;
+    const tailRange = this.mode === 'attacking' ? (this.attackPhase === 'windup' ? 0.54 : 0.42) : 0.26;
+    this.tailPivot.rotation.y = Math.sin(time * tailSpeed) * tailRange;
     this.model.rotation.z = Math.sin(time * 1.4) * 0.035;
 
     const playerInWater = this.player.getSurface() === 'water';
@@ -231,15 +258,29 @@ export class SharkSystem {
     return this.cameraForward.dot(this.strikeVector) > 0.69;
   }
 
-  receiveSpearStrike(camera: PerspectiveCamera, damage = 34): boolean {
+  isCounterWindowOpen(): boolean {
+    return this.lifecycle === 'active' && this.mode === 'attacking' && this.counterWindow;
+  }
+
+  receiveSpearStrike(camera: PerspectiveCamera, damage = 34, counterPrimed = false): boolean {
     if (!this.canStrike(camera)) return false;
+    const timedCounter = counterPrimed && this.counterStrikeWindow;
     this.health = Math.max(0, this.health - Math.max(1, damage));
     this.hitsDuringAttack += 1;
     this.audio.playSpearHit();
     this.splashes.spawnImpact(this.model.position, 0xb74f45, 16);
-    this.showNotice(this.health <= 0 ? '深潮鲨失去力气' : '刺击命中');
+    this.showNotice(
+      this.health <= 0
+        ? '深潮鲨失去力气'
+        : timedCounter ? '抢在扑咬前逼退深潮鲨' : '刺击命中',
+    );
     if (this.health <= 0) {
       this.beginDefeat();
+    } else if (timedCounter) {
+      this.timedCounterEvents += 1;
+      this.audio.playSharkCounter();
+      this.splashes.spawnSharkCounter(this.model.position);
+      this.beginRetreat();
     } else if (this.hitsDuringAttack >= 2) {
       this.beginRetreat();
     }
@@ -275,6 +316,18 @@ export class SharkSystem {
       cooldownSeconds: this.cooldownRemaining,
       health: this.health,
       mode: this.mode,
+      attackPhase: this.attackPhase,
+      attackProgress: this.attackProgress,
+      counterWindow: this.counterWindow,
+      secondsToImpact: this.secondsToImpact,
+      telegraphEvents: this.telegraphEvents,
+      biteAttempts: this.biteAttempts,
+      playerDamageEvents: this.playerDamageEvents,
+      missedPlayerBites: this.missedPlayerBites,
+      timedCounterEvents: this.timedCounterEvents,
+      recoverySeconds: this.lifecycle === 'active' && this.mode === 'retreating'
+        ? Math.max(0, 6.2 - this.phaseTime)
+        : 0,
       worldPosition: {
         x: this.model.position.x,
         y: this.model.position.y,
@@ -383,6 +436,7 @@ export class SharkSystem {
     this.targetStructureId = null;
     this.targetCollectionNetId = null;
     this.targetingPlayer = false;
+    this.clearAttackWindow('complete');
     this.outward.copy(this.model.position).sub(this.raft.group.position);
     this.outward.y = 0;
     if (this.outward.lengthSq() < 0.1) this.outward.set(1, 0, 0);
@@ -572,6 +626,29 @@ export class SharkSystem {
     this.lastCarcassPrompt = null;
   }
 
+  private clearAttackWindow(phase: SharkAttackPhase = 'idle'): void {
+    this.attackPhase = phase;
+    this.attackProgress = 0;
+    this.counterWindow = false;
+    this.counterStrikeWindow = false;
+    this.secondsToImpact = 0;
+  }
+
+  private applyAttackSample(sample: SharkAttackSample, playerTarget: boolean): void {
+    const counterChanged = this.counterWindow !== sample.counterWindow;
+    this.attackPhase = sample.phase;
+    this.attackProgress = sample.progress;
+    this.counterWindow = sample.counterWindow;
+    this.counterStrikeWindow = sample.counterStrikeWindow;
+    this.secondsToImpact = sample.secondsToImpact;
+    if (counterChanged) this.publishFeedback();
+    if (sample.phase !== 'windup' || sample.nextBiteIndex === this.telegraphIndex) return;
+    this.telegraphIndex = sample.nextBiteIndex;
+    this.telegraphEvents += 1;
+    this.audio.playSharkWindup(playerTarget, sample.nextBiteIndex > 0);
+    this.splashes.spawnSharkTelegraph(this.model.position, playerTarget);
+  }
+
   private updateDistant(time: number, delta: number): void {
     this.circleAngle += delta * 0.055;
     this.setCirclePosition(time, 17.5);
@@ -649,7 +726,9 @@ export class SharkSystem {
     this.approachWorld.copy(this.targetWorld).addScaledVector(this.outward, 2.5);
     this.approachWorld.y = this.model.position.y;
     this.biteIndex = 0;
+    this.telegraphIndex = -1;
     this.hitsDuringAttack = 0;
+    this.clearAttackWindow();
     this.audio.playSharkWarning();
     this.setMode('approaching');
     const definition = exposedStructure && chooseStructure
@@ -691,8 +770,9 @@ export class SharkSystem {
       this.beginRetreat();
       return;
     }
-    const biteCycle = this.phaseTime % 1.55;
-    const lunge = Math.pow(Math.sin(Math.min(1, biteCycle / 0.8) * Math.PI), 1.6) * 0.78;
+    const sample = sampleSharkAttack(RAFT_SHARK_ATTACK_RHYTHM, this.phaseTime, this.biteIndex);
+    this.applyAttackSample(sample, false);
+    const lunge = sample.lunge * 0.82;
     this.model.position.copy(this.approachWorld).lerp(this.targetWorld, lunge);
     const surfaceY = sampleWaveHeight(this.model.position.x, this.model.position.z, time);
     const strikeY = Math.min(this.targetWorld.y - 0.22, surfaceY + 0.58);
@@ -700,17 +780,28 @@ export class SharkSystem {
     this.lookTarget.copy(this.targetWorld);
     this.lookTarget.y = Math.min(this.targetWorld.y, surfaceY + 0.64);
     this.model.lookAt(this.lookTarget);
+    if (sample.phase === 'windup') {
+      this.model.rotateZ(Math.sin(this.phaseTime * 10.5) * 0.1 * (1 - sample.progress * 0.42));
+    }
 
-    const biteThresholds = [0.68, 2.23];
-    if (this.biteIndex < biteThresholds.length && this.phaseTime >= biteThresholds[this.biteIndex]) {
+    if (sample.biteDue) {
+      this.biteAttempts += 1;
       this.performBite();
       this.biteIndex += 1;
+      if (this.mode === 'retreating') return;
     }
-    if (this.phaseTime > 3.35) this.beginRetreat();
+    if (sample.phase === 'complete') {
+      this.beginRetreat();
+      return;
+    }
     this.updateSpearInteraction(
-      this.targetCollectionNetId
-        ? '鲨鱼正在撕咬潮兜收集网'
-        : this.targetStructureId ? '鲨鱼正在撕咬暴露结构' : '鲨鱼正在撕咬筏格',
+      sample.phase === 'windup'
+        ? '鲨鱼正在蓄势扑咬'
+        : sample.phase === 'recovery'
+          ? '鲨鱼正在回摆，尚未再次发力'
+          : this.targetCollectionNetId
+            ? '鲨鱼正在撕咬潮兜收集网'
+            : this.targetStructureId ? '鲨鱼正在撕咬暴露结构' : '鲨鱼正在撕咬筏格',
     );
   }
 
@@ -855,8 +946,10 @@ export class SharkSystem {
     this.targetTile = null;
     this.targetStructureId = null;
     this.targetCollectionNetId = null;
+    this.biteIndex = 0;
+    this.telegraphIndex = -1;
     this.hitsDuringAttack = 0;
-    this.nextPlayerBiteAt = 0;
+    this.clearAttackWindow();
     this.audio.playSharkWarning();
     this.setMode('approaching');
     this.showNotice('水下传来快速逼近的摆尾声');
@@ -875,7 +968,9 @@ export class SharkSystem {
       this.model.position.y += Math.sin(time * 3.1) * delta * 0.05;
       this.model.lookAt(this.playerWorld);
       if (distance < 2.65) {
-        this.nextPlayerBiteAt = 0.48;
+        this.biteIndex = 0;
+        this.telegraphIndex = -1;
+        this.clearAttackWindow();
         this.setMode('attacking');
       }
       this.updateSpearInteraction('鲨鱼正从水下逼近');
@@ -886,27 +981,46 @@ export class SharkSystem {
       this.setMode('approaching');
       return;
     }
-    const lunge = 0.75 + Math.pow(Math.max(0, Math.sin(this.phaseTime * 2.8)), 2) * 1.7;
-    const speed = 3.05 + lunge;
+    const sample = sampleSharkAttack(WATER_SHARK_ATTACK_RHYTHM, this.phaseTime, this.biteIndex);
+    this.applyAttackSample(sample, true);
+    const speed = sample.phase === 'impact'
+      ? 4.8
+      : sample.phase === 'windup'
+        ? 1.7 + sample.lunge * 3.4
+        : 1.8 + sample.lunge * 2.2;
     this.model.position.addScaledVector(this.pursuitDirection, Math.min(distance, speed * delta));
     this.model.position.y += Math.sin(time * 4.2) * delta * 0.08;
     this.model.lookAt(this.playerWorld);
-    if (this.phaseTime >= this.nextPlayerBiteAt) {
-      if (distance <= 1.42) {
-        this.performPlayerBite();
-        this.nextPlayerBiteAt += 2.18;
-      } else {
-        this.nextPlayerBiteAt += 0.18;
-      }
+    if (sample.phase === 'windup') {
+      this.model.rotateZ(Math.sin(this.phaseTime * 11.8) * 0.12 * (1 - sample.progress * 0.38));
     }
-    if (distance > 5.4) this.setMode('approaching');
-    else if (this.phaseTime > 5.15) this.beginRetreat();
-    this.updateSpearInteraction('鲨鱼进入扑咬距离');
+    if (sample.biteDue) {
+      this.biteAttempts += 1;
+      if (distance <= 1.55) {
+        this.performPlayerBite();
+      } else {
+        this.missedPlayerBites += 1;
+        this.audio.playSharkMiss();
+        this.splashes.spawnSharkMiss(this.model.position);
+        this.showNotice('深潮鲨的扑咬从身侧掠过');
+      }
+      this.biteIndex += 1;
+    }
+    if (sample.phase === 'complete') {
+      this.beginRetreat();
+      return;
+    }
+    this.updateSpearInteraction(
+      sample.phase === 'windup'
+        ? '鲨鱼翻身蓄势扑咬'
+        : sample.phase === 'recovery' ? '鲨鱼扑咬后正在回摆' : '鲨鱼进入扑咬距离',
+    );
   }
 
   private performPlayerBite(): void {
     const store = useGameStore.getState();
     store.damagePlayer(18, 'shark');
+    this.playerDamageEvents += 1;
     this.audio.playPlayerBite();
     this.splashes.spawnImpact(this.playerWorld, 0xb74f45, 28);
     this.player.applyWaterImpulse(this.model.position, 2.65);
@@ -919,6 +1033,8 @@ export class SharkSystem {
     this.targetStructureId = null;
     this.targetCollectionNetId = null;
     this.targetingPlayer = false;
+    this.telegraphIndex = -1;
+    this.clearAttackWindow('recovery');
     this.setMode('retreating');
     useGameStore.getState().setInteraction(null, 'shark');
   }
@@ -935,6 +1051,7 @@ export class SharkSystem {
     this.model.lookAt(this.lookTarget);
     if (this.phaseTime > 6.2) {
       this.nextAttackAt = this.totalTime + randomRange(this.random, 48, 70);
+      this.clearAttackWindow();
       this.setMode('circling');
     }
   }
@@ -948,7 +1065,11 @@ export class SharkSystem {
   private publishFeedback(): void {
     const threat =
       this.mode === 'attacking'
-        ? 1
+        ? this.attackPhase === 'windup'
+          ? MathUtils.clamp(0.42 + this.attackProgress * 0.58, 0, 1)
+          : this.attackPhase === 'impact'
+            ? 1
+            : 0.38
         : this.mode === 'approaching'
           ? MathUtils.clamp(0.46 + this.phaseTime * 0.1, 0, 0.92)
           : this.mode === 'circling'
@@ -968,6 +1089,13 @@ export class SharkSystem {
       harvested: this.harvestIndex,
       harvestTotal: SHARK_HARVEST_STAGES.length,
       carcassSeconds: Math.ceil(this.carcassRemaining),
+      attackPhase: this.attackPhase,
+      attackProgress: this.attackProgress,
+      counterWindow: this.counterWindow,
+      secondsToImpact: this.secondsToImpact,
+      recoverySeconds: this.lifecycle === 'active' && this.mode === 'retreating'
+        ? Math.max(0, 6.2 - this.phaseTime)
+        : 0,
     });
   }
 

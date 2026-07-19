@@ -1,6 +1,6 @@
 # Driftwake
 
-原创桌面网页 3D 海上生存游戏。当前版本为 `0.15.0` 高质量纵向切片，不以基础 Demo 为完成标准。
+原创桌面网页 3D 海上生存游戏。当前版本为 `0.15.1` 高质量纵向切片，不以基础 Demo 为完成标准。
 
 ## 当前内容
 
@@ -31,7 +31,7 @@
 - 可放置的盐迹研究台：消耗一份实物样本建档，齐集项目需求后手动学习配方，锁定原因在制作页可见；
 - 潮红湿砖可在同一通风架分批放置、独立计时与收取；回潮熔炉可在矿石炼锭与细砂熔制玻璃之间切换；
 - 金属锭研究会解锁潮铸穿浪矛和宽刃斧；升级消耗旧工具、自动替换快捷栏，并实际提升鲨鱼刺击与砍伐效率；
-- 原创程序深潮鲨拥有巡游、预兆、筏体/结构/网具择靶、水中扑咬、分级矛具命中与驱离；致命刺击后会侧翻成 52 秒可采集鲨体，按住 `E` 依次割取 3 份鲨肉、1 张鲨皮和 2 枚鲨齿，伤痕、聚焦环、进度 HUD、粒子和分层音效由真实阶段驱动；
+- 原创程序深潮鲨拥有巡游、预兆、筏体/结构/网具择靶、水中扑咬、分级矛具命中与驱离；每轮攻击使用明确的蓄势/咬合/回摆阶段与最多两次结算，矛具在青色窗口起手可用完整前摇打断攻击，扑空、反击和普通命中具有独立声画反馈；致命刺击后会侧翻成 52 秒可采集鲨体，按住 `E` 依次割取 3 份鲨肉、1 张鲨皮和 2 枚鲨齿；
 - 鲨体取尽或超时后持续下沉并进入 48 秒重生冷却；满包拒收物资使用专用捆扎模型进入既有八槽海面掉落池，部分接收不会复制或吞物，水中连续鲨咬的击退速度有界；
 - 岛屿远景接近、靠岸、无切场登岛、地形坡度与障碍碰撞、返筏后离流和下一岛重生；
 - 18 个确定性岛屿资源节点、石斧三击/金属斧两击砍伐、树木受击/倒伏/树桩、枝料/石料/潮果/纤维拾取和满包保护；
@@ -53,7 +53,7 @@
 - 标题、HUD、背包、制作、设置、能力提示和 Playwright 截图回归流程；
 - 原创标题美术、木材、泡沫、鲨皮、编织纤维、AI 辅助海床、拼补帆布、培养土、耐火陶土、导航合金、信号层压板、磷光玻璃、盐蚀集热玻璃、蜡封帆布、盐封手套 PBR 与飑云天空材质，以及对应的独立 normal/roughness 图。
 
-当前仍不是完整游戏。整套建造流程的无说明玩家验收、鲨鱼战斗节奏与更多武器、更多深水生态资源、潜水装备、天气农业、大型信号目的地、无说明玩家平衡验收和最终蒙皮资产仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
+当前仍不是完整游戏。整套建造流程的无说明玩家验收、鲨鱼连续多轮战斗与更多武器、更多深水生态资源、潜水装备、天气农业、大型信号目的地、无说明玩家平衡验收和最终蒙皮资产仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
 
 ## 运行
 
@@ -74,9 +74,9 @@ npm run test:stability
 npm run capture
 ```
 
-截图脚本默认连接 `http://127.0.0.1:4173`，支持 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH`、`CAPTURE_HEIGHT`、`CAPTURE_QUALITY` 和 `CAPTURE_ONLY`。目标包括 `title`、`pause`、`game`、`hook`、`salvage`、`collection-net`、`perimeter-defense`、`perimeter-defense-visual`、`structure-collapse`、`failure`、`shark-loot`、`shark-loot-water`、`pack`、`crafting`、`survival`、`durability`、`building`、`devices`、`advanced`、`signal`、种植/研究/岛屿/水下/导航各主流程、`underwater-narrow`、`narrow`、`settings` 和 `mobile`。`shark-loot` 验证木筏边真实刺击、四段按住采集、满包四份池化落海、v18 冷启动和水中全部入包；`shark-loot-water` 可独立复验水中路径。`building` 的 `behavior`、`visual`、`traversal`、`ceiling`、`damage` 分段分别验证分类/件型选择隔离、建造/替换事务、512×320 HUD、多层移动、楼板/斜顶撞顶速度截断，以及鲨鱼撕咬、v18 受损恢复和真实锤修；`collection-net` 验证背包安置、被动截获、E 收取、v18 冷重载与锤拆返还；`perimeter-defense` 验证缘甲安装/返料、同侧网具择靶、55% 减伤、E 修补、冷重载和毁网落物；`structure-collapse` 验证真实鲨鱼咬断承重柱、四件结构级联、双块坠落、逐件入水回收和只保存最终结构真值。3D 截图使用分布式 WebGL 像素门禁，拒绝黑屏、白屏、HUD 相交和丢失的上下文。
+截图脚本默认连接 `http://127.0.0.1:4173`，支持 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH`、`CAPTURE_HEIGHT`、`CAPTURE_QUALITY` 和 `CAPTURE_ONLY`。目标包括 `title`、`pause`、`game`、`hook`、`salvage`、`collection-net`、`perimeter-defense`、`perimeter-defense-visual`、`structure-collapse`、`failure`、`shark-combat`、`shark-loot`、`shark-loot-water`、`pack`、`crafting`、`survival`、`durability`、`building`、`devices`、`advanced`、`signal`、种植/研究/岛屿/水下/导航各主流程、`underwater-narrow`、`narrow`、`settings` 和 `mobile`。`shark-combat` 的 `visual`、`counter`、`water` 分段验证蓄势 HUD、限时矛击、零筏体伤害与水中两次结算上限；默认用页面内边沿事件保证软件 GLES 确定性，目标真实 GPU 使用 `SHARK_COMBAT_INPUT=mouse` 复验 Playwright 鼠标时序。`shark-loot` 验证木筏边真实刺击、四段按住采集、满包四份池化落海、v18 冷启动和水中全部入包；`shark-loot-water` 可独立复验水中路径。`building` 的 `behavior`、`visual`、`traversal`、`ceiling`、`damage` 分段分别验证分类/件型选择隔离、建造/替换事务、512×320 HUD、多层移动、楼板/斜顶撞顶速度截断，以及鲨鱼撕咬、v18 受损恢复和真实锤修；`collection-net` 验证背包安置、被动截获、E 收取、v18 冷重载与锤拆返还；`perimeter-defense` 验证缘甲安装/返料、同侧网具择靶、55% 减伤、E 修补、冷重载和毁网落物；`structure-collapse` 验证真实鲨鱼咬断承重柱、四件结构级联、双块坠落、逐件入水回收和只保存最终结构真值。3D 截图使用分布式 WebGL 像素门禁，拒绝黑屏、白屏、HUD 相交和丢失的上下文。
 
-Termux Chromium 149 的纯 headless 后端会在 WebGL draw call 后首次 readback 时丢失上下文。M1 曾以 Debian Chromium 150 + Xvfb/headful GLES 完成冻结版 1200 秒软件长稳；2026-07-19 当前 Termux 的最终构建可稳定完成 `crafting`、`survival`、分段 `durability`、`building`、`collection-net`、`perimeter-defense`、`structure-collapse` 与 `shark-loot` 的领域/交互/v18 写入，也可完成结构、缘甲、装载网具、坠落实体和鲨体场景的有效像素回读。加速门禁仍驱动正式固定步并受 `maxSubSteps` 钳制，只作为正确性与构图证据；冷启动恢复、锤修和锤拆继续使用原生时间。真实 GPU 的 1280x720/30、1920x1080/60、M2 十分钟手感、M3 失败页恢复画面/混音、M4 两层扩建/攻防手感和 M5 战斗/采集节奏仍是发布门禁。详见 [M1 验收记录](docs/M1_ACCEPTANCE.md)、[M2 验收记录](docs/M2_ACCEPTANCE.md)、[M3 验收记录](docs/M3_ACCEPTANCE.md)、[M4 验收记录](docs/M4_ACCEPTANCE.md) 与 [M5 验收记录](docs/M5_ACCEPTANCE.md)。
+Termux Chromium 149 的纯 headless 后端会在 WebGL draw call 后首次 readback 时丢失上下文。M1 曾以 Debian Chromium 150 + Xvfb/headful GLES 完成冻结版 1200 秒软件长稳；2026-07-19 当前 Termux 的最终构建可稳定完成 `crafting`、`survival`、分段 `durability`、`building`、`collection-net`、`perimeter-defense`、`structure-collapse`、`shark-combat` 与 `shark-loot` 的领域/交互/v18 写入，也可完成结构、缘甲、装载网具、坠落实体、鲨鱼蓄势和鲨体场景的有效像素或合成帧回读。加速门禁仍驱动正式固定步并受 `maxSubSteps` 钳制，只作为正确性与构图证据；冷启动恢复、锤修和锤拆继续使用原生时间。真实 GPU 的 1280x720/30、1920x1080/60、M2 十分钟手感、M3 失败页恢复画面/混音、M4 两层扩建/攻防手感，以及 M5 `SHARK_COMBAT_INPUT=mouse` 战斗/采集节奏仍是发布门禁。详见 [M1 验收记录](docs/M1_ACCEPTANCE.md)、[M2 验收记录](docs/M2_ACCEPTANCE.md)、[M3 验收记录](docs/M3_ACCEPTANCE.md)、[M4 验收记录](docs/M4_ACCEPTANCE.md) 与 [M5 验收记录](docs/M5_ACCEPTANCE.md)。
 
 ## 资产管线
 
