@@ -852,6 +852,43 @@ const structureDamageSave = {
   },
 };
 
+const structureCollapseSave = {
+  ...structureBuildSave,
+  version: 17,
+  player: {
+    ...structureBuildSave.player,
+    inventory: { hook: 1 },
+    toolDurability: { hook: 24 },
+    selectedTool: 'hook',
+    navigation: { surface: 'raft', x: 0, z: 1.72 },
+  },
+  raft: {
+    ...structureBuildSave.raft,
+    tiles: Array.from({ length: 9 }, (_, index) => ({
+      x: (index % 3) - 1,
+      z: Math.floor(index / 3) - 1,
+      health: 100,
+      reinforced: false,
+    })),
+    structures: [
+      { id: 'collapse-pillar', type: 'pillar', x: 0, z: -1, level: 0, rotation: 0, health: 1 },
+      { id: 'collapse-floor', type: 'floor', x: 0, z: -1, level: 1, rotation: 0, health: 90 },
+      { id: 'collapse-upper-wall', type: 'wall', x: 0, z: -1, level: 1, rotation: 0, health: 110 },
+      { id: 'collapse-upper-door', type: 'door', x: 0, z: -1, level: 1, rotation: 1, health: 95, open: true },
+    ],
+    collectionNets: [],
+    devices: [],
+    navigation: { ...structureBuildSave.raft.navigation, courseAngle: 0, heading: 0, devices: [] },
+    planting: { birdClock: 0, birdVisit: 0, planters: [] },
+    progression: { researched: [], learned: [], devices: [] },
+  },
+  world: {
+    ...structureBuildSave.world,
+    island: { ...structureBuildSave.world.island, phase: 'approaching', elapsed: 0 },
+    drops: [],
+  },
+};
+
 const collectionNetSave = {
   ...seededSave,
   version: 17,
@@ -994,7 +1031,7 @@ async function openDesktopPage(label, options = {}) {
   if (options.seedSave) {
     await context.addInitScript((save) => {
       localStorage.setItem(`driftwake.save.v${save.version}`, JSON.stringify(save));
-    }, options.perimeterDefenseVisualStart ? perimeterDefenseVisualSave : options.perimeterDefenseStart ? perimeterDefenseSave : options.collectionNetStart ? collectionNetSave : options.failureStart ? failureSave : options.survivalPressureStart ? survivalPressureSave : options.structureDamageStart ? structureDamageSave : options.structureFloorCeilingStart ? structureFloorCeilingSave : options.structureRoofCeilingStart ? structureRoofCeilingSave : options.structureTraversalStart ? structureTraversalSave : options.structureVisualStart ? structureVisualSave : options.structureBuildStart ? structureBuildSave : options.durabilityHammerStart ? durabilityHammerSave : options.durabilityFishingStart ? durabilityFishingSave : options.durabilityAxeStart ? durabilityAxeSave : options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
+    }, options.structureCollapseStart ? structureCollapseSave : options.perimeterDefenseVisualStart ? perimeterDefenseVisualSave : options.perimeterDefenseStart ? perimeterDefenseSave : options.collectionNetStart ? collectionNetSave : options.failureStart ? failureSave : options.survivalPressureStart ? survivalPressureSave : options.structureDamageStart ? structureDamageSave : options.structureFloorCeilingStart ? structureFloorCeilingSave : options.structureRoofCeilingStart ? structureRoofCeilingSave : options.structureTraversalStart ? structureTraversalSave : options.structureVisualStart ? structureVisualSave : options.structureBuildStart ? structureBuildSave : options.durabilityHammerStart ? durabilityHammerSave : options.durabilityFishingStart ? durabilityFishingSave : options.durabilityAxeStart ? durabilityAxeSave : options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave);
   }
   const page = await context.newPage();
   monitorPage(page, label);
@@ -2555,6 +2592,164 @@ async function captureBuildingDamageRepair() {
   }
   console.log(`Building damage/repair gate: ${JSON.stringify({ damagedState, repairAimMovement, repairUi, final })}`);
   await context.close();
+}
+
+async function captureStructureCollapse() {
+  const viewport = { width: 1024, height: 640 };
+  const { context, page } = await openDesktopPage('structure-collapse', {
+    seedSave: true,
+    structureCollapseStart: true,
+    simulationTimeScale: 10,
+    ...viewport,
+  });
+  await enterGame(page);
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.raftStructureCount === '4'
+      && data?.raftCriticalStructureCount === '1'
+      && data?.structureCollapseActive === '0';
+  }, 10_000);
+
+  try {
+    await waitForRuntime(page, () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+      return data?.lastRaftMutation === 'structure:collapse-pillar:0:true'
+        && data?.raftStructureCascadeCount === '3'
+        && data?.structureCollapseSpawned === '4'
+        && saved?.version === 17
+        && saved?.raft?.structures?.length === 0;
+    }, 130_000);
+  } catch (error) {
+    const diagnostics = await page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+      return {
+        simulationActive: data?.simulationActive,
+        simulationTicks: data?.simulationTickCount,
+        targetKind: data?.sharkRaftTargetKind,
+        targetId: data?.sharkRaftTargetId,
+        lastKind: data?.sharkLastRaftTargetKind,
+        lastId: data?.sharkLastRaftTargetId,
+        lastHealth: data?.sharkLastRaftTargetHealth,
+        mutation: data?.lastRaftMutation,
+        structureDamageEvents: data?.sharkStructureDamageCount,
+        foundationDamageEvents: data?.sharkFoundationDamageCount,
+        collapseActive: data?.structureCollapseActive,
+        collapseBodies: data?.structureCollapseBodies,
+        collapseSpawned: data?.structureCollapseSpawned,
+        collapseWaterImpacts: data?.structureCollapseWaterImpacts,
+        collapseRetired: data?.structureCollapseRetired,
+        cascade: data?.raftStructureCascadeCount,
+        structures: saved?.raft?.structures ?? null,
+      };
+    });
+    await captureCompositedPage(
+      page,
+      new URL('structure-collapse-diagnostic.png', outputDir).pathname,
+    ).catch(() => undefined);
+    throw new Error(`Structure collapse trigger timed out: ${JSON.stringify(diagnostics)}`, { cause: error });
+  }
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return Number(data?.structureCollapseActive ?? 0) >= 1
+      && Number(data?.structureCollapseBodies ?? 0) >= 2
+      && Number(data?.structureCollapseWaterImpacts ?? 0) >= 1;
+  }, 20_000);
+
+  const live = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+    return {
+      contextHealthy: data?.contextHealthy,
+      active: Number(data?.structureCollapseActive),
+      bodies: Number(data?.structureCollapseBodies),
+      spawned: Number(data?.structureCollapseSpawned),
+      waterImpacts: Number(data?.structureCollapseWaterImpacts),
+      cascade: Number(data?.raftStructureCascadeCount),
+      mutation: data?.lastRaftMutation,
+      savedStructures: saved?.raft?.structures ?? null,
+      lastId: data?.structureCollapseLastId,
+      lastType: data?.structureCollapseLastType,
+    };
+  });
+  if (
+    live.contextHealthy !== 'true'
+    || live.active < 1
+    || live.bodies < 2
+    || live.spawned !== 4
+    || live.waterImpacts < 1
+    || live.cascade !== 3
+    || live.mutation !== 'structure:collapse-pillar:0:true'
+    || live.savedStructures?.length !== 0
+    || live.lastId !== 'collapse-upper-door'
+    || live.lastType !== 'door'
+  ) {
+    throw new Error(`Structure collapse live stage failed: ${JSON.stringify(live)}`);
+  }
+  await captureCompositedPage(
+    page,
+    new URL('structure-collapse-desktop.png', outputDir).pathname,
+  );
+  await inspectCanvasPixels(page, 'structure-collapse');
+
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+    return data?.structureCollapseActive === '0'
+      && data?.structureCollapseBodies === '0'
+      && data?.structureCollapseWaterImpacts === '4'
+      && data?.structureCollapseRetired === '4'
+      && saved?.raft?.structures?.length === 0;
+  }, 70_000);
+  const settled = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return {
+      active: Number(data?.structureCollapseActive),
+      bodies: Number(data?.structureCollapseBodies),
+      spawned: Number(data?.structureCollapseSpawned),
+      waterImpacts: Number(data?.structureCollapseWaterImpacts),
+      retired: Number(data?.structureCollapseRetired),
+      discarded: Number(data?.structureCollapseDiscarded),
+      saved: JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null'),
+    };
+  });
+  if (
+    settled.active !== 0
+    || settled.bodies !== 0
+    || settled.spawned !== 4
+    || settled.waterImpacts !== 4
+    || settled.retired !== 4
+    || settled.discarded !== 0
+    || settled.saved?.raft?.structures?.length !== 0
+  ) {
+    throw new Error(`Structure collapse settlement failed: ${JSON.stringify(settled)}`);
+  }
+  await context.close();
+
+  const reloadContext = await browser.newContext({ viewport, deviceScaleFactor: 1 });
+  await reloadContext.addInitScript((save) => {
+    localStorage.setItem('driftwake.save.v17', JSON.stringify(save));
+  }, settled.saved);
+  const reloadPage = await reloadContext.newPage();
+  monitorPage(reloadPage, 'structure-collapse-cold-reload');
+  await reloadPage.goto(baseUrl, { waitUntil: 'networkidle' });
+  await reloadPage.waitForSelector('.primary-command:not(:disabled)', { timeout: 45_000 });
+  await enterGame(reloadPage);
+  await waitForRuntime(reloadPage, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.raftStructureCount === '0'
+      && data?.structureCollapseActive === '0'
+      && data?.structureCollapseSpawned === '0';
+  }, 8_000);
+  console.log(`Structure collapse gate: ${JSON.stringify({ live, settled: {
+    active: settled.active,
+    spawned: settled.spawned,
+    waterImpacts: settled.waterImpacts,
+    retired: settled.retired,
+    discarded: settled.discarded,
+  }, coldReload: 'final-truth-only' })}`);
+  await reloadContext.close();
 }
 
 async function captureSettings() {
@@ -4348,6 +4543,7 @@ try {
   if (captureOnly === 'all' || captureOnly === 'survival') await captureSurvivalPressure();
   if (captureOnly === 'all' || captureOnly === 'durability') await captureToolDurability();
   if (captureOnly === 'all' || captureOnly === 'building') await captureBuildingStructures();
+  if (captureOnly === 'structure-collapse') await captureStructureCollapse();
   if (captureOnly === 'all' || captureOnly === 'settings') await captureSettings();
   if (captureOnly === 'all' || captureOnly === 'devices') await captureDevices();
   if (captureOnly === 'all' || captureOnly === 'advanced') await captureAdvancedDevices();

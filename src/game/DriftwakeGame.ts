@@ -57,6 +57,7 @@ import { SalvageSystem } from './systems/SalvageSystem';
 import { SharkSystem } from './systems/SharkSystem';
 import { SpearSystem } from './systems/SpearSystem';
 import { SplashSystem } from './systems/SplashSystem';
+import { StructureCollapseSystem } from './systems/StructureCollapseSystem';
 import { UnderwaterSystem } from './systems/UnderwaterSystem';
 import { NavigationSystem } from './systems/NavigationSystem';
 import { PlantingSystem } from './systems/PlantingSystem';
@@ -154,6 +155,7 @@ export class DriftwakeGame {
   private shark: SharkSystem | null = null;
   private spear: SpearSystem | null = null;
   private splashes: SplashSystem | null = null;
+  private structureCollapses: StructureCollapseSystem | null = null;
   private island: IslandSystem | null = null;
   private underwater: UnderwaterSystem | null = null;
   private navigation: NavigationSystem | null = null;
@@ -332,6 +334,15 @@ export class DriftwakeGame {
       this.debris = new DebrisField(this.scene, this.materials, 30, save?.world.drops ?? []);
       this.setQuality(store.quality);
       this.splashes = new SplashSystem(this.scene);
+      this.structureCollapses = new StructureCollapseSystem(
+        this.scene,
+        this.raft,
+        this.structures,
+        this.materials,
+        this.splashes,
+        this.audio,
+        (strength) => this.player?.addCameraShake(strength),
+      );
       this.salvage = new SalvageSystem(
         this.scene,
         this.camera,
@@ -524,6 +535,9 @@ export class DriftwakeGame {
         this.splashes,
         (strength) => this.player?.addCameraShake(strength),
         (mutation) => {
+          if (mutation.destroyed && mutation.removed.length > 0) {
+            this.structureCollapses?.spawn(mutation.removed);
+          }
           const cascadeCount = mutation.kind === 'structure' && mutation.destroyed
             ? Math.max(0, mutation.removed.length - 1)
             : mutation.removed.length;
@@ -767,6 +781,7 @@ export class DriftwakeGame {
     this.fishing?.dispose(this.scene);
     this.spear?.dispose();
     this.shark?.dispose();
+    this.structureCollapses?.dispose();
     this.underwater?.dispose();
     this.island?.dispose();
     this.splashes?.dispose();
@@ -867,6 +882,18 @@ export class DriftwakeGame {
     this.fishing?.update(simulationSeconds, stepSeconds);
     this.spear?.update(simulationSeconds, stepSeconds);
     this.shark?.update(simulationSeconds, stepSeconds);
+    this.structureCollapses?.update(simulationSeconds, stepSeconds);
+    const collapseDiagnostics = this.structureCollapses?.getDiagnostics();
+    if (collapseDiagnostics) {
+      this.mount.dataset.structureCollapseActive = String(collapseDiagnostics.active);
+      this.mount.dataset.structureCollapseBodies = String(collapseDiagnostics.activeBodies);
+      this.mount.dataset.structureCollapseSpawned = String(collapseDiagnostics.spawned);
+      this.mount.dataset.structureCollapseWaterImpacts = String(collapseDiagnostics.waterImpacts);
+      this.mount.dataset.structureCollapseRetired = String(collapseDiagnostics.retired);
+      this.mount.dataset.structureCollapseDiscarded = String(collapseDiagnostics.discarded);
+      this.mount.dataset.structureCollapseLastId = collapseDiagnostics.lastStructureId ?? 'none';
+      this.mount.dataset.structureCollapseLastType = collapseDiagnostics.lastStructureType ?? 'none';
+    }
     const sharkDiagnostics = this.shark?.getDiagnostics();
     if (sharkDiagnostics) {
       this.mount.dataset.sharkRaftTargetKind = sharkDiagnostics.targetKind;

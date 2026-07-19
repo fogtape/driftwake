@@ -44,6 +44,37 @@ export class SplashSystem {
     );
   }
 
+  spawnStructureWaterImpact(position: Vector3, fibrous = false, strength = 1): void {
+    const normalized = Math.max(0.35, Math.min(1, strength));
+    this.spawnBurst(
+      position,
+      0xe8ffff,
+      Math.round(24 + normalized * 24),
+      1.05,
+      0.065 + normalized * 0.026,
+      0.72,
+      2.35 + normalized * 0.75,
+    );
+    this.spawnBurst(
+      position,
+      0x7fc8ca,
+      Math.round(12 + normalized * 12),
+      0.82,
+      0.045,
+      0.34,
+      1.45,
+    );
+    this.spawnBurst(
+      position,
+      fibrous ? 0xb5aa68 : 0x9a684f,
+      Math.round(7 + normalized * 7),
+      0.96,
+      fibrous ? 0.042 : 0.05,
+      0.28,
+      1.22,
+    );
+  }
+
   spawnRepair(position: Vector3, fibrous = false): void {
     this.spawnBurst(position, 0xefc35c, 11, 0.48, 0.045, 0.22, 0.86);
     this.spawnBurst(position, fibrous ? 0xaeb275 : 0xd3a372, 7, 0.54, 0.035, 0.16, 0.64);

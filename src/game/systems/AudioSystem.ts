@@ -425,6 +425,29 @@ export class AudioSystem {
     if (spatialTarget) this.releaseSpatialTarget(spatialTarget, destroyed ? 620 : 440);
   }
 
+  playStructureSplash(position: AudioPosition, fibrous = false, strength = 1): void {
+    const normalized = Math.max(0.35, Math.min(1, strength));
+    const spatialTarget = this.createSpatialTarget(position);
+    const target = spatialTarget ?? this.effects;
+    this.noiseBurstTo(0.56, 760, 0.13 + normalized * 0.07, 'lowpass', target);
+    this.noiseBurstTo(0.24, fibrous ? 2260 : 1540, 0.045 + normalized * 0.025, 'bandpass', target);
+    this.playWoodKnockTo(0.055 + normalized * 0.055, fibrous ? 0.12 : 0.17, target);
+    if (this.context && target) {
+      const now = this.context.currentTime;
+      const oscillator = this.context.createOscillator();
+      const gain = this.context.createGain();
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(fibrous ? 86 : 72, now);
+      oscillator.frequency.exponentialRampToValueAtTime(34, now + 0.34);
+      gain.gain.setValueAtTime(0.026 + normalized * 0.028, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+      oscillator.connect(gain).connect(target);
+      oscillator.start(now);
+      oscillator.stop(now + 0.39);
+    }
+    if (spatialTarget) this.releaseSpatialTarget(spatialTarget, 760);
+  }
+
   playDoor(open: boolean): void {
     this.playWoodKnock(open ? 0.052 : 0.085, open ? 0.085 : 0.11);
     this.noiseBurst(0.16, open ? 1180 : 860, 0.032, 'bandpass');
