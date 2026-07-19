@@ -43,13 +43,15 @@ import {
   sampleRaftWalkableSurfaces,
   sanitizeRaftFootHeight,
   sanitizeRaftStructures,
+  structurePlacementKey,
   type FoundationCoordinate,
   type SavedRaftStructure,
 } from './raftStructures';
+import { sanitizeCollectionNets, type SavedCollectionNet } from './collectionNets';
 
-export const SAVE_VERSION = 15;
-export const SAVE_KEY = 'driftwake.save.v15';
-export const LEGACY_SAVE_KEYS = ['driftwake.save.v14', 'driftwake.save.v13', 'driftwake.save.v12', 'driftwake.save.v11', 'driftwake.save.v10', 'driftwake.save.v9', 'driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
+export const SAVE_VERSION = 16;
+export const SAVE_KEY = 'driftwake.save.v16';
+export const LEGACY_SAVE_KEYS = ['driftwake.save.v15', 'driftwake.save.v14', 'driftwake.save.v13', 'driftwake.save.v12', 'driftwake.save.v11', 'driftwake.save.v10', 'driftwake.save.v9', 'driftwake.save.v8', 'driftwake.save.v7', 'driftwake.save.v6', 'driftwake.save.v5', 'driftwake.save.v4', 'driftwake.save.v3', 'driftwake.save.v2', 'driftwake.save.v1'] as const;
 
 export type PlayerSurface = 'raft' | 'island' | 'water';
 
@@ -89,6 +91,7 @@ export interface DriftwakeSave {
   raft: {
     tiles: SavedRaftTile[];
     structures: SavedRaftStructure[];
+    collectionNets: SavedCollectionNet[];
     devices: SavedDeviceState[];
     navigation: SavedNavigationState;
     planting: SavedPlantingState;
@@ -176,6 +179,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
     raft?: {
       tiles?: SavedRaftTile[];
       structures?: SavedRaftStructure[];
+      collectionNets?: SavedCollectionNet[];
       devices?: SavedDeviceState[];
       navigation?: SavedNavigationState;
       planting?: SavedPlantingState;
@@ -228,6 +232,14 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
   const stableTiles = tiles.length > 0 ? tiles : createDefaultRaftTiles();
   const structures = version >= 14
     ? sanitizeRaftStructures(candidate.raft.structures, stableTiles)
+    : [];
+  const occupiedStructureEdges = new Set(
+    structures
+      .filter((structure) => structure.level === 0 && (structure.type === 'wall' || structure.type === 'door'))
+      .map(structurePlacementKey),
+  );
+  const collectionNets = version >= 16
+    ? sanitizeCollectionNets(candidate.raft.collectionNets, stableTiles, occupiedStructureEdges)
     : [];
   const tileKeys = new Set(stableTiles.map((tile) => deviceKey(tile.x, tile.z)));
   const occupied = new Set(
@@ -328,7 +340,7 @@ export function sanitizeSave(value: unknown): DriftwakeSave | null {
       failure: version >= 12 ? sanitizeFailureRecord(candidate.player.failure) : null,
       crafting,
     },
-    raft: { tiles: stableTiles, structures, devices, navigation, planting, progression },
+    raft: { tiles: stableTiles, structures, collectionNets, devices, navigation, planting, progression },
     world: { island: { ...island, dockVersion: 1 }, underwater, drops },
   };
 }

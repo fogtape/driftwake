@@ -114,6 +114,7 @@ const CONSUMABLES = new Set<ItemId>([
   'burntFish',
 ]);
 const PLACEABLES: Partial<Record<ItemId, PlacementType>> = {
+  collectionNetKit: 'collectionNet',
   purifierKit: 'purifier',
   grillKit: 'grill',
   solarPurifierKit: 'solarPurifier',

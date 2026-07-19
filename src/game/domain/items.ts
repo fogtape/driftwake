@@ -172,6 +172,15 @@ export const ITEM_DEFINITIONS = {
     tone: '#7dc6c5',
     description: '用回收聚合片压制的耐热杯具，可在净水器中盛取海水。',
   },
+  collectionNetKit: {
+    id: 'collectionNetKit',
+    name: '潮兜收集网套件',
+    shortName: '收集网',
+    category: 'placeable',
+    maxStack: 4,
+    tone: '#72b8a0',
+    description: '带悬垂绳网、边梁卡箍和浮子的外缘套件，可被动截留顺流而来的物资。',
+  },
   purifierKit: {
     id: 'purifierKit',
     name: '潮汐净水器套件',

@@ -107,6 +107,7 @@ export class BuildSystem {
   private hoveredTileCoordinate: GridCoordinate | null = null;
   private hoveredStructure: SavedRaftStructure | null = null;
   private targetStructure: StructurePlacementCandidate | null = null;
+  private foundationBlocked = false;
   private selectedPiece: RaftBuildPiece = 'foundation';
   private selectedRotation: RaftRotation = 0;
   private selectedLevel = 0;
@@ -127,6 +128,8 @@ export class BuildSystem {
     private readonly hasOccupant: (coordinate: GridCoordinate) => boolean = () => false,
     private readonly dismantleOccupant: (coordinate: GridCoordinate) => boolean = () => false,
     private readonly onHammerUsed: (action: HammerAction) => void = () => undefined,
+    private readonly blocksFoundationAt: (coordinate: GridCoordinate) => boolean = () => false,
+    private readonly blocksStructure: (candidate: StructurePlacementCandidate) => boolean = () => false,
   ) {
     this.viewModel = createHammerModel(materials);
     this.viewModel.name = 'first-person-building-hammer';
@@ -281,6 +284,7 @@ export class BuildSystem {
     this.targetStructure = null;
     let coordinate = hitCoordinate;
     let mode: PreviewMode = 'invalid';
+    this.foundationBlocked = false;
 
     if (hitTile) {
       const centerX = hitTile.x * RAFT_TILE_X;
@@ -291,13 +295,16 @@ export class BuildSystem {
         mode = 'repair';
       } else if (Math.abs(offsetX) > Math.abs(offsetZ)) {
         coordinate = { x: hitTile.x + Math.sign(offsetX || 1), z: hitTile.z };
-        mode = this.raft.canAddTile(coordinate) ? 'build' : 'invalid';
+        this.foundationBlocked = this.blocksFoundationAt(coordinate);
+        mode = this.raft.canAddTile(coordinate) && !this.foundationBlocked ? 'build' : 'invalid';
       } else {
         coordinate = { x: hitTile.x, z: hitTile.z + Math.sign(offsetZ || 1) };
-        mode = this.raft.canAddTile(coordinate) ? 'build' : 'invalid';
+        this.foundationBlocked = this.blocksFoundationAt(coordinate);
+        mode = this.raft.canAddTile(coordinate) && !this.foundationBlocked ? 'build' : 'invalid';
       }
     } else {
-      mode = this.raft.canAddTile(coordinate) ? 'build' : 'invalid';
+      this.foundationBlocked = this.blocksFoundationAt(coordinate);
+      mode = this.raft.canAddTile(coordinate) && !this.foundationBlocked ? 'build' : 'invalid';
     }
 
     const inventory = useGameStore.getState().inventory;
@@ -319,7 +326,7 @@ export class BuildSystem {
     };
     this.targetCoordinate = coordinate;
     this.targetStructure = candidate;
-    const reason = occupiesDeviceCell(candidate) && this.hasOccupant(coordinate)
+    const reason = (occupiesDeviceCell(candidate) && this.hasOccupant(coordinate)) || this.blocksStructure(candidate)
       ? 'occupied'
       : this.structures.canPlace(candidate);
     const cost = RAFT_STRUCTURE_DEFINITIONS[candidate.type].cost;
@@ -369,7 +376,10 @@ export class BuildSystem {
       );
     } else {
       const missing = missingCostLabel(FOUNDATION_COST, useGameStore.getState().inventory);
-      useGameStore.getState().setInteraction(missing ? `缺少 ${missing}` : '此处无法连接基础筏格', 'build');
+      useGameStore.getState().setInteraction(
+        missing ? `缺少 ${missing}` : this.foundationBlocked ? '先拆除占用这段外缘的收集网' : '此处无法连接基础筏格',
+        'build',
+      );
     }
   }
 
@@ -456,7 +466,7 @@ export class BuildSystem {
       this.showNotice('结构已修补');
     } else {
       action = 'build';
-      if (!this.raft.canAddTile(coordinate) || !store.spendItems(FOUNDATION_COST)) {
+      if (this.blocksFoundationAt(coordinate) || !this.raft.canAddTile(coordinate) || !store.spendItems(FOUNDATION_COST)) {
         this.audio.playDenied();
         return;
       }
@@ -518,7 +528,7 @@ export class BuildSystem {
     const definition = RAFT_STRUCTURE_DEFINITIONS[candidate.type];
     const store = useGameStore.getState();
     if (
-      (occupiesDeviceCell(candidate) && this.hasOccupant(candidate))
+      ((occupiesDeviceCell(candidate) && this.hasOccupant(candidate)) || this.blocksStructure(candidate))
       || this.structures.canPlace(candidate) !== 'valid'
       || !store.spendItems(definition.cost)
     ) {

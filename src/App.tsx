@@ -53,6 +53,7 @@ export function App() {
   const shark = useGameStore((state) => state.shark);
   const raft = useGameStore((state) => state.raft);
   const build = useGameStore((state) => state.build);
+  const collectionNets = useGameStore((state) => state.collectionNets);
   const devices = useGameStore((state) => state.devices);
   const storage = useGameStore((state) => state.storage);
   const navigation = useGameStore((state) => state.navigation);
@@ -319,6 +320,7 @@ export function App() {
         shark={shark}
         raft={raft}
         build={build}
+        collectionNets={collectionNets}
         progression={progression}
         devices={devices}
         navigation={navigation}

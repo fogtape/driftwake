@@ -905,6 +905,43 @@ export class AudioSystem {
     }, 82);
   }
 
+  playCollectionNetPlace(): void {
+    this.playWoodKnock(0.085, 0.105);
+    this.noiseBurst(0.2, 1760, 0.06, 'bandpass');
+    this.noiseBurst(0.11, 3820, 0.035, 'highpass');
+    if (!this.context) return;
+    const timer = window.setTimeout(() => {
+      this.playWoodKnock(0.045, 0.065);
+      this.noiseBurst(0.08, 2380, 0.028, 'bandpass');
+      window.clearTimeout(timer);
+    }, 76);
+  }
+
+  playCollectionNetCatch(kind: DebrisKind, position?: AudioPosition): void {
+    const spatialTarget = position ? this.createSpatialTarget(position) : null;
+    const target = spatialTarget ?? this.effects;
+    const heavy = kind === 'barrel' || kind === 'cache' || kind === 'timber';
+    this.noiseBurstTo(0.18, heavy ? 820 : 1640, heavy ? 0.065 : 0.045, heavy ? 'lowpass' : 'bandpass', target);
+    this.noiseBurstTo(0.14, 2920, 0.038, 'highpass', target);
+    if (heavy) this.playWoodKnockTo(kind === 'cache' ? 0.065 : 0.04, 0.075, target);
+    if (spatialTarget) this.releaseSpatialTarget(spatialTarget, 390);
+  }
+
+  playCollectionNetCollect(): void {
+    this.noiseBurst(0.14, 2480, 0.045, 'bandpass');
+    this.noiseBurst(0.08, 4300, 0.025, 'highpass');
+    this.playCollect();
+  }
+
+  playCollectionNetLost(position?: AudioPosition): void {
+    const spatialTarget = position ? this.createSpatialTarget(position) : null;
+    const target = spatialTarget ?? this.effects;
+    this.noiseBurstTo(0.32, 680, 0.1, 'lowpass', target);
+    this.noiseBurstTo(0.24, 3260, 0.075, 'highpass', target);
+    this.playWoodKnockTo(0.09, 0.13, target);
+    if (spatialTarget) this.releaseSpatialTarget(spatialTarget, 520);
+  }
+
   playIgnite(): void {
     this.noiseBurst(0.22, 2100, 0.055, 'highpass');
     this.noiseBurst(0.18, 420, 0.08, 'lowpass');

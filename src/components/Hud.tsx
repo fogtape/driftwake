@@ -11,6 +11,7 @@ import {
   Droplet,
   DoorOpen,
   GlassWater,
+  Grid3X3,
   Heart,
   Layers3,
   Mountain,
@@ -47,6 +48,7 @@ import {
 } from '../game/domain/raftStructures';
 import type {
   BuildFeedback,
+  CollectionNetFeedback,
   DeviceFeedbackMap,
   FishingFeedback,
   IslandFeedback,
@@ -78,6 +80,7 @@ interface HudProps {
   shark: SharkFeedback;
   raft: RaftFeedback;
   build: BuildFeedback;
+  collectionNets: CollectionNetFeedback;
   devices: DeviceFeedbackMap;
   navigation: NavigationFeedback;
   planting: PlantingFeedback;
@@ -150,6 +153,7 @@ export function Hud({
   shark,
   raft,
   build,
+  collectionNets,
   devices,
   navigation,
   planting,
@@ -179,6 +183,7 @@ export function Hud({
     : (['purifier', 'grill', 'solarPurifier', 'tripleGrill', 'locker'] as const)
       .filter((type) => devices[type].placed > 0);
   const planterVisible = !island.ashore && planting.placed > 0;
+  const collectionNetsVisible = !island.ashore && collectionNets.placed > 0;
   const progressionVisible = !island.ashore && (
     progression.researchBenches > 0 || progression.dryingRacks > 0 || progression.smelters > 0
   );
@@ -466,9 +471,27 @@ export function Hud({
       </div>
 
       <div
-        className={`device-rack ${placedDeviceTypes.length > 0 || planterVisible || progressionVisible ? 'is-visible' : ''} ${sharkAlert || planting.birdActive ? 'has-threat' : ''} ${sharkAlert && planting.birdActive ? 'has-two-threats' : ''}`}
+        className={`device-rack ${placedDeviceTypes.length > 0 || collectionNetsVisible || planterVisible || progressionVisible ? 'is-visible' : ''} ${sharkAlert || planting.birdActive ? 'has-threat' : ''} ${sharkAlert && planting.birdActive ? 'has-two-threats' : ''}`}
         aria-label="筏上设备状态"
       >
+        {collectionNetsVisible && (
+          <div className={`device-status device-status--collectionNet ${collectionNets.damaged > 0 ? 'device-status--withered' : collectionNets.full > 0 ? 'device-status--ready' : 'device-status--idle'}`}>
+            <Grid3X3 size={18} />
+            <div>
+              <span>潮兜收集网</span>
+              <i><b style={{ width: `${collectionNets.progress * 100}%` }} /></i>
+            </div>
+            <strong>
+              {collectionNets.damaged > 0
+                ? `${collectionNets.damaged} 张受损`
+                : collectionNets.full > 0
+                  ? `${collectionNets.full} 张已满`
+                  : collectionNets.stored > 0
+                    ? `${collectionNets.stored}/${collectionNets.capacity}`
+                    : '等待漂流物'}
+            </strong>
+          </div>
+        )}
         {placedDeviceTypes.map((type) => {
           const status = devices[type];
           const label =

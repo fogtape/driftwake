@@ -89,7 +89,7 @@ export class DebrisField {
       };
       this.items.push(item);
       this.allTargets.push(item);
-      this.respawn(item, index < 8 ? -10 - index * 5 : undefined);
+      this.respawn(item, index === 0 ? -3.7 : index < 8 ? -10 - index * 5 : undefined);
     }
     const dropPrototype = createDebrisModel('cache', materials);
     for (let index = 0; index < WORLD_DROP_POOL_SIZE; index += 1) {

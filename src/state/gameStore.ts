@@ -65,8 +65,8 @@ export type QualityPreset = 'low' | 'high';
 export type OverlayPanel = 'pack' | 'crafting' | 'research' | 'storage' | null;
 export type FishingPhase = 'idle' | 'casting' | 'waiting' | 'nibble' | 'hooked' | 'caught' | 'lost';
 export type SharkMode = 'distant' | 'circling' | 'approaching' | 'attacking' | 'retreating';
-export type PlacementType = DeviceType | NavigationDeviceType | ProgressionDeviceType | 'planter';
-export type InteractionOwner = 'build' | 'device' | 'fishing' | 'island' | 'navigation' | 'planting' | 'progression' | 'salvage' | 'shark' | 'underwater' | 'global';
+export type PlacementType = DeviceType | NavigationDeviceType | ProgressionDeviceType | 'planter' | 'collectionNet';
+export type InteractionOwner = 'build' | 'collectionNet' | 'device' | 'fishing' | 'island' | 'navigation' | 'planting' | 'progression' | 'salvage' | 'shark' | 'underwater' | 'global';
 
 export interface AudioMix {
   master: number;
@@ -123,6 +123,15 @@ export interface DeviceFeedback {
   working: number;
   ready: number;
   burnt: number;
+  progress: number;
+}
+
+export interface CollectionNetFeedback {
+  placed: number;
+  stored: number;
+  capacity: number;
+  full: number;
+  damaged: number;
   progress: number;
 }
 
@@ -249,6 +258,7 @@ interface GameState {
   shark: SharkFeedback;
   raft: RaftFeedback;
   build: BuildFeedback;
+  collectionNets: CollectionNetFeedback;
   devices: DeviceFeedbackMap;
   storage: StorageFeedback | null;
   navigation: NavigationFeedback;
@@ -297,6 +307,7 @@ interface GameState {
   setShark: (feedback: Partial<SharkFeedback>) => void;
   setRaft: (feedback: RaftFeedback) => void;
   setBuild: (feedback: BuildFeedback) => void;
+  setCollectionNets: (feedback: CollectionNetFeedback) => void;
   setDevices: (feedback: DeviceFeedbackMap) => void;
   setStorage: (feedback: StorageFeedback | null) => void;
   setNavigation: (feedback: NavigationFeedback) => void;
@@ -490,6 +501,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   shark: defaultShark(),
   raft: { tiles: 9, damagedTiles: 0, averageIntegrity: 100 },
   build: defaultBuild(),
+  collectionNets: { placed: 0, stored: 0, capacity: 0, full: 0, damaged: 0, progress: 0 },
   devices: {
     purifier: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
     grill: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
@@ -770,6 +782,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
   setRaft: (raft) => set({ raft }),
   setBuild: (build) => set({ build }),
+  setCollectionNets: (collectionNets) => set({ collectionNets }),
   setDevices: (devices) => set({ devices }),
   setStorage: (storage) => set({ storage }),
   setNavigation: (navigation) => set({ navigation }),
@@ -842,6 +855,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       planting: defaultPlanting(),
       progression: defaultProgression(),
       build: defaultBuild(),
+      collectionNets: { placed: 0, stored: 0, capacity: 0, full: 0, damaged: 0, progress: 0 },
       storage: null,
       placementDevice: null,
       interaction: null,

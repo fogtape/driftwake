@@ -16,6 +16,12 @@ function createSalvageMaterials(): MaterialLibrary {
 }
 
 describe('DebrisField salvage settlement', () => {
+  it('starts one readable salvage target near the raft for the opening pickup', () => {
+    const field = new DebrisField(new Scene(), createSalvageMaterials(), 11);
+    expect(field.items[0]?.model.position.z).toBeCloseTo(-3.7);
+    expect(field.items.slice(1, 8).every((item) => item.model.position.z <= -15)).toBe(true);
+  });
+
   it('restores world drops exactly and keeps rejected loot on the water', () => {
     const field = new DebrisField(new Scene(), createSalvageMaterials(), 11, [
       { loot: { timber: 2, polymer: 1 }, x: 1.25, y: 0.18, z: -2.5 },

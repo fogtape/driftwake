@@ -1038,6 +1038,7 @@ button:focus-visible {
 .device-status--tripleGrill { border-left-color: #dc8557; }
 .device-status--solarPurifier { border-left-color: #76cfc2; }
 .device-status--locker { border-left-color: #809a96; }
+.device-status--collectionNet { border-left-color: #68b69e; }
 .device-status--planter { border-left-color: #7fa963; }
 .device-status--progression { border-left-color: #c47b61; }
 .device-status > svg { color: #6fc5ca; }
@@ -1045,6 +1046,7 @@ button:focus-visible {
 .device-status--tripleGrill > svg { color: #e39a62; }
 .device-status--solarPurifier > svg { color: #83d6c9; }
 .device-status--locker > svg { color: #9bb4af; }
+.device-status--collectionNet > svg { color: #82cbb2; }
 .device-status--planter > svg { color: #92bd72; }
 .device-status--progression > svg { color: #d79273; }
 .device-status > div { display: grid; min-width: 0; gap: 4px; }
@@ -1056,6 +1058,7 @@ button:focus-visible {
 .device-status--tripleGrill i b { background: #de8457; }
 .device-status--solarPurifier i b { background: #65bcae; }
 .device-status--locker i b { background: #718c87; }
+.device-status--collectionNet i b { background: #68b69e; }
 .device-status--planter i b { background: #83ad67; }
 .device-status--progression i b { background: #c97961; }
 .device-status--research strong { color: #79c8bb; }

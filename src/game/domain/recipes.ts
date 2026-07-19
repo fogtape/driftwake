@@ -36,6 +36,14 @@ export const RECIPES = {
     cost: { polymer: 2 },
     description: '压出耐热杯壁，作为净水循环中的可重复容器。',
   },
+  collectionNetKit: {
+    id: 'collectionNetKit',
+    name: '潮兜收集网',
+    category: 'survival',
+    output: { collectionNetKit: 1 },
+    cost: { timber: 3, fiber: 4, rope: 2, polymer: 1 },
+    description: '固定在木筏外缘，被动截留漂流物；满载后需要手动收取。',
+  },
   purifierKit: {
     id: 'purifierKit',
     name: '潮汐净水器',

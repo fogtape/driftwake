@@ -39,8 +39,10 @@ import { createDefaultPlantingState } from './domain/planting';
 import { createDefaultProgressionState, type ProgressionDeviceType } from './domain/progression';
 import type { FailureRecord } from './domain/failure';
 import type { CameraMotionMode } from './domain/settings';
+import { structurePlacementKey } from './domain/raftStructures';
 import { AudioSystem } from './systems/AudioSystem';
 import { BuildSystem, type HammerAction } from './systems/BuildSystem';
+import { CollectionNetSystem } from './systems/CollectionNetSystem';
 import { DebrisField } from './systems/DebrisField';
 import { DeviceSystem } from './systems/DeviceSystem';
 import { FishingSystem } from './systems/FishingSystem';
@@ -144,6 +146,7 @@ export class DriftwakeGame {
   private debris: DebrisField | null = null;
   private player: PlayerController | null = null;
   private hook: HookSystem | null = null;
+  private collectionNets: CollectionNetSystem | null = null;
   private salvage: SalvageSystem | null = null;
   private build: BuildSystem | null = null;
   private devices: DeviceSystem | null = null;
@@ -237,6 +240,14 @@ export class DriftwakeGame {
     this.mount.dataset.hookRopeSag = '0';
     this.mount.dataset.salvageFocus = 'none';
     this.mount.dataset.worldDropCount = '0';
+    this.mount.dataset.collectionNetCount = '0';
+    this.mount.dataset.collectionNetStored = '0';
+    this.mount.dataset.collectionNetFocused = 'none';
+    this.mount.dataset.collectionNetPlacement = 'none';
+    this.mount.dataset.collectionNetPlacementValid = 'false';
+    this.mount.dataset.collectionNetCaptures = '0';
+    this.mount.dataset.collectionNetMount = 'none';
+    this.mount.dataset.collectionNetNearestDrift = 'none';
     this.mount.dataset.failureCause = 'none';
     this.mount.dataset.failureDropPending = 'false';
     this.mount.dataset.failureDropCount = '0';
@@ -384,6 +395,23 @@ export class DriftwakeGame {
         this.audio,
         this.splashes,
       );
+      this.collectionNets = new CollectionNetSystem(
+        this.renderer,
+        this.camera,
+        this.materials,
+        this.raft,
+        this.debris,
+        this.audio,
+        this.splashes,
+        save?.raft.collectionNets ?? [],
+        () => this.saveNow(),
+        () => this.applyToolWear('hammer', 'dismantle'),
+        () => new Set(
+          (this.structures?.getSavedStructures() ?? [])
+            .filter((structure) => structure.level === 0 && (structure.type === 'wall' || structure.type === 'door'))
+            .map(structurePlacementKey),
+        ),
+      );
       this.devices = new DeviceSystem(
         this.renderer,
         this.camera,
@@ -471,6 +499,8 @@ export class DriftwakeGame {
           (this.planting?.dismantleAt(coordinate) ?? false) ||
           (this.progression?.dismantleAt(coordinate) ?? false),
         (action) => this.applyToolWear('hammer', action),
+        (coordinate) => this.collectionNets?.blocksFoundationAt(coordinate) ?? false,
+        (candidate) => this.collectionNets?.blocksStructure(candidate) ?? false,
       );
       this.fishing = new FishingSystem(
         this.renderer,
@@ -723,6 +753,7 @@ export class DriftwakeGame {
     this.player?.dispose();
     this.hook?.dispose(this.scene);
     this.salvage?.dispose();
+    this.collectionNets?.dispose();
     this.build?.dispose();
     this.structures?.dispose();
     this.navigation?.dispose();
@@ -846,6 +877,18 @@ export class DriftwakeGame {
     this.navigation?.update(simulationSeconds, stepSeconds);
     this.planting?.update(simulationSeconds, stepSeconds);
     this.progression?.update(simulationSeconds, stepSeconds);
+    this.collectionNets?.update(simulationSeconds, stepSeconds);
+    const collectionNetDiagnostics = this.collectionNets?.getDiagnostics();
+    if (collectionNetDiagnostics) {
+      this.mount.dataset.collectionNetCount = String(collectionNetDiagnostics.count);
+      this.mount.dataset.collectionNetStored = String(collectionNetDiagnostics.stored);
+      this.mount.dataset.collectionNetFocused = collectionNetDiagnostics.focused ?? 'none';
+      this.mount.dataset.collectionNetPlacement = collectionNetDiagnostics.placement ?? 'none';
+      this.mount.dataset.collectionNetPlacementValid = String(collectionNetDiagnostics.placementValid);
+      this.mount.dataset.collectionNetCaptures = String(collectionNetDiagnostics.captures);
+      this.mount.dataset.collectionNetMount = collectionNetDiagnostics.mount ?? 'none';
+      this.mount.dataset.collectionNetNearestDrift = collectionNetDiagnostics.nearestDrift ?? 'none';
+    }
     this.structures?.updateDoorFocus(this.camera);
     const structureDiagnostics = this.structures?.getDiagnostics();
     if (structureDiagnostics) {
@@ -1204,6 +1247,7 @@ export class DriftwakeGame {
         ? state.placementDevice
         : null;
     const plantingPlacement = state.placementDevice === 'planter' ? 'planter' : null;
+    const collectionNetPlacement = state.placementDevice === 'collectionNet';
     const progressionPlacement =
       state.placementDevice === 'researchBench' ||
       state.placementDevice === 'dryingBricks' ||
@@ -1218,6 +1262,8 @@ export class DriftwakeGame {
     this.planting?.setInputEnabled(inputEnabled && onRaft);
     this.progression?.setPlacementType(progressionPlacement);
     this.progression?.setInputEnabled(inputEnabled && onRaft);
+    this.collectionNets?.setPlacementActive(collectionNetPlacement);
+    this.collectionNets?.setInputEnabled(inputEnabled && onRaft);
     this.salvage?.setInputEnabled(inputEnabled && !placingDevice && (onRaft || (inWater && !(this.player?.isSubmerged() ?? false))));
     this.hook?.setEquipped(equipmentVisible && selectedToolAvailable && onRaft && !placingDevice && state.selectedTool === 'hook');
     this.hook?.setEnabled(selectedToolAvailable && inputEnabled && onRaft && !placingDevice && state.selectedTool === 'hook');
@@ -1283,6 +1329,7 @@ export class DriftwakeGame {
       raft: {
         tiles: this.raft.getSavedTiles(),
         structures: this.structures?.getSavedStructures() ?? [],
+        collectionNets: this.collectionNets?.getSavedNets() ?? [],
         devices: this.devices?.getSavedDevices() ?? [],
         navigation: this.navigation?.getSavedState() ?? createDefaultNavigationState(),
         planting: this.planting?.getSavedState() ?? createDefaultPlantingState(),

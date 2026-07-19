@@ -19,6 +19,7 @@ export const RECIPE_CRAFT_SECONDS = {
   hook: 2.4,
   rope: 0.9,
   emptyCup: 1.1,
+  collectionNetKit: 3.4,
   purifierKit: 3.6,
   grillKit: 3.2,
   hinge: 1.4,

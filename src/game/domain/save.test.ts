@@ -38,7 +38,7 @@ describe('save schema', () => {
   });
 
   it('rejects unsupported versions and provides a stable starting raft', () => {
-    expect(sanitizeSave({ version: 16 })).toBeNull();
+    expect(sanitizeSave({ version: 17 })).toBeNull();
     expect(createDefaultRaftTiles()).toHaveLength(9);
   });
 
@@ -64,7 +64,7 @@ describe('save schema', () => {
       getItem: (key: string) => (key === 'driftwake.save.v1' ? legacy : null),
     };
     const save = loadSave(storage);
-    expect(SAVE_KEY).toBe('driftwake.save.v15');
+    expect(SAVE_KEY).toBe('driftwake.save.v16');
     expect(save?.version).toBe(SAVE_VERSION);
     expect(save?.raft.devices).toEqual([]);
     expect(save?.player.inventory.timber).toBe(3);
@@ -73,6 +73,56 @@ describe('save schema', () => {
     expect(save?.raft.navigation.devices).toEqual([]);
     expect(save?.raft.planting.planters).toEqual([]);
     expect(save?.raft.progression.devices).toEqual([]);
+    expect(save?.raft.collectionNets).toEqual([]);
+  });
+
+  it('migrates v15 saves to an empty collection-net set', () => {
+    const save = sanitizeSave({
+      version: 15,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 12 },
+      raft: {
+        tiles: [{ x: 0, z: 0, health: 100 }],
+        collectionNets: [{ id: 'ignored', x: 0, z: 0, rotation: 0, health: 80, storage: { timber: 2 } }],
+      },
+    });
+    expect(save?.version).toBe(SAVE_VERSION);
+    expect(save?.raft.collectionNets).toEqual([]);
+  });
+
+  it('sanitizes v16 collection nets against dynamic raft edges', () => {
+    const save = sanitizeSave({
+      version: SAVE_VERSION,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 12 },
+      raft: {
+        tiles: [{ x: 0, z: 0, health: 100 }, { x: 1, z: 0, health: 100 }],
+        collectionNets: [
+          { id: 'edge', x: 0, z: 0, rotation: 0, health: 54, storage: { timber: 2 } },
+          { id: 'interior', x: 0, z: 0, rotation: 1, health: 80, storage: {} },
+        ],
+      },
+    });
+    expect(save?.raft.collectionNets).toEqual([
+      { id: 'edge', x: 0, z: 0, rotation: 0, health: 54, storage: { timber: 2 } },
+    ]);
+  });
+
+  it('keeps base walls authoritative over conflicting v16 collection-net edges', () => {
+    const save = sanitizeSave({
+      version: SAVE_VERSION,
+      player: { inventory: { hook: 1 }, survival: {}, selectedTool: 'hook', playSeconds: 12 },
+      raft: {
+        tiles: [{ x: 0, z: 0, health: 100 }],
+        structures: [
+          { id: 'north-wall', type: 'wall', x: 0, z: 0, level: 0, rotation: 0, health: 110 },
+        ],
+        collectionNets: [
+          { id: 'blocked', x: 0, z: 0, rotation: 0, health: 80, storage: { timber: 1 } },
+          { id: 'east-edge', x: 0, z: 0, rotation: 1, health: 80, storage: { polymer: 1 } },
+        ],
+      },
+    });
+    expect(save?.raft.structures.map((structure) => structure.id)).toEqual(['north-wall']);
+    expect(save?.raft.collectionNets.map((net) => net.id)).toEqual(['east-edge']);
   });
 
   it('migrates v13 saves to an empty structure set', () => {
