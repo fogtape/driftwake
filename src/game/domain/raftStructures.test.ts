@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canPlaceRaftStructure,
+  canReplaceRaftStructure,
   canRemoveFoundationUnderStructures,
   canRemoveRaftStructure,
   pruneUnsupportedRaftStructures,
@@ -15,6 +16,7 @@ import {
   raftStructureDamageStage,
   nextRaftBuildCategory,
   raftBuildCategoryForPiece,
+  raftStructureReplacementSettlement,
   sampleRaftOverheadSurfaces,
   sampleRaftWalkableSurfaces,
   sanitizeRaftStructures,
@@ -88,6 +90,25 @@ describe('raft structure topology', () => {
     expect(canPlaceRaftStructure([wall], foundations, structure('door', 'door', 1, 0, 0, 3))).toBe('occupied');
     const pillar = structure('pillar', 'pillar', 0, 0, 0);
     expect(canPlaceRaftStructure([pillar], foundations, structure('stairs', 'stairs', 0, 0, 0))).toBe('occupied');
+  });
+
+  it('supports compatible in-place replacement while preserving the support graph', () => {
+    const wall = structure('wall', 'wall', 0, 0, 0, 0);
+    const door = structure('door', 'door', 0, 0, 0, 0);
+    expect(canReplaceRaftStructure([wall], foundations, 'wall', door)).toBe('valid');
+    expect(canReplaceRaftStructure([wall], foundations, 'wall', structure('pillar', 'pillar', 0, 0, 0))).toBe('incompatible');
+    const pillar = structure('pillar', 'pillar', 0, 0, 0);
+    const floor = structure('floor', 'floor', 0, 0, 1);
+    const stairs = structure('stairs', 'stairs', 0, 0, 0, 0);
+    expect(canReplaceRaftStructure([pillar, floor], foundations, 'pillar', stairs)).toBe('dependent');
+    expect(raftStructureReplacementSettlement('wall', 'door')).toEqual({
+      cost: { timber: 1, rope: 2 },
+      refund: {},
+    });
+    expect(raftStructureReplacementSettlement('roof', 'floor')).toEqual({
+      cost: { timber: 2, rope: 1 },
+      refund: { fiber: 2 },
+    });
   });
 
   it('protects supports from dismantling and foundation removal', () => {

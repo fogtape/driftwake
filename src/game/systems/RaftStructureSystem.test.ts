@@ -210,6 +210,18 @@ describe('RaftStructureSystem runtime', () => {
     structures.dispose();
   });
 
+  it('replaces a compatible structure in place while preserving its stable id', () => {
+    const raft = new RaftSystem(createTestMaterials(), [{ x: 0, z: 0, health: 100 }]);
+    const structures = new RaftStructureSystem(raft, createTestMaterials(), [saved('wall', 'wall', 0, 0, 0, 0)]);
+    structures.damage('wall', 34);
+    expect(structures.canReplace('wall', { type: 'door', x: 0, z: 0, level: 0, rotation: 0 })).toBe('valid');
+    const result = structures.replace('wall', { type: 'door', x: 0, z: 0, level: 0, rotation: 0 });
+    expect(result).toMatchObject({ reason: 'valid', previous: { id: 'wall', type: 'wall', health: 76 } });
+    expect(result.replaced).toMatchObject({ id: 'wall', type: 'door', health: 95, open: false });
+    expect(structures.count).toBe(1);
+    structures.dispose();
+  });
+
   it('destroys a targeted support and returns its complete deterministic collapse chain', () => {
     const raft = new RaftSystem(createTestMaterials(), [{ x: 0, z: 0, health: 100 }]);
     const structures = new RaftStructureSystem(raft, createTestMaterials(), [

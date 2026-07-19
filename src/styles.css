@@ -722,6 +722,12 @@ button:focus-visible {
 .build-palette.is-visible { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
 .build-palette.is-invalid { border-color: rgba(226, 111, 85, 0.38); }
 .build-palette.is-repair { border-color: rgba(239, 195, 92, 0.52); }
+.build-palette.is-replace { border-color: rgba(114, 200, 212, 0.58); }
+.build-palette.is-replace .build-palette__meta > strong,
+.build-palette.is-replace .build-palette__meta > span { color: #9bd9df; }
+.build-palette.is-replace.is-invalid { border-color: rgba(226, 111, 85, 0.5); }
+.build-palette.is-replace.is-invalid .build-palette__meta > strong,
+.build-palette.is-replace.is-invalid .build-palette__meta > span { color: #f0a08c; }
 .build-palette.is-repair .build-palette__meta > strong,
 .build-palette.is-repair .build-palette__meta > span { color: #efd58b; }
 .build-palette.is-repair.is-invalid { border-color: rgba(226, 111, 85, 0.5); }
@@ -842,6 +848,8 @@ button:focus-visible {
 }
 
 .build-palette__meta i.is-missing { color: #e47b64; }
+.build-palette__meta i.is-refund { color: #a8d47b; }
+.build-palette__meta i.is-neutral { color: rgba(211, 226, 222, 0.56); font-size: 9px; }
 .build-palette__meta i b { font-weight: 700; }
 .build-palette__meta > em {
   color: rgba(204, 220, 216, 0.48);

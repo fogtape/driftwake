@@ -379,6 +379,19 @@ export class AudioSystem {
     if (spatialTarget) this.releaseSpatialTarget(spatialTarget, 360);
   }
 
+  playReplace(position?: AudioPosition, fibrous = false): void {
+    const spatialTarget = position ? this.createSpatialTarget(position) : null;
+    const target = spatialTarget ?? this.effects;
+    this.noiseBurstTo(0.085, fibrous ? 2260 : 1120, 0.042, 'bandpass', target);
+    this.playWoodKnockTo(fibrous ? 0.06 : 0.082, 0.075, target);
+    const delay = window.setTimeout(() => {
+      this.noiseBurstTo(0.055, fibrous ? 3120 : 1740, 0.025, 'highpass', target);
+      this.playWoodKnockTo(fibrous ? 0.08 : 0.11, 0.12, target);
+      window.clearTimeout(delay);
+    }, 78);
+    if (spatialTarget) this.releaseSpatialTarget(spatialTarget, 420);
+  }
+
   playCeilingBump(fibrous = false): void {
     this.playWoodKnock(fibrous ? 0.038 : 0.055, fibrous ? 0.065 : 0.085);
     this.noiseBurst(fibrous ? 0.075 : 0.052, fibrous ? 2450 : 980, fibrous ? 0.035 : 0.045, fibrous ? 'highpass' : 'lowpass');

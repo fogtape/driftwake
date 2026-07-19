@@ -1,4 +1,4 @@
-import type { ItemBundle } from './items';
+import type { ItemBundle, ItemId } from './items';
 
 export const RAFT_STRUCTURE_LEVEL_HEIGHT = 2.18;
 export const RAFT_TILE_X = 1.44;
@@ -22,6 +22,12 @@ export type StructurePlacementReason =
   | 'out-of-bounds'
   | 'invalid-level'
   | 'limit';
+
+export type StructureReplacementReason = StructurePlacementReason
+  | 'not-found'
+  | 'incompatible'
+  | 'unchanged'
+  | 'dependent';
 
 export interface FoundationCoordinate {
   x: number;
@@ -48,6 +54,11 @@ export interface RaftStructureDefinition {
   repairCost: ItemBundle;
   repairAmount: number;
   maxHealth: number;
+}
+
+export interface RaftStructureReplacementSettlement {
+  cost: ItemBundle;
+  refund: ItemBundle;
 }
 
 export interface RaftBuildPieceDefinition {
@@ -134,6 +145,25 @@ export const RAFT_STRUCTURE_DEFINITIONS: Record<RaftStructureType, RaftStructure
     maxHealth: 80,
   },
 };
+
+export function raftStructureReplacementSettlement(
+  from: RaftStructureType,
+  to: RaftStructureType,
+): RaftStructureReplacementSettlement {
+  const cost: ItemBundle = {};
+  const refund: ItemBundle = {};
+  const itemIds = new Set<ItemId>([
+    ...(Object.keys(RAFT_STRUCTURE_DEFINITIONS[from].refund) as ItemId[]),
+    ...(Object.keys(RAFT_STRUCTURE_DEFINITIONS[to].cost) as ItemId[]),
+  ]);
+  for (const itemId of itemIds) {
+    const amount = (RAFT_STRUCTURE_DEFINITIONS[to].cost[itemId] ?? 0)
+      - (RAFT_STRUCTURE_DEFINITIONS[from].refund[itemId] ?? 0);
+    if (amount > 0) cost[itemId] = amount;
+    if (amount < 0) refund[itemId] = -amount;
+  }
+  return { cost, refund };
+}
 
 export const RAFT_BUILD_PIECES: readonly RaftBuildPiece[] = [
   'foundation',
@@ -578,6 +608,26 @@ export function canPlaceRaftStructure(
   }
   const withCandidate = [...structures, candidate];
   return isRaftStructureSupported(candidate, withCandidate, foundations) ? 'valid' : 'unsupported';
+}
+
+export function canReplaceRaftStructure(
+  structures: readonly SavedRaftStructure[],
+  foundations: readonly FoundationCoordinate[],
+  replacedId: string,
+  candidate: SavedRaftStructure,
+): StructureReplacementReason {
+  const replaced = structures.find((structure) => structure.id === replacedId);
+  if (!replaced) return 'not-found';
+  if (structurePlacementKey(replaced) !== structurePlacementKey(candidate)) return 'incompatible';
+  if (replaced.type === candidate.type && replaced.rotation === candidate.rotation) return 'unchanged';
+
+  const remaining = structures.filter((structure) => structure.id !== replacedId);
+  const placement = canPlaceRaftStructure(remaining, foundations, { ...candidate, id: replacedId });
+  if (placement !== 'valid') return placement;
+  const result = [...remaining, { ...candidate, id: replacedId }];
+  return result.every((structure) => isRaftStructureSupported(structure, result, foundations))
+    ? 'valid'
+    : 'dependent';
 }
 
 export function canRemoveRaftStructure(

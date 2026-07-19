@@ -80,6 +80,11 @@ export class SplashSystem {
     this.spawnBurst(position, fibrous ? 0xaeb275 : 0xd3a372, 7, 0.54, 0.035, 0.16, 0.64);
   }
 
+  spawnReplacement(position: Vector3, fibrous = false): void {
+    this.spawnBurst(position, fibrous ? 0x77734c : 0x775044, 10, 0.46, 0.04, 0.12, 0.72);
+    this.spawnBurst(position, fibrous ? 0xc4c17c : 0x72c8d4, 16, 0.68, 0.048, 0.24, 1.2);
+  }
+
   spawnCeilingDust(position: Vector3, fibrous = false): void {
     this.spawnBurst(position, fibrous ? 0xb6b27a : 0xc89868, fibrous ? 8 : 10, 0.48, 0.035, -0.42, 0.06);
     this.spawnBurst(position, fibrous ? 0x66623d : 0x684536, 5, 0.36, 0.026, -0.28, 0.02);

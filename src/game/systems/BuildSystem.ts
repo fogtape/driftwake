@@ -18,6 +18,7 @@ import {
   INVENTORY_SLOT_CAPACITY,
   ITEM_DEFINITIONS,
   addItems,
+  exchangeInventoryBundles,
   hasItems,
   type ItemBundle,
   type ItemId,
@@ -29,12 +30,16 @@ import {
   RAFT_STRUCTURE_DEFINITIONS,
   normalizeRaftRotation,
   nextRaftBuildCategory,
+  raftStructureReplacementSettlement,
   raftBuildCategoryForPiece,
+  structurePlacementKey,
   type RaftBuildCategory,
   type RaftBuildPiece,
   type RaftRotation,
   type SavedRaftStructure,
+  type RaftStructureReplacementSettlement,
   type StructurePlacementReason,
+  type StructureReplacementReason,
 } from '../domain/raftStructures';
 import { useGameStore } from '../../state/gameStore';
 import type { AudioSystem } from './AudioSystem';
@@ -42,8 +47,8 @@ import { RAFT_TILE_X, RAFT_TILE_Z, type GridCoordinate, type RaftSystem } from '
 import type { RaftStructureSystem, StructurePlacementCandidate } from './RaftStructureSystem';
 import type { SplashSystem } from './SplashSystem';
 
-type PreviewMode = 'build' | 'repair' | 'invalid' | 'hidden';
-export type HammerAction = 'build' | 'repair' | 'dismantle';
+type PreviewMode = 'build' | 'repair' | 'replace' | 'invalid' | 'hidden';
+export type HammerAction = 'build' | 'repair' | 'replace' | 'dismantle';
 
 const FOUNDATION_COST: ItemBundle = RAFT_BUILD_PIECE_DEFINITIONS.foundation.cost;
 const REPAIR_COST: ItemBundle = { timber: 1 };
@@ -57,6 +62,26 @@ const PLACEMENT_REASON_LABEL: Record<Exclude<StructurePlacementReason, 'valid'>,
   'invalid-level': '当前层高无法放置该结构',
   limit: '木筏结构数量已达上限',
 };
+
+const REPLACEMENT_REASON_LABEL: Partial<Record<Exclude<StructureReplacementReason, 'valid'>, string>> = {
+  'not-found': '替换目标已不存在',
+  incompatible: '当前件型不能占用这个结构槽位',
+  unchanged: '当前件型与目标结构相同',
+  dependent: '替换会使上层结构失去承重',
+  occupied: '替换位置与其他结构冲突',
+  unsupported: '替换后的结构缺少承重',
+  'out-of-bounds': '替换结构超出木筏边界',
+  'invalid-level': '替换层高无效',
+  limit: '木筏结构数量已达上限',
+};
+
+function replacementReasonLabel(reason: StructureReplacementReason): string {
+  return reason === 'valid' ? '当前结构可以替换' : REPLACEMENT_REASON_LABEL[reason] ?? '当前结构无法替换';
+}
+
+function isEdgeStructure(type: RaftBuildPiece): boolean {
+  return type === 'wall' || type === 'door';
+}
 
 function coordinateEquals(a: GridCoordinate | null, b: GridCoordinate | null): boolean {
   return Boolean(a && b && a.x === b.x && a.z === b.z);
@@ -109,11 +134,13 @@ export class BuildSystem {
   private readonly inverseRaftRotation = new Quaternion();
   private readonly validColor = new Color(0x72d4b3);
   private readonly repairColor = new Color(0xefc35c);
+  private readonly replaceColor = new Color(0x72c8d4);
   private readonly invalidColor = new Color(0xe26f55);
   private targetCoordinate: GridCoordinate | null = null;
   private hoveredTileCoordinate: GridCoordinate | null = null;
   private hoveredStructure: SavedRaftStructure | null = null;
   private targetStructure: StructurePlacementCandidate | null = null;
+  private replacementSettlement: RaftStructureReplacementSettlement | null = null;
   private foundationBlocked = false;
   private selectedPiece: RaftBuildPiece = 'foundation';
   private readonly selectedByCategory: Record<RaftBuildCategory, RaftBuildPiece> = {
@@ -214,6 +241,10 @@ export class BuildSystem {
     structureCount: number;
     repairTarget: string | null;
     repairHealth: number;
+    replacementTarget: string | null;
+    replacementFrom: RaftBuildPiece | null;
+    replacementCost: ItemBundle;
+    replacementRefund: ItemBundle;
   } {
     return {
       mode: this.mode,
@@ -238,6 +269,10 @@ export class BuildSystem {
         && this.hoveredStructure.health < RAFT_STRUCTURE_DEFINITIONS[this.hoveredStructure.type].maxHealth
         ? this.hoveredStructure.health
         : 0,
+      replacementTarget: this.mode === 'replace' && this.hoveredStructure ? this.hoveredStructure.id : null,
+      replacementFrom: this.mode === 'replace' && this.hoveredStructure ? this.hoveredStructure.type : null,
+      replacementCost: this.replacementSettlement?.cost ?? {},
+      replacementRefund: this.replacementSettlement?.refund ?? {},
     };
   }
 
@@ -277,12 +312,20 @@ export class BuildSystem {
   }
 
   private updatePreview(): void {
+    this.replacementSettlement = null;
     this.camera.getWorldDirection(this.forward);
     this.inverseRaftRotation.copy(this.raft.group.quaternion).invert();
     this.localOrigin.copy(this.camera.position).sub(this.raft.group.position).applyQuaternion(this.inverseRaftRotation);
     this.localDirection.copy(this.forward).applyQuaternion(this.inverseRaftRotation).normalize();
     this.ray.set(this.localOrigin, this.localDirection);
     this.hoveredStructure = this.structures.findRayTarget(this.ray, 6.2);
+    const replacementCandidate = this.hoveredStructure
+      ? this.createReplacementCandidate(this.hoveredStructure)
+      : null;
+    if (replacementCandidate && this.hoveredStructure) {
+      this.setStructureReplacementPreview(this.hoveredStructure, replacementCandidate);
+      return;
+    }
     if (
       this.hoveredStructure
       && this.hoveredStructure.health < RAFT_STRUCTURE_DEFINITIONS[this.hoveredStructure.type].maxHealth
@@ -342,6 +385,71 @@ export class BuildSystem {
     this.setFoundationPreview(coordinate, mode, hasItems(inventory, cost));
   }
 
+  private createReplacementCandidate(structure: SavedRaftStructure): StructurePlacementCandidate | null {
+    if (this.selectedPiece === 'foundation' || this.selectedPiece === 'reinforcement') return null;
+    const rotation = isEdgeStructure(this.selectedPiece) ? structure.rotation : this.selectedRotation;
+    const candidate: StructurePlacementCandidate = {
+      type: this.selectedPiece,
+      x: structure.x,
+      z: structure.z,
+      level: structure.level,
+      rotation,
+    };
+    if (structurePlacementKey(candidate) !== structurePlacementKey(structure)) return null;
+    if (candidate.type === structure.type && candidate.rotation === structure.rotation) return null;
+    return candidate;
+  }
+
+  private setStructureReplacementPreview(
+    structure: SavedRaftStructure,
+    candidate: StructurePlacementCandidate,
+  ): void {
+    const definition = RAFT_STRUCTURE_DEFINITIONS[candidate.type];
+    const settlement = raftStructureReplacementSettlement(structure.type, candidate.type);
+    this.replacementSettlement = settlement;
+    const blocked = (occupiesDeviceCell(candidate) && this.hasOccupant(candidate)) || this.blocksStructure(candidate);
+    const reason: StructureReplacementReason = blocked ? 'occupied' : this.structures.canReplace(structure.id, candidate);
+    const inventory = useGameStore.getState().inventory;
+    const exchange = reason === 'valid'
+      ? exchangeInventoryBundles(inventory, settlement.cost, settlement.refund, INVENTORY_SLOT_CAPACITY)
+      : { ok: false, inventory, reason: 'missing' as const };
+    const valid = reason === 'valid' && exchange.ok;
+    this.targetCoordinate = { x: structure.x, z: structure.z };
+    this.hoveredTileCoordinate = this.raft.hasTile(structure) ? { x: structure.x, z: structure.z } : null;
+    this.targetStructure = candidate;
+    this.mode = 'replace';
+    this.foundationPreview.visible = false;
+    this.reinforcementPreview.visible = false;
+    this.structurePreview.visible = true;
+    this.structurePreview.scale.setScalar(1.025);
+    this.structures.positionObject(this.structurePreview, this.structures.createCandidate(candidate));
+    this.applyPreviewColor(valid ? this.replaceColor : this.invalidColor, valid ? 0.48 : 0.34);
+
+    if (reason !== 'valid') {
+      useGameStore.getState().setInteraction(replacementReasonLabel(reason), 'build');
+    } else if (!exchange.ok) {
+      useGameStore.getState().setInteraction(
+        exchange.reason === 'target-full'
+          ? '背包没有空间收回替换余料'
+          : `缺少 ${missingCostLabel(settlement.cost, inventory)}`,
+        'build',
+      );
+    } else {
+      const cost = costLabel(settlement.cost);
+      const refund = costLabel(settlement.refund);
+      const settlementLabel = cost
+        ? `消耗 ${cost}${refund ? ` · 返还 ${refund}` : ''}`
+        : refund
+          ? `返还 ${refund} · 仅磨损锤具`
+          : '仅磨损锤具';
+      useGameStore.getState().setInteraction(
+        `替换${RAFT_STRUCTURE_DEFINITIONS[structure.type].shortName}为${definition.shortName} · ${settlementLabel}`,
+        'build',
+      );
+    }
+    this.publishFeedback(valid);
+  }
+
   private updateStructurePreview(): void {
     if (this.selectedPiece === 'foundation' || this.selectedPiece === 'reinforcement') return;
     const structureType = this.selectedPiece;
@@ -367,6 +475,7 @@ export class BuildSystem {
     this.reinforcementPreview.visible = false;
     this.structurePreview.visible = true;
     this.structures.positionObject(this.structurePreview, this.structures.createCandidate(candidate));
+    this.structurePreview.scale.setScalar(1);
     this.applyPreviewColor(reason === 'valid' && affordable ? this.validColor : this.invalidColor, reason === 'valid' && affordable ? 0.54 : 0.34);
     const definition = RAFT_STRUCTURE_DEFINITIONS[candidate.type];
     if (reason !== 'valid') {
@@ -480,6 +589,7 @@ export class BuildSystem {
     this.targetCoordinate = null;
     this.hoveredTileCoordinate = null;
     this.targetStructure = null;
+    this.replacementSettlement = null;
     this.publishFeedback();
   }
 
@@ -509,6 +619,10 @@ export class BuildSystem {
       && this.hoveredStructure.health < RAFT_STRUCTURE_DEFINITIONS[this.hoveredStructure.type].maxHealth
     ) {
       this.performStructureRepair();
+      return;
+    }
+    if (this.mode === 'replace') {
+      this.performStructureReplacement();
       return;
     }
     if (this.selectedPiece === 'reinforcement') {
@@ -622,6 +736,55 @@ export class BuildSystem {
     this.hoveredStructure = { ...result.structure };
     this.updatePreview();
     this.onHammerUsed('repair');
+  }
+
+  private performStructureReplacement(): void {
+    if (!this.hoveredStructure || !this.targetStructure) return;
+    const target = this.structures.getStructure(this.hoveredStructure.id);
+    const candidate = { ...this.targetStructure };
+    if (!target) {
+      this.audio.playDenied();
+      return;
+    }
+    const reason = ((occupiesDeviceCell(candidate) && this.hasOccupant(candidate)) || this.blocksStructure(candidate))
+      ? 'occupied'
+      : this.structures.canReplace(target.id, candidate);
+    if (reason !== 'valid') {
+      this.audio.playDenied();
+      this.showNotice(replacementReasonLabel(reason));
+      return;
+    }
+    const settlement = raftStructureReplacementSettlement(target.type, candidate.type);
+    const store = useGameStore.getState();
+    const exchange = store.exchangeItemBundles(settlement.cost, settlement.refund);
+    if (!exchange.ok) {
+      this.audio.playDenied();
+      this.showNotice(
+        exchange.reason === 'target-full'
+          ? '背包没有空间收回替换余料'
+          : `缺少 ${missingCostLabel(settlement.cost, store.inventory)}`,
+      );
+      return;
+    }
+    const result = this.structures.replace(target.id, candidate);
+    if (!result.replaced || !result.previous) {
+      store.exchangeItemBundles(settlement.refund, settlement.cost);
+      this.audio.playDenied();
+      this.showNotice('替换目标已变化，材料已退回');
+      return;
+    }
+    this.structures.getLocalImpactPosition(result.replaced, this.worldHit);
+    this.raft.localPointToWorld(this.worldHit, this.worldHit);
+    const fibrous = result.previous.type === 'roof' || result.replaced.type === 'roof';
+    this.splashes.spawnReplacement(this.worldHit, fibrous);
+    this.audio.playReplace(this.worldHit, fibrous);
+    this.swing = 0.34;
+    this.showNotice(
+      `${RAFT_STRUCTURE_DEFINITIONS[result.previous.type].shortName}已替换为${RAFT_STRUCTURE_DEFINITIONS[result.replaced.type].shortName}`,
+    );
+    this.hoveredStructure = { ...result.replaced };
+    this.updatePreview();
+    this.onHammerUsed('replace');
   }
 
   private performStructureBuild(): void {
@@ -844,6 +1007,21 @@ export class BuildSystem {
           maxHealth: RAFT_STRUCTURE_DEFINITIONS[this.hoveredStructure.type].maxHealth,
         }
       : null;
+    const replacementSettlement = this.mode === 'replace' ? this.replacementSettlement : null;
+    const replaceTarget = this.mode === 'replace'
+      && this.hoveredStructure
+      && this.targetStructure
+      && replacementSettlement
+      ? {
+          id: this.hoveredStructure.id,
+          from: this.hoveredStructure.type,
+          to: this.targetStructure.type,
+          rotation: this.targetStructure.rotation,
+          level: this.targetStructure.level,
+          cost: replacementSettlement.cost,
+          refund: replacementSettlement.refund,
+        }
+      : null;
     useGameStore.getState().setBuild({
       piece: this.selectedPiece,
       category: raftBuildCategoryForPiece(this.selectedPiece),
@@ -853,6 +1031,7 @@ export class BuildSystem {
       valid,
       structures: this.structures.count,
       repairTarget,
+      replaceTarget,
     });
   }
 

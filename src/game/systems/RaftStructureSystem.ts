@@ -27,6 +27,7 @@ import {
   RAFT_STRUCTURE_DEFINITIONS,
   RAFT_STRUCTURE_LEVEL_HEIGHT,
   canPlaceRaftStructure,
+  canReplaceRaftStructure,
   canRemoveFoundationUnderStructures,
   canRemoveRaftStructure,
   normalizeRaftRotation,
@@ -44,6 +45,7 @@ import {
   type RaftStructureType,
   type SavedRaftStructure,
   type StructurePlacementReason,
+  type StructureReplacementReason,
 } from '../domain/raftStructures';
 import { useGameStore } from '../../state/gameStore';
 import { RAFT_TILE_X, RAFT_TILE_Z, type GridCoordinate, type RaftSystem } from './RaftSystem';
@@ -85,6 +87,12 @@ export interface StructureRepairResult {
   changed: boolean;
   structure: SavedRaftStructure | null;
   repaired: number;
+}
+
+export interface StructureReplacementResult {
+  replaced: SavedRaftStructure | null;
+  previous: SavedRaftStructure | null;
+  reason: StructureReplacementReason;
 }
 
 function bucketKey(part: Pick<StructurePart, 'geometry' | 'material'>): BucketKey {
@@ -326,6 +334,35 @@ export class RaftStructureSystem {
     this.structures.set(id, structure);
     this.rebuildInstances();
     return { ...structure };
+  }
+
+  canReplace(id: string, candidate: StructurePlacementCandidate): StructureReplacementReason {
+    const replaced = this.structures.get(id);
+    if (!replaced) return 'not-found';
+    const next = this.createCandidate(candidate, id);
+    return canReplaceRaftStructure(
+      [...this.structures.values()],
+      this.raft.getTiles(),
+      id,
+      next,
+    );
+  }
+
+  replace(id: string, candidate: StructurePlacementCandidate): StructureReplacementResult {
+    const previous = this.structures.get(id);
+    if (!previous) return { replaced: null, previous: null, reason: 'not-found' };
+    const next = this.createCandidate(candidate, id);
+    const reason = canReplaceRaftStructure(
+      [...this.structures.values()],
+      this.raft.getTiles(),
+      id,
+      next,
+    );
+    if (reason !== 'valid') return { replaced: null, previous: { ...previous }, reason };
+    this.structures.set(id, next);
+    if (this.focusedDoorId === id) this.clearDoorFocus();
+    this.rebuildInstances();
+    return { replaced: { ...next }, previous: { ...previous }, reason };
   }
 
   remove(id: string): StructureRemovalResult {

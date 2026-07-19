@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addItems,
+  exchangeInventoryBundles,
   inventoryStacks,
   itemCount,
   preferredToolOrder,
@@ -25,6 +26,20 @@ describe('inventory domain', () => {
     const result = addItems({ timber: 20 }, { polymer: 3 }, 1);
     expect(result.inventory).toEqual({ timber: 20 });
     expect(result.rejected).toEqual({ polymer: 3 });
+  });
+
+  it('exchanges bundles atomically and keeps the old inventory on refund overflow', () => {
+    expect(exchangeInventoryBundles({ timber: 4, rope: 3 }, { timber: 1, rope: 2 }, { fiber: 2 })).toEqual({
+      ok: true,
+      inventory: { timber: 3, rope: 1, fiber: 2 },
+      reason: 'exchanged',
+    });
+    const full = { timber: 20, rope: 10 };
+    expect(exchangeInventoryBundles(full, { timber: 2, rope: 1 }, { fiber: 2 }, 2)).toEqual({
+      ok: false,
+      inventory: full,
+      reason: 'target-full',
+    });
   });
 
   it('crafts tools by paying the exact recipe cost', () => {

@@ -117,7 +117,7 @@ const salvageSave = {
     inventory: { hook: 1, timber: 2, polymer: 2, rope: 1 },
     toolDurability: { hook: 1 },
     selectedTool: 'hook',
-    navigation: { surface: 'raft', x: 0, z: 1.08 },
+    navigation: { surface: 'raft', x: 0, z: 2.9 },
   },
   raft: {
     ...seededSave.raft,
@@ -763,7 +763,7 @@ const structureVisualSave = {
     ...structureBuildSave.player,
     inventory: { ...structureBuildSave.player.inventory, timber: 45, rope: 23 },
     toolDurability: { ...structureBuildSave.player.toolDurability, hammer: 79 },
-    navigation: { surface: 'raft', x: 0.2, z: 2.9 },
+    navigation: { surface: 'raft', x: 0, z: 1.08 },
   },
   raft: {
     ...structureBuildSave.raft,
@@ -771,7 +771,7 @@ const structureVisualSave = {
       ...structureBuildSave.raft.structures.map((structure) =>
         structure.id === 'showcase-stairs' ? { ...structure, x: 1, z: 1 } : structure,
       ),
-      { id: 'showcase-new-wall', type: 'wall', x: 1, z: -1, level: 0, rotation: 1, health: 110 },
+      { id: 'showcase-new-wall', type: 'wall', x: 0, z: 1, level: 0, rotation: 2, health: 110 },
     ],
   },
 };
@@ -1074,7 +1074,10 @@ async function enterGame(page) {
 async function ensurePointerLock(page) {
   const locked = await page.evaluate(() => document.pointerLockElement === document.querySelector('canvas'));
   if (!locked) {
-    await page.locator('canvas').click({ position: { x: desktopWidth / 2, y: desktopHeight / 2 } });
+    const canvas = page.locator('canvas');
+    const bounds = await canvas.boundingBox();
+    if (!bounds) throw new Error('Cannot restore pointer lock without a canvas bounds');
+    await canvas.click({ position: { x: bounds.width / 2, y: bounds.height / 2 } });
   }
   await waitForRuntime(page, () => {
     const canvas = document.querySelector('canvas');
@@ -1138,6 +1141,46 @@ async function waitForRuntime(page, predicate, timeout = 10_000) {
   }
   if (await page.evaluate(predicate)) return;
   throw new Error(`runtime condition timed out after ${timeout}ms`);
+}
+
+async function aimAtRaftLocalPoint(page, target, iterations = 4) {
+  await waitForRuntime(page, () => {
+    const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.structureDoorAim ?? '{}');
+    return Array.isArray(aim.camera) && Array.isArray(aim.forward);
+  }, 5_000);
+  const total = { x: 0, y: 0 };
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    const correction = await page.evaluate(([targetX, targetY, targetZ]) => {
+      const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.structureDoorAim ?? '{}');
+      const [cameraX, cameraY, cameraZ] = aim.camera;
+      const [forwardX, forwardY, forwardZ] = aim.forward;
+      const deltaX = targetX - cameraX;
+      const deltaY = targetY - cameraY;
+      const deltaZ = targetZ - cameraZ;
+      const distance = Math.hypot(deltaX, deltaY, deltaZ);
+      const desiredYaw = Math.atan2(-deltaX / distance, -deltaZ / distance);
+      const desiredPitch = Math.asin(deltaY / distance);
+      const currentYaw = Math.atan2(-forwardX, -forwardZ);
+      const currentPitch = Math.asin(forwardY);
+      const movementX = Math.atan2(
+        Math.sin(currentYaw - desiredYaw),
+        Math.cos(currentYaw - desiredYaw),
+      ) / 0.00175;
+      const movementY = (currentPitch - desiredPitch) / 0.00155;
+      const movement = new MouseEvent('mousemove');
+      Object.defineProperties(movement, {
+        movementX: { value: movementX },
+        movementY: { value: movementY },
+      });
+      document.dispatchEvent(movement);
+      return { x: movementX, y: movementY };
+    }, target);
+    total.x += correction.x;
+    total.y += correction.y;
+    await page.waitForTimeout(280);
+    if (await page.evaluate(() => document.querySelector('.game-mount')?.dataset.buildMode === 'replace')) break;
+  }
+  return total;
 }
 
 async function installNoticeHistory(page) {
@@ -1902,10 +1945,10 @@ async function captureBuildingStructures() {
   }, 10_000);
   await page.keyboard.press('Digit1');
   try {
-    await page.waitForFunction(() => {
+    await waitForRuntime(page, () => {
       const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.structureDoorAim ?? '{}');
       return Boolean(aim.closestDoor?.center);
-    }, undefined, { timeout: 8_000 });
+    }, 8_000);
   } catch (error) {
     const diagnostics = await page.evaluate(() => {
       const data = document.querySelector('.game-mount')?.dataset;
@@ -2097,23 +2140,23 @@ async function captureBuildingStructures() {
       });
       document.dispatchEvent(movement);
       return { x: movementX, y: movementY };
-    }, [1.44, 0.08, -1.38]);
+    }, [2.88, 0.08, 1.38]);
     wallMovement.x += correction.x;
     wallMovement.y += correction.y;
     await page.waitForTimeout(280);
     if (await page.evaluate(() => {
       const data = document.querySelector('.game-mount')?.dataset;
       return data?.buildMode === 'build'
-        && data?.buildTarget === '1,-1'
-        && data?.buildStructureTarget === 'wall:1,-1:0:1';
+        && data?.buildTarget === '2,1'
+        && data?.buildStructureTarget === 'wall:2,1:0:1';
     })) break;
   }
   console.log(`Building wall aim movement: ${JSON.stringify(wallMovement)}`);
   await waitForRuntime(page, () => {
     const data = document.querySelector('.game-mount')?.dataset;
     return data?.buildMode === 'build'
-      && data?.buildTarget === '1,-1'
-      && data?.buildStructureTarget === 'wall:1,-1:0:1';
+      && data?.buildTarget === '2,1'
+      && data?.buildStructureTarget === 'wall:2,1:0:1';
   }, 8_000);
   await page.mouse.click(viewport.width / 2, viewport.height / 2);
   await waitForRuntime(page, () => {
@@ -2127,7 +2170,7 @@ async function captureBuildingStructures() {
       const data = document.querySelector('.game-mount')?.dataset;
       return data?.buildLevel === '1'
         && data?.buildMode === 'invalid'
-        && data?.buildStructureTarget === 'wall:1,-1:1:1';
+        && data?.buildStructureTarget === 'wall:3,1:1:1';
     }, 5_000);
   } catch (error) {
     const diagnostics = await page.evaluate(() => {
@@ -2147,6 +2190,61 @@ async function captureBuildingStructures() {
   }
   await page.mouse.click(viewport.width / 2, viewport.height / 2);
   await page.waitForTimeout(400);
+  await page.keyboard.press('KeyF');
+  await waitForRuntime(page, () => document.querySelector('.game-mount')?.dataset.buildLevel === '0', 5_000);
+  await page.evaluate(() => {
+    document.querySelector('canvas')?.dispatchEvent(new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaY: 120,
+    }));
+  });
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.buildPiece === 'door'
+      && data?.buildMode === 'replace'
+      && data?.buildReplacementTarget !== 'none';
+  }, 5_000);
+  const replacementPreview = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+    return {
+      target: data?.buildReplacementTarget,
+      from: data?.buildReplacementFrom,
+      cost: JSON.parse(data?.buildReplacementCost ?? '{}'),
+      refund: JSON.parse(data?.buildReplacementRefund ?? '{}'),
+      structures: Number(data?.raftStructureCount),
+      inventory: saved?.player?.inventory,
+      durability: saved?.player?.toolDurability,
+    };
+  });
+  if (
+    replacementPreview.from !== 'wall'
+    || replacementPreview.cost?.timber !== 1
+    || replacementPreview.cost?.rope !== 2
+    || Object.keys(replacementPreview.refund ?? {}).length !== 0
+    || replacementPreview.structures !== 11
+    || replacementPreview.inventory?.timber !== 45
+    || replacementPreview.inventory?.rope !== 23
+    || replacementPreview.durability?.hammer !== 79
+  ) {
+    throw new Error(`Building replacement preview transaction failed: ${JSON.stringify(replacementPreview)}`);
+  }
+  await page.mouse.click(viewport.width / 2, viewport.height / 2);
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
+    const replaced = saved?.raft?.structures?.find((structure) =>
+      structure.type === 'door' && structure.x === 2 && structure.z === 1 && structure.level === 0,
+    );
+    return data?.lastToolWear === 'replace:hammer:78'
+      && data?.raftStructureCount === '11'
+      && data?.buildMode === 'invalid'
+      && data?.buildReplacementTarget === 'none'
+      && replaced?.type === 'door'
+      && replaced?.health === 95
+      && replaced?.open === false;
+  }, 8_000);
   const state = await page.evaluate(() => {
     const mount = document.querySelector('.game-mount');
     const saved = JSON.parse(localStorage.getItem('driftwake.save.v17') ?? 'null');
@@ -2174,33 +2272,39 @@ async function captureBuildingStructures() {
       activeCategories: document.querySelectorAll('.build-palette__categories > .is-active').length,
       visiblePieces: document.querySelectorAll('.build-palette__pieces > button').length,
       doorOpen: saved?.raft?.structures?.find((structure) => structure.id === 'showcase-door')?.open,
+      replacementTarget: mount?.dataset.buildReplacementTarget,
+      replacementFrom: mount?.dataset.buildReplacementFrom,
     };
   });
-  const placedWall = state.savedStructures?.find((structure) =>
-    structure.type === 'wall'
-      && structure.x === 1
-      && structure.z === -1
+  const replacedDoor = state.savedStructures?.find((structure) =>
+    structure.id === replacementPreview.target
+      && structure.type === 'door'
+      && structure.x === 2
+      && structure.z === 1
       && structure.level === 0
       && structure.rotation === 1,
   );
   if (
-    state.piece !== 'wall'
+    state.piece !== 'door'
     || state.category !== 'frame'
     || state.rotation !== '1'
-    || state.level !== '1'
+    || state.level !== '0'
     || state.mode !== 'invalid'
     || state.structureCount !== 11
-    || state.inventory?.timber !== 45
-    || state.inventory?.rope !== 23
-    || state.durability?.hammer !== 79
-    || !placedWall
+    || state.inventory?.timber !== 44
+    || state.inventory?.rope !== 21
+    || state.durability?.hammer !== 78
+    || !replacedDoor
     || state.doorOpen !== false
     || state.savedStructures?.length !== 11
     || !state.notices.some((notice) => notice.includes('木墙已固定'))
+    || !state.notices.some((notice) => notice.includes('木墙已替换为板门'))
     || !state.notices.some((notice) => notice.includes('板门已合拢'))
     || state.activePieces !== 1
     || state.activeCategories !== 1
     || state.visiblePieces !== 3
+    || state.replacementTarget !== 'none'
+    || state.replacementFrom !== 'none'
     || !state.palette
     || state.palette.left < 0
     || state.palette.right > viewport.width
@@ -2210,6 +2314,7 @@ async function captureBuildingStructures() {
     throw new Error(`Building structure transaction failed: ${JSON.stringify(state)}`);
   }
   console.log(`Building selector isolation: ${JSON.stringify(selectionState)}`);
+  console.log(`Building replacement preview: ${JSON.stringify(replacementPreview)}`);
   console.log(`Building structure gate: ${JSON.stringify({ ...state, savedStructures: state.savedStructures.length })}`);
   await context.close();
   if (process.env.CAPTURE_FAST === '1' || buildingPart === 'behavior') return;
@@ -2240,6 +2345,45 @@ async function captureBuildingStructureVisual() {
     },
     10_000,
   );
+  await visual.page.evaluate(() => {
+    document.querySelector('canvas')?.dispatchEvent(new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaY: 120,
+    }));
+  });
+  await ensurePointerLock(visual.page);
+  const replacementAimMovement = await aimAtRaftLocalPoint(visual.page, [0, 1.0464, 2.07]);
+  console.log(`Building replacement visual aim movement: ${JSON.stringify(replacementAimMovement)}`);
+  try {
+    await waitForRuntime(
+      visual.page,
+      () => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        return data?.buildPiece === 'door'
+          && data?.buildMode === 'replace'
+          && data?.buildReplacementTarget !== 'none';
+      },
+      10_000,
+    );
+  } catch (error) {
+    const diagnostics = await visual.page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return {
+        piece: data?.buildPiece,
+        mode: data?.buildMode,
+        target: data?.buildTarget,
+        structureTarget: data?.buildStructureTarget,
+        replacementTarget: data?.buildReplacementTarget,
+        replacementFrom: data?.buildReplacementFrom,
+        structureCount: data?.raftStructureCount,
+        pointerLocked: document.pointerLockElement === document.querySelector('canvas'),
+        simulationActive: data?.simulationActive,
+        aim: JSON.parse(data?.structureDoorAim ?? '{}'),
+      };
+    });
+    throw new Error(`Building replacement visual state failed: ${JSON.stringify(diagnostics)}`, { cause: error });
+  }
   await visual.page.waitForTimeout(500);
   const layout = await visual.page.evaluate(() => {
     const box = (selector) => {
@@ -2262,6 +2406,8 @@ async function captureBuildingStructureVisual() {
       activeCategories: categoryButtons.filter((button) => button.classList.contains('is-active')).length,
       pieceCount: pieceButtons.length,
       activePieces: pieceButtons.filter((button) => button.classList.contains('is-active')).length,
+      replacement: document.querySelector('.game-mount')?.dataset.buildReplacementTarget !== 'none',
+      replacementFrom: document.querySelector('.game-mount')?.dataset.buildReplacementFrom,
       clippedLabels: [...categoryButtons, ...pieceButtons].filter(
         (button) => button.scrollWidth > button.clientWidth || button.scrollHeight > button.clientHeight,
       ).map((button) => button.getAttribute('aria-label')),
@@ -2282,6 +2428,8 @@ async function captureBuildingStructureVisual() {
     || layout.activeCategories !== 1
     || layout.pieceCount !== 3
     || layout.activePieces !== 1
+    || !layout.replacement
+    || layout.replacementFrom !== 'wall'
     || layout.clippedLabels.length > 0
   ) {
     throw new Error(`Building visual layout failed: ${JSON.stringify(layout)}`);

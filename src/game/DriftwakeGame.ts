@@ -96,6 +96,7 @@ type ToolWearAction = HammerAction | 'spear-hit' | 'fishing-catch' | 'axe-hit';
 const TOOL_BREAK_CONTEXT: Record<ToolWearAction, string> = {
   build: '本次扩建已完成',
   repair: '本次修补已完成',
+  replace: '本次替换已完成',
   dismantle: '本次拆除已完成',
   'spear-hit': '本次刺击仍然命中',
   'fishing-catch': '渔获已收入背包',
@@ -890,6 +891,10 @@ export class DriftwakeGame {
       this.mount.dataset.buildHoveredStructure = buildDiagnostics.hoveredStructure ?? 'none';
       this.mount.dataset.buildRepairTarget = buildDiagnostics.repairTarget ?? 'none';
       this.mount.dataset.buildRepairHealth = String(buildDiagnostics.repairHealth);
+      this.mount.dataset.buildReplacementTarget = buildDiagnostics.replacementTarget ?? 'none';
+      this.mount.dataset.buildReplacementFrom = buildDiagnostics.replacementFrom ?? 'none';
+      this.mount.dataset.buildReplacementCost = JSON.stringify(buildDiagnostics.replacementCost);
+      this.mount.dataset.buildReplacementRefund = JSON.stringify(buildDiagnostics.replacementRefund);
       this.mount.dataset.raftStructureCount = String(buildDiagnostics.structureCount);
     }
     this.fishing?.update(simulationSeconds, stepSeconds);

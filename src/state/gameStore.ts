@@ -4,6 +4,7 @@ import {
   ITEM_DEFINITIONS,
   STARTING_INVENTORY,
   addItems,
+  exchangeInventoryBundles,
   itemCount,
   preferredToolOrder,
   removeItems,
@@ -11,6 +12,7 @@ import {
   usedInventorySlots,
   type Inventory,
   type InventoryMutation,
+  type InventoryExchangeResult,
   type ItemBundle,
   type ItemId,
   type SalvageKind,
@@ -113,7 +115,7 @@ export interface BuildFeedback {
   category: RaftBuildCategory;
   rotation: RaftRotation;
   level: number;
-  mode: 'hidden' | 'build' | 'repair' | 'invalid';
+  mode: 'hidden' | 'build' | 'repair' | 'replace' | 'invalid';
   valid: boolean;
   structures: number;
   repairTarget: {
@@ -121,6 +123,15 @@ export interface BuildFeedback {
     type: RaftStructureType;
     health: number;
     maxHealth: number;
+  } | null;
+  replaceTarget: {
+    id: string;
+    from: RaftStructureType;
+    to: RaftStructureType;
+    rotation: RaftRotation;
+    level: number;
+    cost: ItemBundle;
+    refund: ItemBundle;
   } | null;
 }
 
@@ -296,6 +307,7 @@ interface GameState {
   setHookCharge: (hookCharge: number) => void;
   addLoot: (kind: SalvageKind, roll?: number) => ItemBundle;
   addItemBundle: (bundle: ItemBundle) => ItemBundle;
+  exchangeItemBundles: (cost: ItemBundle, refund: ItemBundle) => InventoryExchangeResult;
   receiveItemBundle: (bundle: ItemBundle) => InventoryMutation;
   spendItems: (bundle: ItemBundle) => boolean;
   damageTool: (tool: ToolId, amount?: number) => { remaining: number; broken: boolean };
@@ -425,6 +437,7 @@ function defaultBuild(): BuildFeedback {
     valid: false,
     structures: 0,
     repairTarget: null,
+    replaceTarget: null,
   };
 }
 
@@ -568,6 +581,21 @@ export const useGameStore = create<GameState>((set, get) => ({
       toolDurability: normalizeToolDurability(result.inventory, state.toolDurability),
     });
     return result.accepted;
+  },
+  exchangeItemBundles: (cost, refund) => {
+    const state = get();
+    const result = exchangeInventoryBundles(state.inventory, cost, refund, INVENTORY_SLOT_CAPACITY);
+    if (!result.ok) return result;
+    const selectedTool = itemCount(result.inventory, state.selectedTool) > 0
+      ? state.selectedTool
+      : preferredToolOrder(result.inventory).find((tool) => itemCount(result.inventory, tool) > 0) ?? 'hook';
+    set({
+      inventory: result.inventory,
+      inventorySlots: usedInventorySlots(result.inventory),
+      selectedTool,
+      toolDurability: normalizeToolDurability(result.inventory, state.toolDurability),
+    });
+    return result;
   },
   receiveItemBundle: (bundle) => {
     const state = get();

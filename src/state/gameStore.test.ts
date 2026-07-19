@@ -29,6 +29,17 @@ describe('game store item use', () => {
     expect(state.inventorySlots).toBe(1);
   });
 
+  it('commits a structure replacement exchange as one inventory update', () => {
+    const inventory = { timber: 4, rope: 3 } as const;
+    useGameStore.setState({ inventory, inventorySlots: usedInventorySlots(inventory) });
+    expect(useGameStore.getState().exchangeItemBundles({ timber: 1, rope: 2 }, { fiber: 2 })).toMatchObject({
+      ok: true,
+      reason: 'exchanged',
+      inventory: { timber: 3, rope: 1, fiber: 2 },
+    });
+    expect(useGameStore.getState().inventory).toEqual({ timber: 3, rope: 1, fiber: 2 });
+  });
+
   it('does not consume a supply when all of its positive effects are full', () => {
     const inventory = { emergencyWater: 1 } as const;
     useGameStore.setState({

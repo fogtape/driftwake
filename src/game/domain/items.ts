@@ -484,6 +484,14 @@ export interface InventoryMutation {
   rejected: ItemBundle;
 }
 
+export type InventoryExchangeReason = 'exchanged' | 'missing' | 'target-full';
+
+export interface InventoryExchangeResult {
+  ok: boolean;
+  inventory: Inventory;
+  reason: InventoryExchangeReason;
+}
+
 export interface InventoryStack {
   itemId: ItemId;
   count: number;
@@ -598,6 +606,22 @@ export function removeItems(current: Inventory, bundle: ItemBundle): Inventory |
     else delete inventory[id];
   }
   return inventory;
+}
+
+export function exchangeInventoryBundles(
+  current: Inventory,
+  cost: ItemBundle,
+  refund: ItemBundle,
+  capacity = INVENTORY_SLOT_CAPACITY,
+): InventoryExchangeResult {
+  const original = normalizeInventory(current);
+  const spent = removeItems(original, cost);
+  if (!spent) return { ok: false, inventory: original, reason: 'missing' };
+  const received = addItems(spent, refund, capacity);
+  if (Object.keys(received.rejected).length > 0) {
+    return { ok: false, inventory: original, reason: 'target-full' };
+  }
+  return { ok: true, inventory: received.inventory, reason: 'exchanged' };
 }
 
 export function transferInventoryItem(

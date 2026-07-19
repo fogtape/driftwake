@@ -20,6 +20,7 @@ import {
   PackageOpen,
   PanelTop,
   RadioTower,
+  RefreshCw,
   Sailboat,
   ShipWheel,
   Settings,
@@ -186,11 +187,16 @@ export function Hud({
   const sharkAlert = shark.mode === 'approaching' || shark.mode === 'attacking';
   const fishingActive = fishing.phase === 'hooked';
   const structureRepair = build.repairTarget;
+  const structureReplacement = build.replaceTarget;
   const structureRepairDefinition = structureRepair
     ? RAFT_STRUCTURE_DEFINITIONS[structureRepair.type]
     : null;
   const displayedBuildCost = structureRepairDefinition?.repairCost
+    ?? structureReplacement?.cost
     ?? RAFT_BUILD_PIECE_DEFINITIONS[build.piece].cost;
+  const displayedBuildRefund = structureReplacement?.refund ?? {};
+  const displayedBuildCostEntries = Object.entries(displayedBuildCost) as [keyof Inventory, number][];
+  const displayedBuildRefundEntries = Object.entries(displayedBuildRefund) as [keyof Inventory, number][];
   const visibleBuildPieces = RAFT_BUILD_CATEGORY_DEFINITIONS[build.category].pieces;
   const placedDeviceTypes = island.ashore
     ? []
@@ -439,6 +445,8 @@ export function Hud({
         className={`build-palette ${selectedTool === 'hammer' && !placementDevice ? 'is-visible' : ''} is-${build.mode} ${build.valid ? 'is-valid' : 'is-invalid'}`}
         aria-label={structureRepair && structureRepairDefinition
           ? `修补${structureRepairDefinition.name}，完整度 ${structureRepair.health}/${structureRepair.maxHealth}`
+          : structureReplacement
+            ? `替换${RAFT_STRUCTURE_DEFINITIONS[structureReplacement.from].name}为${RAFT_STRUCTURE_DEFINITIONS[structureReplacement.to].name}`
           : build.piece === 'reinforcement'
             ? `${RAFT_BUILD_PIECE_DEFINITIONS[build.piece].name}，鲨鱼伤害降低百分之五十五`
             : `${RAFT_BUILD_PIECE_DEFINITIONS[build.piece].name}，${build.level + 1}层，朝向${['北', '东', '南', '西'][build.rotation]}，筏上结构 ${build.structures} 件`}
@@ -478,23 +486,42 @@ export function Hud({
           ))}
         </div>
         <div className="build-palette__meta">
-          <strong>{structureRepairDefinition ? `修补${structureRepairDefinition.shortName}` : RAFT_BUILD_PIECE_DEFINITIONS[build.piece].shortName}</strong>
+          <strong>{structureRepairDefinition
+            ? `修补${structureRepairDefinition.shortName}`
+            : structureReplacement
+              ? `${RAFT_STRUCTURE_DEFINITIONS[structureReplacement.from].shortName}→${RAFT_STRUCTURE_DEFINITIONS[structureReplacement.to].shortName}`
+              : RAFT_BUILD_PIECE_DEFINITIONS[build.piece].shortName}</strong>
           <span>
             {structureRepair
               ? <><ShieldAlert size={12} />{structureRepair.health}/{structureRepair.maxHealth}</>
+              : structureReplacement
+                ? <><RefreshCw size={12} />原位<small>{structureReplacement.level + 1}层</small></>
               : build.piece === 'reinforcement'
                 ? <><ShieldCheck size={12} />55%<small>减伤</small></>
                 : <><RotateCw size={12} />{['北', '东', '南', '西'][build.rotation]}<small>{build.level + 1}层</small></>}
           </span>
-          <div aria-label={structureRepair ? '修补成本' : '建造成本'}>
-            {(Object.entries(displayedBuildCost) as [keyof Inventory, number][]).map(([itemId, amount]) => (
+          <div aria-label={structureRepair ? '修补成本' : structureReplacement ? '替换材料净额' : '建造成本'}>
+            {displayedBuildCostEntries.map(([itemId, amount]) => (
               <i className={itemCount(inventory, itemId) < amount ? 'is-missing' : ''} key={itemId}>
                 <ItemIcon itemId={itemId} size={12} />
                 <b>{amount}</b>
               </i>
             ))}
+            {displayedBuildRefundEntries.map(([itemId, amount]) => (
+              <i className="is-refund" key={`refund-${itemId}`}>
+                <ItemIcon itemId={itemId} size={12} />
+                <b>+{amount}</b>
+              </i>
+            ))}
+            {structureReplacement && displayedBuildCostEntries.length === 0 && displayedBuildRefundEntries.length === 0 && (
+              <i className="is-neutral">仅耗锤具</i>
+            )}
           </div>
-          <em>{structureRepair ? `${Math.round((structureRepair.health / structureRepair.maxHealth) * 100)}%` : build.structures}</em>
+          <em>{structureRepair
+            ? `${Math.round((structureRepair.health / structureRepair.maxHealth) * 100)}%`
+            : structureReplacement
+              ? '替换'
+              : build.structures}</em>
         </div>
       </div>
 
