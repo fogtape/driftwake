@@ -107,7 +107,7 @@ export interface DriftwakeSave {
   };
 }
 
-const TOOL_IDS = new Set<ToolId>(['hook', 'hammer', 'spear', 'metalSpear', 'fishingRod', 'axe', 'metalAxe']);
+const TOOL_IDS = new Set<ToolId>(['hook', 'hammer', 'spear', 'metalSpear', 'fishingRod', 'axe', 'metalAxe', 'resonanceFork']);
 
 function finiteInteger(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : fallback;

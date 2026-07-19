@@ -370,6 +370,15 @@ export const ITEM_DEFINITIONS = {
     tone: '#9cc9bf',
     description: '窄长合金矛尖与加固矛柄能把刺击力集中到更小的面积。',
   },
+  resonanceFork: {
+    id: 'resonanceFork',
+    name: '潮鸣震叉',
+    shortName: '潮鸣震叉',
+    category: 'tool',
+    maxStack: 1,
+    tone: '#79d8c8',
+    description: '将盐差电势压入双齿谐振腔，以中距离定向脉冲迫使大型海兽潜退。',
+  },
   fishingRod: {
     id: 'fishingRod',
     name: '纤维钓竿',
@@ -483,7 +492,7 @@ export const ITEM_DEFINITIONS = {
 >;
 
 export type ItemId = keyof typeof ITEM_DEFINITIONS;
-export type ToolId = Extract<ItemId, 'hook' | 'hammer' | 'spear' | 'metalSpear' | 'fishingRod' | 'axe' | 'metalAxe'>;
+export type ToolId = Extract<ItemId, 'hook' | 'hammer' | 'spear' | 'metalSpear' | 'fishingRod' | 'axe' | 'metalAxe' | 'resonanceFork'>;
 export type SalvageKind = 'timber' | 'polymer' | 'fiber' | 'barrel' | 'cache';
 export type Inventory = Partial<Record<ItemId, number>>;
 export type ItemBundle = Partial<Record<ItemId, number>>;
@@ -502,6 +511,7 @@ export function preferredToolOrder(inventory: Inventory): readonly ToolId[] {
     itemCount(inventory, 'metalSpear') > 0 ? 'metalSpear' : 'spear',
     'fishingRod',
     itemCount(inventory, 'metalAxe') > 0 ? 'metalAxe' : 'axe',
+    'resonanceFork',
   ];
 }
 

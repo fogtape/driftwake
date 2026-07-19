@@ -42,6 +42,7 @@ export const RECIPE_CRAFT_SECONDS = {
   hammer: 1.8,
   spear: 2,
   metalSpear: 2.8,
+  resonanceFork: 3.8,
   fishingRod: 2.2,
   axe: 2.3,
   metalAxe: 2.8,

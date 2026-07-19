@@ -1062,6 +1062,16 @@ const sharkCombatWaterSave = {
   },
 };
 
+const sharkResonanceSave = {
+  ...sharkCombatRaftSave,
+  player: {
+    ...sharkCombatRaftSave.player,
+    inventory: { resonanceFork: 1, brineCell: 2, hook: 1, timber: 6, polymer: 4, rope: 2 },
+    toolDurability: { resonanceFork: 32, hook: 48 },
+    selectedTool: 'resonanceFork',
+  },
+};
+
 await mkdir(outputDir, { recursive: true });
 
 const browserRuntime = await launchDriftwakeChromium(chromium, {
@@ -4939,7 +4949,7 @@ async function captureSharkCombat() {
   const runtimeViewport = { width: 512, height: 320, quality: 'low' };
   const stage = process.env.SHARK_COMBAT_STAGE ?? 'all';
   const inputMode = process.env.SHARK_COMBAT_INPUT ?? 'observer';
-  if (!['all', 'visual', 'counter', 'water'].includes(stage)) {
+  if (!['all', 'visual', 'counter', 'resonance', 'water'].includes(stage)) {
     throw new Error(`Unsupported SHARK_COMBAT_STAGE: ${stage}`);
   }
   if (!['mouse', 'observer'].includes(inputMode)) {
@@ -4948,6 +4958,7 @@ async function captureSharkCombat() {
   let visualState = null;
   let counterState = null;
   let waterState = null;
+  let resonanceState = null;
   if (stage === 'all' || stage === 'visual') {
     const visual = await openDesktopPage('shark-combat-visual', {
       seedSave: true,
@@ -5246,7 +5257,279 @@ async function captureSharkCombat() {
       await water.context.close();
     }
   }
-  console.log(`Shark combat rhythm: ${JSON.stringify({ visual: visualState, counter: counterState, water: waterState })}`);
+  if (stage === 'all' || stage === 'resonance') {
+    const resonanceVisualProfile = process.env.RESONANCE_CAPTURE_VISUAL === '1';
+    const resonanceProfile = resonanceVisualProfile ? { ...viewport, quality: 'high' } : runtimeViewport;
+    const resonanceChargeTimeout = resonanceVisualProfile ? 120_000 : 20_000;
+    const resonance = await openDesktopPage('shark-combat-resonance', {
+      seedSave: true,
+      customSave: sharkResonanceSave,
+      ...resonanceProfile,
+    });
+    try {
+      await enterGame(resonance.page);
+      await installNoticeHistory(resonance.page);
+      await waitForRuntime(resonance.page, () => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        return data?.sharkMode === 'approaching';
+      }, 20_000);
+      await aimAtShark(resonance.page, 6, 35);
+
+      await resonance.page.evaluate(() => {
+        document.querySelector('canvas')?.dispatchEvent(new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+        }));
+      });
+      await resonance.page.waitForTimeout(320);
+      await resonance.page.evaluate(() => {
+        document.querySelector('canvas')?.dispatchEvent(new MouseEvent('mouseup', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+        }));
+      });
+      await waitForRuntime(resonance.page, () => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        return data?.resonanceCancelledCount === '1'
+          && data?.resonancePhase !== 'charging'
+          && data?.resonancePhase !== 'ready';
+      }, 3_000);
+      const cancelled = await resonance.page.evaluate(() => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        const saved = JSON.parse(localStorage.getItem('driftwake.save.v18') ?? 'null');
+        return {
+          pulses: Number(data?.resonancePulseCount),
+          cancelled: Number(data?.resonanceCancelledCount),
+          cells: saved?.player?.inventory?.brineCell,
+          durability: saved?.player?.toolDurability?.resonanceFork,
+          lastWear: data?.lastToolWear,
+        };
+      });
+      if (
+        cancelled.pulses !== 0
+        || cancelled.cancelled !== 1
+        || cancelled.cells !== 2
+        || cancelled.durability !== 32
+        || cancelled.lastWear !== 'none'
+      ) {
+        throw new Error(`Resonance early-release transaction gate failed: ${JSON.stringify(cancelled)}`);
+      }
+
+      await ensurePointerLock(resonance.page);
+      await resonance.page.waitForFunction(() => {
+        const phase = document.querySelector('.game-mount')?.dataset.resonancePhase;
+        return phase === 'idle';
+      }, undefined, { polling: 'raf', timeout: 5_000 });
+      await aimAtShark(resonance.page, 3, 35);
+      await resonance.page.evaluate(() => {
+        document.querySelector('canvas')?.dispatchEvent(new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+        }));
+      });
+      try {
+        await resonance.page.waitForFunction(() => {
+          const data = document.querySelector('.game-mount')?.dataset;
+          return data?.resonancePhase === 'ready' && data?.resonanceCharge === '1.000';
+        }, undefined, { polling: 'raf', timeout: resonanceChargeTimeout });
+      } catch (error) {
+        const diagnostic = await resonance.page.evaluate(() => {
+          const data = document.querySelector('.game-mount')?.dataset;
+          const saved = JSON.parse(localStorage.getItem('driftwake.save.v18') ?? 'null');
+          return {
+            phase: data?.resonancePhase,
+            charge: data?.resonanceCharge,
+            equipped: data?.resonanceEquipped,
+            inputEnabled: data?.resonanceInputEnabled,
+            held: data?.resonanceHeld,
+            locked: data?.resonanceLocked,
+            sharkMode: data?.sharkMode,
+            simulationActive: data?.simulationActive,
+            pointerLocked: document.pointerLockElement === document.querySelector('canvas'),
+            selectedTool: saved?.player?.selectedTool,
+            cells: saved?.player?.inventory?.brineCell,
+          };
+        });
+        if (diagnostic.phase !== 'ready' || diagnostic.charge !== '1.000' || diagnostic.locked !== 'true') {
+          throw new Error(`Resonance charge did not complete: ${JSON.stringify(diagnostic)}`, { cause: error });
+        }
+      }
+      let resonanceLocked = false;
+      for (let attempt = 0; attempt < 5 && !resonanceLocked; attempt += 1) {
+        resonanceLocked = await resonance.page.evaluate(() => (
+          document.querySelector('.game-mount')?.dataset.resonanceLocked === 'true'
+        ));
+        if (!resonanceLocked) {
+          await aimAtShark(resonance.page, 1, 35);
+          await resonance.page.waitForTimeout(180);
+        }
+      }
+      resonanceLocked = resonanceLocked || await resonance.page.evaluate(() => (
+        document.querySelector('.game-mount')?.dataset.resonanceLocked === 'true'
+      ));
+      if (!resonanceLocked) {
+        const diagnostic = await resonance.page.evaluate(() => {
+          const data = document.querySelector('.game-mount')?.dataset;
+          const aim = JSON.parse(data?.sharkAim ?? '{}');
+          const delta = Array.isArray(aim.target) && Array.isArray(aim.camera)
+            ? aim.target.map((value, index) => value - aim.camera[index])
+            : [];
+          const distance = delta.length === 3 ? Math.hypot(...delta) : null;
+          const dot = distance && Array.isArray(aim.forward)
+            ? delta.reduce((total, value, index) => total + value * aim.forward[index], 0) / distance
+            : null;
+          return {
+            phase: data?.resonancePhase,
+            charge: data?.resonanceCharge,
+            locked: data?.resonanceLocked,
+            sharkMode: data?.sharkMode,
+            distance,
+            dot,
+            simulationActive: data?.simulationActive,
+            pointerLocked: document.pointerLockElement === document.querySelector('canvas'),
+            selected: document.querySelector('.hotbar-slot.is-active')?.getAttribute('aria-label'),
+          };
+        });
+        throw new Error(`Resonance charge could not reacquire its target: ${JSON.stringify(diagnostic)}`);
+      }
+      const readyState = await resonance.page.evaluate(() => {
+        const mount = document.querySelector('.game-mount');
+        const readout = document.querySelector('.resonance-charge.is-visible.is-ready.is-locked');
+        const crosshair = document.querySelector('.crosshair.is-resonance-ready.is-resonance-lock');
+        const rect = readout?.getBoundingClientRect();
+        return {
+          phase: mount?.dataset.resonancePhase,
+          charge: Number(mount?.dataset.resonanceCharge),
+          locked: mount?.dataset.resonanceLocked,
+          readout: Boolean(readout),
+          crosshair: Boolean(crosshair),
+          label: readout?.textContent?.replace(/\s+/g, ' ').trim(),
+          rect: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null,
+          viewport: { width: innerWidth, height: innerHeight },
+        };
+      });
+      if (
+        readyState.phase !== 'ready'
+        || readyState.charge !== 1
+        || readyState.locked !== 'true'
+        || !readyState.readout
+        || !readyState.crosshair
+        || !readyState.label?.includes('脉冲就绪')
+        || !readyState.rect
+        || readyState.rect.left < 0
+        || readyState.rect.top < 0
+        || readyState.rect.right > readyState.viewport.width
+        || readyState.rect.bottom > readyState.viewport.height
+      ) {
+        throw new Error(`Resonance charged visual gate failed: ${JSON.stringify(readyState)}`);
+      }
+      const compositedFrame = await inspectCanvasPixels(resonance.page, 'resonance-fork-ready');
+      if (process.env.CAPTURE_FAST !== '1') {
+        const screenshotPath = new URL('resonance-fork-ready-desktop.png', outputDir).pathname;
+        if (compositedFrame) await writeFile(screenshotPath, Buffer.from(compositedFrame, 'base64'));
+        else await captureCompositedPage(resonance.page, screenshotPath);
+      }
+      const damageBeforePulse = await resonance.page.evaluate(() => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        return {
+          foundation: Number(data?.sharkFoundationDamageCount),
+          structure: Number(data?.sharkStructureDamageCount),
+          net: Number(data?.sharkCollectionNetDamageCount),
+        };
+      });
+      await ensurePointerLock(resonance.page);
+      const postCapturePhase = await resonance.page.evaluate(() => (
+        document.querySelector('.game-mount')?.dataset.resonancePhase
+      ));
+      if (postCapturePhase !== 'ready') {
+        await waitForRuntime(resonance.page, () => {
+          const mode = document.querySelector('.game-mount')?.dataset.sharkMode;
+          return mode === 'approaching' || mode === 'attacking';
+        }, 8_000);
+        await resonance.page.evaluate(() => {
+          document.querySelector('canvas')?.dispatchEvent(new MouseEvent('mousedown', {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+          }));
+        });
+        await resonance.page.waitForFunction(() => (
+          document.querySelector('.game-mount')?.dataset.resonancePhase === 'ready'
+        ), undefined, { polling: 'raf', timeout: resonanceChargeTimeout });
+      }
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const locked = await resonance.page.evaluate(() => (
+          document.querySelector('.game-mount')?.dataset.resonanceLocked === 'true'
+        ));
+        if (locked) break;
+        await aimAtShark(resonance.page, 1, 35);
+        await resonance.page.waitForTimeout(120);
+      }
+      await waitForRuntime(resonance.page, () => (
+        document.querySelector('.game-mount')?.dataset.resonanceLocked === 'true'
+      ), 3_000);
+      await resonance.page.evaluate(() => {
+        document.querySelector('canvas')?.dispatchEvent(new MouseEvent('mouseup', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+        }));
+      });
+      await waitForRuntime(resonance.page, () => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        return data?.sharkMode === 'retreating'
+          && data?.resonancePulseCount === '1'
+          && data?.sharkResonancePulseCount === '1';
+      }, 8_000);
+      resonanceState = await resonance.page.evaluate(() => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        const saved = JSON.parse(localStorage.getItem('driftwake.save.v18') ?? 'null');
+        return {
+          mode: data?.sharkMode,
+          phase: data?.sharkAttackPhase,
+          health: Number(data?.sharkHealth),
+          pulses: Number(data?.resonancePulseCount),
+          sharkPulses: Number(data?.sharkResonancePulseCount),
+          misses: Number(data?.resonanceMissCount),
+          cancelled: Number(data?.resonanceCancelledCount),
+          cells: saved?.player?.inventory?.brineCell,
+          durability: saved?.player?.toolDurability?.resonanceFork,
+          lastWear: data?.lastToolWear,
+          foundationDamage: Number(data?.sharkFoundationDamageCount),
+          structureDamage: Number(data?.sharkStructureDamageCount),
+          netDamage: Number(data?.sharkCollectionNetDamageCount),
+          notices: globalThis.__driftwakeCaptureNotices ?? [],
+        };
+      });
+      resonanceState.readyState = readyState;
+      resonanceState.damageBeforePulse = damageBeforePulse;
+      if (
+        resonanceState.mode !== 'retreating'
+        || resonanceState.phase !== 'recovery'
+        || resonanceState.health !== 58
+        || resonanceState.pulses !== 1
+        || resonanceState.sharkPulses !== 1
+        || resonanceState.misses !== 0
+        || resonanceState.cancelled !== 1
+        || resonanceState.cells !== 1
+        || resonanceState.durability !== 31
+        || resonanceState.lastWear !== 'resonance-pulse:resonanceFork:31'
+        || resonanceState.foundationDamage !== damageBeforePulse.foundation
+        || resonanceState.structureDamage !== damageBeforePulse.structure
+        || resonanceState.netDamage !== damageBeforePulse.net
+        || !resonanceState.notices.some((notice) => notice.includes('潮鸣脉冲'))
+      ) {
+        throw new Error(`Resonance pulse combat gate failed: ${JSON.stringify(resonanceState)}`);
+      }
+    } finally {
+      await resonance.page.mouse.up().catch(() => undefined);
+      await resonance.context.close();
+    }
+  }
+  console.log(`Shark combat rhythm: ${JSON.stringify({ visual: visualState, counter: counterState, resonance: resonanceState, water: waterState })}`);
 }
 
 async function killSharkAndFocusCarcass(page, label) {

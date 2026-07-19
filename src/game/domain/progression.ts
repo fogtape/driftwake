@@ -23,6 +23,11 @@ export const RESEARCH_PROJECTS = {
     description: '窄长金属矛尖集中穿透力，更快驱离深潮鲨。',
     requirements: ['timber', 'rope', 'metalIngot'],
   },
+  resonanceFork: {
+    name: '潮鸣震叉',
+    description: '相位板将盐差放电收束到双齿谐振腔，用有限电荷换取中距离驱离窗口。',
+    requirements: ['metalIngot', 'hinge', 'signalBoard'],
+  },
   metalAxe: {
     name: '潮铸宽刃斧',
     description: '一体宽刃能在每次挥砍时造成双倍切入。',

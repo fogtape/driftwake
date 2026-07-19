@@ -1332,6 +1332,93 @@ export class AudioSystem {
     this.noiseBurst(0.08, 2100, 0.06, 'bandpass');
   }
 
+  playResonanceCharge(stage: number): void {
+    if (!this.context || !this.effects) return;
+    const step = Math.max(0, Math.min(3, Math.floor(stage)));
+    const now = this.context.currentTime;
+    const base = [164, 219, 293, 392][step];
+    [1, 1.505].forEach((ratio, index) => {
+      const oscillator = this.context!.createOscillator();
+      const filter = this.context!.createBiquadFilter();
+      const gain = this.context!.createGain();
+      oscillator.type = index === 0 ? 'sine' : 'triangle';
+      oscillator.frequency.setValueAtTime(base * ratio, now);
+      oscillator.frequency.exponentialRampToValueAtTime(base * ratio * 1.08, now + 0.16);
+      filter.type = 'bandpass';
+      filter.frequency.value = base * ratio * 2.1;
+      filter.Q.value = 1.8;
+      gain.gain.setValueAtTime(index === 0 ? 0.036 : 0.018, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+      oscillator.connect(filter).connect(gain).connect(this.effects!);
+      oscillator.start(now);
+      oscillator.stop(now + 0.19);
+    });
+    this.noiseBurstTo(0.055, 1280 + step * 360, 0.022, 'bandpass', this.effects);
+  }
+
+  playResonanceReady(): void {
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    [438, 444].forEach((frequency) => {
+      const oscillator = this.context!.createOscillator();
+      const gain = this.context!.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.031, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+      oscillator.connect(gain).connect(this.effects!);
+      oscillator.start(now);
+      oscillator.stop(now + 0.31);
+    });
+  }
+
+  playResonanceAbort(): void {
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(224, now);
+    oscillator.frequency.exponentialRampToValueAtTime(92, now + 0.14);
+    gain.gain.setValueAtTime(0.025, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+    oscillator.connect(gain).connect(this.effects);
+    oscillator.start(now);
+    oscillator.stop(now + 0.16);
+  }
+
+  playResonancePulse(hit: boolean): void {
+    if (!this.context || !this.effects) return;
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const sub = this.context.createOscillator();
+    const filter = this.context.createBiquadFilter();
+    const gain = this.context.createGain();
+    const subGain = this.context.createGain();
+    oscillator.type = 'sawtooth';
+    oscillator.frequency.setValueAtTime(hit ? 420 : 310, now);
+    oscillator.frequency.exponentialRampToValueAtTime(hit ? 58 : 92, now + 0.42);
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(hit ? 82 : 116, now);
+    sub.frequency.exponentialRampToValueAtTime(41, now + 0.46);
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(920, now);
+    filter.frequency.exponentialRampToValueAtTime(185, now + 0.4);
+    filter.Q.value = 0.82;
+    gain.gain.setValueAtTime(hit ? 0.075 : 0.04, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.44);
+    subGain.gain.setValueAtTime(hit ? 0.07 : 0.035, now);
+    subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.48);
+    oscillator.connect(filter).connect(gain).connect(this.effects);
+    sub.connect(subGain).connect(this.effects);
+    oscillator.start(now);
+    sub.start(now);
+    oscillator.stop(now + 0.45);
+    sub.stop(now + 0.49);
+    this.noiseBurstTo(0.3, hit ? 520 : 760, hit ? 0.1 : 0.055, 'lowpass', this.effects);
+    if (hit) this.noiseBurstTo(0.24, 360, 0.095, 'lowpass', this.creatures);
+  }
+
   playSharkWarning(): void {
     if (!this.context || !this.creatures) return;
     const now = this.context.currentTime;

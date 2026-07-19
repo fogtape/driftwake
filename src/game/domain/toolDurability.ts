@@ -7,6 +7,7 @@ export const TOOL_MAX_DURABILITY: Record<ToolId, number> = {
   hammer: 80,
   spear: 45,
   metalSpear: 90,
+  resonanceFork: 32,
   fishingRod: 55,
   axe: 60,
   metalAxe: 120,

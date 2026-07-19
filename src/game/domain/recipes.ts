@@ -233,6 +233,15 @@ export const RECIPES = {
     description: '替换木制矛尖并加固绑缚，让每次命中造成更深的创口。',
     requiresResearch: true,
   },
+  resonanceFork: {
+    id: 'resonanceFork',
+    name: '潮鸣震叉',
+    category: 'tool',
+    output: { resonanceFork: 1 },
+    cost: { metalIngot: 2, signalBoard: 1, hinge: 1, rope: 1 },
+    description: '将调谐板、密封转轴和双股合金叉齿组成可蓄能的定向震叉，发射需另备盐差电池。',
+    requiresResearch: true,
+  },
   fishingRod: {
     id: 'fishingRod',
     name: '纤维钓竿',

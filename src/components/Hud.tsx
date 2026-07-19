@@ -1,7 +1,9 @@
 import {
   Anchor,
+  AudioWaveform,
   Anvil,
   Bird,
+  BatteryCharging,
   BrickWall,
   ChartNoAxesGantt,
   Compass,
@@ -59,6 +61,7 @@ import type {
   NavigationFeedback,
   PlantingFeedback,
   ProgressionFeedback,
+  ResonanceForkFeedback,
   PlayerFeedback,
   RaftFeedback,
   ReefFeedback,
@@ -81,6 +84,7 @@ interface HudProps {
   survival: { health: number; thirst: number; hunger: number; oxygen: number };
   player: PlayerFeedback;
   fishing: FishingFeedback;
+  resonanceFork: ResonanceForkFeedback;
   shark: SharkFeedback;
   raft: RaftFeedback;
   build: BuildFeedback;
@@ -163,6 +167,7 @@ export function Hud({
   survival,
   player,
   fishing,
+  resonanceFork,
   shark,
   raft,
   build,
@@ -189,6 +194,16 @@ export function Hud({
   const sharkCarcass = shark.mode === 'carcass';
   const sharkWindup = shark.mode === 'attacking' && shark.attackPhase === 'windup';
   const sharkCounter = shark.counterWindow && (selectedTool === 'spear' || selectedTool === 'metalSpear');
+  const resonanceSelected = selectedTool === 'resonanceFork';
+  const resonanceVisible = resonanceSelected && pointerLocked;
+  const resonanceReady = resonanceFork.phase === 'ready';
+  const resonanceLabel = resonanceFork.phase === 'charging'
+    ? `调谐 ${Math.round(resonanceFork.charge * 100)}%`
+    : resonanceReady
+      ? resonanceFork.locked ? '脉冲就绪' : '等待锁定'
+      : resonanceFork.phase === 'cooldown'
+        ? '腔体回稳'
+        : resonanceFork.locked ? '目标同调' : '寻找频线';
   const sharkAttackLabel = sharkWindup
     ? `${shark.target === 'player' ? '深潮鲨翻身蓄势' : shark.target === 'collectionNet' ? '网床下方蓄势' : shark.target === 'structure' ? '暴露结构外侧蓄势' : '筏缘外侧蓄势'} · ${shark.secondsToImpact.toFixed(1)}s`
     : shark.mode === 'attacking' && shark.attackPhase === 'recovery'
@@ -397,7 +412,7 @@ export function Hud({
         </button>
       </div>
 
-      <div className={`shark-warning ${stormAlert ? 'has-weather-alert' : ''} ${sharkCarcass ? 'is-harvest' : ''} ${sharkWindup ? 'is-windup' : ''} ${sharkCounter ? 'is-counter' : ''} ${sharkAlert || sharkCarcass ? 'is-visible' : ''}`} aria-live="polite">
+      <div className={`shark-warning ${stormAlert ? 'has-weather-alert' : ''} ${sharkCarcass ? 'is-harvest' : ''} ${sharkWindup ? 'is-windup' : ''} ${sharkCounter ? 'is-counter' : ''} ${resonanceSelected && resonanceFork.locked ? 'is-resonance-lock' : ''} ${sharkAlert || sharkCarcass ? 'is-visible' : ''}`} aria-live="polite">
         {sharkCarcass ? <Scissors size={18} /> : <TriangleAlert size={18} />}
         <div>
           <span>{sharkCarcass
@@ -437,7 +452,7 @@ export function Hud({
             <button
               className={`hotbar-slot ${selectedTool === tool ? 'is-active' : ''} ${unlocked ? '' : 'is-locked'} ${durabilityRatio <= 0.2 && unlocked ? 'is-worn' : ''}`}
               type="button"
-              title={unlocked ? `${ITEM_DEFINITIONS[tool].name} · 耐久 ${remainingDurability}/${TOOL_MAX_DURABILITY[tool]}` : '尚未制作'}
+              title={unlocked ? `${ITEM_DEFINITIONS[tool].name} · 耐久 ${remainingDurability}/${TOOL_MAX_DURABILITY[tool]}${tool === 'resonanceFork' ? ` · 盐电池 ${itemCount(inventory, 'brineCell')}` : ''}` : '尚未制作'}
               aria-label={unlocked ? `${ITEM_DEFINITIONS[tool].name}，耐久 ${remainingDurability}` : `${ITEM_DEFINITIONS[tool].name}，尚未制作`}
               disabled={!unlocked}
               onClick={() => onSelectTool(tool)}
@@ -538,12 +553,24 @@ export function Hud({
         </div>
       </div>
 
-      <div className={`crosshair ${fishing.phase === 'nibble' ? 'is-nibble' : ''} ${sharkAlert && (selectedTool === 'spear' || selectedTool === 'metalSpear') ? 'is-danger' : ''} ${sharkCounter ? 'is-counter' : ''}`} aria-hidden="true">
+      <div className={`crosshair ${fishing.phase === 'nibble' ? 'is-nibble' : ''} ${sharkAlert && (selectedTool === 'spear' || selectedTool === 'metalSpear') ? 'is-danger' : ''} ${sharkCounter ? 'is-counter' : ''} ${resonanceSelected ? 'is-resonance' : ''} ${resonanceFork.locked ? 'is-resonance-lock' : ''} ${resonanceReady ? 'is-resonance-ready' : ''}`} aria-hidden="true">
         <i /><i /><i /><i />
       </div>
 
       <div className={`hook-charge ${hookCharge > 0 ? 'is-active' : ''}`} aria-hidden={hookCharge <= 0}>
         <span style={{ transform: `scaleX(${hookCharge})` }} />
+      </div>
+
+      <div
+        className={`resonance-charge ${resonanceVisible ? 'is-visible' : ''} ${resonanceFork.locked ? 'is-locked' : ''} ${resonanceReady ? 'is-ready' : ''}`}
+        aria-label={`潮鸣震叉 ${resonanceLabel} 盐差电池 ${itemCount(inventory, 'brineCell')}`}
+      >
+        <div>
+          <AudioWaveform size={13} />
+          <span>{resonanceLabel}</span>
+          <em><BatteryCharging size={12} />{itemCount(inventory, 'brineCell')}</em>
+        </div>
+        <i><b style={{ transform: `scaleX(${resonanceFork.charge})` }} /></i>
       </div>
 
       <div className={`fishing-fight ${fishingActive ? 'is-visible' : ''}`} aria-hidden={!fishingActive}>

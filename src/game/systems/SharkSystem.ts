@@ -46,6 +46,7 @@ import {
   type SharkAttackSample,
   type SharkLifecycle,
 } from '../domain/shark';
+import { RESONANCE_DAMAGE, isResonanceTarget } from '../domain/resonanceFork';
 
 const SHARK_CARCASS_FOCUS_RADIUS = 1.38;
 const SHARK_CARCASS_HOLD_REACH = SHARK_CARCASS_HARVEST_REACH + 0.9;
@@ -87,6 +88,7 @@ export interface SharkDiagnostics {
   playerDamageEvents: number;
   missedPlayerBites: number;
   timedCounterEvents: number;
+  resonancePulseEvents: number;
   recoverySeconds: number;
   worldPosition: { x: number; y: number; z: number };
 }
@@ -154,6 +156,7 @@ export class SharkSystem {
   private playerDamageEvents = 0;
   private missedPlayerBites = 0;
   private timedCounterEvents = 0;
+  private resonancePulseEvents = 0;
   private feedbackTimer = 0;
   private noticeTimer: number | null = null;
   private lastRaftTargetKind: SharkDiagnostics['lastRaftTargetKind'] = 'none';
@@ -288,6 +291,33 @@ export class SharkSystem {
     return true;
   }
 
+  canReceiveResonancePulse(camera: PerspectiveCamera): boolean {
+    camera.getWorldPosition(this.cameraWorld);
+    this.strikeVector.copy(this.model.position).sub(this.cameraWorld);
+    const distance = this.strikeVector.length();
+    if (distance > 0) this.strikeVector.divideScalar(distance);
+    camera.getWorldDirection(this.cameraForward);
+    return isResonanceTarget({
+      active: this.lifecycle === 'active',
+      visible: this.model.visible,
+      mode: this.mode,
+      distance,
+      alignment: distance > 0 ? this.cameraForward.dot(this.strikeVector) : -1,
+    });
+  }
+
+  receiveResonancePulse(camera: PerspectiveCamera, damage = RESONANCE_DAMAGE): boolean {
+    if (!this.canReceiveResonancePulse(camera)) return false;
+    this.health = Math.max(0, this.health - Math.max(0, damage));
+    this.resonancePulseEvents += 1;
+    this.splashes.spawnResonancePulse(this.model.position);
+    this.showNotice(this.health <= 0 ? '潮鸣脉冲压低了鲨鳃' : '潮鸣脉冲迫使深潮鲨潜退');
+    if (this.health <= 0) this.beginDefeat();
+    else this.beginRetreat();
+    this.publishFeedback();
+    return true;
+  }
+
   getDiagnostics(): SharkDiagnostics {
     return {
       targetKind: this.targetingPlayer
@@ -325,6 +355,7 @@ export class SharkSystem {
       playerDamageEvents: this.playerDamageEvents,
       missedPlayerBites: this.missedPlayerBites,
       timedCounterEvents: this.timedCounterEvents,
+      resonancePulseEvents: this.resonancePulseEvents,
       recoverySeconds: this.lifecycle === 'active' && this.mode === 'retreating'
         ? Math.max(0, 6.2 - this.phaseTime)
         : 0,

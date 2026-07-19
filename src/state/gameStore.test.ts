@@ -138,7 +138,7 @@ describe('game store item use', () => {
     expect(state.selectedTool).toBe('hammer');
   });
 
-  it.each<ToolId>(['hammer', 'spear', 'metalSpear', 'fishingRod', 'axe', 'metalAxe'])(
+  it.each<ToolId>(['hammer', 'spear', 'metalSpear', 'fishingRod', 'axe', 'metalAxe', 'resonanceFork'])(
     'atomically removes a broken %s and selects an owned fallback',
     (tool) => {
       const inventory = { hook: 1, [tool]: 1 };

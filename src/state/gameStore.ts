@@ -91,6 +91,13 @@ export interface FishingFeedback {
   progress: number;
 }
 
+export interface ResonanceForkFeedback {
+  phase: 'idle' | 'charging' | 'ready' | 'cooldown';
+  charge: number;
+  locked: boolean;
+  pulseEvents: number;
+}
+
 export interface SharkFeedback {
   mode: SharkMode;
   threat: number;
@@ -282,6 +289,7 @@ interface GameState {
   crafting: CraftingQueueState;
   player: PlayerFeedback;
   fishing: FishingFeedback;
+  resonanceFork: ResonanceForkFeedback;
   shark: SharkFeedback;
   raft: RaftFeedback;
   build: BuildFeedback;
@@ -332,6 +340,7 @@ interface GameState {
   recoverPlayer: () => boolean;
   setPlayer: (feedback: PlayerFeedback) => void;
   setFishing: (feedback: Partial<FishingFeedback>) => void;
+  setResonanceFork: (feedback: ResonanceForkFeedback) => void;
   setShark: (feedback: Partial<SharkFeedback>) => void;
   setRaft: (feedback: RaftFeedback) => void;
   setBuild: (feedback: BuildFeedback) => void;
@@ -358,6 +367,10 @@ interface GameState {
 
 function defaultFishing(): FishingFeedback {
   return { phase: 'idle', tension: 0, progress: 0 };
+}
+
+function defaultResonanceFork(): ResonanceForkFeedback {
+  return { phase: 'idle', charge: 0, locked: false, pulseEvents: 0 };
 }
 
 function defaultShark(): SharkFeedback {
@@ -513,6 +526,7 @@ function createFailurePatch(
     storage: null,
     hookCharge: 0,
     fishing: defaultFishing(),
+    resonanceFork: defaultResonanceFork(),
     interaction: null,
     interactionOwner: null,
     notice: null,
@@ -543,6 +557,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   crafting: createDefaultCraftingQueue(),
   player: defaultPlayer(),
   fishing: defaultFishing(),
+  resonanceFork: defaultResonanceFork(),
   shark: defaultShark(),
   raft: { tiles: 9, damagedTiles: 0, averageIntegrity: 100 },
   build: defaultBuild(),
@@ -798,6 +813,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       survival: { ...RECOVERY_SURVIVAL },
       player: defaultPlayer(),
       fishing: defaultFishing(),
+      resonanceFork: defaultResonanceFork(),
       shark: defaultShark(),
       hookCharge: 0,
       pointerLocked: false,
@@ -829,6 +845,15 @@ export const useGameStore = create<GameState>((set, get) => ({
         ? state
         : { fishing };
     }),
+  setResonanceFork: (resonanceFork) =>
+    set((state) => (
+      state.resonanceFork.phase === resonanceFork.phase
+      && state.resonanceFork.charge === resonanceFork.charge
+      && state.resonanceFork.locked === resonanceFork.locked
+      && state.resonanceFork.pulseEvents === resonanceFork.pulseEvents
+        ? state
+        : { resonanceFork }
+    )),
   setShark: (feedback) =>
     set((state) => {
       const shark = { ...state.shark, ...feedback };
@@ -918,6 +943,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       selectedTool: snapshot.selectedTool,
       playSeconds: snapshot.playSeconds,
       fishing: defaultFishing(),
+      resonanceFork: defaultResonanceFork(),
       shark: defaultShark(),
       player: defaultPlayer(),
       navigation: defaultNavigation(),

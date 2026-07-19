@@ -51,6 +51,7 @@ export function App() {
   const crafting = useGameStore((state) => state.crafting);
   const player = useGameStore((state) => state.player);
   const fishing = useGameStore((state) => state.fishing);
+  const resonanceFork = useGameStore((state) => state.resonanceFork);
   const shark = useGameStore((state) => state.shark);
   const raft = useGameStore((state) => state.raft);
   const build = useGameStore((state) => state.build);
@@ -324,6 +325,7 @@ export function App() {
         survival={survival}
         player={player}
         fishing={fishing}
+        resonanceFork={resonanceFork}
         shark={shark}
         raft={raft}
         build={build}

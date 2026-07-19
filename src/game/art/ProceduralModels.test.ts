@@ -10,6 +10,7 @@ import {
   createHammerModel,
   createHarvestNodeModel,
   createPurifierModel,
+  createResonanceForkModel,
   createSharkModel,
   createSharkLootDropModel,
   createSpearModel,
@@ -131,15 +132,18 @@ describe('procedural model assets', () => {
       createSpearModel(materials),
       createFishingRodModel(materials),
       createAxeModel(materials),
+      createResonanceForkModel(materials),
     ];
     const meshCounts = tools.map((tool) => meshStats(tool).meshes);
     expect(meshCounts[0]).toBeGreaterThanOrEqual(9);
     expect(meshCounts[1]).toBeGreaterThanOrEqual(7);
     expect(meshCounts[2]).toBeGreaterThanOrEqual(4);
     expect(meshCounts[3]).toBeGreaterThanOrEqual(4);
+    expect(meshCounts[4]).toBeGreaterThanOrEqual(22);
     expect(renderedPartCount(tools[3])).toBeGreaterThanOrEqual(9);
     expect(meshStats(createSpearModel(materials, true)).meshes).toBeGreaterThan(meshCounts[1]);
     expect(meshStats(createAxeModel(materials, true)).meshes).toBeGreaterThan(meshCounts[3]);
+    expect(createResonanceForkModel(materials).userData.resonanceVisuals.chargeRings).toHaveLength(3);
   }, 15_000);
 
   it('builds readable purifier and grill assemblies with animated state references', () => {

@@ -42,6 +42,23 @@ describe('save schema', () => {
     expect(createDefaultRaftTiles()).toHaveLength(9);
   });
 
+  it('preserves a crafted resonance fork and its bounded durability in v18 saves', () => {
+    const save = sanitizeSave({
+      version: SAVE_VERSION,
+      player: {
+        inventory: { resonanceFork: 1, brineCell: 3 },
+        toolDurability: { resonanceFork: 19 },
+        selectedTool: 'resonanceFork',
+        survival: {},
+        playSeconds: 0,
+      },
+      raft: { tiles: createDefaultRaftTiles() },
+    });
+    expect(save?.player.inventory).toMatchObject({ resonanceFork: 1, brineCell: 3 });
+    expect(save?.player.toolDurability).toEqual({ resonanceFork: 19 });
+    expect(save?.player.selectedTool).toBe('resonanceFork');
+  });
+
   it('keeps a broken hook absent so the replacement recipe remains meaningful', () => {
     const save = sanitizeSave({
       version: SAVE_VERSION,

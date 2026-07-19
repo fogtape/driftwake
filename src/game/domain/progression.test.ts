@@ -42,6 +42,9 @@ describe('research progression', () => {
     expect(canLearnProject(knowledge, 'receiverKit')).toBe(true);
     expect(canLearnProject(knowledge, 'antennaKit')).toBe(true);
     expect(canLearnProject(knowledge, 'brineCell')).toBe(true);
+    expect(canLearnProject(knowledge, 'resonanceFork')).toBe(false);
+    knowledge = { ...knowledge, ...addResearchSample(knowledge, 'hinge') };
+    expect(canLearnProject(knowledge, 'resonanceFork')).toBe(true);
   });
 
   it('dries separately timed bricks without advancing newly added bricks', () => {

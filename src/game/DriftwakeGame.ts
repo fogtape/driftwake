@@ -61,6 +61,7 @@ import { RaftStructureSystem } from './systems/RaftStructureSystem';
 import { SalvageSystem } from './systems/SalvageSystem';
 import { SharkSystem } from './systems/SharkSystem';
 import { SpearSystem } from './systems/SpearSystem';
+import { ResonanceForkSystem, type ResonancePulseSettlement } from './systems/ResonanceForkSystem';
 import { SplashSystem } from './systems/SplashSystem';
 import { StructureCollapseSystem } from './systems/StructureCollapseSystem';
 import { UnderwaterSystem } from './systems/UnderwaterSystem';
@@ -92,7 +93,7 @@ import {
 } from './domain/survival';
 
 const CRAFTING_TICK_SECONDS = 0.1;
-type ToolWearAction = HammerAction | 'spear-hit' | 'fishing-catch' | 'axe-hit';
+type ToolWearAction = HammerAction | 'spear-hit' | 'resonance-pulse' | 'fishing-catch' | 'axe-hit';
 
 const TOOL_BREAK_CONTEXT: Record<ToolWearAction, string> = {
   build: '本次扩建已完成',
@@ -100,6 +101,7 @@ const TOOL_BREAK_CONTEXT: Record<ToolWearAction, string> = {
   replace: '本次替换已完成',
   dismantle: '本次拆除已完成',
   'spear-hit': '本次刺击仍然命中',
+  'resonance-pulse': '本次脉冲仍然完成',
   'fishing-catch': '渔获已收入背包',
   'axe-hit': '本次砍击仍然生效',
 };
@@ -160,6 +162,7 @@ export class DriftwakeGame {
   private fishing: FishingSystem | null = null;
   private shark: SharkSystem | null = null;
   private spear: SpearSystem | null = null;
+  private resonanceFork: ResonanceForkSystem | null = null;
   private splashes: SplashSystem | null = null;
   private structureCollapses: StructureCollapseSystem | null = null;
   private island: IslandSystem | null = null;
@@ -283,6 +286,12 @@ export class DriftwakeGame {
     this.mount.dataset.buildTarget = 'none';
     this.mount.dataset.buildHovered = 'none';
     this.mount.dataset.axeAim = '{}';
+    this.mount.dataset.resonancePhase = 'idle';
+    this.mount.dataset.resonanceCharge = '0';
+    this.mount.dataset.resonanceLocked = 'false';
+    this.mount.dataset.resonancePulseCount = '0';
+    this.mount.dataset.resonanceMissCount = '0';
+    this.mount.dataset.resonanceCancelledCount = '0';
     this.audio.setMix(useGameStore.getState().audioMix);
     this.syncAudioFocusMuted();
     this.setQuality(useGameStore.getState().quality);
@@ -573,6 +582,17 @@ export class DriftwakeGame {
         (upgraded) => this.applyToolWear(upgraded ? 'metalSpear' : 'spear', 'spear-hit'),
         () => this.shark?.isCounterWindowOpen() ?? false,
       );
+      this.resonanceFork = new ResonanceForkSystem(
+        this.renderer,
+        this.camera,
+        this.materials,
+        this.audio,
+        () => itemCount(useGameStore.getState().inventory, 'brineCell') > 0,
+        () => this.shark?.canReceiveResonancePulse(this.camera) ?? false,
+        () => this.settleResonancePulse(),
+        (feedback) => useGameStore.getState().setResonanceFork(feedback),
+        (message) => this.showTransientNotice(message),
+      );
       store.setRaft(this.raft.getIntegrityStats());
       this.unsubscribeStore = useGameStore.subscribe((state, previous) => {
         if (
@@ -806,6 +826,7 @@ export class DriftwakeGame {
     this.devices?.dispose();
     this.fishing?.dispose(this.scene);
     this.spear?.dispose();
+    this.resonanceFork?.dispose();
     this.shark?.dispose();
     this.structureCollapses?.dispose();
     this.underwater?.dispose();
@@ -970,6 +991,20 @@ export class DriftwakeGame {
     this.underwater?.update(simulationSeconds, stepSeconds);
     this.salvage?.update(simulationSeconds);
     this.shark?.update(simulationSeconds, stepSeconds);
+    this.resonanceFork?.update(simulationSeconds, stepSeconds);
+    const resonanceDiagnostics = this.resonanceFork?.getDiagnostics();
+    if (resonanceDiagnostics) {
+      this.mount.dataset.resonancePhase = resonanceDiagnostics.phase;
+      this.mount.dataset.resonanceCharge = resonanceDiagnostics.charge.toFixed(3);
+      this.mount.dataset.resonanceLocked = String(resonanceDiagnostics.locked);
+      this.mount.dataset.resonancePulseCount = String(resonanceDiagnostics.pulseEvents);
+      this.mount.dataset.resonanceMissCount = String(resonanceDiagnostics.missEvents);
+      this.mount.dataset.resonanceCancelledCount = String(resonanceDiagnostics.cancelledEvents);
+      this.mount.dataset.resonancePulseVisual = resonanceDiagnostics.pulseVisual.toFixed(3);
+      this.mount.dataset.resonanceEquipped = String(resonanceDiagnostics.equipped);
+      this.mount.dataset.resonanceInputEnabled = String(resonanceDiagnostics.inputEnabled);
+      this.mount.dataset.resonanceHeld = String(resonanceDiagnostics.held);
+    }
     const sharkDiagnostics = this.shark?.getDiagnostics();
     if (sharkDiagnostics) {
       this.mount.dataset.sharkRaftTargetKind = sharkDiagnostics.targetKind;
@@ -999,6 +1034,7 @@ export class DriftwakeGame {
       this.mount.dataset.sharkPlayerDamageCount = String(sharkDiagnostics.playerDamageEvents);
       this.mount.dataset.sharkMissedPlayerBiteCount = String(sharkDiagnostics.missedPlayerBites);
       this.mount.dataset.sharkTimedCounterCount = String(sharkDiagnostics.timedCounterEvents);
+      this.mount.dataset.sharkResonancePulseCount = String(sharkDiagnostics.resonancePulseEvents);
       this.mount.dataset.sharkRecoverySeconds = sharkDiagnostics.recoverySeconds.toFixed(2);
       this.mount.dataset.sharkWorldPosition = JSON.stringify(sharkDiagnostics.worldPosition);
       this.mount.dataset.sharkAim = JSON.stringify(this.shark?.getAimDiagnostics());
@@ -1366,8 +1402,11 @@ export class DriftwakeGame {
     this.fishing?.setInputEnabled(selectedToolAvailable && inputEnabled && onRaft && !placingDevice && state.selectedTool === 'fishingRod');
     const spearEquipped = selectedToolAvailable && (state.selectedTool === 'spear' || state.selectedTool === 'metalSpear');
     const axeEquipped = selectedToolAvailable && (state.selectedTool === 'axe' || state.selectedTool === 'metalAxe');
+    const resonanceEquipped = selectedToolAvailable && state.selectedTool === 'resonanceFork';
     this.spear?.setEquipped(equipmentVisible && (onRaft || inWater) && !placingDevice && spearEquipped, state.selectedTool === 'metalSpear');
     this.spear?.setInputEnabled(inputEnabled && (onRaft || inWater) && !placingDevice && spearEquipped);
+    this.resonanceFork?.setEquipped(equipmentVisible && (onRaft || inWater) && !placingDevice && resonanceEquipped);
+    this.resonanceFork?.setInputEnabled(inputEnabled && (onRaft || inWater) && !placingDevice && resonanceEquipped);
     this.shark?.setInputEnabled(inputEnabled && (onRaft || inWater) && !placingDevice);
     this.island?.setAxeEquipped(equipmentVisible && onIsland && !placingDevice && axeEquipped, state.selectedTool === 'metalAxe');
     this.island?.setInputEnabled(inputEnabled);
@@ -1472,6 +1511,19 @@ export class DriftwakeGame {
     }
     this.saveNow();
     return wear;
+  }
+
+  private settleResonancePulse(): ResonancePulseSettlement {
+    const store = useGameStore.getState();
+    if (itemCount(store.inventory, 'brineCell') <= 0) return 'no-cell';
+    if (!this.shark?.canReceiveResonancePulse(this.camera)) return 'miss';
+    if (!store.spendItems({ brineCell: 1 })) return 'no-cell';
+    if (!this.shark.receiveResonancePulse(this.camera)) {
+      store.addItemBundle({ brineCell: 1 });
+      return 'miss';
+    }
+    this.applyToolWear('resonanceFork', 'resonance-pulse');
+    return 'hit';
   }
 
   private syncToolDurabilityDiagnostics(): void {
@@ -1623,7 +1675,7 @@ export class DriftwakeGame {
       this.audio.playUi();
       return;
     }
-    const digit = /^Digit([1-5])$/.exec(event.code);
+    const digit = /^Digit([1-6])$/.exec(event.code);
     if (digit && state.overlayPanel === null && !state.settingsOpen && state.placementDevice === null) {
       const tool = preferredToolOrder(state.inventory)[Number(digit[1]) - 1];
       if (!state.setSelectedTool(tool)) {

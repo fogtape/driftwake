@@ -72,7 +72,15 @@ export interface HarvestModelVisuals {
   highlight: Mesh;
 }
 
-function shadowed(mesh: Mesh): Mesh {
+export interface ResonanceForkVisuals {
+  core: Mesh<BufferGeometry, MeshStandardMaterial>;
+  chargeRings: Mesh<BufferGeometry, MeshBasicMaterial>[];
+  tinePivots: Group[];
+  triggerPivot: Group;
+  light: PointLight;
+}
+
+function shadowed<T extends Mesh>(mesh: T): T {
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
@@ -178,6 +186,107 @@ export function createSpearModel(materials: MaterialLibrary, upgraded = false): 
     binding.rotation.x = Math.PI / 2;
     group.add(binding);
   }
+  return group;
+}
+
+export function createResonanceForkModel(materials: MaterialLibrary): Group {
+  const group = new Group();
+  group.name = 'tide-resonance-fork';
+
+  const handle = shadowed(new Mesh(new CylinderGeometry(0.06, 0.085, 0.84, 10), materials.darkWood));
+  handle.position.y = 0.04;
+  handle.rotation.z = -0.055;
+  group.add(handle);
+
+  for (let index = 0; index < 7; index += 1) {
+    const binding = shadowed(new Mesh(new TorusGeometry(0.078, 0.011, 5, 14), materials.rope));
+    binding.position.y = -0.24 + index * 0.053;
+    binding.rotation.x = Math.PI / 2;
+    binding.rotation.z = index * 0.07;
+    group.add(binding);
+  }
+
+  const housing = shadowed(new Mesh(
+    new RoundedBoxGeometry(0.36, 0.39, 0.22, 4, 0.045),
+    materials.signalLaminate,
+  ));
+  housing.position.set(-0.01, 0.48, 0);
+  housing.rotation.z = -0.04;
+  group.add(housing);
+
+  const cell = shadowed(new Mesh(new CylinderGeometry(0.075, 0.075, 0.29, 12), materials.navigationAlloy));
+  cell.position.set(-0.02, 0.49, -0.135);
+  cell.rotation.z = Math.PI / 2;
+  group.add(cell);
+  for (const side of [-1, 1]) {
+    const cap = shadowed(new Mesh(new CylinderGeometry(0.084, 0.084, 0.025, 12), materials.metal));
+    cap.position.set(side * 0.155 - 0.02, 0.49, -0.135);
+    cap.rotation.z = Math.PI / 2;
+    group.add(cap);
+  }
+
+  const coreMaterial = materials.phosphorGlass.clone();
+  coreMaterial.emissive = new Color(0x5bd7c2);
+  coreMaterial.emissiveIntensity = 0.22;
+  const core = shadowed(new Mesh(new SphereGeometry(0.092, 14, 10), coreMaterial));
+  core.name = 'resonance-pressure-core';
+  core.position.set(0.075, 0.53, 0.13);
+  core.scale.y = 1.28;
+  group.add(core);
+
+  const triggerPivot = new Group();
+  triggerPivot.name = 'resonance-trigger-pivot';
+  triggerPivot.position.set(-0.11, 0.37, 0.13);
+  const trigger = shadowed(new Mesh(new RoundedBoxGeometry(0.07, 0.16, 0.055, 3, 0.018), materials.rustMetal));
+  trigger.position.y = -0.06;
+  triggerPivot.add(trigger);
+  group.add(triggerPivot);
+
+  const throat = shadowed(new Mesh(new CylinderGeometry(0.11, 0.14, 0.28, 10), materials.navigationAlloy));
+  throat.position.y = 0.79;
+  group.add(throat);
+  const brace = shadowed(new Mesh(new RoundedBoxGeometry(0.45, 0.11, 0.15, 3, 0.025), materials.metal));
+  brace.position.y = 0.91;
+  group.add(brace);
+
+  const tinePivots: Group[] = [];
+  for (const side of [-1, 1]) {
+    const tinePivot = new Group();
+    tinePivot.name = side < 0 ? 'resonance-left-tine' : 'resonance-right-tine';
+    tinePivot.position.set(side * 0.145, 0.91, 0);
+    const tine = shadowed(new Mesh(new CylinderGeometry(0.031, 0.046, 0.87, 9), materials.navigationAlloy));
+    tine.position.y = 0.42;
+    const tip = shadowed(new Mesh(new ConeGeometry(0.064, 0.24, 9), coreMaterial));
+    tip.position.y = 0.97;
+    const electrode = shadowed(new Mesh(new TorusGeometry(0.048, 0.012, 6, 15), materials.metal));
+    electrode.position.y = 0.77;
+    electrode.rotation.x = Math.PI / 2;
+    tinePivot.add(tine, tip, electrode);
+    group.add(tinePivot);
+    tinePivots.push(tinePivot);
+  }
+
+  const chargeRings: Mesh<BufferGeometry, MeshBasicMaterial>[] = [];
+  for (let index = 0; index < 3; index += 1) {
+    const ringMaterial = new MeshBasicMaterial({
+      color: index === 2 ? 0xf2d36c : 0x68d9c6,
+      transparent: true,
+      opacity: 0.08,
+      depthWrite: false,
+      blending: AdditiveBlending,
+    });
+    const ring = new Mesh(new TorusGeometry(0.19 + index * 0.015, 0.009, 6, 28), ringMaterial);
+    ring.name = `resonance-charge-ring-${index + 1}`;
+    ring.position.y = 1.08 + index * 0.22;
+    ring.rotation.x = Math.PI / 2;
+    group.add(ring);
+    chargeRings.push(ring);
+  }
+
+  const light = new PointLight(0x65e5ce, 0, 2.4, 2);
+  light.position.copy(core.position);
+  group.add(light);
+  group.userData.resonanceVisuals = { core, chargeRings, tinePivots, triggerPivot, light } satisfies ResonanceForkVisuals;
   return group;
 }
 

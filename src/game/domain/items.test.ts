@@ -75,7 +75,16 @@ describe('inventory domain', () => {
       'metalSpear',
       'fishingRod',
       'metalAxe',
+      'resonanceFork',
     ]);
+  });
+
+  it('crafts the resonance fork only after signal-chain research without consuming its ammunition', () => {
+    const inventory = { metalIngot: 2, signalBoard: 1, hinge: 1, rope: 1, brineCell: 2 } as const;
+    expect(craftRecipe(inventory, 'resonanceFork')).toMatchObject({ ok: false, reason: 'locked' });
+    const crafted = craftRecipe(inventory, 'resonanceFork', ['resonanceFork']);
+    expect(crafted).toMatchObject({ ok: true, reason: 'crafted' });
+    expect(crafted.inventory).toEqual({ brineCell: 2, resonanceFork: 1 });
   });
 
   it('expands a cache into useful loot instead of a cache counter', () => {

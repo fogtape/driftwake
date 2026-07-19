@@ -100,6 +100,12 @@ export class SplashSystem {
     this.spawnBurst(position, 0xc55b55, 16, 0.58, 0.046, 0.12, 0.9);
   }
 
+  spawnResonancePulse(position: Vector3): void {
+    this.spawnBurst(position, 0x6be6cf, 34, 0.86, 0.064, 0.12, 1.82);
+    this.spawnBurst(position, 0xf0d36d, 18, 0.62, 0.045, 0.06, 1.18);
+    this.spawnBurst(position, 0xdffff8, 22, 0.74, 0.038, 0.48, 2.36);
+  }
+
   spawnSharkMiss(position: Vector3): void {
     this.spawnBurst(position, 0xdffcff, 28, 0.78, 0.048, 0.18, 1.58);
     this.spawnBurst(position, 0x65bfc0, 18, 0.86, 0.042, 0.08, 1.02);

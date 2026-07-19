@@ -36,6 +36,7 @@ import {
   TreePine,
   Waves,
   Antenna,
+  AudioWaveform,
   type LucideProps,
 } from 'lucide-react';
 import type { ItemId } from '../game/domain/items';
@@ -78,6 +79,7 @@ const ICONS: Record<ItemId, React.ComponentType<LucideProps>> = {
   hammer: Hammer,
   spear: Sword,
   metalSpear: Sword,
+  resonanceFork: AudioWaveform,
   fishingRod: Fish,
   axe: Axe,
   metalAxe: Axe,

@@ -15,6 +15,18 @@ describe('tool durability', () => {
     )).toEqual({ hook: 48, hammer: 1 });
   });
 
+  it('tracks the resonance fork as a durable unique tool', () => {
+    expect(normalizeToolDurability(
+      { resonanceFork: 1, brineCell: 2 },
+      { resonanceFork: 17 },
+    )).toEqual({ resonanceFork: 17 });
+    expect(applyToolWear({ resonanceFork: 1 }, 'resonanceFork')).toEqual({
+      durability: {},
+      remaining: 0,
+      broken: true,
+    });
+  });
+
   it('wears a tool to breakage without leaving a zero entry', () => {
     const worn = applyToolWear({ hook: 2 }, 'hook');
     expect(worn).toMatchObject({ remaining: 1, broken: false, durability: { hook: 1 } });
