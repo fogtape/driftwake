@@ -64,6 +64,68 @@ export interface DeviceModelVisuals {
   storageMarkers?: Mesh[];
 }
 
+export type FoodMaterialStage = 'raw' | 'cooked' | 'burnt';
+
+interface FoodMaterialSnapshot {
+  map: MeshStandardMaterial['map'];
+  normalMap: MeshStandardMaterial['normalMap'];
+  normalScale: Vector2;
+  roughnessMap: MeshStandardMaterial['roughnessMap'];
+  color: number;
+  roughness: number;
+  metalness: number;
+}
+
+function snapshotFoodMaterial(material: MeshStandardMaterial): FoodMaterialSnapshot {
+  return {
+    map: material.map,
+    normalMap: material.normalMap,
+    normalScale: material.normalScale.clone(),
+    roughnessMap: material.roughnessMap,
+    color: material.color.getHex(),
+    roughness: material.roughness,
+    metalness: material.metalness,
+  };
+}
+
+function registerFoodMaterialStages(material: MeshStandardMaterial, materials: MaterialLibrary): void {
+  material.userData.foodMaterialStages = {
+    raw: snapshotFoodMaterial(material),
+    cooked: snapshotFoodMaterial(materials.cookedFishFlesh),
+    burnt: snapshotFoodMaterial(materials.burntFishFlesh),
+  } satisfies Record<FoodMaterialStage, FoodMaterialSnapshot>;
+  material.userData.foodMaterialStage = 'raw' satisfies FoodMaterialStage;
+}
+
+export function applyFoodMaterialStage(
+  mesh: Mesh<BufferGeometry, MeshStandardMaterial>,
+  stage: FoodMaterialStage,
+): void {
+  const material = mesh.material;
+  const stages = material.userData.foodMaterialStages as Record<FoodMaterialStage, FoodMaterialSnapshot> | undefined;
+  if (!stages || material.userData.foodMaterialStage === stage) return;
+  const next = stages[stage];
+  const shaderChanged = material.map !== next.map
+    || material.normalMap !== next.normalMap
+    || material.roughnessMap !== next.roughnessMap;
+  material.map = next.map;
+  material.normalMap = next.normalMap;
+  material.normalScale.copy(next.normalScale);
+  material.roughnessMap = next.roughnessMap;
+  material.color.setHex(next.color);
+  material.roughness = next.roughness;
+  material.metalness = next.metalness;
+  material.userData.foodMaterialStage = stage;
+  if (shaderChanged) material.needsUpdate = true;
+}
+
+export function foodMaterialStageOf(
+  mesh: Mesh<BufferGeometry, MeshStandardMaterial>,
+): FoodMaterialStage {
+  const stage = mesh.material.userData.foodMaterialStage;
+  return stage === 'cooked' || stage === 'burnt' ? stage : 'raw';
+}
+
 export interface IslandModelVisuals {
   foam: Mesh[];
   obstacles: Array<{ x: number; z: number; radius: number }>;
@@ -87,13 +149,6 @@ function shadowed<T extends Mesh>(mesh: T): T {
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
-}
-
-function isLibraryMaterial(material: MeshStandardMaterial, materials: MaterialLibrary): boolean {
-  return (
-    materials.wood.some((candidate) => candidate === material) ||
-    Object.values(materials).some((candidate) => candidate === material)
-  );
 }
 
 export function createHookModel(materials: MaterialLibrary): Group {
@@ -644,6 +699,7 @@ export function createFishFilletModel(materials: MaterialLibrary): Group {
   const cutMaterial = materials.fishFlesh.clone();
   cutMaterial.color.set(0xffead6);
   cutMaterial.roughness = 0.76;
+  [skinMaterial, fleshMaterial, cutMaterial].forEach((material) => registerFoodMaterialStages(material, materials));
 
   const skin = shadowed(new Mesh(new RoundedBoxGeometry(0.64, 0.075, 0.31, 4, 0.055), skinMaterial));
   skin.position.y = 0.035;
@@ -1050,7 +1106,7 @@ function addBoundFrame(group: Group, materials: MaterialLibrary, width: number, 
   const legGeometry = new CylinderGeometry(0.045, 0.06, height, 7);
   for (const x of [-width / 2, width / 2]) {
     for (const z of [-depth / 2, depth / 2]) {
-      const leg = shadowed(new Mesh(legGeometry, materials.darkWood));
+      const leg = shadowed(new Mesh(legGeometry, materials.wood[2]));
       leg.position.set(x, height / 2, z);
       leg.rotation.z = x * 0.08;
       leg.rotation.x = z * 0.08;
@@ -1090,9 +1146,9 @@ export function createPurifierModel(materials: MaterialLibrary): Group {
     purifier.add(puff);
   });
 
-  const heatBowl = shadowed(new Mesh(new CylinderGeometry(0.34, 0.27, 0.13, 16, 1, true), materials.rustMetal));
+  const heatBowl = shadowed(new Mesh(new CylinderGeometry(0.34, 0.27, 0.13, 16, 1, true), materials.saltfireIron));
   heatBowl.position.y = 0.31;
-  const bowlBottom = shadowed(new Mesh(new CylinderGeometry(0.27, 0.27, 0.035, 16), materials.metal));
+  const bowlBottom = shadowed(new Mesh(new CylinderGeometry(0.27, 0.27, 0.035, 16), materials.saltfireIron));
   bowlBottom.position.y = 0.255;
   purifier.add(heatBowl, bowlBottom);
 
@@ -1110,9 +1166,9 @@ export function createPurifierModel(materials: MaterialLibrary): Group {
 
   const hood = shadowed(new Mesh(new CylinderGeometry(0.2, 0.38, 0.34, 18, 1, true), materials.wovenFiber));
   hood.position.y = 0.59;
-  const hoodCap = shadowed(new Mesh(new CylinderGeometry(0.2, 0.2, 0.04, 18), materials.metal));
+  const hoodCap = shadowed(new Mesh(new CylinderGeometry(0.2, 0.2, 0.04, 18), materials.saltfireIron));
   hoodCap.position.y = 0.77;
-  const gutter = shadowed(new Mesh(new TorusGeometry(0.38, 0.026, 7, 26), materials.metal));
+  const gutter = shadowed(new Mesh(new TorusGeometry(0.38, 0.026, 7, 26), materials.saltfireIron));
   gutter.position.y = 0.43;
   gutter.rotation.x = Math.PI / 2;
   purifier.add(hood, hoodCap, gutter);
@@ -1123,14 +1179,18 @@ export function createPurifierModel(materials: MaterialLibrary): Group {
     new Vector3(0.51, 0.35, 0),
     new Vector3(0.51, 0.29, 0),
   ]);
-  purifier.add(shadowed(new Mesh(new TubeGeometry(spoutCurve, 14, 0.022, 7, false), materials.metal)));
+  purifier.add(shadowed(new Mesh(new TubeGeometry(spoutCurve, 14, 0.022, 7, false), materials.saltfireIron)));
 
   const cup = new Group();
   cup.name = 'purifier-collection-cup';
   cup.position.set(0.51, 0.18, 0);
   const cupMaterial = new MeshPhysicalMaterial({
     color: 0x7fc5ca,
-    roughness: 0.34,
+    map: materials.saltEtchedPolymer.map,
+    normalMap: materials.saltEtchedPolymer.normalMap,
+    normalScale: materials.saltEtchedPolymer.normalScale.clone(),
+    roughnessMap: materials.saltEtchedPolymer.roughnessMap,
+    roughness: 0.48,
     transparent: true,
     opacity: 0.58,
     transmission: 0.2,
@@ -1138,7 +1198,7 @@ export function createPurifierModel(materials: MaterialLibrary): Group {
   });
   const cupWall = new Mesh(new CylinderGeometry(0.12, 0.095, 0.24, 14, 1, true), cupMaterial);
   cupWall.position.y = 0.12;
-  const cupRim = new Mesh(new TorusGeometry(0.12, 0.012, 6, 18), materials.polymer);
+  const cupRim = new Mesh(new TorusGeometry(0.12, 0.012, 6, 18), materials.saltEtchedPolymer);
   cupRim.position.y = 0.24;
   cupRim.rotation.x = Math.PI / 2;
   const cleanWater = new Mesh(
@@ -1159,7 +1219,7 @@ export function createPurifierModel(materials: MaterialLibrary): Group {
   drip.visible = false;
   purifier.add(drip);
 
-  const pressureBand = shadowed(new Mesh(new TorusGeometry(0.245, 0.014, 5, 22), materials.rope));
+  const pressureBand = shadowed(new Mesh(new TorusGeometry(0.245, 0.014, 5, 22), materials.wovenFiber));
   pressureBand.position.y = 0.69;
   pressureBand.rotation.x = Math.PI / 2;
   purifier.add(pressureBand);
@@ -1186,13 +1246,13 @@ export function createGrillModel(materials: MaterialLibrary): Group {
     grill.add(puff);
   });
 
-  const firePan = shadowed(new Mesh(new CylinderGeometry(0.4, 0.31, 0.14, 16, 1, true), materials.rustMetal));
+  const firePan = shadowed(new Mesh(new CylinderGeometry(0.4, 0.31, 0.14, 16, 1, true), materials.saltfireIron));
   firePan.position.y = 0.27;
-  const panBase = shadowed(new Mesh(new CylinderGeometry(0.31, 0.31, 0.035, 16), materials.rustMetal));
+  const panBase = shadowed(new Mesh(new CylinderGeometry(0.31, 0.31, 0.035, 16), materials.saltfireIron));
   panBase.position.y = 0.21;
   grill.add(firePan, panBase);
 
-  const grateMaterial = materials.metal;
+  const grateMaterial = materials.saltfireIron;
   for (let index = -4; index <= 4; index += 1) {
     const rod = shadowed(new Mesh(new CylinderGeometry(0.012, 0.012, 0.76, 7), grateMaterial));
     rod.position.set(index * 0.085, 0.42, 0);
@@ -1200,7 +1260,7 @@ export function createGrillModel(materials: MaterialLibrary): Group {
     grill.add(rod);
   }
   for (const z of [-0.31, 0.31]) {
-    const brace = shadowed(new Mesh(new CylinderGeometry(0.018, 0.018, 0.86, 7), materials.rustMetal));
+    const brace = shadowed(new Mesh(new CylinderGeometry(0.018, 0.018, 0.86, 7), materials.saltfireIron));
     brace.position.set(0, 0.415, z);
     brace.rotation.z = Math.PI / 2;
     grill.add(brace);
@@ -1210,21 +1270,16 @@ export function createGrillModel(materials: MaterialLibrary): Group {
   food.name = 'grill-fish';
   food.position.set(0, 0.49, 0);
   food.rotation.y = Math.PI / 2;
-  food.rotation.z = Math.PI / 2;
   food.scale.setScalar(0.48);
   const foodMeshes: Mesh<BufferGeometry, MeshStandardMaterial>[] = [];
   food.traverse((object) => {
     if (!(object instanceof Mesh) || !(object.material instanceof MeshStandardMaterial)) return;
-    const sourceMaterial = object.material;
-    object.material = sourceMaterial.clone();
-    if (!isLibraryMaterial(sourceMaterial, materials)) sourceMaterial.dispose();
-    object.material.userData.rawColor = object.material.color.getHex();
     foodMeshes.push(object as Mesh<BufferGeometry, MeshStandardMaterial>);
   });
   food.visible = false;
   grill.add(food);
 
-  const handle = shadowed(new Mesh(new TorusGeometry(0.21, 0.025, 7, 20, Math.PI), materials.metal));
+  const handle = shadowed(new Mesh(new TorusGeometry(0.21, 0.025, 7, 20, Math.PI), materials.saltfireIron));
   handle.position.set(0.46, 0.31, 0);
   handle.rotation.set(Math.PI / 2, 0, Math.PI / 2);
   grill.add(handle);

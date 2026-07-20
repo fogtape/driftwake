@@ -1,7 +1,7 @@
 # 原创资产清单
 
 > 更新日期：2026-07-20
-> 状态：第十五轮 M6 多鱼种与鱼肉原创 PBR 材质场景复验中，发布前仍需做最终授权、DCC 替换与相似性复核
+> 状态：第十六轮 M6 多鱼种与烹饪原创 PBR 材质已通过场景门禁，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -412,9 +412,9 @@ Asset type: seamless tileable game texture, PBR base-color albedo. Primary reque
 | 采用源图 | `artifacts/imagegen/fresh-fish-flesh-raw.png` |
 | 模型 / 质量 | `gpt-image-2` / `high` |
 | 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
-| 用途 | 基础烤架与三槽烤台的鲜鱼段/熟鱼排形体 |
+| 用途 | 基础烤架与三槽烤台的鲜鱼段形体 |
 | 处理方式 | `scripts/prepare_imagegen_material.py --optimize-boundary`，seam 168、normal 0.44、roughness 148-216 |
-| 检查 | 无完整鱼体/骨骼/器官/器具/文字/烘焙光影；接缝 x=3.28/1.00x、y=5.17/0.97x；烹饪场景复验中 |
+| 检查 | 无完整鱼体/骨骼/器官/器具/文字/烘焙光影；接缝 x=3.28/1.00x、y=5.17/0.97x；基础烤架与三槽生/熟/焦同屏通过 |
 
 最终提示词：
 
@@ -450,9 +450,96 @@ Constraints: fully original; exact centered circular design; no text, numbers, s
 Avoid: human eye anatomy, cat/reptile slit pupil, giant black featureless sphere, cute cartoon eye, neon cyan, red eye, photographic macro image, glossy baked highlight, material ball, perspective preview, multiple eyes, and background scene
 ```
 
+### TEX-021：火烤熟鱼肉材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/cooked-fish-flesh.webp`、`cooked-fish-flesh-normal.webp`、`cooked-fish-flesh-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/cooked-fish-flesh-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 基础烤架与三槽烤台达到熟制窗口后的鱼排表面 |
+| 处理方式 | `scripts/prepare_imagegen_material.py --optimize-boundary`，seam 168、normal 0.44、roughness 150-214 |
+| 检查 | 以 TEX-019 为编辑目标，保持相同鱼肉尺度和片层；接缝 x=4.95/0.89x、y=7.28/0.93x；基础真实收取与三槽同屏通过 |
+
+最终提示词：
+
+```text
+Transform the provided original seamless fresh ocean-fish flesh albedo into a production-ready seamless fire-roasted fish surface for a premium stylized-realistic survival game. Preserve the source's directional muscle grain, fine connective lines, uniform texel density, edge continuity, and painterly material scale, but cook it through: opaque pearl flakes, toasted coral and muted apricot fibers, restrained golden-brown ridges, tiny dry blister freckles, and sparse pale salt crystals. The result must remain a continuous material texture only, not a whole fillet, steak, fish, food object, plate, grill, cookware, garnish, fire, smoke, shadow, or scene. Exact top-down orthographic square texture, seamless on all four edges, no central focal point, no large crust patch, no unique burn mark, and no repeating cells. Flat neutral PBR base-color albedo with absolutely no baked directional lighting, cast shadow, ambient occlusion, specular highlight, wet gloss, depth-of-field, or perspective. Fully original; no text, symbols, logos, watermark, frame, branded motif, or resemblance to a specific commercial game. Keep it appetizing and grounded rather than plastic, neon, photographic, beef-like, raw-looking, or heavily charred.
+```
+
+### TEX-022：焦黑鱼肉材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/burnt-fish-flesh.webp`、`burnt-fish-flesh-normal.webp`、`burnt-fish-flesh-roughness.webp` |
+| Image 2 原始编辑 | `artifacts/imagegen/burnt-fish-flesh-image2-raw.png` |
+| 采用源图 | `artifacts/imagegen/burnt-fish-flesh-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 基础烤架与三槽烤台超过收取窗口后的焦鱼惩罚表面 |
+| 处理方式 | Image 2 最终编辑源离线亮度 `1.72`、饱和度 `0.92`，再由 `prepare_imagegen_material.py --optimize-boundary` 以 seam 168、normal 0.50、roughness 178-236 处理 |
+| 检查 | 第一版因树皮感拒绝并删除；第二版缩到鱼排后与熟鱼区分不足；最终编辑原图亮度 45.30，未直接上线，采用可审计提亮版后运行图亮度 77.3，接缝 x=18.01/1.11x、y=19.34/0.93x；三槽同屏焦斑清晰且无黑块 |
+
+初始过熟编辑提示词：
+
+```text
+Transform the provided original seamless cooked ocean-fish flesh albedo into a production-ready seamless overcooked fish surface for a premium stylized-realistic survival game. Preserve the exact thin flaky fish-muscle shapes, pale connective lines, diagonal grain scale, uniform texel density, and edge continuity of the input. Dry and overcook those same flakes with a warm chestnut base, irregular toasted umber edges, small charcoal freckles, tiny blister spots, sparse pale salt ash, and only occasional coin-sized matte scorch patches covering less than one third of the image. Most flakes must remain visibly fish-like and warm brown; do not create long black bands, thick splinters, bark ridges, wood grain, cracked rock, or a dark continuous crust. Continuous material texture only, not a whole fillet, steak, fish, food object, plate, grill, cookware, flame, glowing ember, smoke, shadow, or scene. Exact top-down orthographic square texture, seamless on all four edges, no central focal point, no large unique scorch mark, no long crack, and no repeating cells. Flat neutral PBR base-color albedo with absolutely no baked directional lighting, cast shadow, ambient occlusion, specular highlight, oily gloss, depth-of-field, or perspective. Fully original; no text, symbols, logos, watermark, frame, branded motif, or resemblance to a specific commercial game. Avoid pure black, tree bark, timber fibers, mulch, volcanic rock, rusted metal, beef crust, photographic scan noise, gore, dramatic lighting, and background scenes.
+```
+
+最终针对性编辑提示词：
+
+```text
+Use case: precise-object-edit
+Asset type: seamless tileable PBR albedo texture for a premium stylized-realistic survival game
+Input images: Image 1 is the edit target, an overcooked ocean-fish flesh texture
+Primary request: change only the degree and readability of charring. Deepen the same fish flakes from orange-brown to a clearly overcooked dark chestnut and mahogany range, add many small irregular charcoal-brown freckles, crisp short toasted edges, and scattered matte scorch islands so the material remains unmistakably burnt when reduced to a small game prop. The result should read roughly 45 percent darker than normal cooked fish while retaining warm brown variation.
+Materials/textures: preserve the exact thin flaky fish-muscle shapes, pale connective seams, diagonal grain scale, uniform texel density, and seamless edge continuity of Image 1. Every mark must follow or cross short fish flakes rather than forming long fibers.
+Composition/framing: exact top-down orthographic square material texture, continuous across all four edges, no central focal point, no large unique mark, no repeating cells.
+Lighting/mood: flat neutral PBR base-color albedo; no baked directional light, cast shadow, ambient occlusion, specular highlight, oily gloss, depth of field, or perspective.
+Constraints: edit only color value and short local scorch detail; preserve fish anatomy and original scale; no whole fillet, fish, plate, grill, cookware, flame, ember, smoke, scene, text, symbol, logo, watermark, or frame; fully original.
+Avoid: pure black, a continuous black crust, long black bands, bark, timber fibers, wood grain, splinters, mulch, cracked rock, volcanic stone, rusted metal, beef crust, gore, photographic scan noise, dramatic lighting, and background scenes.
+```
+
+### TEX-023：耐热折铁材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/saltfire-folded-iron.webp`、`saltfire-folded-iron-normal.webp`、`saltfire-folded-iron-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/saltfire-folded-iron-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 基础净水器热碗/导流金属、基础烤架火盆/炉条，以及三槽烤台炉口/十三根炉条 |
+| 处理方式 | `scripts/prepare_imagegen_material.py --optimize-boundary`，seam 144、normal 0.68、roughness 138-220 |
+| 检查 | 无现成器具、铆钉阵列或烘焙高光；boundary=(921,1)，接缝 x=5.11/1.01x、y=5.75/0.86x；基础设备与三槽近景均通过 |
+
+最终提示词：
+
+```text
+Use case: stylized-concept. Asset type: seamless tileable game texture, production PBR base-color albedo. Primary request: an original heat-folded salvaged marine iron surface for hand-built ocean-survival grills and stills, with dense hammer planishing, shallow salt pitting, restrained blue-black mill oxide, muted warm heat-temper clouds, sparse dull iron-gray scuffs, and tiny soot deposits embedded in the grain. Subject: continuous forged iron material only, no cookware, grill, grate, bowl, machine, rivets, bolts, seams, holes, separate plates, fire, embers, text, symbols, or objects. Style/medium: premium hand-painted stylized realism, tactile production-ready PBR albedo with controlled close-range detail and deliberate painterly variation, not photographic scan noise. Composition/framing: exact top-down orthographic square texture, uniform texel density, seamless wrapping on all four edges, irregular microstructure with no central focal point and no long directional band. Lighting: perfectly flat neutral base color with absolutely no baked directional light, cast shadows, ambient occlusion, highlights, reflections, wet gloss, depth-of-field, or perspective. Color palette: charcoal iron, cool gunmetal, restrained indigo oxide, muted copper-brown heat stain, pale salt-gray pin marks; dark but readable and not a one-note black surface. Constraints: fully original, seamless tile, no text, numbers, logos, watermark, frame, border, unique scar, recognizable branded pattern, or resemblance to a specific commercial game. Avoid: corrugated sheet, diamond plate, brushed stainless steel, shiny chrome, heavy orange rust, repeating rivet grid, large cracks, fantasy runes, material sphere, product mockup, background scene, and dramatic lighting.
+```
+
+### TEX-024：盐蚀聚合物材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/salt-etched-polymer.webp`、`salt-etched-polymer-normal.webp`、`salt-etched-polymer-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/salt-etched-polymer-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 基础净水器透明集水杯的表面层/杯沿，以及潮镜五联净水器盆体 |
+| 处理方式 | `scripts/prepare_imagegen_material.py --optimize-boundary`，seam 144、normal 0.38、roughness 118-194 |
+| 检查 | 无现成杯盆、回收标志、透明高光或大裂纹；boundary=(1,1)，接缝 x=8.92/1.07x、y=8.36/0.88x；基础设备近景与材质绑定通过 |
+
+最终提示词：
+
+```text
+Use case: stylized-concept. Asset type: seamless tileable game texture, production PBR base-color albedo. Primary request: an original reclaimed marine polymer surface for an ocean-survival water purifier basin and cup rim, with compact molded grain, cloudy salt bloom, fine crossed cleaning scratches, subtle pressure whitening, sparse sea-glass inclusions, and small worn edges expressed only as micro color variation. Subject: continuous weathered polymer material only, no cup, basin, container, sheet edge, molded part, logo, recycling mark, text, symbols, water droplets, separate objects, or transparency cutout. Style/medium: premium hand-painted stylized realism, clean production-ready PBR albedo with crisp controlled microdetail suitable for close first-person inspection, not photographic noise. Composition/framing: exact top-down orthographic square texture, uniform texel density, seamless wrapping on all four edges, evenly distributed wear with no central focal point, large stripe, panel line, or repeating cell. Lighting: perfectly flat neutral base color with absolutely no baked directional light, cast shadows, ambient occlusion, specular highlights, reflections, wet gloss, depth-of-field, or perspective. Color palette: pale mineral gray, desaturated sea-glass green, cool ivory, restrained oxidized teal scratches, tiny warm salvage-plastic flecks; bright and balanced, not monochrome cyan. Constraints: fully original, seamless tile, no text, numbers, logos, watermark, frame, border, branded resin pattern, or resemblance to a specific commercial game. Avoid: glossy new plastic, translucent product render, bubble wrap, rubber, fabric weave, camouflage, large stains, strong cracks, material sphere, product mockup, background scene, and dramatic lighting.
+```
+
 ## 本轮 Imagegen 尝试
 
-调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider 并执行技能内置 CLI，模型固定为 `gpt-image-2`、质量固定为 `high`。本轮先完成盐封打捞手套，随后为 M6 分别生成银脊鱼皮、琥鳍鲷皮、旗尾梭皮、鲜鱼肉和远洋鱼眼五张 2048x2048 原创源图；没有切换低阶模型、复用旧鲨皮或以纯色占位冒充完成。三种鱼皮与鱼眼已通过人工内容、接缝或径向检查、独立 PBR、材质绑定和三鱼种捕获近景；鲜鱼肉已通过来源/PBR，但继续保持 `IN_REVIEW` 直到烹饪场景验收。采用源图随仓库归档，仓库没有保存 provider URL 或 API Key。
+调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider 并执行技能内置 CLI，模型固定为 `gpt-image-2`、质量固定为 `high`。本轮先完成盐封打捞手套和 M6 三鱼种/鱼眼，随后以鲜鱼肉为共同尺度锚点编辑熟鱼与焦鱼，并生成耐热折铁、盐蚀聚合物两套生活设备材质；没有切换低阶模型、复用旧锈铁或以纯色占位冒充完成。四套烹饪新增材质均采用 2048x2048 原创源图、独立 1024 albedo/normal/roughness、既定接缝门禁、2x2 人工复核和真实场景绑定。焦鱼第一版因树皮感拒绝，第二版因缩略图区分不足不采用，最终版保留 Image 2 焦斑结构并做可审计离线色阶修正；两张运行时烹饪截图证明生/熟/焦、基础净水/烤架和三槽设备画风统一。采用源图随仓库归档，仓库没有保存 provider URL 或 API Key。
 
 鲨皮最终请求提示词：
 
@@ -501,7 +588,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | MOD-007 | 钓竿、卷线轮、浮标，以及银脊鱼、旗尾梭、琥鳍鲷三种鱼体 | `src/game/art/ProceduralModels.ts` | 三种鱼使用平滑躯体、独立背/胸/尾鳍轮廓、Image 2 鱼皮与虹膜 PBR；体型缩放、挣扎、捕获展示和单实例显隐进入完整循环 |
 | MOD-008 | 深潮鲨：车削躯干、背鳍、胸鳍、尾柄、双叶尾、眼、口、鳃与三段采集伤痕 | `src/game/art/ProceduralModels.ts` | 15+ 独立网格，已接巡游、袭击、受击、侧翻浮尸与采集阶段 |
 | MOD-009 | 潮汐净水器：绑扎木架、火盆、海水槽、编织蒸馏罩、冷凝沟、滴管与透明杯具 | `src/game/art/ProceduralModels.ts` | 35+ 独立网格，运行阶段驱动海水/净水水位和滴水 |
-| MOD-010 | 折铁烤架：绑扎木架、折铁火盆、九根炉条、横撑、把手与鱼段 | `src/game/art/ProceduralModels.ts` | 40+ 独立网格；鱼段已接鲜鱼肉 PBR，生/熟/焦状态与最终烹饪场景材质验收继续在 M6 进行 |
+| MOD-010 | 折铁烤架：绑扎木架、折铁火盆、九根炉条、横撑、把手与鱼段 | `src/game/art/ProceduralModels.ts` | 40+ 独立网格；折铁/雪松/编织纤维与生/熟/焦鱼肉均使用审定 PBR，平放姿态、真实收取和基础设备近景通过 |
 | MOD-011 | 盐冠浅滩：2115 顶点高度场、顶点色分层、5 个岩石地标、22 个灌木和 30 条岸浪 | `src/game/art/ProceduralModels.ts` | 已进入接近、靠岸、登岛、离流和重生周期 |
 | MOD-012 | 岛屿资源组：4 棕榈、枝料、石堆、潮果、纤维簇与交互高亮 | `src/game/art/ProceduralModels.ts` | 节点独立、内部实例化，支持生命、拾取、倒伏和树桩 |
 | MOD-013 | 潮磨石斧：回收木柄、石质斧头、金属刃口和六圈编织绑带 | `src/game/art/ProceduralModels.ts` | 已进入第一视角挥砍和三击树木循环 |
@@ -518,7 +605,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | MOD-024 | 定潮舵台：双层轮缘、八辐手柄、斜撑、盐蚀合金面板、万向罗盘、四枚航线针、三组齿轮与双侧舵索 | `src/game/art/NavigationModels.ts` | 55+ 网格，筏格附着；轮、罗盘、齿轮与航线针按航向/阵风/模式实时驱动 |
 | MOD-025 | 横风抗扭索具：双金属横撑、四枚帆缘锁扣和双股交叉受力绳 | `src/game/art/NavigationModels.ts` | 直接加装到既有拾风帆，强化状态、拆除返还和 v8 存档已接通 |
 | MOD-026 | 潮镜五联净水器：斜置盐玻璃集热板、合金框、五个独立杯位、分流歧管、冷凝管与蒸汽/滴水层 | `src/game/art/AdvancedDeviceModels.ts` | 55+ 网格、五路水位和完成标记；队列并行推进且无需燃料 |
-| MOD-027 | 三槽烟鳍烤台：宽体耐火炉膛、十三根炉条、三组鱼段位、共享燃料条、火焰/余烬/烟层 | `src/game/art/AdvancedDeviceModels.ts` | 70+ 网格；三份渔获使用鲜鱼肉 PBR 并分别经历生/熟/焦状态，共享漂木燃料；生活设备专用材质仍在 M6 审计 |
+| MOD-027 | 三槽烟鳍烤台：宽体耐火炉膛、十三根炉条、三组鱼段位、共享燃料条、火焰/余烬/烟层 | `src/game/art/AdvancedDeviceModels.ts` | 70+ 网格；三份平放鱼排独立使用生/熟/焦 PBR，炉口/炉条采用耐热折铁，共享燃料与三状态同屏近景通过 |
 | MOD-028 | 干舱储物柜：蜡封帆布柜门/顶盖、木质骨架、潮铸铰链、把手、锁扣和八个内容标记 | `src/game/art/AdvancedDeviceModels.ts` | 25+ 网格；柜盖动画、八格真实堆叠与拆除原子返还已接通 |
 | MOD-029 | 深锚锁链棘轮：双爪棘轮、潮铸护圈、短节锁链与加固绞盘 | `src/game/art/NavigationModels.ts` | 直接加装到现有锚具，风暴载荷、滑脱与 v10 强化状态同步 |
 | MOD-030 | 潮听接收台：层压机壳、斜置扫描盘、三环二十四刻度、扫描束、三信号点、参考线圈、三频段鼓轮、六电量条与阵列灯 | `src/game/art/SignalModels.ts` | 90+ 网格；断电/在线发光、扫描、调谐、频段点、电量和诊断灯由 v10 导航状态驱动 |
@@ -544,7 +631,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | ANI-014 | 研究拨盘/页面反馈、逐砖湿干变化、熔炉炉门/内容物/热光阶段 | `src/game/systems/ProgressionSystem.ts` | 与全局知识、逐砖计时、熔炼工作/完成和 v8 恢复同步 |
 | ANI-015 | 木矛/金属矛与石斧/金属斧实时换模、挥击和分级命中 | `src/game/systems/SpearSystem.ts`、`IslandSystem.ts` | 升级制作后自动替换快捷栏，鲨鱼和棕榈实际接收不同伤害 |
 | ANI-016 | 舵轮修正、罗盘指向、齿轮联动、航线针切换、强化帆鼓动和过载自动泄压 | `src/game/systems/NavigationSystem.ts` | 与四种航线、阵风偏航、帆具载荷、交互、音频和 v10 恢复同步 |
-| ANI-017 | 五杯水位/完成标记、三份鱼段独立火候、共享燃料条、柜盖与内容标记 | `src/game/systems/DeviceSystem.ts` | 与高级设备领域队列、真实库存、HUD、音频和 v10 恢复同步；鲜鱼肉 PBR 已接线，完整烹饪视觉门禁待收敛 |
+| ANI-017 | 五杯水位/完成标记、三份鱼段独立火候、共享燃料条、柜盖与内容标记 | `src/game/systems/DeviceSystem.ts` | 与高级设备领域队列、真实库存、HUD、音频和 v10 恢复同步；共享燃料、断火续燃、熟优先收取、停止空烧和三状态 PBR 门禁通过 |
 | ANI-018 | 锚机棘轮加装、锁链受力、风暴载荷累积与未强化锚滑脱 | `src/game/systems/NavigationSystem.ts` | 与锚泊后果、警报、音频、模型强化和 v10 恢复同步 |
 | ANI-019 | 接收台扫描/调谐/电量、双桅相位/传播、目标浮筒/转子/脉冲与抵达解码 | `src/game/systems/NavigationSystem.ts` | 与电池、间距、活动信号、世界位置、距离、访问解锁和 v10 恢复同步 |
 | ANI-020 | 结构分件幽灵预览、旋转/层高切换、板门开合、连续楼梯登层、上层落地/分层碰撞、楼板/斜顶撞顶、三档受损色泽/确定性松动和承重级联 | `src/game/systems/BuildSystem.ts`、`RaftStructureSystem.ts`、`PlayerController.ts` | 与材料、锤耐久、共享占位、四向楼梯入口、材质撞顶音尘、鲨鱼外沿择靶、修补 HUD、支撑拓扑和 v15 恢复同步；不增加结构实例批次 |
@@ -599,7 +686,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 - 用 Blender 或等效 DCC 建立可蒙皮的最终双手、工具、鲨鱼和生活设备资产，当前代码模型是原创近最终形体基线而非最终蒙皮资产；
 - 为木材补充经过人工修整的 normal、roughness 与 AO；鲨皮和编织纤维已使用独立派生图；
-- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005 至 TEX-018 与 TEX-020 已采用高质量输出，TEX-019 仍待烹饪场景批准；
+- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005 至 TEX-024 已采用高质量输出；
 - 建立同一角色比例与材质语言下的模型规范；
 - 为岛屿补充手绘沙地/草地/岩面材质组、草丛层级和更丰富的岸线小物，保持现有确定性地形与碰撞接口；
 - 为漂流箱桶、最终双手/钩具、木筏结构套件、潮兜收集网、珊瑚、海草、鱼群、水下钩具、拾风帆、强化索具/锚具、定潮舵台、接收台/阵列/中继标、高级生活设备、作物、盐翼盗鸟、研究台、通风架、熔炉和金属工具建立最终 DCC 模型、蒙皮与顶点动画，保留当前布局和领域接口；

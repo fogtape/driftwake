@@ -2,9 +2,11 @@ import { Box3, Group, InstancedMesh, Mesh, MeshBasicMaterial, MeshStandardMateri
 import { describe, expect, it } from 'vitest';
 import type { MaterialLibrary } from './Materials';
 import {
+  applyFoodMaterialStage,
   createAxeModel,
   createDebrisModel,
   createExplorableIsland,
+  createFishFilletModel,
   createFishingFishModel,
   createFishingRodModel,
   createGrillModel,
@@ -15,6 +17,7 @@ import {
   createSharkModel,
   createSharkLootDropModel,
   createSpearModel,
+  foodMaterialStageOf,
 } from './ProceduralModels';
 import { createReefModel, createReefNodeModel } from './UnderwaterModels';
 import { createAnchorModel, createHelmModel, createSailModel } from './NavigationModels';
@@ -46,6 +49,10 @@ function createTestMaterials(): MaterialLibrary {
     amberFinSkin: texturedMaterial(),
     sailtailRunnerSkin: texturedMaterial(),
     fishFlesh: texturedMaterial(),
+    cookedFishFlesh: texturedMaterial(),
+    burntFishFlesh: texturedMaterial(),
+    saltfireIron: texturedMaterial(),
+    saltEtchedPolymer: texturedMaterial(),
     fishEye: texturedMaterial(),
     sharkMouth: material(),
     sharkEye: material(),
@@ -197,7 +204,31 @@ describe('procedural model assets', () => {
     expect(grillSize.x).toBeGreaterThan(0.8);
     expect(purifier.userData.deviceVisuals.cleanWater).toBeDefined();
     expect(grill.userData.deviceVisuals.foodMeshes.length).toBeGreaterThanOrEqual(3);
+    const food = grill.userData.deviceVisuals.food as Group;
+    food.visible = true;
+    const foodSize = new Box3().setFromObject(food).getSize(new Vector3());
+    expect(foodSize.y).toBeLessThan(foodSize.x);
+    expect(foodSize.y).toBeLessThan(foodSize.z);
   }, 15_000);
+
+  it('switches prepared fish between independent raw, cooked and burnt PBR maps', () => {
+    const materials = createTestMaterials();
+    const fillet = createFishFilletModel(materials);
+    const mesh = fillet.children.find((child): child is Mesh<never, MeshStandardMaterial> => (
+      child instanceof Mesh && child.material instanceof MeshStandardMaterial
+    ));
+    expect(mesh).toBeDefined();
+    expect(foodMaterialStageOf(mesh!)).toBe('raw');
+    applyFoodMaterialStage(mesh!, 'cooked');
+    expect(foodMaterialStageOf(mesh!)).toBe('cooked');
+    expect(mesh!.material.map).toBe(materials.cookedFishFlesh.map);
+    expect(mesh!.material.normalMap).toBe(materials.cookedFishFlesh.normalMap);
+    expect(mesh!.material.roughnessMap).toBe(materials.cookedFishFlesh.roughnessMap);
+    applyFoodMaterialStage(mesh!, 'burnt');
+    expect(foodMaterialStageOf(mesh!)).toBe('burnt');
+    expect(mesh!.material.map).toBe(materials.burntFishFlesh.map);
+    expect(mesh!.material.roughness).toBe(materials.burntFishFlesh.roughness);
+  });
 
   it('builds high-detail advanced survival devices with per-slot visual references', () => {
     const materials = createTestMaterials();
@@ -210,6 +241,14 @@ describe('procedural model assets', () => {
     expect(solar.userData.deviceVisuals.waterCells).toHaveLength(5);
     expect(grill.userData.deviceVisuals.foodSlots).toHaveLength(3);
     expect(grill.userData.deviceVisuals.fuelBars).toHaveLength(4);
+    expect((grill.getObjectByName('triple-grill-fire-mouth') as Mesh).material).toBe(materials.saltfireIron);
+    expect((grill.getObjectByName('triple-grill-grate-0') as Mesh).material).toBe(materials.saltfireIron);
+    for (const food of grill.userData.deviceVisuals.foodSlots as Group[]) {
+      food.visible = true;
+      const foodSize = new Box3().setFromObject(food).getSize(new Vector3());
+      expect(foodSize.y).toBeLessThan(foodSize.x);
+      expect(foodSize.y).toBeLessThan(foodSize.z);
+    }
     expect(locker.userData.deviceVisuals.storageMarkers).toHaveLength(8);
     expect(new Box3().setFromObject(solar).getSize(new Vector3()).x).toBeGreaterThan(1.05);
     expect(new Box3().setFromObject(locker).getSize(new Vector3()).y).toBeGreaterThan(0.85);

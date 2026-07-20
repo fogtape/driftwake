@@ -1,5 +1,4 @@
 import {
-  Color,
   Group,
   MathUtils,
   Mesh,
@@ -17,8 +16,10 @@ import {
   createTripleGrillModel,
 } from '../art/AdvancedDeviceModels';
 import {
+  applyFoodMaterialStage,
   createGrillModel,
   createPurifierModel,
+  foodMaterialStageOf,
   type DeviceModelVisuals,
 } from '../art/ProceduralModels';
 import type { MaterialLibrary } from '../art/Materials';
@@ -70,8 +71,17 @@ interface DeviceRuntime {
   visuals: DeviceModelVisuals;
 }
 
-const COOKED_COLOR = new Color(0xb76a3f);
-const BURNT_COLOR = new Color(0x2f2925);
+export interface CookingDiagnostics {
+  basePhase: string;
+  baseFoodStage: string;
+  baseMaterialMaps: string;
+  purifierMaterialMaps: string;
+  triplePhases: string;
+  tripleFoodStages: string;
+  tripleFuelSeconds: number;
+  tripleMaterialMaps: string;
+}
+
 const DEVICE_TYPES: readonly DeviceType[] = ['purifier', 'grill', 'solarPurifier', 'tripleGrill', 'locker'];
 
 function coordinateEquals(a: GridCoordinate | null, b: GridCoordinate | null): boolean {
@@ -92,8 +102,6 @@ export class DeviceSystem {
   private readonly worldHit = new Vector3();
   private readonly forward = new Vector3();
   private readonly inverseRaftRotation = new Quaternion();
-  private readonly rawColor = new Color();
-  private readonly targetColor = new Color();
   private placementType: DeviceType | null = null;
   private placementCoordinate: GridCoordinate | null = null;
   private placementRotation = 0;
@@ -155,6 +163,25 @@ export class DeviceSystem {
       this.focused = null;
       this.clearPrompt();
     }
+  }
+
+  getCookingDiagnostics(): CookingDiagnostics {
+    const base = [...this.devices.values()].find((runtime) => runtime.state.type === 'grill');
+    const purifier = [...this.devices.values()].find((runtime) => runtime.state.type === 'purifier');
+    const triple = [...this.devices.values()].find((runtime) => runtime.state.type === 'tripleGrill');
+    return {
+      basePhase: base?.state.phase ?? 'none',
+      baseFoodStage: base?.visuals.foodMeshes?.[0] ? foodMaterialStageOf(base.visuals.foodMeshes[0]) : 'none',
+      baseMaterialMaps: base ? this.modelMaterialMaps(base.model) : 'none',
+      purifierMaterialMaps: purifier ? this.modelMaterialMaps(purifier.model) : 'none',
+      triplePhases: triple?.state.grillSlots.map((slot) => slot.phase).join('|') || 'none',
+      tripleFoodStages: triple?.visuals.foodSlotMeshes
+        ?.slice(0, triple.state.grillSlots.length)
+        .map((meshes) => (meshes[0] ? foodMaterialStageOf(meshes[0]) : 'none'))
+        .join('|') || 'none',
+      tripleFuelSeconds: triple?.state.fuelSeconds ?? 0,
+      tripleMaterialMaps: triple ? this.modelMaterialMaps(triple.model) : 'none',
+    };
   }
 
   update(time: number, delta: number): void {
@@ -794,11 +821,9 @@ export class DeviceSystem {
         const blend = slot.phase === 'burnt'
           ? 1
           : MathUtils.smoothstep(slot.elapsed / DEVICE_DEFINITIONS.tripleGrill.duration, 0.16, 1);
+        const foodStage = slot.phase === 'burnt' ? 'burnt' : blend >= 0.72 ? 'cooked' : 'raw';
         visuals.foodSlotMeshes?.[index]?.forEach((mesh) => {
-          this.rawColor.setHex(mesh.material.userData.rawColor ?? 0x8eb9bb);
-          this.targetColor.copy(slot.phase === 'burnt' ? BURNT_COLOR : COOKED_COLOR);
-          mesh.material.color.copy(this.rawColor).lerp(this.targetColor, blend);
-          mesh.material.roughness = MathUtils.lerp(0.48, slot.phase === 'burnt' ? 0.96 : 0.72, blend);
+          applyFoodMaterialStage(mesh, foodStage);
         });
       });
       visuals.fuelBars?.forEach((bar, index) => {
@@ -834,11 +859,9 @@ export class DeviceSystem {
     if (visuals.food && visuals.foodMeshes) {
       visuals.food.visible = state.phase !== 'idle';
       const cookedBlend = state.phase === 'burnt' ? 1 : MathUtils.smoothstep(progress, 0.18, 1);
+      const foodStage = state.phase === 'burnt' ? 'burnt' : cookedBlend >= 0.72 ? 'cooked' : 'raw';
       visuals.foodMeshes.forEach((mesh) => {
-        this.rawColor.setHex(mesh.material.userData.rawColor ?? 0x8eb9bb);
-        this.targetColor.copy(state.phase === 'burnt' ? BURNT_COLOR : COOKED_COLOR);
-        mesh.material.color.copy(this.rawColor).lerp(this.targetColor, cookedBlend);
-        mesh.material.roughness = MathUtils.lerp(0.48, state.phase === 'burnt' ? 0.96 : 0.72, cookedBlend);
+        applyFoodMaterialStage(mesh, foodStage);
       });
       visuals.food.position.y = 0.49 + (heating ? Math.sin(time * 8.2) * 0.005 : 0);
     }
@@ -897,6 +920,17 @@ export class DeviceSystem {
       this.showNotice(`${DEVICE_DEFINITIONS[runtime.state.type].name}随筏格落海`);
     }
     this.publishFeedback();
+  }
+
+  private modelMaterialMaps(model: Group): string {
+    const maps = new Set<string>();
+    model.traverse((object) => {
+      if (!(object instanceof Mesh) || !(object.material instanceof MeshStandardMaterial)) return;
+      for (const texture of [object.material.map, object.material.normalMap, object.material.roughnessMap]) {
+        if (texture?.name) maps.add(texture.name);
+      }
+    });
+    return [...maps].sort().join('|') || 'none';
   }
 
   private publishFeedback(): void {

@@ -1,6 +1,6 @@
 # Driftwake
 
-原创桌面网页 3D 海上生存游戏。当前版本为 `0.16.0` 高质量纵向切片，不以基础 Demo 为完成标准。
+原创桌面网页 3D 海上生存游戏。当前版本为 `0.17.0` 高质量纵向切片，不以基础 Demo 为完成标准。
 
 ## 当前内容
 
@@ -52,9 +52,9 @@
 - v18 版本化自动存档继续保存逐格缘甲、收集网、多层脚底与结构状态，并新增鲨鱼伤势、漂浮尸体、采集段数和重生冷却；v1-v17 自动升级，非法鲨鱼状态、内缘、重复边位、悬空网具、超容量内容和伪造缘甲字段不会污染运行时；
 - 六总线程序音频混音、随完整相机姿态更新的 HRTF 落水/打捞定位、近场绳索受力与断裂层，以及水下低通、鲨鱼失力/浮尸/分段割取/下沉、震叉分段蓄能/就绪/失调/脉冲、生活/信号设备、锚帆、风雨雷声、种植、研究、礁区和生物声音；
 - 标题、HUD、背包、制作、设置、能力提示和 Playwright 截图回归流程；
-- 原创标题美术、木材、泡沫、鲨皮、编织纤维、AI 辅助海床、拼补帆布、培养土、耐火陶土、导航合金、信号层压板、磷光玻璃、盐蚀集热玻璃、蜡封帆布、盐封手套、三种鱼皮、鲜鱼肉、远洋鱼眼 PBR 与飑云天空材质，以及对应的独立 normal/roughness 图。
+- 原创标题美术、木材、泡沫、鲨皮、编织纤维、AI 辅助海床、拼补帆布、培养土、耐火陶土、导航合金、信号层压板、磷光玻璃、盐蚀集热玻璃、蜡封帆布、盐封手套、三种鱼皮、生/熟/焦鱼肉、远洋鱼眼、耐热折铁、盐蚀聚合物 PBR 与飑云天空材质，以及对应的独立 normal/roughness 图。
 
-当前仍不是完整游戏。M6 钓鱼代码与自动视觉闭环已经完成，但烹饪/净水维护链、天气农业、作物与盐翼盗鸟材质仍在收敛；整套建造流程与鲨鱼连续多轮的无说明玩家验收、目标真实 GPU 鼠标/双画质门禁、更多深水生态资源、潜水装备、大型信号目的地、无说明玩家平衡验收和最终蒙皮资产仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
+当前仍不是完整游戏。M6 钓鱼、烹饪/净水代码与自动视觉闭环已经完成，但天气农业、作物与盐翼盗鸟材质仍在收敛；整套建造流程与鲨鱼连续多轮的无说明玩家验收、目标真实 GPU 鼠标/双画质门禁、更多深水生态资源、潜水装备、大型信号目的地、无说明玩家平衡验收和最终蒙皮资产仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
 
 ## 运行
 
@@ -75,13 +75,15 @@ npm run test:stability
 npm run capture
 ```
 
-截图脚本默认连接 `http://127.0.0.1:4173`，支持 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH`、`CAPTURE_HEIGHT`、`CAPTURE_QUALITY` 和 `CAPTURE_ONLY`。目标包括 `title`、`pause`、`game`、`hook`、`salvage`、`fishing`、`collection-net`、`perimeter-defense`、`perimeter-defense-visual`、`structure-collapse`、`failure`、`shark-combat`、`shark-loot`、`shark-loot-water`、`pack`、`crafting`、`survival`、`durability`、`building`、`devices`、`advanced`、`signal`、种植/研究/岛屿/水下/导航各主流程、`underwater-narrow`、`narrow`、`settings` 和 `mobile`。`fishing` 的 `variety / capacity / all` 分段验证连续三鱼种真实捕获、拉力差异、材质预热/绑定、单实例鱼体、实际入包后磨损、部分容量返海、满包零磨损与 512x320 HUD；`FISHING_VISUAL_IDS` 可隔离指定物种的 1024x640 高画质捕获近景。`shark-combat` 的 `visual`、`counter`、`resonance`、`water` 分段验证蓄势 HUD、限时矛击、震叉取消/锁定/原子消耗/驱离，以及水中两次结算上限；默认用页面内边沿事件保证软件 GLES 确定性，目标真实 GPU 使用 `SHARK_COMBAT_INPUT=mouse` 复验 Playwright 鼠标时序。`shark-loot` 验证木筏边真实刺击、四段按住采集、满包四份池化落海、v18 冷启动和水中全部入包；`shark-loot-water` 可独立复验水中路径。`building` 的 `behavior`、`visual`、`traversal`、`ceiling`、`damage` 分段分别验证分类/件型选择隔离、建造/替换事务、512×320 HUD、多层移动、楼板/斜顶撞顶速度截断，以及鲨鱼撕咬、v18 受损恢复和真实锤修；`collection-net` 验证背包安置、被动截获、E 收取、v18 冷重载与锤拆返还；`perimeter-defense` 验证缘甲安装/返料、同侧网具择靶、55% 减伤、E 修补、冷重载和毁网落物；`structure-collapse` 验证真实鲨鱼咬断承重柱、四件结构级联、双块坠落、逐件入水回收和只保存最终结构真值。3D 截图使用分布式 WebGL 像素门禁，拒绝黑屏、白屏、HUD 相交和丢失的上下文。
+截图脚本默认连接 `http://127.0.0.1:4173`，支持 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH`、`CAPTURE_HEIGHT`、`CAPTURE_QUALITY` 和 `CAPTURE_ONLY`。目标包括 `title`、`pause`、`game`、`hook`、`salvage`、`fishing`、`cooking`、`collection-net`、`perimeter-defense`、`perimeter-defense-visual`、`structure-collapse`、`failure`、`shark-combat`、`shark-loot`、`shark-loot-water`、`pack`、`crafting`、`survival`、`durability`、`building`、`devices`、`advanced`、`signal`、种植/研究/岛屿/水下/导航各主流程、`underwater-narrow`、`narrow`、`settings` 和 `mobile`。`fishing` 的 `variety / capacity / all` 分段验证连续三鱼种真实捕获、拉力差异、材质预热/绑定、单实例鱼体、实际入包后磨损、部分容量返海、满包零磨损与 512x320 HUD；`FISHING_VISUAL_IDS` 可隔离指定物种的 1024x640 高画质捕获近景。`cooking` 的 `base / burnt / visual / all` 分段验证真实投料/收取、自然焦黑、生/熟/焦 PBR 和基础生活设备近景；`COOKING_VISUAL_TARGET=base|triple|all` 可隔离视觉场景。`shark-combat` 的 `visual`、`counter`、`resonance`、`water` 分段验证蓄势 HUD、限时矛击、震叉取消/锁定/原子消耗/驱离，以及水中两次结算上限；默认用页面内边沿事件保证软件 GLES 确定性，目标真实 GPU 使用 `SHARK_COMBAT_INPUT=mouse` 复验 Playwright 鼠标时序。`shark-loot` 验证木筏边真实刺击、四段按住采集、满包四份池化落海、v18 冷启动和水中全部入包；`shark-loot-water` 可独立复验水中路径。`building` 的 `behavior`、`visual`、`traversal`、`ceiling`、`damage` 分段分别验证分类/件型选择隔离、建造/替换事务、512×320 HUD、多层移动、楼板/斜顶撞顶速度截断，以及鲨鱼撕咬、v18 受损恢复和真实锤修；`collection-net` 验证背包安置、被动截获、E 收取、v18 冷重载与锤拆返还；`perimeter-defense` 验证缘甲安装/返料、同侧网具择靶、55% 减伤、E 修补、冷重载和毁网落物；`structure-collapse` 验证真实鲨鱼咬断承重柱、四件结构级联、双块坠落、逐件入水回收和只保存最终结构真值。3D 截图使用分布式 WebGL 像素门禁，拒绝黑屏、白屏、HUD 相交和丢失的上下文。
 
 Termux Chromium 149 的纯 headless 后端会在 WebGL draw call 后首次 readback 时丢失上下文。M1 曾以 Debian Chromium 150 + Xvfb/headful GLES 完成冻结版 1200 秒软件长稳；2026-07-20 当前 Termux 的最终构建可稳定完成 `crafting`、`survival`、分段 `durability`、`building`、`collection-net`、`perimeter-defense`、`structure-collapse`、`shark-combat`、`shark-loot` 与 `fishing` 的领域/交互/v18 写入，也可完成结构、缘甲、装载网具、坠落实体、鲨鱼蓄势/鲨体和三鱼种捕获场景的有效像素或合成帧回读。加速门禁仍驱动正式固定步并受 `maxSubSteps` 钳制，只作为正确性与构图证据；冷启动恢复、锤修和锤拆继续使用原生时间。真实 GPU 的 1280x720/30、1920x1080/60、M2 十分钟手感、M3 失败页恢复画面/混音、M4 两层扩建/攻防手感、M5 战斗/采集，以及 M6 钓鱼鼠标手感/材质/混音仍是发布门禁。详见 [M1 验收记录](docs/M1_ACCEPTANCE.md)、[M2 验收记录](docs/M2_ACCEPTANCE.md)、[M3 验收记录](docs/M3_ACCEPTANCE.md)、[M4 验收记录](docs/M4_ACCEPTANCE.md)、[M5 验收记录](docs/M5_ACCEPTANCE.md) 与 [M6 验收记录](docs/M6_ACCEPTANCE.md)。
 
 M5 连续门禁复现：`CAPTURE_ONLY=shark-loot SHARK_LOOT_STAGE=loop CAPTURE_FAST=1 npm run capture`。软件环境默认使用页面内边沿事件；目标真实 GPU 使用 `SHARK_LOOT_INPUT=mouse`，并按 `docs/M5_ACCEPTANCE.md` 的双画质与无说明玩家清单验收。
 
 M6 钓鱼门禁复现：`CAPTURE_ONLY=fishing FISHING_STAGE=variety CAPTURE_FAST=1 npm run capture` 验证连续三鱼种；`CAPTURE_ONLY=fishing FISHING_STAGE=capacity CAPTURE_FAST=1 npm run capture` 验证部分容量与满包事务；指定 `FISHING_VISUAL_IDS=silver-spine,sailtail-runner,amber-fin CAPTURE_QUALITY=high` 生成三鱼种近景，详细阈值见 `docs/M6_ACCEPTANCE.md`。
+
+M6 烹饪门禁复现：`CAPTURE_ONLY=cooking COOKING_STAGE=base npm run capture` 验证真实投料/等待/收取，`COOKING_STAGE=burnt` 验证完整焦鱼边界；视觉阶段分别使用 `COOKING_STAGE=visual COOKING_VISUAL_TARGET=triple` 与 `COOKING_VISUAL_TARGET=base` 生成三火候和基础设备高画质近景，详细阈值见 `docs/M6_ACCEPTANCE.md`。
 
 ## 资产管线
 

@@ -108,8 +108,6 @@ function cloneFood(materials: MaterialLibrary): {
   const meshes: Mesh<BufferGeometry, MeshStandardMaterial>[] = [];
   food.traverse((object) => {
     if (!(object instanceof Mesh) || !(object.material instanceof MeshStandardMaterial)) return;
-    object.material = object.material.clone();
-    object.material.userData.rawColor = object.material.color.getHex();
     meshes.push(object as Mesh<BufferGeometry, MeshStandardMaterial>);
   });
   return { food, meshes };
@@ -123,7 +121,7 @@ export function createSolarPurifierModel(materials: MaterialLibrary): Group {
   const base = shadowed(new Mesh(new RoundedBoxGeometry(1.04, 0.16, 0.72, 4, 0.06), materials.navigationAlloy));
   base.position.y = 0.25;
   purifier.add(base);
-  const basin = shadowed(new Mesh(new RoundedBoxGeometry(0.92, 0.15, 0.58, 4, 0.05), materials.polymer));
+  const basin = shadowed(new Mesh(new RoundedBoxGeometry(0.92, 0.15, 0.58, 4, 0.05), materials.saltEtchedPolymer));
   basin.position.y = 0.36;
   purifier.add(basin);
 
@@ -241,7 +239,8 @@ export function createTripleGrillModel(materials: MaterialLibrary): Group {
   const firebox = shadowed(new Mesh(new RoundedBoxGeometry(1.08, 0.26, 0.64, 4, 0.07), materials.refractoryClay));
   firebox.position.y = 0.29;
   grill.add(firebox);
-  const fireMouth = shadowed(new Mesh(new RoundedBoxGeometry(0.58, 0.16, 0.055, 3, 0.025), materials.rustMetal));
+  const fireMouth = shadowed(new Mesh(new RoundedBoxGeometry(0.58, 0.16, 0.055, 3, 0.025), materials.saltfireIron));
+  fireMouth.name = 'triple-grill-fire-mouth';
   fireMouth.position.set(0, 0.28, 0.33);
   grill.add(fireMouth);
 
@@ -249,7 +248,8 @@ export function createTripleGrillModel(materials: MaterialLibrary): Group {
   top.position.y = 0.48;
   grill.add(top);
   for (let index = -6; index <= 6; index += 1) {
-    const rod = shadowed(new Mesh(new CylinderGeometry(0.009, 0.009, 0.6, 6), materials.metal));
+    const rod = shadowed(new Mesh(new CylinderGeometry(0.009, 0.009, 0.6, 6), materials.saltfireIron));
+    rod.name = `triple-grill-grate-${index}`;
     rod.position.set(index * 0.082, 0.535, 0);
     rod.rotation.x = Math.PI / 2;
     grill.add(rod);
@@ -267,7 +267,7 @@ export function createTripleGrillModel(materials: MaterialLibrary): Group {
     const { food, meshes } = cloneFood(materials);
     food.name = `triple-grill-food-${index}`;
     food.position.set((index - 1) * 0.36, 0.62, 0);
-    food.rotation.set(0, Math.PI / 2, Math.PI / 2);
+    food.rotation.y = Math.PI / 2;
     food.scale.setScalar(0.39);
     food.visible = false;
     foodSlots.push(food);

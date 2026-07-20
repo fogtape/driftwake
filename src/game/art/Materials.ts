@@ -31,6 +31,18 @@ export interface AssetTextures {
   fishFlesh: Texture;
   fishFleshNormal: Texture;
   fishFleshRoughness: Texture;
+  cookedFishFlesh: Texture;
+  cookedFishFleshNormal: Texture;
+  cookedFishFleshRoughness: Texture;
+  burntFishFlesh: Texture;
+  burntFishFleshNormal: Texture;
+  burntFishFleshRoughness: Texture;
+  saltfireIron: Texture;
+  saltfireIronNormal: Texture;
+  saltfireIronRoughness: Texture;
+  saltEtchedPolymer: Texture;
+  saltEtchedPolymerNormal: Texture;
+  saltEtchedPolymerRoughness: Texture;
   fishEye: Texture;
   fishEyeNormal: Texture;
   fishEyeRoughness: Texture;
@@ -86,6 +98,10 @@ export interface MaterialLibrary {
   amberFinSkin: MeshStandardMaterial;
   sailtailRunnerSkin: MeshStandardMaterial;
   fishFlesh: MeshStandardMaterial;
+  cookedFishFlesh: MeshStandardMaterial;
+  burntFishFlesh: MeshStandardMaterial;
+  saltfireIron: MeshStandardMaterial;
+  saltEtchedPolymer: MeshStandardMaterial;
   fishEye: MeshStandardMaterial;
   sharkMouth: MeshStandardMaterial;
   sharkEye: MeshStandardMaterial;
@@ -136,6 +152,18 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     fishFlesh,
     fishFleshNormal,
     fishFleshRoughness,
+    cookedFishFlesh,
+    cookedFishFleshNormal,
+    cookedFishFleshRoughness,
+    burntFishFlesh,
+    burntFishFleshNormal,
+    burntFishFleshRoughness,
+    saltfireIron,
+    saltfireIronNormal,
+    saltfireIronRoughness,
+    saltEtchedPolymer,
+    saltEtchedPolymerNormal,
+    saltEtchedPolymerRoughness,
     fishEye,
     fishEyeNormal,
     fishEyeRoughness,
@@ -191,6 +219,18 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/fresh-fish-flesh.webp'),
     loader.loadAsync('/assets/textures/fresh-fish-flesh-normal.webp'),
     loader.loadAsync('/assets/textures/fresh-fish-flesh-roughness.webp'),
+    loader.loadAsync('/assets/textures/cooked-fish-flesh.webp'),
+    loader.loadAsync('/assets/textures/cooked-fish-flesh-normal.webp'),
+    loader.loadAsync('/assets/textures/cooked-fish-flesh-roughness.webp'),
+    loader.loadAsync('/assets/textures/burnt-fish-flesh.webp'),
+    loader.loadAsync('/assets/textures/burnt-fish-flesh-normal.webp'),
+    loader.loadAsync('/assets/textures/burnt-fish-flesh-roughness.webp'),
+    loader.loadAsync('/assets/textures/saltfire-folded-iron.webp'),
+    loader.loadAsync('/assets/textures/saltfire-folded-iron-normal.webp'),
+    loader.loadAsync('/assets/textures/saltfire-folded-iron-roughness.webp'),
+    loader.loadAsync('/assets/textures/salt-etched-polymer.webp'),
+    loader.loadAsync('/assets/textures/salt-etched-polymer-normal.webp'),
+    loader.loadAsync('/assets/textures/salt-etched-polymer-roughness.webp'),
     loader.loadAsync('/assets/textures/pelagic-fish-eye.webp'),
     loader.loadAsync('/assets/textures/pelagic-fish-eye-normal.webp'),
     loader.loadAsync('/assets/textures/pelagic-fish-eye-roughness.webp'),
@@ -244,6 +284,18 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     [fishFlesh, 'fresh-fish-flesh-albedo'],
     [fishFleshNormal, 'fresh-fish-flesh-normal'],
     [fishFleshRoughness, 'fresh-fish-flesh-roughness'],
+    [cookedFishFlesh, 'cooked-fish-flesh-albedo'],
+    [cookedFishFleshNormal, 'cooked-fish-flesh-normal'],
+    [cookedFishFleshRoughness, 'cooked-fish-flesh-roughness'],
+    [burntFishFlesh, 'burnt-fish-flesh-albedo'],
+    [burntFishFleshNormal, 'burnt-fish-flesh-normal'],
+    [burntFishFleshRoughness, 'burnt-fish-flesh-roughness'],
+    [saltfireIron, 'saltfire-folded-iron-albedo'],
+    [saltfireIronNormal, 'saltfire-folded-iron-normal'],
+    [saltfireIronRoughness, 'saltfire-folded-iron-roughness'],
+    [saltEtchedPolymer, 'salt-etched-polymer-albedo'],
+    [saltEtchedPolymerNormal, 'salt-etched-polymer-normal'],
+    [saltEtchedPolymerRoughness, 'salt-etched-polymer-roughness'],
     [fishEye, 'pelagic-fish-eye-albedo'],
     [fishEyeNormal, 'pelagic-fish-eye-normal'],
     [fishEyeRoughness, 'pelagic-fish-eye-roughness'],
@@ -298,15 +350,37 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     textureSet[1].colorSpace = NoColorSpace;
     textureSet[2].colorSpace = NoColorSpace;
   }
-  for (const texture of [fishFlesh, fishFleshNormal, fishFleshRoughness]) {
-    texture.wrapS = RepeatWrapping;
-    texture.wrapT = RepeatWrapping;
-    texture.repeat.set(1.35, 1.25);
-    texture.anisotropy = anisotropy;
+  const fishFleshSets = [
+    [fishFlesh, fishFleshNormal, fishFleshRoughness],
+    [cookedFishFlesh, cookedFishFleshNormal, cookedFishFleshRoughness],
+    [burntFishFlesh, burntFishFleshNormal, burntFishFleshRoughness],
+  ];
+  for (const textureSet of fishFleshSets) {
+    for (const texture of textureSet) {
+      texture.wrapS = RepeatWrapping;
+      texture.wrapT = RepeatWrapping;
+      texture.repeat.set(1.35, 1.25);
+      texture.anisotropy = anisotropy;
+    }
+    textureSet[0].colorSpace = SRGBColorSpace;
+    textureSet[1].colorSpace = NoColorSpace;
+    textureSet[2].colorSpace = NoColorSpace;
   }
-  fishFlesh.colorSpace = SRGBColorSpace;
-  fishFleshNormal.colorSpace = NoColorSpace;
-  fishFleshRoughness.colorSpace = NoColorSpace;
+  const cookingDeviceSets = [
+    [saltfireIron, saltfireIronNormal, saltfireIronRoughness, 1.55, 1.45],
+    [saltEtchedPolymer, saltEtchedPolymerNormal, saltEtchedPolymerRoughness, 1.25, 1.2],
+  ] as const;
+  for (const [albedo, normal, roughness, repeatX, repeatY] of cookingDeviceSets) {
+    for (const texture of [albedo, normal, roughness]) {
+      texture.wrapS = RepeatWrapping;
+      texture.wrapT = RepeatWrapping;
+      texture.repeat.set(repeatX, repeatY);
+      texture.anisotropy = anisotropy;
+    }
+    albedo.colorSpace = SRGBColorSpace;
+    normal.colorSpace = NoColorSpace;
+    roughness.colorSpace = NoColorSpace;
+  }
   for (const texture of [fishEye, fishEyeNormal, fishEyeRoughness]) {
     texture.anisotropy = anisotropy;
   }
@@ -437,6 +511,18 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     fishFlesh,
     fishFleshNormal,
     fishFleshRoughness,
+    cookedFishFlesh,
+    cookedFishFleshNormal,
+    cookedFishFleshRoughness,
+    burntFishFlesh,
+    burntFishFleshNormal,
+    burntFishFleshRoughness,
+    saltfireIron,
+    saltfireIronNormal,
+    saltfireIronRoughness,
+    saltEtchedPolymer,
+    saltEtchedPolymerNormal,
+    saltEtchedPolymerRoughness,
     fishEye,
     fishEyeNormal,
     fishEyeRoughness,
@@ -561,6 +647,42 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       normalScale: new Vector2(0.34, 0.34),
       roughnessMap: textures.fishFleshRoughness,
       roughness: 0.82,
+      metalness: 0,
+    }),
+    cookedFishFlesh: new MeshStandardMaterial({
+      color: 0xffead7,
+      map: textures.cookedFishFlesh,
+      normalMap: textures.cookedFishFleshNormal,
+      normalScale: new Vector2(0.36, 0.36),
+      roughnessMap: textures.cookedFishFleshRoughness,
+      roughness: 0.84,
+      metalness: 0,
+    }),
+    burntFishFlesh: new MeshStandardMaterial({
+      color: 0xffffff,
+      map: textures.burntFishFlesh,
+      normalMap: textures.burntFishFleshNormal,
+      normalScale: new Vector2(0.42, 0.42),
+      roughnessMap: textures.burntFishFleshRoughness,
+      roughness: 0.94,
+      metalness: 0,
+    }),
+    saltfireIron: new MeshStandardMaterial({
+      color: 0xb9c1bd,
+      map: textures.saltfireIron,
+      normalMap: textures.saltfireIronNormal,
+      normalScale: new Vector2(0.58, 0.58),
+      roughnessMap: textures.saltfireIronRoughness,
+      roughness: 0.78,
+      metalness: 0.68,
+    }),
+    saltEtchedPolymer: new MeshStandardMaterial({
+      color: 0xe2ebe4,
+      map: textures.saltEtchedPolymer,
+      normalMap: textures.saltEtchedPolymerNormal,
+      normalScale: new Vector2(0.3, 0.3),
+      roughnessMap: textures.saltEtchedPolymerRoughness,
+      roughness: 0.72,
       metalness: 0,
     }),
     fishEye: new MeshStandardMaterial({

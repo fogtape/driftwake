@@ -55,6 +55,10 @@ function createTestMaterials(): MaterialLibrary {
     amberFinSkin: material(),
     sailtailRunnerSkin: material(),
     fishFlesh: material(),
+    cookedFishFlesh: material(),
+    burntFishFlesh: material(),
+    saltfireIron: material(),
+    saltEtchedPolymer: material(),
     fishEye: material(),
   };
 }

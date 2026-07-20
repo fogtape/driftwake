@@ -293,6 +293,18 @@ export class DriftwakeGame {
     this.mount.dataset.fishingModelScale = '0';
     this.mount.dataset.fishingMaterialMaps = 'none';
     this.mount.dataset.fishingPhaseTime = '0';
+    this.mount.dataset.cookingBasePhase = 'none';
+    this.mount.dataset.cookingBaseFoodStage = 'none';
+    this.mount.dataset.cookingBaseMaterialMaps = 'none';
+    this.mount.dataset.cookingPurifierMaterialMaps = 'none';
+    this.mount.dataset.cookingTriplePhases = 'none';
+    this.mount.dataset.cookingTripleFoodStages = 'none';
+    this.mount.dataset.cookingTripleFuelSeconds = '0';
+    this.mount.dataset.cookingTripleMaterialMaps = 'none';
+    this.mount.dataset.cookingRawFish = '0';
+    this.mount.dataset.cookingCookedFish = '0';
+    this.mount.dataset.cookingBurntFish = '0';
+    this.mount.dataset.cookingTimber = '0';
     this.mount.dataset.buildMode = 'hidden';
     this.mount.dataset.buildTarget = 'none';
     this.mount.dataset.buildHovered = 'none';
@@ -628,6 +640,7 @@ export class DriftwakeGame {
           this.syncToolDurabilityDiagnostics();
         }
         if (state.fishing !== previous.fishing) this.syncFishingDiagnostics();
+        if (state.devices !== previous.devices || state.inventory !== previous.inventory) this.syncCookingDiagnostics();
         if (state.phase === 'failed' && previous.phase !== 'failed' && state.failure) {
           this.pauseInput();
           if (state.audioEnabled) {
@@ -644,6 +657,7 @@ export class DriftwakeGame {
       this.syncSurvivalDiagnostics();
       this.syncToolDurabilityDiagnostics();
       this.syncFishingDiagnostics();
+      this.syncCookingDiagnostics();
 
       store.setLoadingLabel('正在建立物理世界');
       await this.physics.initialize();
@@ -1571,6 +1585,23 @@ export class DriftwakeGame {
     this.mount.dataset.fishingModelScale = (diagnostics?.modelScale ?? 0).toFixed(3);
     this.mount.dataset.fishingMaterialMaps = diagnostics?.materialMaps ?? 'none';
     this.mount.dataset.fishingPhaseTime = (diagnostics?.phaseTime ?? 0).toFixed(3);
+  }
+
+  private syncCookingDiagnostics(): void {
+    const diagnostics = this.devices?.getCookingDiagnostics();
+    const inventory = useGameStore.getState().inventory;
+    this.mount.dataset.cookingBasePhase = diagnostics?.basePhase ?? 'none';
+    this.mount.dataset.cookingBaseFoodStage = diagnostics?.baseFoodStage ?? 'none';
+    this.mount.dataset.cookingBaseMaterialMaps = diagnostics?.baseMaterialMaps ?? 'none';
+    this.mount.dataset.cookingPurifierMaterialMaps = diagnostics?.purifierMaterialMaps ?? 'none';
+    this.mount.dataset.cookingTriplePhases = diagnostics?.triplePhases ?? 'none';
+    this.mount.dataset.cookingTripleFoodStages = diagnostics?.tripleFoodStages ?? 'none';
+    this.mount.dataset.cookingTripleFuelSeconds = (diagnostics?.tripleFuelSeconds ?? 0).toFixed(2);
+    this.mount.dataset.cookingTripleMaterialMaps = diagnostics?.tripleMaterialMaps ?? 'none';
+    this.mount.dataset.cookingRawFish = String(itemCount(inventory, 'rawFish'));
+    this.mount.dataset.cookingCookedFish = String(itemCount(inventory, 'cookedFish'));
+    this.mount.dataset.cookingBurntFish = String(itemCount(inventory, 'burntFish'));
+    this.mount.dataset.cookingTimber = String(itemCount(inventory, 'timber'));
   }
 
   private syncSurvivalDiagnostics(): void {

@@ -519,6 +519,95 @@ const advancedDeviceSave = {
   },
 };
 
+const cookingBaseSave = {
+  ...seededSave,
+  player: {
+    ...seededSave.player,
+    inventory: {
+      hook: 1,
+      rawFish: 2,
+      timber: 3,
+    },
+    selectedTool: 'hook',
+    navigation: { surface: 'raft', x: 0, z: 1.08 },
+  },
+  raft: {
+    ...seededSave.raft,
+    devices: [
+      { id: 'cooking-base-grill', type: 'grill', x: 0, z: 0, rotation: Math.PI, phase: 'idle', elapsed: 0 },
+      { id: 'cooking-base-purifier', type: 'purifier', x: -1, z: 0, rotation: 0, phase: 'ready', elapsed: 18 },
+    ],
+    navigation: { ...seededSave.raft.navigation, devices: [] },
+    planting: { birdClock: 0, birdVisit: 0, planters: [] },
+    progression: { researched: [], learned: [], devices: [] },
+  },
+  world: {
+    ...seededSave.world,
+    island: { ...seededSave.world.island, phase: 'approaching', elapsed: 0 },
+  },
+};
+
+const cookingBaseVisualSave = {
+  ...cookingBaseSave,
+  raft: {
+    ...cookingBaseSave.raft,
+    devices: [
+      { id: 'cooking-base-visual-grill', type: 'grill', x: 0, z: 0, rotation: Math.PI, phase: 'ready', elapsed: 18 },
+      { id: 'cooking-base-visual-purifier', type: 'purifier', x: -1, z: 0, rotation: 0, phase: 'ready', elapsed: 18 },
+    ],
+  },
+};
+
+const cookingTripleVisualSave = {
+  ...cookingBaseSave,
+  player: {
+    ...cookingBaseSave.player,
+    inventory: { hook: 1, rawFish: 2, timber: 3 },
+  },
+  raft: {
+    ...cookingBaseSave.raft,
+    devices: [
+      {
+        id: 'cooking-triple-visual',
+        type: 'tripleGrill',
+        x: 0,
+        z: 0,
+        rotation: Math.PI,
+        phase: 'burnt',
+        elapsed: 56,
+        grillSlots: [
+          { phase: 'working', elapsed: 0 },
+          { phase: 'ready', elapsed: 25 },
+          { phase: 'burnt', elapsed: 56 },
+        ],
+        fuelSeconds: 74,
+      },
+    ],
+  },
+};
+
+const cookingBurntBoundarySave = {
+  ...cookingBaseSave,
+  player: {
+    ...cookingBaseSave.player,
+    inventory: { hook: 1, cookedFish: 1, timber: 1 },
+  },
+  raft: {
+    ...cookingBaseSave.raft,
+    devices: [
+      {
+        id: 'cooking-burnt-boundary',
+        type: 'grill',
+        x: 0,
+        z: 0,
+        rotation: Math.PI,
+        phase: 'ready',
+        elapsed: 37,
+      },
+    ],
+  },
+};
+
 const advancedStorageSave = {
   ...advancedDeviceSave,
   player: {
@@ -4113,6 +4202,285 @@ async function captureDevices() {
   await context.close();
 }
 
+async function readCookingSnapshot(page) {
+  return page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return {
+      basePhase: data?.cookingBasePhase ?? 'missing',
+      baseFoodStage: data?.cookingBaseFoodStage ?? 'missing',
+      baseMaterialMaps: data?.cookingBaseMaterialMaps ?? 'missing',
+      purifierMaterialMaps: data?.cookingPurifierMaterialMaps ?? 'missing',
+      triplePhases: data?.cookingTriplePhases ?? 'missing',
+      tripleFoodStages: data?.cookingTripleFoodStages ?? 'missing',
+      tripleFuelSeconds: Number(data?.cookingTripleFuelSeconds),
+      tripleMaterialMaps: data?.cookingTripleMaterialMaps ?? 'missing',
+      rawFish: Number(data?.cookingRawFish),
+      cookedFish: Number(data?.cookingCookedFish),
+      burntFish: Number(data?.cookingBurntFish),
+      timber: Number(data?.cookingTimber),
+      contextHealthy: data?.contextHealthy ?? 'missing',
+      simulationActive: data?.simulationActive ?? 'missing',
+      prompt: document.querySelector('.interaction-prompt')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    };
+  });
+}
+
+async function focusCookingPrompt(page, expected) {
+  let prompt = await aimLocalPointToPrompt(page, [0, 0.47, 0], expected, 10);
+  if (!prompt.includes(expected)) prompt = await aimDownToPrompt(page, expected, 70);
+  if (!prompt.includes(expected)) prompt = await aimAroundToPrompt(page, expected);
+  if (!prompt.includes(expected)) {
+    throw new Error(`Cooking focus missing ${expected}: ${JSON.stringify(await readCookingSnapshot(page))}`);
+  }
+  return prompt;
+}
+
+async function readCookingLayout(page) {
+  return page.evaluate(() => {
+    const box = (selector) => {
+      const rect = document.querySelector(selector)?.getBoundingClientRect();
+      return rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null;
+    };
+    return {
+      deviceRack: box('.device-rack.is-visible'),
+      hotbar: box('.hotbar'),
+      prompt: box('.interaction-prompt'),
+      viewport: { width: innerWidth, height: innerHeight },
+    };
+  });
+}
+
+function validateCookingLayout(layout, label) {
+  const rectanglesOverlap = (first, second) => Boolean(
+    first
+    && second
+    && first.left < second.right
+    && first.right > second.left
+    && first.top < second.bottom
+    && first.bottom > second.top
+  );
+  if (
+    !layout.deviceRack
+    || !layout.hotbar
+    || layout.deviceRack.right > layout.viewport.width + 1
+    || layout.hotbar.bottom > layout.viewport.height + 1
+    || rectanglesOverlap(layout.deviceRack, layout.hotbar)
+    || rectanglesOverlap(layout.prompt, layout.deviceRack)
+    || rectanglesOverlap(layout.prompt, layout.hotbar)
+  ) {
+    throw new Error(`${label} layout failed: ${JSON.stringify(layout)}`);
+  }
+}
+
+async function captureCooking() {
+  const stage = process.env.COOKING_STAGE ?? 'all';
+  const visualTarget = process.env.COOKING_VISUAL_TARGET ?? 'all';
+  if (!['all', 'base', 'burnt', 'visual'].includes(stage)) {
+    throw new Error(`Unknown COOKING_STAGE: ${stage}`);
+  }
+  if (!['all', 'base', 'triple'].includes(visualTarget)) {
+    throw new Error(`Unknown COOKING_VISUAL_TARGET: ${visualTarget}`);
+  }
+  let baseEvidence = null;
+  if (stage === 'all' || stage === 'base') {
+  const { context, page } = await openDesktopPage('cooking-behavior', {
+    seedSave: true,
+    customSave: cookingBaseSave,
+    simulationTimeScale: 5,
+    quality: 'low',
+    width: 512,
+    height: 320,
+  });
+  await enterGame(page);
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.cookingBasePhase === 'idle'
+      && data?.cookingRawFish === '2'
+      && data?.cookingTimber === '3'
+      && data?.cookingBaseMaterialMaps?.includes('saltfire-folded-iron-albedo')
+      && data?.cookingPurifierMaterialMaps?.includes('salt-etched-polymer-albedo');
+  }, 10_000);
+  const initial = await readCookingSnapshot(page);
+  if (
+    !initial.baseMaterialMaps.includes('fresh-fish-flesh-albedo')
+    || !initial.purifierMaterialMaps.includes('saltfire-folded-iron-albedo')
+    || initial.contextHealthy !== 'true'
+  ) {
+    throw new Error(`Cooking initial material contract failed: ${JSON.stringify(initial)}`);
+  }
+
+  await page.evaluate(() => {
+    const mount = document.querySelector('.game-mount');
+    if (!mount) throw new Error('Cooking mount missing before ready latch');
+    const observer = new MutationObserver(() => {
+      if (mount.dataset.cookingBasePhase !== 'ready') return;
+      globalThis.__driftwakeCaptureTimeScale = 1;
+      mount.dataset.cookingCaptureReadyLatched = 'true';
+      observer.disconnect();
+    });
+    observer.observe(mount, { attributes: true, attributeFilter: ['data-cooking-base-phase'] });
+  });
+
+  await focusCookingPrompt(page, '放上鲜鱼段并点燃');
+  await page.keyboard.press('KeyE');
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.cookingBasePhase === 'working'
+      && data?.cookingBaseFoodStage === 'raw'
+      && data?.cookingRawFish === '1'
+      && data?.cookingTimber === '2';
+  }, 8_000);
+  const firstStarted = await readCookingSnapshot(page);
+  console.log(`Cooking first cycle started: ${JSON.stringify(firstStarted)}`);
+
+  let firstReady = null;
+  for (let index = 0; index < 80; index += 1) {
+    await page.waitForTimeout(500);
+    const sample = await readCookingSnapshot(page);
+    if (index % 4 === 0) console.log(`Cooking first cycle heartbeat ${index / 2}s: ${JSON.stringify(sample)}`);
+    if (sample.basePhase === 'ready' || sample.basePhase === 'burnt') {
+      firstReady = sample;
+      break;
+    }
+  }
+  if (!firstReady) throw new Error(`Cooking first cycle did not reach a terminal phase: ${JSON.stringify(await readCookingSnapshot(page))}`);
+  const readyLatched = await page.locator('.game-mount').getAttribute('data-cooking-capture-ready-latched');
+  if (
+    firstReady.basePhase !== 'ready'
+    || firstReady.baseFoodStage !== 'cooked'
+    || readyLatched !== 'true'
+    || !firstReady.baseMaterialMaps.includes('cooked-fish-flesh-albedo')
+  ) {
+    throw new Error(`Cooking ready material contract failed: ${JSON.stringify({ ...firstReady, readyLatched })}`);
+  }
+  await focusCookingPrompt(page, '收取炭烤鱼排');
+  await page.keyboard.press('KeyE');
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.cookingBasePhase === 'idle'
+      && data?.cookingCookedFish === '1'
+      && data?.cookingRawFish === '1'
+      && data?.cookingTimber === '2';
+  }, 8_000);
+  const cookedCollected = await readCookingSnapshot(page);
+  baseEvidence = { initial, firstStarted, firstReady, cookedCollected };
+  console.log(`Cooking cooked collection: ${JSON.stringify(baseEvidence)}`);
+  await context.close();
+  }
+
+  if (stage === 'all' || stage === 'burnt') {
+  const { context: burntContext, page: burntPage } = await openDesktopPage('cooking-burnt-boundary', {
+    seedSave: true,
+    customSave: cookingBurntBoundarySave,
+    simulationTimeScale: 5,
+    quality: 'low',
+    width: 512,
+    height: 320,
+  });
+  await enterGame(burntPage);
+  await waitForRuntime(burntPage, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.cookingBasePhase === 'ready'
+      && data?.cookingBaseFoodStage === 'cooked'
+      && data?.cookingCookedFish === '1';
+  }, 8_000);
+  const burntBoundaryStart = await readCookingSnapshot(burntPage);
+  await waitForRuntime(burntPage, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.cookingBasePhase === 'burnt'
+      && data?.cookingBaseFoodStage === 'burnt'
+      && data?.cookingBaseMaterialMaps?.includes('burnt-fish-flesh-albedo');
+  }, 30_000);
+  const secondBurnt = await readCookingSnapshot(burntPage);
+  await focusCookingPrompt(burntPage, '收取焦黑鱼排');
+  await burntPage.keyboard.press('KeyE');
+  await waitForRuntime(burntPage, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.cookingBasePhase === 'idle'
+      && data?.cookingCookedFish === '1'
+      && data?.cookingBurntFish === '1'
+      && data?.cookingRawFish === '0'
+      && data?.cookingTimber === '1';
+  }, 8_000);
+  const final = await readCookingSnapshot(burntPage);
+  if (final.contextHealthy !== 'true' || final.simulationActive !== 'true') {
+    throw new Error(`Cooking behavior context failed: ${JSON.stringify(final)}`);
+  }
+  console.log(`Cooking burnt gate: ${JSON.stringify({ base: baseEvidence, burntBoundaryStart, secondBurnt, final })}`);
+  await burntContext.close();
+  }
+
+  if ((stage === 'all' || stage === 'visual') && (visualTarget === 'all' || visualTarget === 'triple')) {
+  const { context: visualContext, page: visualPage } = await openDesktopPage('cooking-visual', {
+    seedSave: true,
+    customSave: cookingTripleVisualSave,
+    quality: 'high',
+    width: 1024,
+    height: 640,
+  });
+  await enterGame(visualPage);
+  await waitForRuntime(visualPage, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.cookingTriplePhases === 'working|ready|burnt'
+      && data?.cookingTripleFoodStages === 'raw|cooked|burnt'
+      && data?.cookingTripleMaterialMaps?.includes('fresh-fish-flesh-albedo')
+      && data?.cookingTripleMaterialMaps?.includes('cooked-fish-flesh-albedo')
+      && data?.cookingTripleMaterialMaps?.includes('burnt-fish-flesh-albedo')
+      && data?.cookingTripleMaterialMaps?.includes('saltfire-folded-iron-albedo');
+  }, 10_000);
+  await focusCookingPrompt(visualPage, '收取炭烤鱼排');
+  const visual = await readCookingSnapshot(visualPage);
+  const visualLayout = await readCookingLayout(visualPage);
+  validateCookingLayout(visualLayout, 'Cooking three-stage visual');
+  const compositedFrame = await inspectCanvasPixels(visualPage, 'cooking-three-stage');
+  const screenshotPath = new URL('cooking-three-stage-desktop.png', outputDir).pathname;
+  if (compositedFrame) {
+    await writeFile(screenshotPath, Buffer.from(compositedFrame, 'base64'));
+  } else {
+    await focusCookingPrompt(visualPage, '收取炭烤鱼排');
+    await captureCompositedPage(visualPage, screenshotPath);
+  }
+  console.log(`Cooking visual gate: ${JSON.stringify({ visual, layout: visualLayout })}`);
+  await visualContext.close();
+  }
+
+  if ((stage === 'all' || stage === 'visual') && (visualTarget === 'all' || visualTarget === 'base')) {
+    const { context: baseVisualContext, page: baseVisualPage } = await openDesktopPage('cooking-base-visual', {
+      seedSave: true,
+      customSave: cookingBaseVisualSave,
+      quality: 'high',
+      width: 1024,
+      height: 640,
+    });
+    await enterGame(baseVisualPage);
+    await waitForRuntime(baseVisualPage, () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return data?.cookingBasePhase === 'ready'
+        && data?.cookingBaseFoodStage === 'cooked'
+        && data?.cookingBaseMaterialMaps?.includes('saltfire-folded-iron-albedo')
+        && data?.cookingBaseMaterialMaps?.includes('cooked-fish-flesh-albedo')
+        && data?.cookingPurifierMaterialMaps?.includes('salt-etched-polymer-albedo');
+    }, 10_000);
+    await focusCookingPrompt(baseVisualPage, '收取炭烤鱼排');
+    const baseVisual = await readCookingSnapshot(baseVisualPage);
+    const baseVisualLayout = await readCookingLayout(baseVisualPage);
+    validateCookingLayout(baseVisualLayout, 'Cooking base-device visual');
+    if (baseVisual.contextHealthy !== 'true' || baseVisual.simulationActive !== 'true') {
+      throw new Error(`Cooking base-device context failed: ${JSON.stringify(baseVisual)}`);
+    }
+    const compositedFrame = await inspectCanvasPixels(baseVisualPage, 'cooking-base-materials');
+    const screenshotPath = new URL('cooking-base-materials-desktop.png', outputDir).pathname;
+    if (compositedFrame) {
+      await writeFile(screenshotPath, Buffer.from(compositedFrame, 'base64'));
+    } else {
+      await focusCookingPrompt(baseVisualPage, '收取炭烤鱼排');
+      await captureCompositedPage(baseVisualPage, screenshotPath);
+    }
+    console.log(`Cooking base-device visual gate: ${JSON.stringify({ visual: baseVisual, layout: baseVisualLayout })}`);
+    await baseVisualContext.close();
+  }
+}
+
 async function captureAdvancedDevices() {
   if (process.env.CAPTURE_FAST !== '1') {
     const { context: showcaseContext, page: showcasePage } = await openDesktopPage('advanced-devices', { seedSave: true, advancedStart: true });
@@ -4436,13 +4804,15 @@ async function readInteractionPrompt(page) {
 }
 
 async function aimLocalPointToPrompt(page, target, expected, iterations = 6) {
-  await page.waitForFunction(() => {
+  let prompt = await readInteractionPrompt(page);
+  if (prompt.includes(expected)) return prompt;
+  const diagnosticsReady = await page.waitForFunction(() => {
     const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.collectionNetAim ?? '{}');
     return Array.isArray(aim.camera)
       && Array.isArray(aim.forward)
       && Math.hypot(...aim.forward) > 0.5;
-  }, undefined, { timeout: 8_000 });
-  let prompt = await readInteractionPrompt(page);
+  }, undefined, { timeout: 8_000 }).then(() => true).catch(() => false);
+  if (!diagnosticsReady) return prompt;
   for (let iteration = 0; iteration < iterations && !prompt.includes(expected); iteration += 1) {
     await page.evaluate(([targetX, targetY, targetZ]) => {
       const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.collectionNetAim ?? '{}');
@@ -7442,6 +7812,7 @@ try {
   if (captureOnly === 'structure-collapse') await captureStructureCollapse();
   if (captureOnly === 'all' || captureOnly === 'settings') await captureSettings();
   if (captureOnly === 'all' || captureOnly === 'devices') await captureDevices();
+  if (captureOnly === 'all' || captureOnly === 'cooking') await captureCooking();
   if (captureOnly === 'all' || captureOnly === 'advanced') await captureAdvancedDevices();
   if (captureOnly === 'all' || captureOnly === 'signal') await captureSignalNetwork();
   if (captureOnly === 'all' || captureOnly === 'planting-placement') await capturePlantingPlacement();

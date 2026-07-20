@@ -22,6 +22,10 @@ describe('asset texture loading', () => {
 
     expect(paths).toHaveLength(Object.keys(textures).length);
     expect(new Set(paths).size).toBe(paths.length);
+    expect(textures.cookedFishFlesh.userData.sourcePath).toBe('/assets/textures/cooked-fish-flesh.webp');
+    expect(textures.burntFishFlesh.userData.sourcePath).toBe('/assets/textures/burnt-fish-flesh.webp');
+    expect(textures.saltfireIron.userData.sourcePath).toBe('/assets/textures/saltfire-folded-iron.webp');
+    expect(textures.saltEtchedPolymer.userData.sourcePath).toBe('/assets/textures/salt-etched-polymer.webp');
     expect(textures.fishEye.userData.sourcePath).toBe('/assets/textures/pelagic-fish-eye.webp');
     expect(textures.saltsealedGlove.userData.sourcePath).toBe('/assets/textures/saltsealed-glove.webp');
     expect(textures.signalLaminate.userData.sourcePath).toBe('/assets/textures/signal-laminate.webp');

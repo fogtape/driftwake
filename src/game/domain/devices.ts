@@ -263,8 +263,11 @@ function advanceTripleGrill(
 ): { device: SavedDeviceState; event: DeviceEvent } {
   if (device.grillSlots.length === 0 || device.fuelSeconds <= 0) return { device, event: 'none' };
   const definition = DEVICE_DEFINITIONS.tripleGrill;
-  const activeSeconds = Math.min(seconds, device.fuelSeconds);
   const burnAt = definition.duration + (definition.readyWindow ?? 0);
+  const activeSlots = device.grillSlots.filter((slot) => slot.phase !== 'burnt');
+  if (activeSlots.length === 0) return { device, event: 'none' };
+  const usefulSeconds = Math.max(...activeSlots.map((slot) => Math.max(0, burnAt - slot.elapsed)));
+  const activeSeconds = Math.min(seconds, device.fuelSeconds, usefulSeconds);
   let becameReady = false;
   let becameBurnt = false;
   const grillSlots = device.grillSlots.map((slot): GrillSlotState => {
