@@ -192,6 +192,7 @@ export class DriftwakeGame {
   private readonly audioQuaternion = new Quaternion();
   private readonly failureDropLocal = new Vector3();
   private readonly failureDropWorld = new Vector3();
+  private readonly playerDiagnosticWorld = new Vector3();
   private environmentBlend = 0;
   private stormBlend = 0;
   private elapsed = 0;
@@ -688,6 +689,10 @@ export class DriftwakeGame {
 
   pauseInput(): void {
     if (document.pointerLockElement === this.renderer.domElement) document.exitPointerLock();
+    const store = useGameStore.getState();
+    if (store.pointerLocked) store.setPointerLocked(false);
+    this.player?.setEnabled(false);
+    this.syncEquipment();
   }
 
   setAudioEnabled(enabled: boolean): void {
@@ -1021,6 +1026,11 @@ export class DriftwakeGame {
       this.mount.dataset.sharkHarvestIndex = String(sharkDiagnostics.harvestIndex);
       this.mount.dataset.sharkHarvestProgress = sharkDiagnostics.harvestProgress.toFixed(3);
       this.mount.dataset.sharkHarvestEvents = String(sharkDiagnostics.harvestEvents);
+      this.mount.dataset.sharkTotalHarvestEvents = String(sharkDiagnostics.totalHarvestEvents);
+      this.mount.dataset.sharkDefeatCount = String(sharkDiagnostics.defeatEvents);
+      this.mount.dataset.sharkHarvestedCarcassCount = String(sharkDiagnostics.harvestedCarcassEvents);
+      this.mount.dataset.sharkExpiredCarcassCount = String(sharkDiagnostics.expiredCarcassEvents);
+      this.mount.dataset.sharkRespawnCount = String(sharkDiagnostics.respawnEvents);
       this.mount.dataset.sharkCarcassSeconds = sharkDiagnostics.carcassSeconds.toFixed(2);
       this.mount.dataset.sharkCooldownSeconds = sharkDiagnostics.cooldownSeconds.toFixed(2);
       this.mount.dataset.sharkHealth = String(Math.round(sharkDiagnostics.health));
@@ -1636,6 +1646,7 @@ export class DriftwakeGame {
     this.mount.dataset.daylight = day.daylight.toFixed(3);
     this.mount.dataset.dayProgress = day.progress.toFixed(3);
     this.mount.dataset.weather = this.navigation?.getWeather().weatherPhase ?? 'calm';
+    this.player?.getWorldFootPosition(this.playerDiagnosticWorld);
     this.mount.dataset.playerSurface = this.player?.getSurface() ?? 'raft';
     this.mount.dataset.playerAirborne = String(this.player?.isAirborne() ?? false);
     this.mount.dataset.playerJumpCount = String(this.player?.jumpCount ?? 0);
@@ -1653,6 +1664,16 @@ export class DriftwakeGame {
     this.mount.dataset.playerRaftSurface = this.player?.raftWalkableSurface ?? 'none';
     this.mount.dataset.playerLocalX = (this.player?.localPosition.x ?? 0).toFixed(3);
     this.mount.dataset.playerLocalZ = (this.player?.localPosition.z ?? 0).toFixed(3);
+    this.mount.dataset.playerWorldPosition = JSON.stringify({
+      x: this.playerDiagnosticWorld.x,
+      y: this.playerDiagnosticWorld.y,
+      z: this.playerDiagnosticWorld.z,
+    });
+    this.mount.dataset.raftWorldPosition = JSON.stringify({
+      x: this.raft?.group.position.x ?? 0,
+      y: this.raft?.group.position.y ?? 0,
+      z: this.raft?.group.position.z ?? 0,
+    });
     this.mount.dataset.simulationTickCount = String(this.simulationTickCount);
     this.mount.dataset.cameraY = this.camera.position.y.toFixed(3);
   }

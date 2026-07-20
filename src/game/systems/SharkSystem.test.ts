@@ -10,7 +10,11 @@ import { RaftStructureSystem } from './RaftStructureSystem';
 import { SharkSystem } from './SharkSystem';
 import { useGameStore } from '../../state/gameStore';
 import { SPEAR_THRUST_TO_IMPACT_SECONDS } from '../domain/combat';
-import { SHARK_COUNTER_CLOSE_LEAD_SECONDS } from '../domain/shark';
+import {
+  SHARK_COUNTER_CLOSE_LEAD_SECONDS,
+  SHARK_RESPAWN_SECONDS,
+  SHARK_SINK_SECONDS,
+} from '../domain/shark';
 
 function createTestMaterials(): MaterialLibrary {
   const material = () => new MeshStandardMaterial();
@@ -465,11 +469,42 @@ describe('SharkSystem structure attacks', () => {
       carcassPhase: 'sinking',
       harvestIndex: 4,
       harvestEvents: 4,
+      totalHarvestEvents: 4,
+      defeatEvents: 0,
+      harvestedCarcassEvents: 1,
+      expiredCarcassEvents: 0,
+      respawnEvents: 0,
       carcassFocused: false,
     });
     expect(shark.getSavedState()).toMatchObject({ lifecycle: 'cooldown', health: 0 });
     expect(vi.mocked(audio.playSharkHarvest)).toHaveBeenCalledTimes(4);
     expect(onStateChange).toHaveBeenCalledTimes(4);
+
+    const recoveryTicks = Math.ceil((SHARK_SINK_SECONDS + SHARK_RESPAWN_SECONDS + 1) * 60);
+    for (let tick = 0; tick < recoveryTicks && shark.getDiagnostics().lifecycle !== 'active'; tick += 1) {
+      shark.update((tick + 300) / 60, 1 / 60);
+    }
+    expect(shark.getDiagnostics()).toMatchObject({
+      lifecycle: 'active',
+      carcassPhase: 'none',
+      health: 100,
+      mode: 'distant',
+      harvestIndex: 0,
+      harvestProgress: 0,
+      harvestEvents: 4,
+      totalHarvestEvents: 4,
+      harvestedCarcassEvents: 1,
+      expiredCarcassEvents: 0,
+      respawnEvents: 1,
+      carcassFocused: false,
+    });
+    expect(shark.model.visible).toBe(true);
+    expect(Math.hypot(
+      shark.model.position.x - raft.group.position.x,
+      shark.model.position.z - raft.group.position.z,
+    )).toBeCloseTo(17.5, 4);
+    expect(shark.getSavedState()).toMatchObject({ lifecycle: 'active', health: 100 });
+    expect(useGameStore.getState().interactionOwner).not.toBe('shark');
     shark.dispose();
     structures.dispose();
   });

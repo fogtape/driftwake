@@ -75,6 +75,11 @@ export interface SharkDiagnostics {
   harvestIndex: number;
   harvestProgress: number;
   harvestEvents: number;
+  totalHarvestEvents: number;
+  defeatEvents: number;
+  harvestedCarcassEvents: number;
+  expiredCarcassEvents: number;
+  respawnEvents: number;
   carcassSeconds: number;
   cooldownSeconds: number;
   health: number;
@@ -141,6 +146,11 @@ export class SharkSystem {
   private harvestIndex = 0;
   private harvestProgress = 0;
   private harvestEvents = 0;
+  private totalHarvestEvents = 0;
+  private defeatEvents = 0;
+  private harvestedCarcassEvents = 0;
+  private expiredCarcassEvents = 0;
+  private respawnEvents = 0;
   private carcassFocused = false;
   private harvestHeld = false;
   private inputEnabled = false;
@@ -342,6 +352,11 @@ export class SharkSystem {
       harvestIndex: this.harvestIndex,
       harvestProgress: this.harvestProgress,
       harvestEvents: this.harvestEvents,
+      totalHarvestEvents: this.totalHarvestEvents,
+      defeatEvents: this.defeatEvents,
+      harvestedCarcassEvents: this.harvestedCarcassEvents,
+      expiredCarcassEvents: this.expiredCarcassEvents,
+      respawnEvents: this.respawnEvents,
       carcassSeconds: this.carcassRemaining,
       cooldownSeconds: this.cooldownRemaining,
       health: this.health,
@@ -456,6 +471,7 @@ export class SharkSystem {
   }
 
   private beginDefeat(): void {
+    this.defeatEvents += 1;
     this.lifecycle = 'carcass';
     this.carcassPhase = 'settling';
     this.carcassRemaining = SHARK_CARCASS_WINDOW_SECONDS;
@@ -532,12 +548,14 @@ export class SharkSystem {
     this.lifecycle = 'active';
     this.carcassPhase = 'none';
     this.health = SHARK_MAX_HEALTH;
+    this.respawnEvents += 1;
     this.harvestIndex = 0;
     this.harvestProgress = 0;
     this.model.visible = true;
     this.model.rotation.set(0, 0, 0);
     this.updateHarvestMarks();
     this.circleAngle += Math.PI * 0.72;
+    this.setCirclePosition(time, 17.5);
     this.nextAttackAt = this.totalTime + randomRange(this.random, 52, 75);
     this.setMode('distant');
     this.onStateChange();
@@ -603,6 +621,7 @@ export class SharkSystem {
     }
     this.harvestIndex += 1;
     this.harvestEvents += 1;
+    this.totalHarvestEvents += 1;
     this.harvestProgress = 0;
     this.audio.playSharkHarvest(this.harvestIndex >= SHARK_HARVEST_STAGES.length, rejected);
     this.splashes.spawnSharkHarvest(this.model.position, this.harvestIndex >= SHARK_HARVEST_STAGES.length);
@@ -618,6 +637,8 @@ export class SharkSystem {
   }
 
   private beginCarcassSinking(harvested: boolean): void {
+    if (harvested) this.harvestedCarcassEvents += 1;
+    else this.expiredCarcassEvents += 1;
     this.lifecycle = 'cooldown';
     this.carcassPhase = 'sinking';
     this.cooldownRemaining = SHARK_RESPAWN_SECONDS;

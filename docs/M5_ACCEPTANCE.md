@@ -1,9 +1,9 @@
 # M5 鲨鱼、战斗与破坏验收记录
 
-> 当前状态：`DOING`（攻击节奏、鲨体战利品与第三种武器代码闭环完成，连续多轮和外部验收继续）
-> 本次切片：潮鸣震叉研究/制作/蓄能/锁定/驱离、原子电池与耐久结算、原创程序模型、分层声画与浏览器门禁
-> 版本：`0.15.2`
-> 日期：2026-07-19
+> 当前状态：`BLOCKED`（M5 代码与自动连续多轮闭环完成，仅保留目标真实 GPU 与无说明玩家外部门禁）
+> 本次切片：连续三轮矛具击杀/四段采集、失焦冻结、落水等待、自然重生、资源/渲染预算与 v18 冷启动
+> 版本：`0.15.3`
+> 日期：2026-07-20
 
 ## 战斗节奏与公平性闭环
 
@@ -62,6 +62,26 @@
 - `shark-combat resonance` 先在 0.32 秒松开验证脉冲 0、电池 2、耐久 32 和零磨损；再蓄满并重新锁定，结算为鲨鱼 `66 -> 58`、电池 `2 -> 1`、耐久 `32 -> 31`、震叉/鲨鱼脉冲计数各 1、失调 0 并立即撤退；结算窗口内筏格/结构/网具伤害均未继续增加；
 - 1024×640 高画质震叉帧中，状态条为 `(425,351)-(599,389)`，锁定准星、双齿/三环/发光核心、鲨体和六格快捷栏无裁切与重叠；Context 健康，合成帧编码 364230 字节，正式图为 `artifacts/screenshots/resonance-fork-ready-desktop.png`，已人工复核。
 
+## 连续三轮战斗/采集稳定性闭环（0.15.3）
+
+- `SHARK_LOOT_STAGE=loop` 在同一浏览器上下文连续完成三轮：首轮生命 `52 -> 0` 用 1 次金属矛命中，第二/三轮均从健康 `100` 用 2 次命中；长矛耐久 `90 -> 85`，页面内边沿输入每次只派发 1 个真实 Canvas `mousedown`；
+- 每轮均完成四段按住 `E` 采集，累计 `defeats=3`、`harvestStages=12`、`harvestedCarcasses=3`、`expiredCarcasses=0`；最终生命周期与尸体阶段均为 `cooldown`，没有残留鲨鱼交互所有权；
+- 满包拒收沿既有八槽池结算：第一轮活动掉落 4 份，第二轮达到 8 份，第三轮仍为 8 份；最终聚合精确为 `9 鲨肉 / 3 鲨皮 / 6 鲨齿`，背包没有重复鲨鱼物资，也没有静默吞料；
+- 每轮采集后玩家转身游离木筏并持续上浮，实测水中距离依次约 `8.09m / 37.33m / 38.17m`，氧气保持 100、生命未归零；这同时覆盖了此前重生鲨鱼从旧尸体坐标追击的缺陷，后两轮重生均在当前木筏附近重新布置并恢复逼近；
+- 首轮注入真实 `blur`/`visibilitychange` 失焦，确认 `simulationActive=false`、Pointer Lock 为空、固定步 tick 与 `cooldown` 在等待期间完全不变，恢复后只计一次焦点恢复；
+- 每轮及最终均检查 WebGL Context 与运行时资源预算：`geometries <= 160`、`textures <= 32`、`drawCalls <= 240`、`triangles <= 125000`；最终记录 `103 / 21 / 14 / 17162`，未出现池增长或上下文丢失；
+- 三轮主上下文关闭后，使用最终 v18 检查点建立全新浏览器上下文；冷启动恢复为 `cooldown`、8 个世界掉落、`9/3/6` 聚合战利品和耐久 85，未复活可采集尸体；检查点写入 `artifacts/screenshots/shark-loot-loop-checkpoint.json`；
+- 软件 GLES 默认使用页面内 MutationObserver 在诊断数据边沿向 Canvas 派发事件，避免 CDP 鼠标延迟跨过短窗口；目标真实 GPU 必须设置 `SHARK_LOOT_INPUT=mouse` 复验主观瞄准、双画质、混音和长稳，当前证据不冒充真实 GPU 发布性能；
+
+连续门禁结果摘要：
+
+```text
+rounds=3  defeats=3  harvestStages=12  harvestedCarcasses=3
+expiredCarcasses=0  naturalRespawns=2  activeDrops=8
+loot=9/3/6  spearDurability=85  focusRecoveries=1
+finalRenderer=geometries103 textures21 drawCalls14 triangles17162
+```
+
 复现命令：
 
 ```sh
@@ -81,11 +101,15 @@ CAPTURE_ONLY=shark-combat SHARK_COMBAT_STAGE=resonance CAPTURE_FAST=1 \
   DRIFTWAKE_URL=http://127.0.0.1:4180 npm run capture
 CAPTURE_ONLY=shark-combat SHARK_COMBAT_STAGE=resonance RESONANCE_CAPTURE_VISUAL=1 CAPTURE_QUALITY=high \
   DRIFTWAKE_URL=http://127.0.0.1:4180 npm run capture
+CAPTURE_ONLY=shark-loot SHARK_LOOT_STAGE=loop CAPTURE_FAST=1 \
+  DRIFTWAKE_URL=http://127.0.0.1:4180 npm run capture
+SHARK_LOOT_INPUT=mouse CAPTURE_ONLY=shark-loot SHARK_LOOT_STAGE=loop \
+  DRIFTWAKE_URL=http://127.0.0.1:4180 npm run capture
 ```
 
 ## 目标真实 GPU 门禁
 
-1. 在 1280×720/30 与 1920×1080/60 使用 `SHARK_COMBAT_INPUT=mouse` 复验两次蓄势、限时起手、普通命中、扑空、撤退、侧翻、浮尸、四段割取、下沉和重生全流程；
+1. 在 1280×720/30 与 1920×1080/60 使用 `SHARK_COMBAT_INPUT=mouse` 和 `SHARK_LOOT_INPUT=mouse` 复验两次蓄势、限时起手、普通命中、扑空、撤退、侧翻、浮尸、四段割取、下沉和重生全流程；
 2. 连续完成至少三次木筏边和三次水中击杀，确认尸体始终可达、按住进度不因正常波浪误断，也不会在玩家明显转身或离开后继续远程采集；
 3. 检查鲨皮 PBR、分段伤痕、肉/皮/齿浮包在晴天、夜间、风暴和水下观察时均可辨，聚焦环不会穿过海面或遮挡准星；
 4. 检查击杀、割取、入包、满包捆扎和下沉音层不会削波、互相覆盖或压住下一次鲨鱼预兆；
@@ -94,6 +118,6 @@ CAPTURE_ONLY=shark-combat SHARK_COMBAT_STAGE=resonance RESONANCE_CAPTURE_VISUAL=
 
 ## M5 剩余工作
 
-- 以无说明玩家和连续多轮战斗复核当前巡游间隔、目标切换、0.96/2.72 秒木筏节奏、0.88/3.15 秒水中节奏与 6.2 秒撤退窗口；代码与自动公平性闭环已完成；
-- 在目标真实 GPU 完成双画质鲨鱼模型、尸体采集构图、空间混音和长时间战斗稳定性门禁；
+- 以无说明玩家和目标真实 GPU 复核当前巡游间隔、目标切换、0.96/2.72 秒木筏节奏、0.88/3.15 秒水中节奏与 6.2 秒撤退窗口；代码与软件自动公平性/连续稳定性闭环已完成；
+- 在目标真实 GPU 完成双画质鲨鱼模型、尸体采集构图、空间混音、`SHARK_LOOT_INPUT=mouse` 时序和长时间战斗稳定性门禁；
 - M9 用最终可蒙皮 DCC 鲨鱼替换当前原创程序形体，并保留现有领域、动画事件和材质接口。

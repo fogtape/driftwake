@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { launchDriftwakeChromium, preparePlaywrightPlatform } from './browser-runtime.mjs';
 import { assertEncodedFrameContent, assertFrameContent } from './capture-utils.mjs';
 
@@ -1017,6 +1017,27 @@ const sharkLootRaftSave = {
   },
 };
 
+const sharkLootLoopSave = {
+  ...sharkLootRaftSave,
+  player: {
+    ...sharkLootRaftSave.player,
+    survival: { health: 100, thirst: 78, hunger: 74, oxygen: 100 },
+    navigation: { surface: 'water', x: -3.117, y: -1.45, z: 4.7 },
+  },
+  raft: {
+    ...sharkLootRaftSave.raft,
+    tiles: sharkLootRaftSave.raft.tiles.map((tile) => ({
+      ...tile,
+      health: 100,
+      reinforced: true,
+    })),
+  },
+  world: {
+    ...sharkLootRaftSave.world,
+    island: { ...seededSave.world.island, phase: 'docked', elapsed: 12 },
+  },
+};
+
 const sharkLootWaterSave = {
   ...sharkLootRaftSave,
   player: {
@@ -1111,10 +1132,19 @@ async function openDesktopPage(label, options = {}) {
   if (Number.isFinite(options.simulationTimeScale) && options.simulationTimeScale > 1) {
     await context.addInitScript((scale) => {
       const nativeNow = performance.now.bind(performance);
-      const origin = nativeNow();
+      let lastNative = nativeNow();
+      let scaledNow = lastNative;
+      globalThis.__driftwakeCaptureTimeScale = scale;
       Object.defineProperty(performance, 'now', {
         configurable: true,
-        value: () => origin + (nativeNow() - origin) * scale,
+        value: () => {
+          const currentNative = nativeNow();
+          const currentScale = Number(globalThis.__driftwakeCaptureTimeScale);
+          const safeScale = Number.isFinite(currentScale) && currentScale > 0 ? currentScale : scale;
+          scaledNow += Math.max(0, currentNative - lastNative) * safeScale;
+          lastNative = currentNative;
+          return scaledNow;
+        },
       });
     }, options.simulationTimeScale);
   }
@@ -1138,6 +1168,11 @@ async function openDesktopPage(label, options = {}) {
     }, options.customSave ?? (options.structureCollapseStart ? structureCollapseSave : options.perimeterDefenseVisualStart ? perimeterDefenseVisualSave : options.perimeterDefenseStart ? perimeterDefenseSave : options.collectionNetStart ? collectionNetSave : options.failureStart ? failureSave : options.survivalPressureStart ? survivalPressureSave : options.structureDamageStart ? structureDamageSave : options.structureFloorCeilingStart ? structureFloorCeilingSave : options.structureRoofCeilingStart ? structureRoofCeilingSave : options.structureTraversalStart ? structureTraversalSave : options.structureVisualStart ? structureVisualSave : options.structureBuildStart ? structureBuildSave : options.durabilityHammerStart ? durabilityHammerSave : options.durabilityFishingStart ? durabilityFishingSave : options.durabilityAxeStart ? durabilityAxeSave : options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave));
   }
   const page = await context.newPage();
+  if (options.focusEmulation) {
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true });
+    await cdp.detach();
+  }
   monitorPage(page, label);
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
   try {
@@ -1161,9 +1196,9 @@ async function openDesktopPage(label, options = {}) {
 }
 
 async function enterGame(page) {
-  await page.getByRole('button', { name: '开始漂流', exact: true }).click();
+  await page.getByRole('button', { name: '开始漂流', exact: true }).click({ force: true });
   const enter = page.getByRole('button', { name: '继续漂流', exact: true });
-  await enter.waitFor({ timeout: 45_000 });
+  await enter.waitFor({ timeout: 120_000 });
   await enter.click({ force: true });
   await waitForRuntime(page, () => {
     const canvas = document.querySelector('canvas');
@@ -1176,18 +1211,61 @@ async function enterGame(page) {
 }
 
 async function ensurePointerLock(page) {
-  const locked = await page.evaluate(() => document.pointerLockElement === document.querySelector('canvas'));
-  if (!locked) {
-    const canvas = page.locator('canvas');
-    const bounds = await canvas.boundingBox();
-    if (!bounds) throw new Error('Cannot restore pointer lock without a canvas bounds');
-    await canvas.click({ position: { x: bounds.width / 2, y: bounds.height / 2 } });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const active = await page.evaluate(() => {
+      const mount = document.querySelector('.game-mount');
+      return document.pointerLockElement === document.querySelector('canvas')
+        && mount?.dataset.simulationActive === 'true';
+    });
+    if (active) return;
+    await page.bringToFront();
+    const focused = await page.evaluate(() => document.hasFocus());
+    if (focused) await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    const resume = page.locator('.focus-prompt__resume');
+    const resumeConnected = await resume.waitFor({ state: 'attached', timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (resumeConnected) {
+      await resume.click({ force: true });
+    } else {
+      const exposedCanvasPoint = await page.evaluate(() => {
+        const canvas = document.querySelector('canvas');
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        const candidates = [
+          [rect.left + 6, rect.top + rect.height * 0.5],
+          [rect.left + rect.width * 0.5, rect.top + rect.height * 0.36],
+          [rect.right - 6, rect.top + rect.height * 0.5],
+        ];
+        const point = candidates.find(([x, y]) => document.elementFromPoint(x, y) === canvas);
+        return point ? { x: point[0], y: point[1] } : null;
+      });
+      if (!exposedCanvasPoint) continue;
+      await page.mouse.click(exposedCanvasPoint.x, exposedCanvasPoint.y);
+    }
+    const restored = await waitForRuntime(page, () => {
+      const canvas = document.querySelector('canvas');
+      const mount = document.querySelector('.game-mount');
+      return document.pointerLockElement === canvas && mount?.dataset.simulationActive === 'true';
+    }, 12_000).then(() => true).catch(() => false);
+    if (restored) return;
   }
-  await waitForRuntime(page, () => {
-    const canvas = document.querySelector('canvas');
-    const mount = document.querySelector('.game-mount');
-    return document.pointerLockElement === canvas && mount?.dataset.simulationActive === 'true';
-  }, 5_000);
+  const diagnostic = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return {
+      phase: data?.phase,
+      simulationActive: data?.simulationActive,
+      pointerLocked: document.pointerLockElement === document.querySelector('canvas'),
+      pointerLockDenied: data?.pointerLockDenied,
+      contextHealthy: data?.contextHealthy,
+      visibility: document.visibilityState,
+      focused: document.hasFocus(),
+      resume: document.querySelector('.focus-prompt__resume')?.textContent?.trim() ?? null,
+      buttons: [...document.querySelectorAll('button')].map((button) => button.textContent?.trim() ?? ''),
+      centerElement: document.elementFromPoint(innerWidth / 2, innerHeight / 2)?.className ?? null,
+    };
+  });
+  throw new Error(`Pointer Lock recovery failed: ${JSON.stringify(diagnostic)}`);
 }
 
 async function assertHookVisualOwnership(page, label, expected = 'any') {
@@ -1245,6 +1323,194 @@ async function waitForRuntime(page, predicate, timeout = 10_000) {
   }
   if (await page.evaluate(predicate)) return;
   throw new Error(`runtime condition timed out after ${timeout}ms`);
+}
+
+async function setCaptureTimeScale(page, scale) {
+  await page.evaluate((nextScale) => {
+    if (!Number.isFinite(nextScale) || nextScale <= 0) throw new Error('Invalid capture time scale');
+    globalThis.__driftwakeCaptureTimeScale = nextScale;
+  }, scale);
+}
+
+async function moveWaterPlayerAwayFromRaft(page) {
+  await ensurePointerLock(page);
+  await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const player = JSON.parse(data?.playerWorldPosition ?? 'null');
+    const raft = JSON.parse(data?.raftWorldPosition ?? 'null');
+    const aim = JSON.parse(data?.sharkAim ?? '{}');
+    if (!player || !raft || !Array.isArray(aim.forward)) throw new Error('Water retreat diagnostics unavailable');
+    let awayX = player.x - raft.x;
+    let awayZ = player.z - raft.z;
+    const awayLength = Math.hypot(awayX, awayZ);
+    if (awayLength < 0.001) {
+      awayX = 0;
+      awayZ = 1;
+    } else {
+      awayX /= awayLength;
+      awayZ /= awayLength;
+    }
+    const desiredYaw = Math.atan2(-awayX, -awayZ);
+    const currentYaw = Math.atan2(-aim.forward[0], -aim.forward[2]);
+    const currentPitch = Math.asin(Math.max(-1, Math.min(1, aim.forward[1])));
+    const movement = new MouseEvent('mousemove');
+    Object.defineProperties(movement, {
+      movementX: {
+        value: Math.atan2(
+          Math.sin(currentYaw - desiredYaw),
+          Math.cos(currentYaw - desiredYaw),
+        ) / 0.00175,
+      },
+      movementY: { value: currentPitch / 0.00155 },
+    });
+    document.dispatchEvent(movement);
+  });
+  await page.keyboard.down('KeyW');
+  try {
+    await waitForRuntime(page, () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      const player = JSON.parse(data?.playerWorldPosition ?? 'null');
+      const raft = JSON.parse(data?.raftWorldPosition ?? 'null');
+      return data?.playerSurface === 'water'
+        && player
+        && raft
+        && Math.hypot(player.x - raft.x, player.z - raft.z) >= 7.5;
+    }, 120_000);
+  } finally {
+    await page.keyboard.up('KeyW');
+  }
+  await page.keyboard.down('Space');
+  return page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const player = JSON.parse(data?.playerWorldPosition ?? 'null');
+    const raft = JSON.parse(data?.raftWorldPosition ?? 'null');
+    return {
+      surface: data?.playerSurface,
+      distance: player && raft ? Math.hypot(player.x - raft.x, player.z - raft.z) : null,
+      player,
+      raft,
+    };
+  });
+}
+
+async function waitForNaturalSharkRespawn(page, expectedRespawns, timeout) {
+  const deadline = Date.now() + timeout;
+  let focusRecoveries = 0;
+  while (Date.now() < deadline) {
+    const state = await page.evaluate((expected) => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v18') ?? 'null');
+      return {
+        ready: data?.sharkLifecycle === 'active'
+          && data?.sharkCarcassPhase === 'none'
+          && data?.sharkHealth === '100'
+          && data?.sharkHarvestIndex === '0'
+          && data?.sharkHarvestProgress === '0.000'
+          && data?.sharkCarcassFocused === 'false'
+          && data?.playerSurface === 'water'
+          && Number(data?.sharkRespawnCount) === expected
+          && data?.contextHealthy === 'true'
+          && data?.simulationActive === 'true'
+          && document.pointerLockElement === document.querySelector('canvas')
+          && saved?.world?.shark?.lifecycle === 'active'
+          && saved?.world?.shark?.health === 100,
+        lifecycle: data?.sharkLifecycle,
+        phase: data?.sharkCarcassPhase,
+        cooldownSeconds: Number(data?.sharkCooldownSeconds),
+        health: Number(data?.sharkHealth),
+        respawns: Number(data?.sharkRespawnCount),
+        defeats: Number(data?.sharkDefeatCount),
+        harvestStages: Number(data?.sharkTotalHarvestEvents),
+        simulationActive: data?.simulationActive === 'true',
+        pointerLocked: document.pointerLockElement === document.querySelector('canvas'),
+        failed: Boolean(document.querySelector('.failure-screen.is-visible')),
+        playerSurface: data?.playerSurface,
+        contextHealthy: data?.contextHealthy === 'true',
+        visibility: document.visibilityState,
+        focused: document.hasFocus(),
+        ticks: Number(data?.simulationTickCount),
+        savedShark: saved?.world?.shark,
+      };
+    }, expectedRespawns);
+    if (state.ready) return { focusRecoveries, state };
+    if (!state.contextHealthy) {
+      throw new Error(`WebGL context failed during shark respawn: ${JSON.stringify(state)}`);
+    }
+    if (state.failed) throw new Error(`Player failed during shark respawn: ${JSON.stringify(state)}`);
+    if (!state.simulationActive || !state.pointerLocked || state.visibility !== 'visible' || !state.focused) {
+      await page.bringToFront();
+      const focus = await page.evaluate(() => ({
+        visible: document.visibilityState === 'visible',
+        focused: document.hasFocus(),
+      }));
+      if (!focus.visible || !focus.focused) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        continue;
+      }
+      await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+      await ensurePointerLock(page);
+      await page.keyboard.down('Space');
+      focusRecoveries += 1;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  const diagnostic = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v18') ?? 'null');
+    return {
+      lifecycle: data?.sharkLifecycle,
+      phase: data?.sharkCarcassPhase,
+      cooldownSeconds: data?.sharkCooldownSeconds,
+      health: data?.sharkHealth,
+      respawns: data?.sharkRespawnCount,
+      defeats: data?.sharkDefeatCount,
+      harvestStages: data?.sharkTotalHarvestEvents,
+      simulationActive: data?.simulationActive,
+      pointerLocked: document.pointerLockElement === document.querySelector('canvas'),
+      visibility: document.visibilityState,
+      focused: document.hasFocus(),
+      ticks: data?.simulationTickCount,
+      contextHealthy: data?.contextHealthy,
+      savedShark: saved?.world?.shark,
+    };
+  });
+  throw new Error(`Natural shark respawn timed out: ${JSON.stringify({ focusRecoveries, diagnostic })}`);
+}
+
+async function waitForSettledSharkCooldown(page, timeout) {
+  const deadline = Date.now() + timeout;
+  let focusRecoveries = 0;
+  while (Date.now() < deadline) {
+    const state = await page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return {
+        ready: data?.sharkLifecycle === 'cooldown'
+          && data?.sharkCarcassPhase === 'cooldown'
+          && data?.worldDropCount === '8'
+          && data?.contextHealthy === 'true'
+          && data?.simulationActive === 'true',
+        lifecycle: data?.sharkLifecycle,
+        phase: data?.sharkCarcassPhase,
+        simulationActive: data?.simulationActive === 'true',
+        pointerLocked: document.pointerLockElement === document.querySelector('canvas'),
+        contextHealthy: data?.contextHealthy === 'true',
+        failed: Boolean(document.querySelector('.failure-screen.is-visible')),
+        ticks: Number(data?.simulationTickCount),
+      };
+    });
+    if (state.ready) return { focusRecoveries, state };
+    if (!state.contextHealthy || state.failed) {
+      throw new Error(`Shark final cooldown failed: ${JSON.stringify(state)}`);
+    }
+    if (!state.simulationActive || !state.pointerLocked) {
+      await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+      await ensurePointerLock(page);
+      await page.keyboard.down('Space');
+      focusRecoveries += 1;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error('Settled shark cooldown timed out');
 }
 
 async function aimAtRaftLocalPoint(page, target, iterations = 4) {
@@ -5532,99 +5798,274 @@ async function captureSharkCombat() {
   console.log(`Shark combat rhythm: ${JSON.stringify({ visual: visualState, counter: counterState, resonance: resonanceState, water: waterState })}`);
 }
 
-async function killSharkAndFocusCarcass(page, label) {
-  try {
-    await waitForRuntime(page, () => {
-      const data = document.querySelector('.game-mount')?.dataset;
-      const aim = JSON.parse(data?.sharkAim ?? '{}');
-      if (!Array.isArray(aim.camera) || !Array.isArray(aim.target)) return false;
-      const distance = Math.hypot(
-        aim.target[0] - aim.camera[0],
-        aim.target[1] - aim.camera[1],
-        aim.target[2] - aim.camera[2],
-      );
-      return (data?.sharkMode === 'approaching' || data?.sharkMode === 'attacking')
-        && data?.sharkHealth === '52'
-        && distance < 5.7;
-    }, 30_000);
-  } catch (error) {
-    const diagnostic = await page.evaluate(() => {
-      const data = document.querySelector('.game-mount')?.dataset;
-      return {
-        mode: data?.sharkMode,
-        lifecycle: data?.sharkLifecycle,
-        health: data?.sharkHealth,
-        target: data?.sharkRaftTargetKind,
-        position: JSON.parse(data?.sharkWorldPosition ?? 'null'),
-        simulation: data?.simulationActive,
-        ticks: data?.simulationTickCount,
-      };
-    });
-    throw new Error(`${label} wounded shark did not return: ${JSON.stringify(diagnostic)}`, { cause: error });
+async function killSharkAndFocusCarcass(page, label, options = {}) {
+  const startingHealth = options.startingHealth ?? 52;
+  const startingDurability = options.startingDurability ?? 90;
+  const inputMode = options.inputMode ?? 'mouse';
+  if (inputMode !== 'mouse' && inputMode !== 'observer') {
+    throw new Error(`Unsupported shark loot input mode: ${inputMode}`);
   }
+  const strikeDamage = 52;
+  const returnTimeout = options.returnTimeout ?? 120_000;
+  let expectedHealth = startingHealth;
+  let expectedDurability = startingDurability;
   const attackAim = { x: 0, y: 0 };
-  let strikeReady = false;
-  for (let attempt = 0; attempt < 4 && !strikeReady; attempt += 1) {
-    const correction = await aimAtShark(page, 1, 70);
-    attackAim.x += correction.x;
-    attackAim.y += correction.y;
-    strikeReady = await page.evaluate(() => {
-      const data = document.querySelector('.game-mount')?.dataset;
-      const aim = JSON.parse(data?.sharkAim ?? '{}');
-      if (!Array.isArray(aim.camera) || !Array.isArray(aim.forward) || !Array.isArray(aim.target)) return false;
-      const delta = [
-        aim.target[0] - aim.camera[0],
-        aim.target[1] - aim.camera[1],
-        aim.target[2] - aim.camera[2],
-      ];
-      const distance = Math.hypot(...delta);
-      const dot = distance > 0
-        ? (delta[0] * aim.forward[0] + delta[1] * aim.forward[1] + delta[2] * aim.forward[2]) / distance
-        : -1;
-      return distance >= 0.25
-        && distance <= 5.8
-        && dot > 0.78
-        && (data?.sharkMode === 'approaching' || data?.sharkMode === 'attacking');
-    });
-  }
-  if (!strikeReady) throw new Error(`${label} could not establish a valid spear sightline`);
   const viewport = page.viewportSize();
   if (!viewport) throw new Error(`${label} viewport unavailable`);
-  await page.mouse.click(viewport.width / 2, viewport.height / 2);
-  try {
-    await waitForRuntime(page, () => {
-      const data = document.querySelector('.game-mount')?.dataset;
-      return data?.sharkLifecycle === 'carcass'
-        && Number(data?.sharkHealth) === 0
-        && data?.lastToolWear === 'spear-hit:metalSpear:89';
-    }, 8_000);
-  } catch (error) {
-    const diagnostic = await page.evaluate(() => {
-      const data = document.querySelector('.game-mount')?.dataset;
-      const aim = JSON.parse(data?.sharkAim ?? '{}');
-      return {
-        mode: data?.sharkMode,
-        lifecycle: data?.sharkLifecycle,
-        health: data?.sharkHealth,
-        lastWear: data?.lastToolWear,
-        position: aim.target,
-        camera: aim.camera,
-        forward: aim.forward,
-      };
+  const strikes = [];
+
+  while (expectedHealth > 0) {
+    try {
+      await page.waitForFunction(({ health, observerInput }) => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        const aim = JSON.parse(data?.sharkAim ?? '{}');
+        if (!Array.isArray(aim.camera) || !Array.isArray(aim.target)) return false;
+        const distance = Math.hypot(
+          aim.target[0] - aim.camera[0],
+          aim.target[1] - aim.camera[1],
+          aim.target[2] - aim.camera[2],
+        );
+        return data?.sharkLifecycle === 'active'
+          && Number(data?.sharkHealth) === health
+          && (data?.sharkMode === 'approaching' || data?.sharkMode === 'attacking')
+          && (observerInput || (distance >= 0.25 && distance < 5.7));
+      }, { health: expectedHealth, observerInput: inputMode === 'observer' }, {
+        polling: 'raf',
+        timeout: returnTimeout,
+      });
+    } catch (error) {
+      const diagnostic = await page.evaluate(() => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        return {
+          mode: data?.sharkMode,
+          lifecycle: data?.sharkLifecycle,
+          health: data?.sharkHealth,
+          target: data?.sharkRaftTargetKind,
+          position: JSON.parse(data?.sharkWorldPosition ?? 'null'),
+          aim: JSON.parse(data?.sharkAim ?? 'null'),
+          simulation: data?.simulationActive,
+          ticks: data?.simulationTickCount,
+          contextHealthy: data?.contextHealthy,
+        };
+      });
+      throw new Error(`${label} shark did not return for health ${expectedHealth}: ${JSON.stringify(diagnostic)}`, { cause: error });
+    }
+
+    if (inputMode === 'observer') {
+      await page.evaluate((health) => {
+        globalThis.__driftwakeSharkStrikeObserver?.disconnect();
+        globalThis.__driftwakeSharkStrikeHistory = [];
+        globalThis.__driftwakeSharkStrikeInputCount = 0;
+        globalThis.__driftwakeSharkStrikeAim = { x: 0, y: 0 };
+        const mount = document.querySelector('.game-mount');
+        const canvas = document.querySelector('canvas');
+        if (!mount || !canvas) throw new Error('Shark strike observer could not find the game surface');
+        let dispatched = false;
+        const track = () => {
+          const data = mount.dataset;
+          if (data.sharkLifecycle !== 'active' || Number(data.sharkHealth) !== health) {
+            globalThis.__driftwakeSharkStrikeObserver?.disconnect();
+            return;
+          }
+          const aim = JSON.parse(data.sharkAim ?? '{}');
+          if (!Array.isArray(aim.camera) || !Array.isArray(aim.forward) || !Array.isArray(aim.target)) return;
+          const deltaX = aim.target[0] - aim.camera[0];
+          const deltaY = aim.target[1] - aim.camera[1];
+          const deltaZ = aim.target[2] - aim.camera[2];
+          const distance = Math.max(0.001, Math.hypot(deltaX, deltaY, deltaZ));
+          const desiredYaw = Math.atan2(-deltaX / distance, -deltaZ / distance);
+          const desiredPitch = Math.asin(deltaY / distance);
+          const currentYaw = Math.atan2(-aim.forward[0], -aim.forward[2]);
+          const currentPitch = Math.asin(aim.forward[1]);
+          const movementX = Math.atan2(
+            Math.sin(currentYaw - desiredYaw),
+            Math.cos(currentYaw - desiredYaw),
+          ) / 0.00175;
+          const movementY = (currentPitch - desiredPitch) / 0.00155;
+          const dot = (
+            deltaX * aim.forward[0]
+            + deltaY * aim.forward[1]
+            + deltaZ * aim.forward[2]
+          ) / distance;
+          const history = globalThis.__driftwakeSharkStrikeHistory;
+          history.push({
+            mode: data.sharkMode,
+            health: data.sharkHealth,
+            distance: Number(distance.toFixed(3)),
+            dot: Number(dot.toFixed(3)),
+            dispatched,
+          });
+          if (history.length > 80) history.shift();
+          if (Number.isFinite(movementX) && Number.isFinite(movementY)) {
+            const movement = new MouseEvent('mousemove');
+            Object.defineProperties(movement, {
+              movementX: { value: movementX },
+              movementY: { value: movementY },
+            });
+            document.dispatchEvent(movement);
+            globalThis.__driftwakeSharkStrikeAim.x += movementX;
+            globalThis.__driftwakeSharkStrikeAim.y += movementY;
+          }
+          if (
+            !dispatched
+            && (data.sharkMode === 'approaching' || data.sharkMode === 'attacking')
+            && distance >= 1.15
+            && distance <= 5.8
+            && dot > 0.78
+          ) {
+            dispatched = true;
+            globalThis.__driftwakeSharkStrikeInputCount += 1;
+            canvas.dispatchEvent(new MouseEvent('mousedown', {
+              bubbles: true,
+              cancelable: true,
+              button: 0,
+            }));
+            window.setTimeout(() => {
+              if (Number(mount.dataset.sharkHealth) === health) dispatched = false;
+            }, 850);
+          }
+        };
+        const observer = new MutationObserver(track);
+        globalThis.__driftwakeSharkStrikeObserver = observer;
+        observer.observe(mount, {
+          attributes: true,
+          attributeFilter: [
+            'data-shark-aim',
+            'data-shark-health',
+            'data-shark-mode',
+            'data-shark-lifecycle',
+          ],
+        });
+        track();
+      }, expectedHealth);
+    } else {
+      let strikeReady = false;
+      for (let attempt = 0; attempt < 5 && !strikeReady; attempt += 1) {
+        const correction = await aimAtShark(page, 1, 70);
+        attackAim.x += correction.x;
+        attackAim.y += correction.y;
+        strikeReady = await page.evaluate((health) => {
+          const data = document.querySelector('.game-mount')?.dataset;
+          const aim = JSON.parse(data?.sharkAim ?? '{}');
+          if (!Array.isArray(aim.camera) || !Array.isArray(aim.forward) || !Array.isArray(aim.target)) return false;
+          const delta = [
+            aim.target[0] - aim.camera[0],
+            aim.target[1] - aim.camera[1],
+            aim.target[2] - aim.camera[2],
+          ];
+          const distance = Math.hypot(...delta);
+          const dot = distance > 0
+            ? (delta[0] * aim.forward[0] + delta[1] * aim.forward[1] + delta[2] * aim.forward[2]) / distance
+            : -1;
+          return data?.sharkLifecycle === 'active'
+            && Number(data?.sharkHealth) === health
+            && distance >= 0.25
+            && distance <= 5.8
+            && dot > 0.78
+            && (data?.sharkMode === 'approaching' || data?.sharkMode === 'attacking');
+        }, expectedHealth);
+      }
+      if (!strikeReady) throw new Error(`${label} could not establish a valid spear sightline at health ${expectedHealth}`);
+    }
+
+    const healthBefore = expectedHealth;
+    expectedHealth = Math.max(0, expectedHealth - strikeDamage);
+    expectedDurability -= 1;
+    if (inputMode === 'mouse') await page.mouse.click(viewport.width / 2, viewport.height / 2);
+    try {
+      await page.waitForFunction(({ health, durability }) => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        return Number(data?.sharkHealth) === health
+          && data?.lastToolWear === `spear-hit:metalSpear:${durability}`
+          && (health > 0 || data?.sharkLifecycle === 'carcass');
+      }, { health: expectedHealth, durability: expectedDurability }, {
+        polling: 'raf',
+        timeout: inputMode === 'observer' ? returnTimeout : 10_000,
+      });
+    } catch (error) {
+      const diagnostic = await page.evaluate(() => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        const aim = JSON.parse(data?.sharkAim ?? '{}');
+        return {
+          mode: data?.sharkMode,
+          lifecycle: data?.sharkLifecycle,
+          health: data?.sharkHealth,
+          lastWear: data?.lastToolWear,
+          position: aim.target,
+          camera: aim.camera,
+          forward: aim.forward,
+          observerInputs: globalThis.__driftwakeSharkStrikeInputCount,
+          observerHistory: globalThis.__driftwakeSharkStrikeHistory ?? [],
+        };
+      });
+      await page.evaluate(() => globalThis.__driftwakeSharkStrikeObserver?.disconnect());
+      throw new Error(`${label} real spear strike ${healthBefore} -> ${expectedHealth} failed: ${JSON.stringify(diagnostic)}`, { cause: error });
+    }
+    const observerTelemetry = inputMode === 'observer'
+      ? await page.evaluate(() => {
+          globalThis.__driftwakeSharkStrikeObserver?.disconnect();
+          return {
+            inputs: globalThis.__driftwakeSharkStrikeInputCount ?? 0,
+            aim: globalThis.__driftwakeSharkStrikeAim ?? { x: 0, y: 0 },
+          };
+        })
+      : { inputs: 1, aim: { x: 0, y: 0 } };
+    attackAim.x += observerTelemetry.aim.x;
+    attackAim.y += observerTelemetry.aim.y;
+    strikes.push({
+      healthBefore,
+      healthAfter: expectedHealth,
+      durability: expectedDurability,
+      inputs: observerTelemetry.inputs,
+      inputMode,
     });
-    throw new Error(`${label} real spear strike failed: ${JSON.stringify(diagnostic)}`, { cause: error });
+    console.log(`${label}: spear ${healthBefore} -> ${expectedHealth}, durability ${expectedDurability}, inputs ${observerTelemetry.inputs}`);
+    if (expectedHealth > 0) await page.waitForTimeout(260);
+  }
+
+  if (Number.isFinite(options.carcassTimeScale) && options.carcassTimeScale > 0) {
+    await setCaptureTimeScale(page, options.carcassTimeScale);
   }
   await waitForRuntime(page, () => {
     const data = document.querySelector('.game-mount')?.dataset;
     return data?.sharkCarcassPhase === 'available' && data?.sharkMode === 'carcass';
-  }, 8_000);
-  const carcassAim = await aimAtShark(page, 5, 120);
+  }, 120_000);
+  await page.keyboard.up('Space');
+  await aimAtShark(page, 3, 120);
+  const carcassDistance = await page.evaluate(() => {
+    const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.sharkAim ?? '{}');
+    return Array.isArray(aim.camera) && Array.isArray(aim.target)
+      ? Math.hypot(
+          aim.target[0] - aim.camera[0],
+          aim.target[1] - aim.camera[1],
+          aim.target[2] - aim.camera[2],
+        )
+      : Number.NaN;
+  });
+  if (carcassDistance > 5.8) {
+    await page.keyboard.down('KeyW');
+    try {
+      await waitForRuntime(page, () => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        const aim = JSON.parse(data?.sharkAim ?? '{}');
+        if (data?.sharkCarcassPhase !== 'available' || !Array.isArray(aim.camera) || !Array.isArray(aim.target)) return false;
+        return Math.hypot(
+          aim.target[0] - aim.camera[0],
+          aim.target[1] - aim.camera[1],
+          aim.target[2] - aim.camera[2],
+        ) <= 5.8;
+      }, 90_000);
+    } finally {
+      await page.keyboard.up('KeyW');
+    }
+  }
+  const carcassAim = await aimAtShark(page, 7, 160);
   try {
     await waitForRuntime(page, () => {
       const data = document.querySelector('.game-mount')?.dataset;
       return data?.sharkCarcassFocused === 'true'
         && document.querySelector('.interaction-prompt.is-visible')?.textContent?.includes('按住 E 割取');
-    }, 6_000);
+    }, 120_000);
   } catch (error) {
     const diagnostic = await page.evaluate(() => {
       const data = document.querySelector('.game-mount')?.dataset;
@@ -5649,22 +6090,32 @@ async function killSharkAndFocusCarcass(page, label) {
     });
     throw new Error(`${label} carcass focus failed: ${JSON.stringify(diagnostic)}`, { cause: error });
   }
-  return { attackAim, carcassAim };
+  return { attackAim, carcassAim, strikes };
 }
 
-async function holdToHarvestShark(page, label) {
-  const harvestTimeout = process.env.CAPTURE_FAST === '1' && captureQuality !== 'high'
-    ? 45_000
-    : 180_000;
+async function holdToHarvestShark(page, label, options = {}) {
+  const harvestTimeout = options.timeout ?? (
+    process.env.CAPTURE_FAST === '1' && captureQuality !== 'high'
+      ? 45_000
+      : 180_000
+  );
+  const expectedDurability = options.expectedDurability ?? 89;
+  const expectedTotalHarvestEvents = options.expectedTotalHarvestEvents ?? 4;
+  const expectedDefeatEvents = options.expectedDefeatEvents ?? 1;
+  const expectedHarvestedCarcasses = options.expectedHarvestedCarcasses ?? 1;
   await page.keyboard.down('e');
   try {
     try {
-      await waitForRuntime(page, () => {
+      await page.waitForFunction((expected) => {
         const data = document.querySelector('.game-mount')?.dataset;
-        return data?.sharkHarvestIndex === '4'
-          && data?.sharkHarvestEvents === '4'
-          && data?.sharkLifecycle === 'cooldown';
-      }, harvestTimeout);
+        return Number(data?.sharkTotalHarvestEvents) === expected.totalHarvestEvents
+          && Number(data?.sharkDefeatCount) === expected.defeatEvents
+          && Number(data?.sharkHarvestedCarcassCount) === expected.harvestedCarcasses;
+      }, {
+        totalHarvestEvents: expectedTotalHarvestEvents,
+        defeatEvents: expectedDefeatEvents,
+        harvestedCarcasses: expectedHarvestedCarcasses,
+      }, { polling: 'raf', timeout: harvestTimeout });
     } catch (error) {
       const diagnostic = await page.evaluate(() => {
         const data = document.querySelector('.game-mount')?.dataset;
@@ -5683,6 +6134,11 @@ async function holdToHarvestShark(page, label) {
           index: data?.sharkHarvestIndex,
           progress: data?.sharkHarvestProgress,
           events: data?.sharkHarvestEvents,
+          totalEvents: data?.sharkTotalHarvestEvents,
+          defeats: data?.sharkDefeatCount,
+          harvestedCarcasses: data?.sharkHarvestedCarcassCount,
+          expiredCarcasses: data?.sharkExpiredCarcassCount,
+          respawns: data?.sharkRespawnCount,
           interaction: document.querySelector('.interaction-prompt.is-visible')?.textContent?.trim(),
           worldDrops: data?.worldDropCount,
           distance,
@@ -5698,12 +6154,29 @@ async function holdToHarvestShark(page, label) {
   } finally {
     await page.keyboard.up('e');
   }
-  await waitForRuntime(page, () => {
-    const saved = JSON.parse(localStorage.getItem('driftwake.save.v18') ?? 'null');
-    return saved?.world?.shark?.lifecycle === 'cooldown'
-      && saved?.player?.toolDurability?.metalSpear === 89;
-  }, 6_000);
-  return page.evaluate(() => {
+  try {
+    await waitForRuntime(page, () => {
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v18') ?? 'null');
+      return saved?.world?.shark?.lifecycle === 'cooldown'
+        && Number.isFinite(saved?.player?.toolDurability?.metalSpear);
+    }, Math.min(harvestTimeout, 120_000));
+  } catch (error) {
+    const diagnostic = await page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v18') ?? 'null');
+      return {
+        runtimeLifecycle: data?.sharkLifecycle,
+        runtimePhase: data?.sharkCarcassPhase,
+        totalEvents: data?.sharkTotalHarvestEvents,
+        harvestedCarcasses: data?.sharkHarvestedCarcassCount,
+        savedShark: saved?.world?.shark,
+        savedDurability: saved?.player?.toolDurability?.metalSpear,
+        savedDrops: saved?.world?.drops,
+      };
+    });
+    throw new Error(`${label} harvest save settlement failed: ${JSON.stringify(diagnostic)}`, { cause: error });
+  }
+  const result = await page.evaluate(() => {
     const data = document.querySelector('.game-mount')?.dataset;
     const saved = JSON.parse(localStorage.getItem('driftwake.save.v18') ?? 'null');
     return {
@@ -5711,7 +6184,19 @@ async function holdToHarvestShark(page, label) {
       lifecycle: data?.sharkLifecycle,
       harvested: Number(data?.sharkHarvestIndex),
       events: Number(data?.sharkHarvestEvents),
+      totalEvents: Number(data?.sharkTotalHarvestEvents),
+      defeats: Number(data?.sharkDefeatCount),
+      harvestedCarcasses: Number(data?.sharkHarvestedCarcassCount),
+      expiredCarcasses: Number(data?.sharkExpiredCarcassCount),
+      respawns: Number(data?.sharkRespawnCount),
       worldDrops: Number(data?.worldDropCount),
+      renderer: {
+        contextHealthy: data?.contextHealthy,
+        geometries: Number(data?.geometries),
+        textures: Number(data?.textures),
+        drawCalls: Number(data?.drawCalls),
+        triangles: Number(data?.triangles),
+      },
       surface: data?.playerSurface,
       inventory: saved?.player?.inventory,
       toolDurability: saved?.player?.toolDurability,
@@ -5722,9 +6207,14 @@ async function holdToHarvestShark(page, label) {
   }).catch((error) => {
     throw new Error(`${label} harvest diagnostics failed`, { cause: error });
   });
+  if (result.toolDurability?.metalSpear !== expectedDurability) {
+    throw new Error(`${label} harvest saved unexpected spear durability: ${JSON.stringify(result)}`);
+  }
+  return result;
 }
 
 async function captureSharkLootWater() {
+  const inputMode = process.env.SHARK_LOOT_INPUT ?? 'observer';
   const waterRun = await openDesktopPage('shark-loot-water', {
     seedSave: true,
     customSave: sharkLootWaterSave,
@@ -5734,7 +6224,7 @@ async function captureSharkLootWater() {
   });
   await enterGame(waterRun.page);
   await installNoticeHistory(waterRun.page);
-  const waterAim = await killSharkAndFocusCarcass(waterRun.page, 'water');
+  const waterAim = await killSharkAndFocusCarcass(waterRun.page, 'water', { inputMode });
   const waterHarvest = await holdToHarvestShark(waterRun.page, 'water');
   if (
     waterHarvest.surface !== 'water'
@@ -5749,7 +6239,418 @@ async function captureSharkLootWater() {
   return { waterAim, waterHarvest };
 }
 
+function aggregateWorldDropLoot(drops) {
+  return (drops ?? []).reduce((total, drop) => {
+    for (const [id, amount] of Object.entries(drop.loot ?? {})) {
+      total[id] = (total[id] ?? 0) + amount;
+    }
+    return total;
+  }, {});
+}
+
+async function validateSharkLootLoopCold(save) {
+  const cold = await openDesktopPage('shark-loot-loop-cold', {
+    seedSave: true,
+    customSave: save,
+    quality: 'low',
+    width: 320,
+    height: 200,
+  });
+  try {
+    await enterGame(cold.page);
+    await waitForRuntime(cold.page, () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return data?.sharkLifecycle === 'cooldown'
+        && data?.sharkCarcassPhase === 'cooldown'
+        && data?.worldDropCount === '8'
+        && data?.contextHealthy === 'true';
+    }, 60_000);
+    const coldState = await cold.page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v18') ?? 'null');
+      return {
+        lifecycle: data?.sharkLifecycle,
+        phase: data?.sharkCarcassPhase,
+        worldDrops: Number(data?.worldDropCount),
+        contextHealthy: data?.contextHealthy,
+        interactionOwner: data?.interactionOwner,
+        durability: saved?.player?.toolDurability?.metalSpear,
+        shark: saved?.world?.shark,
+        drops: saved?.world?.drops ?? [],
+      };
+    });
+    const coldDrops = aggregateWorldDropLoot(coldState.drops);
+    if (
+      coldState.lifecycle !== 'cooldown'
+      || coldState.phase !== 'cooldown'
+      || coldState.worldDrops !== 8
+      || coldState.contextHealthy !== 'true'
+      || coldState.interactionOwner === 'shark'
+      || coldState.durability !== 85
+      || coldState.shark?.lifecycle !== 'cooldown'
+      || coldDrops.sharkMeat !== 9
+      || coldDrops.sharkHide !== 3
+      || coldDrops.sharkTooth !== 6
+    ) {
+      throw new Error(`Shark loop cold-start gate failed: ${JSON.stringify({ coldState, coldDrops })}`);
+    }
+    return { ...coldState, drops: coldDrops };
+  } finally {
+    await cold.context.close();
+  }
+}
+
+async function captureSharkLootLoop() {
+  const simulationTimeScale = Number(process.env.SHARK_LOOT_LOOP_SCALE ?? 12);
+  const combatTimeScale = Number(process.env.SHARK_LOOT_COMBAT_SCALE ?? 3);
+  const harvestTimeScale = Number(process.env.SHARK_LOOT_HARVEST_SCALE ?? 3);
+  const inputMode = process.env.SHARK_LOOT_INPUT ?? 'observer';
+  const rendererBudget = { geometries: 160, textures: 32, drawCalls: 240, triangles: 125_000 };
+  if (!Number.isFinite(simulationTimeScale) || simulationTimeScale < 1 || simulationTimeScale > 12) {
+    throw new Error('SHARK_LOOT_LOOP_SCALE must be between 1 and 12');
+  }
+  if (!Number.isFinite(combatTimeScale) || combatTimeScale < 0.25 || combatTimeScale > 6) {
+    throw new Error('SHARK_LOOT_COMBAT_SCALE must be between 0.25 and 6');
+  }
+  if (!Number.isFinite(harvestTimeScale) || harvestTimeScale < 1 || harvestTimeScale > 6) {
+    throw new Error('SHARK_LOOT_HARVEST_SCALE must be between 1 and 6');
+  }
+  if (inputMode !== 'observer' && inputMode !== 'mouse') {
+    throw new Error('SHARK_LOOT_INPUT must be observer or mouse');
+  }
+  if (process.env.SHARK_LOOT_LOOP_COLD_ONLY === '1') {
+    const checkpoint = JSON.parse(await readFile(
+      new URL('shark-loot-loop-checkpoint.json', outputDir),
+      'utf8',
+    ));
+    return {
+      coldOnly: true,
+      cold: await validateSharkLootLoopCold(checkpoint),
+    };
+  }
+  const run = await openDesktopPage('shark-loot-loop', {
+    seedSave: true,
+    customSave: sharkLootLoopSave,
+    simulationTimeScale,
+    focusEmulation: true,
+    quality: captureQuality ?? 'low',
+    width: process.env.CAPTURE_FAST === '1' ? 320 : 1024,
+    height: process.env.CAPTURE_FAST === '1' ? 200 : 640,
+  });
+  const rounds = [];
+  try {
+    await enterGame(run.page);
+    await installNoticeHistory(run.page);
+    await setCaptureTimeScale(run.page, combatTimeScale);
+    await waitForRuntime(run.page, () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return Number.isFinite(Number(data?.geometries))
+        && Number.isFinite(Number(data?.textures))
+        && data?.contextHealthy === 'true';
+    }, 8_000);
+    const initialRenderer = await run.page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return {
+        geometries: Number(data?.geometries),
+        textures: Number(data?.textures),
+        drawCalls: Number(data?.drawCalls),
+        triangles: Number(data?.triangles),
+        ticks: Number(data?.simulationTickCount),
+      };
+    });
+    const plans = [
+      { startingHealth: 52, startingDurability: 90, endingDurability: 89, strikes: 1 },
+      { startingHealth: 100, startingDurability: 89, endingDurability: 87, strikes: 2 },
+      { startingHealth: 100, startingDurability: 87, endingDurability: 85, strikes: 2 },
+    ];
+    let focusRecoveries = 0;
+
+    for (let index = 0; index < plans.length; index += 1) {
+      const round = index + 1;
+      const plan = plans[index];
+      let reset = null;
+      console.log(`Shark loot loop round ${round}/3: awaiting ${plan.startingHealth} health strike window`);
+      if (index > 0) {
+        const recovery = await waitForNaturalSharkRespawn(run.page, index, 480_000);
+        focusRecoveries += recovery.focusRecoveries;
+        reset = await run.page.evaluate(() => {
+          const data = document.querySelector('.game-mount')?.dataset;
+          return {
+            lifecycle: data?.sharkLifecycle,
+            phase: data?.sharkCarcassPhase,
+            health: Number(data?.sharkHealth),
+            harvested: Number(data?.sharkHarvestIndex),
+            focused: data?.sharkCarcassFocused,
+            respawns: Number(data?.sharkRespawnCount),
+            interactionOwner: data?.interactionOwner,
+            interaction: document.querySelector('.interaction-prompt.is-visible')?.textContent?.trim() ?? '',
+          };
+        });
+        reset.focusRecoveries = recovery.focusRecoveries;
+        if (reset.interactionOwner === 'shark' || reset.interaction.includes('割取')) {
+          throw new Error(`Shark loop round ${round} retained carcass interaction: ${JSON.stringify(reset)}`);
+        }
+        await setCaptureTimeScale(run.page, combatTimeScale);
+        console.log(`Shark loot loop round ${round}/3: natural respawn ${index} validated`);
+      }
+
+      const aim = await killSharkAndFocusCarcass(run.page, `loop-${round}`, {
+        startingHealth: plan.startingHealth,
+        startingDurability: plan.startingDurability,
+        returnTimeout: 240_000,
+        inputMode,
+        carcassTimeScale: harvestTimeScale,
+      });
+      if (aim.strikes.length !== plan.strikes) {
+        throw new Error(`Shark loop round ${round} used unexpected strikes: ${JSON.stringify(aim.strikes)}`);
+      }
+      console.log(`Shark loot loop round ${round}/3: ${aim.strikes.length} spear strike(s) settled`);
+      await setCaptureTimeScale(run.page, harvestTimeScale);
+      const harvest = await holdToHarvestShark(run.page, `loop-${round}`, {
+        expectedDurability: plan.endingDurability,
+        expectedTotalHarvestEvents: round * 4,
+        expectedDefeatEvents: round,
+        expectedHarvestedCarcasses: round,
+        timeout: 300_000,
+      });
+      const drops = aggregateWorldDropLoot(harvest.drops);
+      const expectedWorldDrops = Math.min(round * 4, 8);
+      const unexpectedLoot = Object.entries(drops).filter(([id, amount]) => (
+        id !== 'sharkMeat' && id !== 'sharkHide' && id !== 'sharkTooth' && amount > 0
+      ));
+      if (
+        harvest.surface !== 'water'
+        || harvest.worldDrops !== expectedWorldDrops
+        || drops.sharkMeat !== round * 3
+        || drops.sharkHide !== round
+        || drops.sharkTooth !== round * 2
+        || unexpectedLoot.length > 0
+        || harvest.inventory?.sharkMeat
+        || harvest.inventory?.sharkHide
+        || harvest.inventory?.sharkTooth
+        || harvest.events !== 4
+        || harvest.totalEvents !== round * 4
+        || harvest.defeats !== round
+        || harvest.harvestedCarcasses !== round
+        || harvest.expiredCarcasses !== 0
+        || harvest.respawns !== index
+        || harvest.renderer?.contextHealthy !== 'true'
+        || !Number.isFinite(harvest.renderer?.geometries)
+        || !Number.isFinite(harvest.renderer?.textures)
+        || !Number.isFinite(harvest.renderer?.drawCalls)
+        || !Number.isFinite(harvest.renderer?.triangles)
+        || harvest.renderer?.geometries > rendererBudget.geometries
+        || harvest.renderer?.textures > rendererBudget.textures
+        || harvest.renderer?.drawCalls > rendererBudget.drawCalls
+        || harvest.renderer?.triangles > rendererBudget.triangles
+      ) {
+        throw new Error(`Shark loop round ${round} settlement failed: ${JSON.stringify({ harvest, drops, unexpectedLoot })}`);
+      }
+      rounds.push({
+        round,
+        reset,
+        strikes: aim.strikes,
+        durability: harvest.toolDurability?.metalSpear,
+        activeDrops: harvest.worldDrops,
+        drops,
+        counters: {
+          defeats: harvest.defeats,
+          harvestStages: harvest.totalEvents,
+          harvestedCarcasses: harvest.harvestedCarcasses,
+          expiredCarcasses: harvest.expiredCarcasses,
+          respawns: harvest.respawns,
+        },
+        renderer: harvest.renderer,
+      });
+      console.log(`Shark loot loop round ${round}/3: four harvest stages settled into ${harvest.worldDrops} active drop(s)`);
+      await setCaptureTimeScale(run.page, simulationTimeScale);
+      const afloat = await moveWaterPlayerAwayFromRaft(run.page);
+      if (afloat.surface !== 'water' || !Number.isFinite(afloat.distance) || afloat.distance < 7.5) {
+        throw new Error(`Shark loop round ${round} could not establish safe surface water: ${JSON.stringify(afloat)}`);
+      }
+      rounds.at(-1).afloat = afloat;
+      console.log(`Shark loot loop round ${round}/3: player afloat ${afloat.distance.toFixed(2)}m from raft`);
+      if (round === 1) {
+        const beforePause = await run.page.evaluate(() => {
+          const data = document.querySelector('.game-mount')?.dataset;
+          return {
+            ticks: Number(data?.simulationTickCount),
+            cooldown: Number(data?.sharkCooldownSeconds),
+          };
+        });
+        await run.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+        await waitForRuntime(run.page, () => {
+          const data = document.querySelector('.game-mount')?.dataset;
+          return data?.simulationActive === 'false' && document.pointerLockElement === null;
+        }, 8_000);
+        const pauseStart = await run.page.evaluate(() => {
+          const data = document.querySelector('.game-mount')?.dataset;
+          return {
+            ticks: Number(data?.simulationTickCount),
+            cooldown: Number(data?.sharkCooldownSeconds),
+          };
+        });
+        await run.page.waitForTimeout(600);
+        const paused = await run.page.evaluate(() => {
+          const data = document.querySelector('.game-mount')?.dataset;
+          return {
+            ticks: Number(data?.simulationTickCount),
+            cooldown: Number(data?.sharkCooldownSeconds),
+            simulationActive: data?.simulationActive,
+            pointerLocked: document.pointerLockElement === document.querySelector('canvas'),
+            contextHealthy: data?.contextHealthy,
+          };
+        });
+        if (
+          paused.ticks !== pauseStart.ticks
+          || Math.abs(paused.cooldown - pauseStart.cooldown) > 0.001
+          || paused.simulationActive !== 'false'
+          || paused.pointerLocked
+          || paused.contextHealthy !== 'true'
+        ) {
+          throw new Error(`Shark loop focus pause gate failed: ${JSON.stringify({ beforePause, pauseStart, paused })}`);
+        }
+        rounds.at(-1).focusPause = { beforePause, pauseStart, paused };
+        console.log(`Shark loot loop focus pause: fixed step ${paused.ticks}, cooldown ${paused.cooldown.toFixed(2)}s frozen`);
+      }
+    }
+
+    const finalCooldown = await waitForSettledSharkCooldown(run.page, 180_000);
+    focusRecoveries += finalCooldown.focusRecoveries;
+    const final = await run.page.evaluate(() => {
+      const mount = document.querySelector('.game-mount');
+      const data = mount?.dataset;
+      const saved = JSON.parse(localStorage.getItem('driftwake.save.v18') ?? 'null');
+      return {
+        contextHealthy: data?.contextHealthy,
+        simulationActive: data?.simulationActive,
+        pointerLocked: document.pointerLockElement === document.querySelector('canvas'),
+        failed: Boolean(document.querySelector('.failure-screen.is-visible')),
+        playerSurface: data?.playerSurface,
+        lifecycle: data?.sharkLifecycle,
+        phase: data?.sharkCarcassPhase,
+        defeats: Number(data?.sharkDefeatCount),
+        harvestStages: Number(data?.sharkTotalHarvestEvents),
+        harvestedCarcasses: Number(data?.sharkHarvestedCarcassCount),
+        expiredCarcasses: Number(data?.sharkExpiredCarcassCount),
+        respawns: Number(data?.sharkRespawnCount),
+        worldDrops: Number(data?.worldDropCount),
+        geometries: Number(data?.geometries),
+        textures: Number(data?.textures),
+        drawCalls: Number(data?.drawCalls),
+        triangles: Number(data?.triangles),
+        ticks: Number(data?.simulationTickCount),
+        interactionOwner: data?.interactionOwner,
+        interaction: document.querySelector('.interaction-prompt.is-visible')?.textContent?.trim() ?? '',
+        minimumFoundationHealth: Math.min(...(saved?.raft?.tiles ?? []).map((tile) => tile.health)),
+        reinforcedFoundations: (saved?.raft?.tiles ?? []).filter((tile) => tile.reinforced).length,
+        durability: saved?.player?.toolDurability?.metalSpear,
+        survival: saved?.player?.survival,
+        inventory: saved?.player?.inventory,
+        shark: saved?.world?.shark,
+        drops: saved?.world?.drops ?? [],
+        save: saved,
+      };
+    });
+    const finalDrops = aggregateWorldDropLoot(final.drops);
+    if (
+      final.contextHealthy !== 'true'
+      || final.simulationActive !== 'true'
+      || !final.pointerLocked
+      || final.failed
+      || final.playerSurface !== 'water'
+      || final.lifecycle !== 'cooldown'
+      || final.phase !== 'cooldown'
+      || final.defeats !== 3
+      || final.harvestStages !== 12
+      || final.harvestedCarcasses !== 3
+      || final.expiredCarcasses !== 0
+      || final.respawns !== 2
+      || final.worldDrops !== 8
+      || finalDrops.sharkMeat !== 9
+      || finalDrops.sharkHide !== 3
+      || finalDrops.sharkTooth !== 6
+      || !Number.isFinite(final.geometries)
+      || !Number.isFinite(final.textures)
+      || !Number.isFinite(final.drawCalls)
+      || !Number.isFinite(final.triangles)
+      || final.geometries > rendererBudget.geometries
+      || final.textures > rendererBudget.textures
+      || final.drawCalls > rendererBudget.drawCalls
+      || final.triangles > rendererBudget.triangles
+      || final.ticks <= initialRenderer.ticks
+      || final.interactionOwner === 'shark'
+      || final.interaction.includes('割取')
+      || final.minimumFoundationHealth <= 0
+      || final.reinforcedFoundations !== 9
+      || final.durability !== 85
+      || !final.survival
+      || final.survival.health <= 0
+      || final.survival.oxygen <= 0
+      || final.inventory?.sharkMeat
+      || final.inventory?.sharkHide
+      || final.inventory?.sharkTooth
+      || final.shark?.lifecycle !== 'cooldown'
+    ) {
+      throw new Error(`Shark loop final stability gate failed: ${JSON.stringify({ rendererBudget, initialRenderer, final, finalDrops })}`);
+    }
+    await writeFile(
+      new URL('shark-loot-loop-checkpoint.json', outputDir),
+      `${JSON.stringify(final.save, null, 2)}\n`,
+      'utf8',
+    );
+
+    await run.context.close();
+    const cold = await validateSharkLootLoopCold(final.save);
+    return {
+      simulationTimeScale,
+      combatTimeScale,
+      harvestTimeScale,
+      inputMode,
+      focusRecoveries,
+      rendererBudget,
+      initialRenderer,
+      rounds,
+      final: {
+        lifecycle: final.lifecycle,
+        phase: final.phase,
+        durability: final.durability,
+        activeDrops: final.worldDrops,
+        drops: finalDrops,
+        defeats: final.defeats,
+        harvestStages: final.harvestStages,
+        harvestedCarcasses: final.harvestedCarcasses,
+        expiredCarcasses: final.expiredCarcasses,
+        respawns: final.respawns,
+        minimumFoundationHealth: final.minimumFoundationHealth,
+        renderer: {
+          geometries: final.geometries,
+          textures: final.textures,
+          drawCalls: final.drawCalls,
+          triangles: final.triangles,
+        },
+      },
+      cold,
+    };
+  } finally {
+    await run.page.keyboard.up('e').catch(() => undefined);
+    await run.page.keyboard.up('Space').catch(() => undefined);
+    await run.page.keyboard.up('KeyW').catch(() => undefined);
+    await run.context.close().catch(() => undefined);
+  }
+}
+
 async function captureSharkLoot() {
+  const stage = process.env.SHARK_LOOT_STAGE ?? 'all';
+  if (stage !== 'all' && stage !== 'single' && stage !== 'loop') {
+    throw new Error(`Unsupported SHARK_LOOT_STAGE: ${stage}`);
+  }
+  if (stage === 'loop') {
+    const loop = await captureSharkLootLoop();
+    console.log(`Shark loot multi-round loop: ${JSON.stringify(loop)}`);
+    return;
+  }
+  const inputMode = process.env.SHARK_LOOT_INPUT ?? 'observer';
   const raftRun = await openDesktopPage('shark-loot-raft', {
     seedSave: true,
     customSave: sharkLootRaftSave,
@@ -5759,7 +6660,7 @@ async function captureSharkLoot() {
   });
   await enterGame(raftRun.page);
   await installNoticeHistory(raftRun.page);
-  const raftAim = await killSharkAndFocusCarcass(raftRun.page, 'raft-edge');
+  const raftAim = await killSharkAndFocusCarcass(raftRun.page, 'raft-edge', { inputMode });
   const layout = await raftRun.page.evaluate(() => {
     const card = document.querySelector('.shark-warning.is-harvest')?.getBoundingClientRect();
     const prompt = document.querySelector('.interaction-prompt.is-visible')?.getBoundingClientRect();
@@ -5843,6 +6744,10 @@ async function captureSharkLoot() {
       durability: waterHarvest.toolDurability?.metalSpear,
     },
   })}`);
+  if (stage === 'all') {
+    const loop = await captureSharkLootLoop();
+    console.log(`Shark loot multi-round loop: ${JSON.stringify(loop)}`);
+  }
 }
 
 async function captureMobile() {
@@ -5872,6 +6777,10 @@ try {
   if (captureOnly === 'all' || captureOnly === 'failure') await captureFailureRecovery();
   if (captureOnly === 'all' || captureOnly === 'shark-combat') await captureSharkCombat();
   if (captureOnly === 'all' || captureOnly === 'shark-loot') await captureSharkLoot();
+  if (captureOnly === 'shark-loot-loop') {
+    const result = await captureSharkLootLoop();
+    console.log(`Shark loot multi-round loop: ${JSON.stringify(result)}`);
+  }
   if (captureOnly === 'shark-loot-water') {
     const result = await captureSharkLootWater();
     console.log(`Water shark loot: ${JSON.stringify(result)}`);
