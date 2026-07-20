@@ -45,6 +45,11 @@ function createTestMaterials(): MaterialLibrary {
     birdWing: material(),
     birdBeak: material(),
     birdEye: material(),
+    silverSpineSkin: material(),
+    amberFinSkin: material(),
+    sailtailRunnerSkin: material(),
+    fishFlesh: material(),
+    fishEye: material(),
   };
 }
 

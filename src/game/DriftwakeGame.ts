@@ -283,6 +283,16 @@ export class DriftwakeGame {
     this.mount.dataset.fishingPhase = 'idle';
     this.mount.dataset.fishingTension = '0';
     this.mount.dataset.fishingProgress = '0';
+    this.mount.dataset.fishingPull = '0';
+    this.mount.dataset.fishingSpecies = 'none';
+    this.mount.dataset.fishingSize = 'none';
+    this.mount.dataset.fishingWeightKg = '0';
+    this.mount.dataset.fishingPortions = '0';
+    this.mount.dataset.fishingVisibleModels = '0';
+    this.mount.dataset.fishingModelName = 'none';
+    this.mount.dataset.fishingModelScale = '0';
+    this.mount.dataset.fishingMaterialMaps = 'none';
+    this.mount.dataset.fishingPhaseTime = '0';
     this.mount.dataset.buildMode = 'hidden';
     this.mount.dataset.buildTarget = 'none';
     this.mount.dataset.buildHovered = 'none';
@@ -638,6 +648,10 @@ export class DriftwakeGame {
       store.setLoadingLabel('正在建立物理世界');
       await this.physics.initialize();
       if (this.disposed) return;
+      store.setLoadingLabel('正在预热渔获材质');
+      await this.fishing.prewarmVisuals();
+      if (this.disposed) return;
+      this.mount.dataset.fishingVisualsPrewarmed = 'true';
       this.syncRaftPhysics();
       this.physics.step(1 / 60);
 
@@ -1543,9 +1557,20 @@ export class DriftwakeGame {
 
   private syncFishingDiagnostics(): void {
     const fishing = useGameStore.getState().fishing;
+    const diagnostics = this.fishing?.getDiagnostics();
     this.mount.dataset.fishingPhase = fishing.phase;
     this.mount.dataset.fishingTension = fishing.tension.toFixed(3);
     this.mount.dataset.fishingProgress = fishing.progress.toFixed(3);
+    this.mount.dataset.fishingPull = fishing.pull.toFixed(3);
+    this.mount.dataset.fishingSpecies = fishing.species ?? 'none';
+    this.mount.dataset.fishingSize = fishing.size ?? 'none';
+    this.mount.dataset.fishingWeightKg = fishing.weightKg.toFixed(2);
+    this.mount.dataset.fishingPortions = String(fishing.portions);
+    this.mount.dataset.fishingVisibleModels = String(diagnostics?.visibleModels ?? 0);
+    this.mount.dataset.fishingModelName = diagnostics?.modelName ?? 'none';
+    this.mount.dataset.fishingModelScale = (diagnostics?.modelScale ?? 0).toFixed(3);
+    this.mount.dataset.fishingMaterialMaps = diagnostics?.materialMaps ?? 'none';
+    this.mount.dataset.fishingPhaseTime = (diagnostics?.phaseTime ?? 0).toFixed(3);
   }
 
   private syncSurvivalDiagnostics(): void {

@@ -700,6 +700,72 @@ const durabilityFishingSave = {
   },
 };
 
+const fishingVarietySave = {
+  ...durabilityBaseSave,
+  version: 18,
+  player: {
+    ...durabilityBaseSave.player,
+    inventory: { hook: 1, fishingRod: 1 },
+    toolDurability: { hook: 24, fishingRod: 55 },
+    selectedTool: 'fishingRod',
+    survival: { health: 100, thirst: 82, hunger: 74, oxygen: 100 },
+  },
+  raft: {
+    ...durabilityBaseSave.raft,
+    tiles: durabilityBaseSave.raft.tiles.map((tile) => ({ ...tile, health: 100, reinforced: true })),
+    navigation: {
+      ...durabilityBaseSave.raft.navigation,
+      windClock: 0,
+      weatherClock: 180,
+      devices: [],
+    },
+  },
+  world: {
+    ...durabilityBaseSave.world,
+    shark: { lifecycle: 'cooldown', health: 0, x: 0, z: 0, harvestIndex: 0, remainingSeconds: 48 },
+  },
+};
+
+const fishingCapacityInventory = {
+  hook: 1,
+  fishingRod: 1,
+  timber: 1,
+  polymer: 1,
+  fiber: 1,
+  scrap: 1,
+  rope: 1,
+  stone: 1,
+  palmSeed: 1,
+  sand: 1,
+  clay: 1,
+  metalOre: 1,
+  wetBrick: 1,
+  dryBrick: 1,
+  metalIngot: 1,
+  glassPane: 1,
+  hinge: 1,
+  signalBoard: 1,
+  brineCell: 1,
+  rawFish: 7,
+};
+
+const fishingPartialSave = {
+  ...fishingVarietySave,
+  player: {
+    ...fishingVarietySave.player,
+    inventory: fishingCapacityInventory,
+    toolDurability: { hook: 24, fishingRod: 10 },
+  },
+};
+
+const fishingFullSave = {
+  ...fishingPartialSave,
+  player: {
+    ...fishingPartialSave.player,
+    inventory: { ...fishingCapacityInventory, rawFish: 8 },
+  },
+};
+
 const durabilityAxeSave = {
   ...durabilityBaseSave,
   player: {
@@ -1268,6 +1334,48 @@ async function ensurePointerLock(page) {
   throw new Error(`Pointer Lock recovery failed: ${JSON.stringify(diagnostic)}`);
 }
 
+async function setRuntimeQualityThroughUi(page, quality) {
+  const current = await page.locator('.game-mount').getAttribute('data-quality');
+  if (current === quality) return;
+  await page.evaluate(() => {
+    if (document.pointerLockElement) document.exitPointerLock();
+  });
+  await waitForRuntime(page, () => document.pointerLockElement === null, 10_000);
+  const opened = await page.evaluate(() => {
+    const buttons = [...document.querySelectorAll('button[aria-label="设置"]')];
+    const button = buttons.find((candidate) => {
+      const rect = candidate.getBoundingClientRect();
+      const style = getComputedStyle(candidate);
+      return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+    });
+    button?.click();
+    return Boolean(button);
+  });
+  if (!opened) throw new Error('No visible settings button was available for the quality switch');
+  await page.getByRole('dialog', { name: '设置' }).waitFor({ timeout: 10_000 });
+  const label = quality === 'high' ? '高质量' : '性能';
+  const changed = await page.evaluate((targetLabel) => {
+    const button = [...document.querySelectorAll('.segmented-control button')]
+      .find((candidate) => candidate.textContent?.trim() === targetLabel);
+    button?.click();
+    return Boolean(button);
+  }, label);
+  if (!changed) throw new Error(`Quality button was not available: ${label}`);
+  await waitForRuntime(
+    page,
+    (target) => document.querySelector('.game-mount')?.dataset.quality === target,
+    10_000,
+    quality,
+  );
+  const closed = await page.evaluate(() => {
+    const button = document.querySelector('button[aria-label="关闭设置"]');
+    button?.click();
+    return Boolean(button);
+  });
+  if (!closed) throw new Error('Close settings button was not available after quality switch');
+  await ensurePointerLock(page);
+}
+
 async function assertHookVisualOwnership(page, label, expected = 'any') {
   const state = await page.evaluate(() => {
     const data = document.querySelector('.game-mount')?.dataset;
@@ -1315,13 +1423,13 @@ async function assertHookVisualOwnership(page, label, expected = 'any') {
   return state;
 }
 
-async function waitForRuntime(page, predicate, timeout = 10_000) {
+async function waitForRuntime(page, predicate, timeout = 10_000, argument) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
-    if (await page.evaluate(predicate)) return;
+    if (await page.evaluate(predicate, argument)) return;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  if (await page.evaluate(predicate)) return;
+  if (await page.evaluate(predicate, argument)) return;
   throw new Error(`runtime condition timed out after ${timeout}ms`);
 }
 
@@ -2039,6 +2147,529 @@ async function captureSurvivalPressure() {
   await context.close();
 }
 
+async function installFishingAutoReel(page) {
+  await page.evaluate(() => {
+    globalThis.__driftwakeFishingObserver?.disconnect();
+    if (globalThis.__driftwakeFishingAutoReelTimer) {
+      clearInterval(globalThis.__driftwakeFishingAutoReelTimer);
+    }
+    globalThis.__driftwakeFishingStats = {
+      samples: 0,
+      pullMin: 1,
+      pullMax: 0,
+      tensionMax: 0,
+      progressMax: 0,
+      transitions: 0,
+      modelViolations: 0,
+      reeling: true,
+      lastReelSignalAt: 0,
+      history: [],
+    };
+    const mount = document.querySelector('.game-mount');
+    const canvas = document.querySelector('canvas');
+    if (!mount || !canvas) throw new Error('Fishing auto reel could not find game surface');
+    const track = () => {
+      const data = mount.dataset;
+      const stats = globalThis.__driftwakeFishingStats;
+      if (!stats || data.fishingPhase !== 'hooked') return;
+      const tension = Number(data.fishingTension);
+      const progress = Number(data.fishingProgress);
+      const pull = Number(data.fishingPull);
+      stats.samples += 1;
+      stats.pullMin = Math.min(stats.pullMin, pull);
+      stats.pullMax = Math.max(stats.pullMax, pull);
+      stats.tensionMax = Math.max(stats.tensionMax, tension);
+      stats.progressMax = Math.max(stats.progressMax, progress);
+      if (Number(data.fishingVisibleModels) !== 1) stats.modelViolations += 1;
+      stats.history.push({
+        tension,
+        progress,
+        pull,
+        reeling: stats.reeling,
+        model: data.fishingModelName,
+      });
+      if (stats.history.length > 80) stats.history.shift();
+      if (stats.reeling && tension >= 0.72) {
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+        stats.reeling = false;
+        stats.transitions += 1;
+      } else if (!stats.reeling && tension <= 0.34) {
+        canvas.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+        stats.reeling = true;
+        stats.lastReelSignalAt = performance.now();
+        stats.transitions += 1;
+      } else if (stats.reeling && performance.now() - stats.lastReelSignalAt >= 500) {
+        // Pointer-lock or settings transitions may consume the original synthetic press.
+        canvas.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+        stats.lastReelSignalAt = performance.now();
+      }
+    };
+    const observer = new MutationObserver(track);
+    globalThis.__driftwakeFishingObserver = observer;
+    observer.observe(mount, {
+      attributes: true,
+      attributeFilter: [
+        'data-fishing-phase',
+        'data-fishing-tension',
+        'data-fishing-progress',
+        'data-fishing-pull',
+        'data-fishing-visible-models',
+      ],
+    });
+    canvas.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+    globalThis.__driftwakeFishingStats.lastReelSignalAt = performance.now();
+    globalThis.__driftwakeFishingAutoReelTimer = setInterval(track, 200);
+    track();
+  });
+}
+
+async function installFishingCatchFreeze(page) {
+  await page.evaluate(() => {
+    globalThis.__driftwakeFishingCatchFreezeObserver?.disconnect();
+    globalThis.__driftwakeFishingCatchFrozen = false;
+    globalThis.__driftwakeFishingCatchFreezeEvents = [];
+    const mount = document.querySelector('.game-mount');
+    if (!mount) throw new Error('Fishing catch freeze could not find game surface');
+    const freezeAtReadablePose = () => {
+      const phase = mount.dataset.fishingPhase;
+      if (phase !== 'caught') return;
+      const phaseTime = Number(mount.dataset.fishingPhaseTime);
+      globalThis.__driftwakeFishingCatchFreezeEvents.push({ phase, phaseTime });
+      if (globalThis.__driftwakeFishingCatchFreezeEvents.length > 12) {
+        globalThis.__driftwakeFishingCatchFreezeEvents.shift();
+      }
+      if (phaseTime >= 0.16) {
+        globalThis.__driftwakeCaptureTimeScale = 0.0001;
+        globalThis.__driftwakeFishingCatchFrozen = true;
+      } else {
+        globalThis.__driftwakeCaptureTimeScale = 12;
+      }
+    };
+    const observer = new MutationObserver(freezeAtReadablePose);
+    globalThis.__driftwakeFishingCatchFreezeObserver = observer;
+    observer.observe(mount, {
+      attributes: true,
+      attributeFilter: ['data-fishing-phase', 'data-fishing-phase-time'],
+    });
+    freezeAtReadablePose();
+  });
+}
+
+async function readFishingRuntimeState(page) {
+  const evaluation = page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const stats = globalThis.__driftwakeFishingStats;
+    return {
+      phase: data?.fishingPhase ?? 'missing',
+      phaseTime: Number(data?.fishingPhaseTime),
+      tension: Number(data?.fishingTension),
+      progress: Number(data?.fishingProgress),
+      pull: Number(data?.fishingPull),
+      simulationActive: data?.simulationActive,
+      contextHealthy: data?.contextHealthy,
+      quality: data?.quality,
+      visualsPrewarmed: data?.fishingVisualsPrewarmed,
+      samples: stats?.samples ?? 0,
+      transitions: stats?.transitions ?? 0,
+      progressMax: stats?.progressMax ?? 0,
+      reeling: stats?.reeling ?? false,
+      lastSample: stats?.history?.at(-1) ?? null,
+    };
+  });
+  let timeoutId;
+  try {
+    return await Promise.race([
+      evaluation,
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error('Fishing runtime page evaluation stalled for 90 seconds')),
+          90_000,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+async function waitForFishingTerminal(page, roundLabel, timeout = 360_000) {
+  const deadline = Date.now() + timeout;
+  let nextHeartbeat = 0;
+  let state = null;
+  while (Date.now() < deadline) {
+    state = await readFishingRuntimeState(page);
+    if (
+      state.phase === 'caught'
+      || state.phase === 'lost'
+      || state.phase === 'idle'
+    ) {
+      console.log(`Fishing round ${roundLabel}: terminal ${JSON.stringify(state)}`);
+      return state;
+    }
+    if (Date.now() >= nextHeartbeat) {
+      console.log(`Fishing round ${roundLabel}: fight heartbeat ${JSON.stringify(state)}`);
+      nextHeartbeat = Date.now() + 10_000;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  throw new Error(`Fishing round ${roundLabel} timed out: ${JSON.stringify(state)}`);
+}
+
+async function captureFishingRound(page, expected, options = {}) {
+  const roundLabel = `${expected.label}/${expected.modelName}`;
+  console.log(`Fishing round ${roundLabel}: casting`);
+  await page.evaluate(() => {
+    const canvas = document.querySelector('canvas');
+    canvas?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+  });
+  await waitForRuntime(
+    page,
+    () => document.querySelector('.game-mount')?.dataset.fishingPhase === 'casting',
+    10_000,
+  );
+  await waitForRuntime(
+    page,
+    () => document.querySelector('.game-mount')?.dataset.fishingPhase === 'nibble',
+    120_000,
+  );
+  console.log(`Fishing round ${roundLabel}: bite window`);
+  await page.evaluate(() => {
+    document.querySelector('canvas')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+  });
+  await waitForRuntime(page, (target) => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.fishingPhase === 'hooked'
+      && data?.fishingSpecies === target.species
+      && data?.fishingSize === target.size
+      && Number(data?.fishingPortions) === target.portions
+      && Number(data?.fishingVisibleModels) === 1
+      && data?.fishingModelName === target.modelName
+      && data?.fishingMaterialMaps === target.materialMaps;
+  }, 30_000, expected);
+  console.log(`Fishing round ${roundLabel}: hooked`);
+  await page.evaluate(() => {
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+  });
+
+  const profile = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const panel = document.querySelector('.fishing-fight.is-visible')?.getBoundingClientRect();
+    const hotbar = document.querySelector('.hotbar')?.getBoundingClientRect();
+    return {
+      phase: data?.fishingPhase,
+      species: data?.fishingSpecies,
+      size: data?.fishingSize,
+      weightKg: Number(data?.fishingWeightKg),
+      portions: Number(data?.fishingPortions),
+      pull: Number(data?.fishingPull),
+      visibleModels: Number(data?.fishingVisibleModels),
+      modelName: data?.fishingModelName,
+      modelScale: Number(data?.fishingModelScale),
+      materialMaps: data?.fishingMaterialMaps,
+      visualsPrewarmed: data?.fishingVisualsPrewarmed,
+      panel: panel ? { left: panel.left, top: panel.top, right: panel.right, bottom: panel.bottom } : null,
+      hotbar: hotbar ? { top: hotbar.top, bottom: hotbar.bottom } : null,
+      viewport: { width: innerWidth, height: innerHeight },
+      label: document.querySelector('.fishing-fight.is-visible')?.getAttribute('aria-label'),
+    };
+  });
+  if (
+    !profile.panel
+    || profile.panel.left < 0
+    || profile.panel.top < 0
+    || profile.panel.right > profile.viewport.width
+    || profile.panel.bottom > profile.viewport.height
+    || (profile.hotbar && profile.panel.bottom > profile.hotbar.top)
+    || profile.weightKg <= 0
+    || profile.visualsPrewarmed !== 'true'
+    || profile.pull < 0.12
+    || profile.pull > 0.96
+    || !profile.label?.includes(expected.label)
+  ) {
+    throw new Error(`Fishing profile/layout gate failed: ${JSON.stringify({ expected, profile })}`);
+  }
+  if (options.captureFightVisual) {
+    await setCaptureTimeScale(page, 0.0001);
+    await page.waitForTimeout(150);
+    console.log(`Fishing round ${roundLabel}: switching fight evidence to high quality`);
+    await setRuntimeQualityThroughUi(page, 'high');
+    await inspectCanvasPixels(page, 'fishing-sailtail-fight');
+    await captureCompositedPage(page, new URL('fishing-sailtail-fight-desktop.png', outputDir).pathname);
+    console.log(`Fishing round ${roundLabel}: restoring performance quality after fight evidence`);
+    await setRuntimeQualityThroughUi(page, 'low');
+    await setCaptureTimeScale(page, 4);
+    console.log(`Fishing round ${roundLabel}: fight evidence complete`);
+  }
+
+  if (options.captureVisual) await installFishingCatchFreeze(page);
+  await installFishingAutoReel(page);
+  const terminalState = await waitForFishingTerminal(page, roundLabel);
+  if (terminalState.phase !== 'caught' && terminalState.progressMax < 0.96) {
+    throw new Error(`Fishing round ended before catch: ${JSON.stringify(terminalState)}`);
+  }
+  if (options.captureVisual) {
+    const terminalPhase = await page.locator('.game-mount').getAttribute('data-fishing-phase');
+    if (terminalPhase !== 'caught') {
+      const terminalState = await page.evaluate(() => ({
+        phase: document.querySelector('.game-mount')?.dataset.fishingPhase,
+        stats: globalThis.__driftwakeFishingStats,
+        freezeEvents: globalThis.__driftwakeFishingCatchFreezeEvents ?? [],
+        notices: globalThis.__driftwakeCaptureNotices ?? [],
+      }));
+      throw new Error(`Fishing visual round ended before catch: ${JSON.stringify(terminalState)}`);
+    }
+    const positioned = await waitForRuntime(page, () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return globalThis.__driftwakeFishingCatchFrozen === true
+        && data?.fishingPhase === 'caught'
+        && Number(data?.fishingVisibleModels) === 1
+        && Number(data?.fishingPhaseTime) >= 0.16;
+    }, 120_000).then(() => true).catch(() => false);
+    if (!positioned) {
+      const positioningState = await page.evaluate(() => {
+        const data = document.querySelector('.game-mount')?.dataset;
+        return {
+          phase: data?.fishingPhase,
+          phaseTime: Number(data?.fishingPhaseTime),
+          visibleModels: Number(data?.fishingVisibleModels),
+          modelName: data?.fishingModelName,
+          simulationActive: data?.simulationActive,
+          contextHealthy: data?.contextHealthy,
+          freezeEvents: globalThis.__driftwakeFishingCatchFreezeEvents ?? [],
+        };
+      });
+      throw new Error(`Fishing catch visual positioning timed out: ${JSON.stringify(positioningState)}`);
+    }
+    await setCaptureTimeScale(page, 0.0001);
+    const frozenCatch = await page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return {
+        phase: data?.fishingPhase,
+        phaseTime: Number(data?.fishingPhaseTime),
+        visibleModels: Number(data?.fishingVisibleModels),
+        modelName: data?.fishingModelName,
+        materialMaps: data?.fishingMaterialMaps,
+        daylight: Number(data?.daylight),
+        weather: data?.weather,
+      };
+    });
+    if (
+      frozenCatch.phase !== 'caught'
+      || frozenCatch.visibleModels !== 1
+      || frozenCatch.modelName !== expected.modelName
+      || frozenCatch.materialMaps !== expected.materialMaps
+      || frozenCatch.daylight < 0.9
+      || !['calm', 'clearing'].includes(frozenCatch.weather)
+    ) {
+      throw new Error(`Fishing frozen catch visual gate failed: ${JSON.stringify({ expected, frozenCatch })}`);
+    }
+    console.log(`Fishing round ${roundLabel}: capturing high-quality catch evidence`);
+    await setRuntimeQualityThroughUi(page, 'high');
+    await captureCompositedPage(
+      page,
+      new URL(`fishing-${options.captureVisual}-catch-desktop.png`, outputDir).pathname,
+    );
+    const afterCapture = await page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return {
+        phase: data?.fishingPhase,
+        visibleModels: Number(data?.fishingVisibleModels),
+      };
+    });
+    if (afterCapture.phase !== 'caught' || afterCapture.visibleModels !== 1) {
+      throw new Error(`Fishing catch visual advanced during capture: ${JSON.stringify(afterCapture)}`);
+    }
+    console.log(`Fishing round ${roundLabel}: restoring performance quality after catch evidence`);
+    await setRuntimeQualityThroughUi(page, 'low');
+    console.log(`Fishing round ${roundLabel}: catch evidence complete`);
+    await page.evaluate(() => {
+      globalThis.__driftwakeFishingCatchFreezeObserver?.disconnect();
+      globalThis.__driftwakeFishingCatchFrozen = false;
+    });
+    await setCaptureTimeScale(page, 4);
+  }
+  await waitForRuntime(page, (target) => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v18') ?? 'null');
+    return data?.fishingPhase === 'idle'
+      && Number(data?.toolWearEventCount) === target.wearEvents
+      && Number(saved?.player?.inventory?.rawFish ?? 0) === target.inventory
+      && Number(saved?.player?.toolDurability?.fishingRod ?? 0) === target.durability;
+  }, 360_000, expected);
+  const result = await page.evaluate(() => {
+    globalThis.__driftwakeFishingObserver?.disconnect();
+    if (globalThis.__driftwakeFishingAutoReelTimer) {
+      clearInterval(globalThis.__driftwakeFishingAutoReelTimer);
+      globalThis.__driftwakeFishingAutoReelTimer = null;
+    }
+    const data = document.querySelector('.game-mount')?.dataset;
+    const saved = JSON.parse(localStorage.getItem('driftwake.save.v18') ?? 'null');
+    return {
+      phase: data?.fishingPhase,
+      contextHealthy: data?.contextHealthy,
+      failed: Boolean(document.querySelector('.failure-screen.is-visible')),
+      inventory: saved?.player?.inventory?.rawFish ?? 0,
+      durability: saved?.player?.toolDurability?.fishingRod,
+      wearEvents: Number(data?.toolWearEventCount),
+      notice: globalThis.__driftwakeCaptureNotices?.at(-1) ?? '',
+      notices: globalThis.__driftwakeCaptureNotices ?? [],
+      stats: globalThis.__driftwakeFishingStats,
+    };
+  });
+  if (
+    result.phase !== 'idle'
+    || result.contextHealthy !== 'true'
+    || result.failed
+    || result.inventory !== expected.inventory
+    || result.durability !== expected.durability
+    || result.wearEvents !== expected.wearEvents
+    || !result.notices.some((notice) => notice.includes(expected.notice))
+    || result.stats?.samples < 8
+    || result.stats?.transitions < 2
+    || result.stats?.modelViolations !== 0
+    || result.stats?.tensionMax >= 1
+    || result.stats?.progressMax < 0.96
+    || result.stats?.pullMax - result.stats?.pullMin < 0.08
+  ) {
+    throw new Error(`Fishing settlement gate failed: ${JSON.stringify({ expected, profile, result })}`);
+  }
+  console.log(`Fishing round ${roundLabel}: settled ${result.inventory}/${result.durability}`);
+  return { profile, result };
+}
+
+async function captureFishingVariety() {
+  const stage = process.env.FISHING_STAGE ?? 'all';
+  if (!['all', 'variety', 'capacity'].includes(stage)) {
+    throw new Error(`Unknown FISHING_STAGE: ${stage}`);
+  }
+  const visual = process.env.CAPTURE_FAST !== '1';
+  const visualIds = ['silver-spine', 'sailtail-runner', 'amber-fin'];
+  const requestedVisualIds = new Set(
+    (process.env.FISHING_VISUAL_IDS ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+  const unknownVisualIds = [...requestedVisualIds].filter((value) => !visualIds.includes(value));
+  if (unknownVisualIds.length > 0) {
+    throw new Error(`Unknown FISHING_VISUAL_IDS: ${unknownVisualIds.join(', ')}`);
+  }
+  const targetedVisual = visual && requestedVisualIds.size > 0;
+  const rounds = [];
+  let partialResult = null;
+  let fullResult = null;
+  if (stage === 'all' || stage === 'variety') {
+    const targetedWeatherClock = requestedVisualIds.has('amber-fin')
+      ? 95
+      : requestedVisualIds.has('sailtail-runner')
+        ? 140
+        : fishingVarietySave.raft.navigation.weatherClock;
+    const varietySave = targetedVisual
+      ? {
+          ...fishingVarietySave,
+          raft: {
+            ...fishingVarietySave.raft,
+            navigation: {
+              ...fishingVarietySave.raft.navigation,
+              weatherClock: targetedWeatherClock,
+            },
+          },
+        }
+      : fishingVarietySave;
+    const variety = await openDesktopPage('fishing-variety', {
+      seedSave: true,
+      customSave: varietySave,
+      simulationTimeScale: 4,
+      quality: 'low',
+      width: visual && !targetedVisual ? 1024 : 800,
+      height: visual && !targetedVisual ? 640 : 500,
+    });
+    await enterGame(variety.page);
+    await installNoticeHistory(variety.page);
+    const expectedRounds = [
+      {
+        species: 'silverSpine', size: 'large', portions: 2, modelName: 'silver-spine-fish',
+        materialMaps: 'silver-spine-skin-albedo|silver-spine-skin-normal|silver-spine-skin-roughness|pelagic-fish-eye-albedo|pelagic-fish-eye-normal|pelagic-fish-eye-roughness',
+        label: '银脊鱼 大型', notice: '+2 鲜鱼段 · 银脊鱼 大型', inventory: 2, durability: 54, wearEvents: 1,
+      },
+      {
+        species: 'sailtailRunner', size: 'medium', portions: 1, modelName: 'sailtail-runner-fish',
+        materialMaps: 'sailtail-runner-skin-albedo|sailtail-runner-skin-normal|sailtail-runner-skin-roughness|pelagic-fish-eye-albedo|pelagic-fish-eye-normal|pelagic-fish-eye-roughness',
+        label: '旗尾梭 中型', notice: '+1 鲜鱼段 · 旗尾梭 中型', inventory: 3, durability: 53, wearEvents: 2,
+      },
+      {
+        species: 'amberFin', size: 'large', portions: 2, modelName: 'amber-fin-bream',
+        materialMaps: 'amber-fin-skin-albedo|amber-fin-skin-normal|amber-fin-skin-roughness|pelagic-fish-eye-albedo|pelagic-fish-eye-normal|pelagic-fish-eye-roughness',
+        label: '琥鳍鲷 大型', notice: '+2 鲜鱼段 · 琥鳍鲷 大型', inventory: 5, durability: 52, wearEvents: 3,
+      },
+    ];
+    const requestedLimit = process.env.FISHING_ROUND_LIMIT
+      ?? (visual ? process.env.FISHING_VISUAL_LIMIT : undefined);
+    const visualLimit = requestedLimit
+      ? Number(requestedLimit)
+      : expectedRounds.length;
+    if (!Number.isInteger(visualLimit) || visualLimit < 1 || visualLimit > expectedRounds.length) {
+      throw new Error(`Fishing round limit must be an integer from 1 to ${expectedRounds.length}`);
+    }
+    for (const [index, expected] of expectedRounds.slice(0, visualLimit).entries()) {
+      const captureVisual = visual
+        && (requestedVisualIds.size === 0 || requestedVisualIds.has(visualIds[index]));
+      if (captureVisual && targetedVisual) {
+        console.log(`Fishing visual target ${visualIds[index]}: switching viewport to 1024x640`);
+        await variety.page.setViewportSize({ width: 1024, height: 640 });
+        await variety.page.waitForTimeout(250);
+      }
+      rounds.push(await captureFishingRound(variety.page, expected, {
+        captureVisual: captureVisual ? visualIds[index] : null,
+        captureFightVisual: captureVisual
+          && index === 1
+          && process.env.FISHING_CAPTURE_FIGHT !== '0',
+      }));
+    }
+    await variety.context.close();
+  }
+  if (stage === 'all' || stage === 'capacity') {
+    const partial = await openDesktopPage('fishing-capacity-partial', {
+      seedSave: true,
+      customSave: fishingPartialSave,
+      simulationTimeScale: 4,
+      quality: 'low',
+      width: 512,
+      height: 320,
+    });
+    await enterGame(partial.page);
+    await installNoticeHistory(partial.page);
+    partialResult = await captureFishingRound(partial.page, {
+      species: 'silverSpine', size: 'large', portions: 2, modelName: 'silver-spine-fish',
+      materialMaps: 'silver-spine-skin-albedo|silver-spine-skin-normal|silver-spine-skin-roughness|pelagic-fish-eye-albedo|pelagic-fish-eye-normal|pelagic-fish-eye-roughness',
+      label: '银脊鱼 大型', notice: '+1 鲜鱼段 · 银脊鱼 大型', inventory: 8, durability: 9, wearEvents: 1,
+    });
+    if (!partialResult.result.notices.some((notice) => notice.includes('1 份滑回海里'))) {
+      throw new Error(`Fishing partial-capacity feedback failed: ${JSON.stringify(partialResult)}`);
+    }
+    await partial.context.close();
+
+    const full = await openDesktopPage('fishing-capacity-full', {
+      seedSave: true,
+      customSave: fishingFullSave,
+      simulationTimeScale: 4,
+      quality: 'low',
+      width: 512,
+      height: 320,
+    });
+    await enterGame(full.page);
+    await installNoticeHistory(full.page);
+    fullResult = await captureFishingRound(full.page, {
+      species: 'silverSpine', size: 'large', portions: 2, modelName: 'silver-spine-fish',
+      materialMaps: 'silver-spine-skin-albedo|silver-spine-skin-normal|silver-spine-skin-roughness|pelagic-fish-eye-albedo|pelagic-fish-eye-normal|pelagic-fish-eye-roughness',
+      label: '银脊鱼 大型', notice: '背包已满，银脊鱼滑回海里', inventory: 8, durability: 10, wearEvents: 0,
+    });
+    await full.context.close();
+  }
+  console.log(`Fishing variety gate (${stage}): ${JSON.stringify({ rounds, partial: partialResult, full: fullResult })}`);
+}
+
 async function captureToolDurability() {
   const durabilityPart = process.env.DURABILITY_PART ?? 'all';
   if (durabilityPart === 'all' || durabilityPart === 'hammer') {
@@ -2168,6 +2799,7 @@ async function captureToolDurability() {
   const fishingDeadline = Date.now() + 300_000;
   let nextFightLogAt = Date.now() + 15_000;
   let lastFight = null;
+  let hookedProfile = null;
   while (Date.now() < fishingDeadline) {
     const fight = await fishingRun.page.evaluate(() => {
       const data = document.querySelector('.game-mount')?.dataset;
@@ -2175,18 +2807,27 @@ async function captureToolDurability() {
         phase: data?.fishingPhase,
         tension: Number(data?.fishingTension),
         progress: Number(data?.fishingProgress),
+        pull: Number(data?.fishingPull),
+        species: data?.fishingSpecies,
+        size: data?.fishingSize,
+        weightKg: Number(data?.fishingWeightKg),
+        portions: Number(data?.fishingPortions),
+        visibleModels: Number(data?.fishingVisibleModels),
+        modelName: data?.fishingModelName,
+        modelScale: Number(data?.fishingModelScale),
         wearEvents: Number(data?.toolWearEventCount),
       };
     });
     lastFight = fight;
+    if (!hookedProfile && fight.phase === 'hooked' && fight.species !== 'none') hookedProfile = fight;
     if (fight.wearEvents >= 1) break;
     if (fight.phase === 'lost' || fight.phase === 'idle') break;
-    if (holdingReel && fight.tension >= 0.68) {
+    if (holdingReel && fight.tension >= 0.6) {
       await fishingRun.page.evaluate(() => {
         document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
       });
       holdingReel = false;
-    } else if (!holdingReel && fight.tension <= 0.42) {
+    } else if (!holdingReel && fight.tension <= 0.34) {
       await fishingRun.page.evaluate(() => {
         document.querySelector('canvas')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
       });
@@ -2228,15 +2869,22 @@ async function captureToolDurability() {
   if (
     fishingState.phase !== 'idle'
     || fishingState.wearEvents !== 1
-    || fishingState.inventory?.rawFish !== 1
+    || fishingState.inventory?.rawFish !== 2
     || fishingState.inventory?.fishingRod
     || fishingState.savedDurability?.fishingRod !== undefined
     || fishingState.selectedTool !== 'hook'
+    || hookedProfile?.species !== 'silverSpine'
+    || hookedProfile?.size !== 'large'
+    || hookedProfile?.portions !== 2
+    || hookedProfile?.visibleModels !== 1
+    || hookedProfile?.modelName !== 'silver-spine-fish'
+    || Math.abs((hookedProfile?.modelScale ?? 0) - 0.893) > 0.002
+    || !fishingState.notices.some((notice) => notice.includes('+2 鲜鱼段 · 银脊鱼 大型'))
     || !fishingState.notices.some((notice) => notice.includes('钓竿损坏'))
   ) {
-    throw new Error(`Fishing durability transaction failed: ${JSON.stringify(fishingState)}`);
+    throw new Error(`Fishing durability transaction failed: ${JSON.stringify({ fishingState, hookedProfile })}`);
   }
-  console.log(`Fishing durability gate: ${JSON.stringify(fishingState)}`);
+  console.log(`Fishing durability gate: ${JSON.stringify({ fishingState, hookedProfile })}`);
   await fishingRun.context.close();
   if (durabilityPart === 'fishing') return;
   }
@@ -3636,7 +4284,7 @@ async function captureAdvancedDevices() {
     && document.querySelector('.storage-transfer-axis > small.is-limited')?.textContent?.trim() === '可容 2',
   ));
   await clickWithPointer(
-    dialog.locator('button[aria-label="随身背包：银脊鱼，4 个"]'),
+    dialog.locator('button[aria-label="随身背包：海风鲜鱼段，4 个"]'),
     'capacity-blocked fish stack',
   );
   await page.waitForFunction(() => Boolean(
@@ -6788,6 +7436,7 @@ try {
   if (captureOnly === 'all' || captureOnly === 'pack') await capturePack();
   if (captureOnly === 'all' || captureOnly === 'crafting') await captureCrafting();
   if (captureOnly === 'all' || captureOnly === 'survival') await captureSurvivalPressure();
+  if (captureOnly === 'all' || captureOnly === 'fishing') await captureFishingVariety();
   if (captureOnly === 'all' || captureOnly === 'durability') await captureToolDurability();
   if (captureOnly === 'all' || captureOnly === 'building') await captureBuildingStructures();
   if (captureOnly === 'structure-collapse') await captureStructureCollapse();

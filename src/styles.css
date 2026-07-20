@@ -1113,10 +1113,31 @@ button:focus-visible {
 }
 
 .fishing-fight.is-visible { opacity: 1; transform: translateY(-50%); }
+.fishing-fight__identity {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(221, 237, 232, 0.14);
+}
+.fishing-fight__identity > svg { color: var(--fish-tone); }
+.fishing-fight__identity > div { display: grid; min-width: 0; gap: 1px; }
+.fishing-fight__identity strong,
+.fishing-fight__identity span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fishing-fight__identity strong { color: #f2f6ef; font-family: 'Barlow Condensed', sans-serif; font-size: 14px; }
+.fishing-fight__identity span { color: rgba(229, 240, 237, 0.62); font-size: 10px; }
+.fishing-fight__identity em { color: var(--fish-tone); font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-style: normal; }
 .fishing-fight__row { display: grid; grid-template-columns: 48px 1fr; align-items: center; gap: 8px; }
 .fishing-fight__row span { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; }
-.fishing-fight__row > i { height: 6px; border-radius: 2px; }
+.fishing-fight__row > i { height: 6px; overflow: hidden; border-radius: 2px; background: rgba(217, 234, 229, 0.1); }
 .fishing-fight__row > i b { display: block; height: 100%; transition: width 60ms linear; }
+.fishing-fight__pull b { background: var(--fish-tone); }
 .fishing-fight__tension b { background: linear-gradient(90deg, #79bca6 0%, #efc35c 62%, #e26f55 88%); }
 .fishing-fight__progress b { background: #65b7c1; }
 

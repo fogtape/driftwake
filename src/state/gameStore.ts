@@ -44,6 +44,7 @@ import type { NavigationDeviceType, NavigationRouteMode, NavigationWeatherPhase,
 import type { PlayerSurface } from '../game/domain/save';
 import type { CameraMotionMode } from '../game/domain/settings';
 import type { SharkAttackPhase } from '../game/domain/shark';
+import type { FishSizeId, FishSpeciesId } from '../game/domain/fishing';
 import type {
   RaftBuildCategory,
   RaftBuildPiece,
@@ -89,6 +90,11 @@ export interface FishingFeedback {
   phase: FishingPhase;
   tension: number;
   progress: number;
+  pull: number;
+  species: FishSpeciesId | null;
+  size: FishSizeId | null;
+  weightKg: number;
+  portions: number;
 }
 
 export interface ResonanceForkFeedback {
@@ -366,7 +372,16 @@ interface GameState {
 }
 
 function defaultFishing(): FishingFeedback {
-  return { phase: 'idle', tension: 0, progress: 0 };
+  return {
+    phase: 'idle',
+    tension: 0,
+    progress: 0,
+    pull: 0,
+    species: null,
+    size: null,
+    weightKg: 0,
+    portions: 0,
+  };
 }
 
 function defaultResonanceFork(): ResonanceForkFeedback {
@@ -841,7 +856,12 @@ export const useGameStore = create<GameState>((set, get) => ({
       const fishing = { ...state.fishing, ...feedback };
       return fishing.phase === state.fishing.phase &&
         fishing.tension === state.fishing.tension &&
-        fishing.progress === state.fishing.progress
+        fishing.progress === state.fishing.progress &&
+        fishing.pull === state.fishing.pull &&
+        fishing.species === state.fishing.species &&
+        fishing.size === state.fishing.size &&
+        fishing.weightKg === state.fishing.weightKg &&
+        fishing.portions === state.fishing.portions
         ? state
         : { fishing };
     }),

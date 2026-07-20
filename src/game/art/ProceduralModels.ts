@@ -3,6 +3,7 @@ import {
   BoxGeometry,
   BufferGeometry,
   CatmullRomCurve3,
+  CircleGeometry,
   Color,
   ConeGeometry,
   CylinderGeometry,
@@ -21,6 +22,7 @@ import {
   PointLight,
   PlaneGeometry,
   Shape,
+  ShapeGeometry,
   SphereGeometry,
   TorusGeometry,
   TubeGeometry,
@@ -37,6 +39,7 @@ import {
   sampleIslandHeight,
   type HarvestNodeType,
 } from '../domain/island';
+import type { FishSpeciesId } from '../domain/fishing';
 import type { MaterialLibrary } from './Materials';
 
 export type DebrisKind = 'timber' | 'polymer' | 'fiber' | 'barrel' | 'cache';
@@ -381,51 +384,310 @@ export function createFishingBobber(materials: MaterialLibrary): Group {
   return group;
 }
 
-export function createSilverSpineFishModel(materials: MaterialLibrary): Group {
+export interface FishingFishVisuals {
+  tailPivot: Group;
+  finPivots: Group[];
+  accentMeshes: Mesh[];
+}
+
+interface FishingFishStyle {
+  name: string;
+  materialKey: 'silverSpineSkin' | 'amberFinSkin' | 'sailtailRunnerSkin';
+  bodyColor: number;
+  finColor: number;
+  accentColor: number;
+  width: number;
+  depth: number;
+  length: number;
+  tailHeight: number;
+  dorsalHeight: number;
+  bands: readonly number[];
+}
+
+const FISHING_FISH_STYLES: Record<FishSpeciesId, FishingFishStyle> = {
+  silverSpine: {
+    name: 'silver-spine-fish',
+    materialKey: 'silverSpineSkin',
+    bodyColor: 0xd6e1d7,
+    finColor: 0x82afa2,
+    accentColor: 0xe8edc9,
+    width: 1,
+    depth: 0.68,
+    length: 1,
+    tailHeight: 0.78,
+    dorsalHeight: 0.56,
+    bands: [-0.08, 0.2],
+  },
+  amberFin: {
+    name: 'amber-fin-bream',
+    materialKey: 'amberFinSkin',
+    bodyColor: 0xfff2d7,
+    finColor: 0xffd39c,
+    accentColor: 0x5a7870,
+    width: 1.12,
+    depth: 0.9,
+    length: 0.92,
+    tailHeight: 0.88,
+    dorsalHeight: 0.98,
+    bands: [-0.24, 0.02, 0.28],
+  },
+  sailtailRunner: {
+    name: 'sailtail-runner-fish',
+    materialKey: 'sailtailRunnerSkin',
+    bodyColor: 0xffffff,
+    finColor: 0xb8e1da,
+    accentColor: 0xe6d28b,
+    width: 0.84,
+    depth: 0.62,
+    length: 1.28,
+    tailHeight: 1.18,
+    dorsalHeight: 1.32,
+    bands: [-0.12, 0.26],
+  },
+};
+
+export function createFishingFishModel(materials: MaterialLibrary, species: FishSpeciesId): Group {
+  const style = FISHING_FISH_STYLES[species];
   const fish = new Group();
-  fish.name = 'silver-spine-fish';
+  fish.name = style.name;
   const profile = [
-    new Vector2(0.025, -0.72),
-    new Vector2(0.2, -0.58),
-    new Vector2(0.3, -0.18),
-    new Vector2(0.27, 0.28),
-    new Vector2(0.12, 0.58),
-    new Vector2(0.045, 0.72),
+    new Vector2(0.018, -0.74),
+    new Vector2(0.1, -0.69),
+    new Vector2(0.205, -0.56),
+    new Vector2(0.285, -0.31),
+    new Vector2(0.305, -0.04),
+    new Vector2(0.278, 0.26),
+    new Vector2(0.205, 0.47),
+    new Vector2(0.115, 0.62),
+    new Vector2(0.04, 0.72),
   ];
-  const bodyGeometry = new LatheGeometry(profile, 18);
+  const bodyGeometry = new LatheGeometry(profile, 32);
   bodyGeometry.rotateX(Math.PI / 2);
-  const bodyMaterial = materials.metal.clone();
-  bodyMaterial.color.set(0x8eb9bb);
-  bodyMaterial.metalness = 0.12;
-  bodyMaterial.roughness = 0.46;
+  const bodyMaterial = materials[style.materialKey].clone();
+  bodyMaterial.color.set(style.bodyColor);
+  bodyMaterial.metalness = 0.02;
+  bodyMaterial.roughness = species === 'sailtailRunner' ? 0.72 : 0.82;
   const body = shadowed(new Mesh(bodyGeometry, bodyMaterial));
-  body.scale.y = 0.68;
+  body.scale.set(style.width, style.depth, style.length);
   fish.add(body);
-  const tail = shadowed(
-    new Mesh(
-      createWedgeGeometry(
-        [
-          -0.03, 0, 0.58, -0.03, 0.34, 0.92, -0.03, 0, 0.82, -0.03, -0.34, 0.92,
-          0.03, 0, 0.58, 0.03, 0.34, 0.92, 0.03, 0, 0.82, 0.03, -0.34, 0.92,
-        ],
-        [0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 4, 5, 0, 5, 1, 3, 6, 7, 3, 2, 6],
-      ),
-      materials.polymer,
-    ),
-  );
-  fish.add(tail);
+
+  const finMaterial = materials[style.materialKey].clone();
+  finMaterial.color.set(style.finColor);
+  finMaterial.metalness = 0;
+  finMaterial.roughness = species === 'sailtailRunner' ? 0.72 : 0.78;
+  finMaterial.side = DoubleSide;
+  const accentMaterial = materials[style.materialKey].clone();
+  accentMaterial.color.set(style.accentColor);
+  accentMaterial.metalness = 0.01;
+  accentMaterial.roughness = 0.74;
+
+  const tailPivot = new Group();
+  tailPivot.name = `${species}-tail-pivot`;
+  tailPivot.position.z = 0.54 * style.length;
+  const tailShape = new Shape();
+  tailShape.moveTo(0, 0);
+  tailShape.bezierCurveTo(0.12, 0.08, 0.24, 0.34, 0.4, 0.35);
+  tailShape.bezierCurveTo(0.33, 0.18, 0.25, 0.06, 0.18, 0);
+  tailShape.bezierCurveTo(0.26, -0.07, 0.34, -0.2, 0.41, -0.36);
+  tailShape.bezierCurveTo(0.24, -0.33, 0.1, -0.08, 0, 0);
+  const tail = shadowed(new Mesh(new ShapeGeometry(tailShape, 8), finMaterial));
+  tail.rotation.y = -Math.PI / 2;
+  tail.scale.set(style.length, style.tailHeight, style.width);
+  tailPivot.add(tail);
+  fish.add(tailPivot);
+
+  const dorsalShape = new Shape();
+  dorsalShape.moveTo(-0.34, 0);
+  dorsalShape.bezierCurveTo(-0.2, 0.04, -0.13, 0.34, -0.03, 0.39);
+  dorsalShape.bezierCurveTo(0.09, 0.3, 0.2, 0.1, 0.34, 0);
+  dorsalShape.closePath();
+  const dorsal = shadowed(new Mesh(new ShapeGeometry(dorsalShape, 8), finMaterial));
+  dorsal.rotation.y = -Math.PI / 2;
+  dorsal.position.y = 0.18 * style.depth;
+  dorsal.scale.set(style.length, style.dorsalHeight, style.width);
+  fish.add(dorsal);
+
+  const finPivots: Group[] = [];
+  const pectoralShape = new Shape();
+  pectoralShape.moveTo(-0.025, 0.025);
+  pectoralShape.bezierCurveTo(0.065, 0.018, 0.22, -0.075, 0.32, -0.17);
+  pectoralShape.bezierCurveTo(0.22, -0.18, 0.055, -0.1, -0.025, 0.025);
   for (const side of [-1, 1]) {
-    const eye = new Mesh(new SphereGeometry(0.035, 9, 7), materials.sharkEye);
-    eye.position.set(side * 0.2, 0.06, -0.5);
-    fish.add(eye);
+    const finPivot = new Group();
+    finPivot.name = `${species}-pectoral-${side < 0 ? 'left' : 'right'}`;
+    finPivot.position.set(side * 0.292 * style.width, 0.005, -0.2 * style.length);
+    const fin = shadowed(new Mesh(new ExtrudeGeometry(pectoralShape, {
+      depth: 0.009,
+      bevelEnabled: true,
+      bevelSegments: 1,
+      bevelSize: 0.003,
+      bevelThickness: 0.003,
+      curveSegments: 8,
+    }), finMaterial));
+    fin.rotation.y = -Math.PI / 2;
+    fin.rotation.z = side * 0.08;
+    fin.scale.set(0.9 * style.length, 0.86 * style.depth, side);
+    finPivot.add(fin);
+    finPivots.push(finPivot);
+    fish.add(finPivot);
+  }
+
+  const accentMeshes: Mesh[] = [];
+  for (const offset of style.bands) {
+    const band = shadowed(new Mesh(new TorusGeometry(0.205, 0.014, 5, 18), accentMaterial));
+    band.position.z = offset * style.length;
+    band.scale.set(style.width, style.depth, 1);
+    accentMeshes.push(band);
+    fish.add(band);
+  }
+  const spineCount = species === 'sailtailRunner' ? 6 : 4;
+  for (let index = 0; index < spineCount; index += 1) {
+    const spine = shadowed(new Mesh(new SphereGeometry(0.025, 7, 5), accentMaterial));
+    spine.position.set(0, 0.215 * style.depth, (-0.34 + index * (0.62 / Math.max(1, spineCount - 1))) * style.length);
+    spine.scale.set(0.72, 0.48 + index * 0.035, 1.2);
+    accentMeshes.push(spine);
+    fish.add(spine);
+  }
+  const faceDetailMaterial = materials.fishFlesh.clone();
+  faceDetailMaterial.color.set(species === 'amberFin' ? 0x6b453b : 0x34565a);
+  faceDetailMaterial.roughness = 0.86;
+  const irisAlbedo = materials.fishEye.map?.clone() ?? null;
+  if (irisAlbedo) irisAlbedo.needsUpdate = true;
+  const irisMaterial = new MeshBasicMaterial({
+    color: 0xffffff,
+    map: irisAlbedo,
+    side: DoubleSide,
+    toneMapped: false,
+  });
+  const pupilAlbedo = materials.fishEye.map?.clone() ?? null;
+  if (pupilAlbedo) {
+    pupilAlbedo.repeat.set(0.3, 0.3);
+    pupilAlbedo.offset.set(0.35, 0.35);
+    pupilAlbedo.needsUpdate = true;
+  }
+  const pupilMaterial = new MeshBasicMaterial({
+    color: 0xffffff,
+    map: pupilAlbedo,
+    side: DoubleSide,
+    toneMapped: false,
+  });
+  const corneaMaterial = materials.fishEye.clone();
+  corneaMaterial.map = null;
+  corneaMaterial.color.set(0x91b8ad);
+  corneaMaterial.transparent = true;
+  corneaMaterial.opacity = 0.24;
+  corneaMaterial.depthWrite = false;
+  for (const side of [-1, 1]) {
+    const eye = new Mesh(new CircleGeometry(0.032, 32), irisMaterial);
+    eye.name = `${species}-iris-${side < 0 ? 'left' : 'right'}`;
+    eye.position.set(side * 0.25 * style.width, 0.028 * style.depth, -0.455 * style.length);
+    eye.rotation.y = side * Math.PI / 2;
+    const eyeRim = shadowed(new Mesh(new TorusGeometry(0.033, 0.0033, 7, 28), faceDetailMaterial));
+    eyeRim.position.copy(eye.position);
+    eyeRim.position.x += side * 0.0015;
+    eyeRim.rotation.y = side * Math.PI / 2;
+    const pupil = new Mesh(new CircleGeometry(0.011, 24), pupilMaterial);
+    pupil.name = `${species}-pupil-${side < 0 ? 'left' : 'right'}`;
+    pupil.position.copy(eye.position);
+    pupil.position.x += side * 0.003;
+    pupil.rotation.copy(eye.rotation);
+    const cornea = new Mesh(new CircleGeometry(0.032, 32), corneaMaterial);
+    cornea.position.copy(eye.position);
+    cornea.position.x += side * 0.0045;
+    cornea.rotation.copy(eye.rotation);
+    cornea.renderOrder = 2;
+    fish.add(eye, eyeRim, pupil, cornea);
+    const gill = shadowed(new Mesh(new TubeGeometry(new CatmullRomCurve3([
+      new Vector3(side * 0.246 * style.width, 0.095 * style.depth, -0.4 * style.length),
+      new Vector3(side * 0.254 * style.width, 0.015, -0.37 * style.length),
+      new Vector3(side * 0.24 * style.width, -0.09 * style.depth, -0.39 * style.length),
+    ]), 10, 0.0045, 5, false), faceDetailMaterial));
+    fish.add(gill);
+    const mouth = shadowed(new Mesh(new TubeGeometry(new CatmullRomCurve3([
+      new Vector3(side * 0.13 * style.width, -0.075 * style.depth, -0.65 * style.length),
+      new Vector3(side * 0.17 * style.width, -0.09 * style.depth, -0.625 * style.length),
+      new Vector3(side * 0.205 * style.width, -0.075 * style.depth, -0.59 * style.length),
+    ]), 8, 0.0038, 5, false), faceDetailMaterial));
+    fish.add(mouth);
   }
   fish.scale.setScalar(0.72);
+  fish.userData.species = species;
+  fish.userData.materialMaps = [
+    bodyMaterial.map?.name ?? 'none',
+    bodyMaterial.normalMap?.name ?? 'none',
+    bodyMaterial.roughnessMap?.name ?? 'none',
+    materials.fishEye.map?.name ?? 'none',
+    materials.fishEye.normalMap?.name ?? 'none',
+    materials.fishEye.roughnessMap?.name ?? 'none',
+  ].join('|');
+  fish.userData.fishingFishVisuals = {
+    tailPivot,
+    finPivots,
+    accentMeshes,
+  } satisfies FishingFishVisuals;
   return fish;
+}
+
+export function createSilverSpineFishModel(materials: MaterialLibrary): Group {
+  return createFishingFishModel(materials, 'silverSpine');
+}
+
+export function createFishFilletModel(materials: MaterialLibrary): Group {
+  const fillet = new Group();
+  fillet.name = 'prepared-fish-fillet';
+  const skinMaterial = materials.silverSpineSkin.clone();
+  skinMaterial.color.set(0x9fc0b9);
+  skinMaterial.roughness = 0.78;
+  const fleshMaterial = materials.fishFlesh.clone();
+  fleshMaterial.color.set(0xffd8c5);
+  fleshMaterial.roughness = 0.8;
+  const cutMaterial = materials.fishFlesh.clone();
+  cutMaterial.color.set(0xffead6);
+  cutMaterial.roughness = 0.76;
+
+  const skin = shadowed(new Mesh(new RoundedBoxGeometry(0.64, 0.075, 0.31, 4, 0.055), skinMaterial));
+  skin.position.y = 0.035;
+  const flesh = shadowed(new Mesh(new RoundedBoxGeometry(0.57, 0.12, 0.27, 4, 0.065), fleshMaterial));
+  flesh.position.set(-0.015, 0.115, 0);
+  flesh.scale.set(1, 0.82, 0.92);
+  fillet.add(skin, flesh);
+
+  for (const side of [-1, 1]) {
+    const cutFace = shadowed(new Mesh(new CylinderGeometry(0.115, 0.135, 0.035, 12), cutMaterial));
+    cutFace.position.set(side * 0.285, 0.11, 0);
+    cutFace.rotation.z = Math.PI / 2;
+    cutFace.scale.z = 0.78;
+    fillet.add(cutFace);
+  }
+  for (let index = -2; index <= 2; index += 1) {
+    const rib = shadowed(new Mesh(new BoxGeometry(0.012, 0.018, 0.2), cutMaterial));
+    rib.position.set(index * 0.09, 0.18, 0);
+    rib.rotation.y = index * 0.035;
+    fillet.add(rib);
+  }
+  return fillet;
 }
 
 function createWedgeGeometry(vertices: readonly number[], indices: readonly number[]): BufferGeometry {
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3));
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  let minZ = Number.POSITIVE_INFINITY;
+  let maxZ = Number.NEGATIVE_INFINITY;
+  for (let index = 0; index < vertices.length; index += 3) {
+    minY = Math.min(minY, vertices[index + 1]);
+    maxY = Math.max(maxY, vertices[index + 1]);
+    minZ = Math.min(minZ, vertices[index + 2]);
+    maxZ = Math.max(maxZ, vertices[index + 2]);
+  }
+  const yRange = Math.max(1e-6, maxY - minY);
+  const zRange = Math.max(1e-6, maxZ - minZ);
+  const uvs: number[] = [];
+  for (let index = 0; index < vertices.length; index += 3) {
+    uvs.push((vertices[index + 2] - minZ) / zRange, (vertices[index + 1] - minY) / yRange);
+  }
+  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
   geometry.setIndex([...indices]);
   geometry.computeVertexNormals();
   return geometry;
@@ -944,7 +1206,7 @@ export function createGrillModel(materials: MaterialLibrary): Group {
     grill.add(brace);
   }
 
-  const food = createSilverSpineFishModel(materials);
+  const food = createFishFilletModel(materials);
   food.name = 'grill-fish';
   food.position.set(0, 0.49, 0);
   food.rotation.y = Math.PI / 2;

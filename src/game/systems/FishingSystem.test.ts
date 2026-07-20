@@ -5,7 +5,14 @@ describe('FishingSystem catch transaction', () => {
   it('wears the rod exactly once when a fish enters the backpack', () => {
     const onFishRetrieved = vi.fn(() => ({ broken: true }));
 
-    expect(resolveFishingRodWear({ rawFish: 1 }, onFishRetrieved)).toEqual({ broken: true });
+    expect(resolveFishingRodWear({ rawFish: 2 }, onFishRetrieved)).toEqual({ broken: true });
+    expect(onFishRetrieved).toHaveBeenCalledOnce();
+  });
+
+  it('wears once when only part of a large catch fits', () => {
+    const onFishRetrieved = vi.fn(() => ({ broken: false }));
+
+    expect(resolveFishingRodWear({ rawFish: 1 }, onFishRetrieved)).toEqual({ broken: false });
     expect(onFishRetrieved).toHaveBeenCalledOnce();
   });
 

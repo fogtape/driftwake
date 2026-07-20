@@ -19,6 +19,21 @@ export interface AssetTextures {
   sharkSkin: Texture;
   sharkSkinNormal: Texture;
   sharkSkinRoughness: Texture;
+  silverSpineSkin: Texture;
+  silverSpineSkinNormal: Texture;
+  silverSpineSkinRoughness: Texture;
+  amberFinSkin: Texture;
+  amberFinSkinNormal: Texture;
+  amberFinSkinRoughness: Texture;
+  sailtailRunnerSkin: Texture;
+  sailtailRunnerSkinNormal: Texture;
+  sailtailRunnerSkinRoughness: Texture;
+  fishFlesh: Texture;
+  fishFleshNormal: Texture;
+  fishFleshRoughness: Texture;
+  fishEye: Texture;
+  fishEyeNormal: Texture;
+  fishEyeRoughness: Texture;
   wovenFiber: Texture;
   wovenFiberNormal: Texture;
   wovenFiberRoughness: Texture;
@@ -67,6 +82,11 @@ export interface MaterialLibrary {
   foliage: MeshStandardMaterial;
   wovenFiber: MeshStandardMaterial;
   sharkSkin: MeshStandardMaterial;
+  silverSpineSkin: MeshStandardMaterial;
+  amberFinSkin: MeshStandardMaterial;
+  sailtailRunnerSkin: MeshStandardMaterial;
+  fishFlesh: MeshStandardMaterial;
+  fishEye: MeshStandardMaterial;
   sharkMouth: MeshStandardMaterial;
   sharkEye: MeshStandardMaterial;
   reefSeabed: MeshStandardMaterial;
@@ -104,6 +124,21 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     sharkSkin,
     sharkSkinNormal,
     sharkSkinRoughness,
+    silverSpineSkin,
+    silverSpineSkinNormal,
+    silverSpineSkinRoughness,
+    amberFinSkin,
+    amberFinSkinNormal,
+    amberFinSkinRoughness,
+    sailtailRunnerSkin,
+    sailtailRunnerSkinNormal,
+    sailtailRunnerSkinRoughness,
+    fishFlesh,
+    fishFleshNormal,
+    fishFleshRoughness,
+    fishEye,
+    fishEyeNormal,
+    fishEyeRoughness,
     wovenFiber,
     wovenFiberNormal,
     wovenFiberRoughness,
@@ -144,6 +179,21 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/shark-skin.webp'),
     loader.loadAsync('/assets/textures/shark-skin-normal.webp'),
     loader.loadAsync('/assets/textures/shark-skin-roughness.webp'),
+    loader.loadAsync('/assets/textures/silver-spine-skin.webp'),
+    loader.loadAsync('/assets/textures/silver-spine-skin-normal.webp'),
+    loader.loadAsync('/assets/textures/silver-spine-skin-roughness.webp'),
+    loader.loadAsync('/assets/textures/amber-fin-skin.webp'),
+    loader.loadAsync('/assets/textures/amber-fin-skin-normal.webp'),
+    loader.loadAsync('/assets/textures/amber-fin-skin-roughness.webp'),
+    loader.loadAsync('/assets/textures/sailtail-runner-skin.webp'),
+    loader.loadAsync('/assets/textures/sailtail-runner-skin-normal.webp'),
+    loader.loadAsync('/assets/textures/sailtail-runner-skin-roughness.webp'),
+    loader.loadAsync('/assets/textures/fresh-fish-flesh.webp'),
+    loader.loadAsync('/assets/textures/fresh-fish-flesh-normal.webp'),
+    loader.loadAsync('/assets/textures/fresh-fish-flesh-roughness.webp'),
+    loader.loadAsync('/assets/textures/pelagic-fish-eye.webp'),
+    loader.loadAsync('/assets/textures/pelagic-fish-eye-normal.webp'),
+    loader.loadAsync('/assets/textures/pelagic-fish-eye-roughness.webp'),
     loader.loadAsync('/assets/textures/woven-palm-fiber.webp'),
     loader.loadAsync('/assets/textures/woven-palm-fiber-normal.webp'),
     loader.loadAsync('/assets/textures/woven-palm-fiber-roughness.webp'),
@@ -181,6 +231,26 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   ]);
 
   const anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const textureNames: Array<[Texture, string]> = [
+    [silverSpineSkin, 'silver-spine-skin-albedo'],
+    [silverSpineSkinNormal, 'silver-spine-skin-normal'],
+    [silverSpineSkinRoughness, 'silver-spine-skin-roughness'],
+    [amberFinSkin, 'amber-fin-skin-albedo'],
+    [amberFinSkinNormal, 'amber-fin-skin-normal'],
+    [amberFinSkinRoughness, 'amber-fin-skin-roughness'],
+    [sailtailRunnerSkin, 'sailtail-runner-skin-albedo'],
+    [sailtailRunnerSkinNormal, 'sailtail-runner-skin-normal'],
+    [sailtailRunnerSkinRoughness, 'sailtail-runner-skin-roughness'],
+    [fishFlesh, 'fresh-fish-flesh-albedo'],
+    [fishFleshNormal, 'fresh-fish-flesh-normal'],
+    [fishFleshRoughness, 'fresh-fish-flesh-roughness'],
+    [fishEye, 'pelagic-fish-eye-albedo'],
+    [fishEyeNormal, 'pelagic-fish-eye-normal'],
+    [fishEyeRoughness, 'pelagic-fish-eye-roughness'],
+  ];
+  textureNames.forEach(([texture, name]) => {
+    texture.name = name;
+  });
   wood.colorSpace = SRGBColorSpace;
   wood.wrapS = RepeatWrapping;
   wood.wrapT = RepeatWrapping;
@@ -209,6 +279,40 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   wovenFiber.repeat.set(1.8, 1.8);
   wovenFiberNormal.repeat.copy(wovenFiber.repeat);
   wovenFiberRoughness.repeat.copy(wovenFiber.repeat);
+
+  const fishSkinSets = [
+    [silverSpineSkin, silverSpineSkinNormal, silverSpineSkinRoughness],
+    [amberFinSkin, amberFinSkinNormal, amberFinSkinRoughness],
+    [sailtailRunnerSkin, sailtailRunnerSkinNormal, sailtailRunnerSkinRoughness],
+  ];
+  for (const textureSet of fishSkinSets) {
+    for (const texture of textureSet) {
+      texture.wrapS = RepeatWrapping;
+      texture.wrapT = RepeatWrapping;
+      texture.center.set(0.5, 0.5);
+      texture.rotation = Math.PI / 2;
+      texture.repeat.set(1.12, 1.06);
+      texture.anisotropy = anisotropy;
+    }
+    textureSet[0].colorSpace = SRGBColorSpace;
+    textureSet[1].colorSpace = NoColorSpace;
+    textureSet[2].colorSpace = NoColorSpace;
+  }
+  for (const texture of [fishFlesh, fishFleshNormal, fishFleshRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(1.35, 1.25);
+    texture.anisotropy = anisotropy;
+  }
+  fishFlesh.colorSpace = SRGBColorSpace;
+  fishFleshNormal.colorSpace = NoColorSpace;
+  fishFleshRoughness.colorSpace = NoColorSpace;
+  for (const texture of [fishEye, fishEyeNormal, fishEyeRoughness]) {
+    texture.anisotropy = anisotropy;
+  }
+  fishEye.colorSpace = SRGBColorSpace;
+  fishEyeNormal.colorSpace = NoColorSpace;
+  fishEyeRoughness.colorSpace = NoColorSpace;
 
   for (const texture of [reefSeabed, reefSeabedNormal, reefSeabedRoughness]) {
     texture.wrapS = RepeatWrapping;
@@ -321,6 +425,21 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     sharkSkin,
     sharkSkinNormal,
     sharkSkinRoughness,
+    silverSpineSkin,
+    silverSpineSkinNormal,
+    silverSpineSkinRoughness,
+    amberFinSkin,
+    amberFinSkinNormal,
+    amberFinSkinRoughness,
+    sailtailRunnerSkin,
+    sailtailRunnerSkinNormal,
+    sailtailRunnerSkinRoughness,
+    fishFlesh,
+    fishFleshNormal,
+    fishFleshRoughness,
+    fishEye,
+    fishEyeNormal,
+    fishEyeRoughness,
     wovenFiber,
     wovenFiberNormal,
     wovenFiberRoughness,
@@ -407,6 +526,52 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       roughnessMap: textures.sharkSkinRoughness,
       roughness: 0.78,
       metalness: 0.0,
+    }),
+    silverSpineSkin: new MeshStandardMaterial({
+      color: 0xf2f5eb,
+      map: textures.silverSpineSkin,
+      normalMap: textures.silverSpineSkinNormal,
+      normalScale: new Vector2(0.42, 0.42),
+      roughnessMap: textures.silverSpineSkinRoughness,
+      roughness: 0.82,
+      metalness: 0.02,
+    }),
+    amberFinSkin: new MeshStandardMaterial({
+      color: 0xffe0b7,
+      map: textures.amberFinSkin,
+      normalMap: textures.amberFinSkinNormal,
+      normalScale: new Vector2(0.45, 0.45),
+      roughnessMap: textures.amberFinSkinRoughness,
+      roughness: 0.84,
+      metalness: 0.01,
+    }),
+    sailtailRunnerSkin: new MeshStandardMaterial({
+      color: 0xc9e6de,
+      map: textures.sailtailRunnerSkin,
+      normalMap: textures.sailtailRunnerSkinNormal,
+      normalScale: new Vector2(0.38, 0.38),
+      roughnessMap: textures.sailtailRunnerSkinRoughness,
+      roughness: 0.8,
+      metalness: 0.02,
+    }),
+    fishFlesh: new MeshStandardMaterial({
+      color: 0xffe1d1,
+      map: textures.fishFlesh,
+      normalMap: textures.fishFleshNormal,
+      normalScale: new Vector2(0.34, 0.34),
+      roughnessMap: textures.fishFleshRoughness,
+      roughness: 0.82,
+      metalness: 0,
+    }),
+    fishEye: new MeshStandardMaterial({
+      color: 0xb7cfc4,
+      map: textures.fishEye,
+      normalMap: textures.fishEyeNormal,
+      normalScale: new Vector2(0.14, 0.14),
+      roughnessMap: textures.fishEyeRoughness,
+      roughness: 0.46,
+      metalness: 0,
+      side: DoubleSide,
     }),
     sharkMouth: new MeshStandardMaterial({ color: 0x341f24, roughness: 0.84 }),
     sharkEye: new MeshStandardMaterial({ color: 0x090d0d, roughness: 0.22, metalness: 0.08 }),

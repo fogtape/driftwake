@@ -12,6 +12,7 @@ import {
   CookingPot,
   Droplet,
   DoorOpen,
+  Fish,
   GlassWater,
   Grid3X3,
   Heart,
@@ -44,6 +45,7 @@ import { TOOL_MAX_DURABILITY, toolDurabilityRatio, type ToolDurability } from '.
 import { survivalBand } from '../game/domain/survival';
 import { ISLAND_APPROACH_SECONDS, ISLAND_DEPART_SECONDS, ISLAND_DOCK_SECONDS } from '../game/domain/island';
 import { cardinalLabel } from '../game/domain/navigation';
+import { FISH_SIZE_DEFINITIONS, FISH_SPECIES_DEFINITIONS } from '../game/domain/fishing';
 import {
   RAFT_BUILD_CATEGORY_DEFINITIONS,
   RAFT_BUILD_CATEGORY_ORDER,
@@ -215,7 +217,9 @@ export function Hud({
           : shark.target === 'structure'
             ? (shark.mode === 'attacking' ? '暴露结构遭到撕咬' : '脆弱结构已被锁定')
             : shark.mode === 'attacking' ? '筏体遭到撕咬' : '深潮鲨正在逼近';
-  const fishingActive = fishing.phase === 'hooked';
+  const fishingActive = fishing.phase === 'hooked' || fishing.phase === 'caught';
+  const fishingSpecies = fishing.species ? FISH_SPECIES_DEFINITIONS[fishing.species] : null;
+  const fishingSize = fishing.size ? FISH_SIZE_DEFINITIONS[fishing.size] : null;
   const structureRepair = build.repairTarget;
   const structureReplacement = build.replaceTarget;
   const structureRepairDefinition = structureRepair
@@ -573,7 +577,26 @@ export function Hud({
         <i><b style={{ transform: `scaleX(${resonanceFork.charge})` }} /></i>
       </div>
 
-      <div className={`fishing-fight ${fishingActive ? 'is-visible' : ''}`} aria-hidden={!fishingActive}>
+      <div
+        className={`fishing-fight ${fishingActive ? 'is-visible' : ''}`}
+        aria-hidden={!fishingActive}
+        aria-label={fishingSpecies && fishingSize
+          ? `${fishingSpecies.name} ${fishingSize.label} ${fishing.weightKg.toFixed(2)} 千克，预计 ${fishing.portions} 份鱼段`
+          : '钓鱼搏鱼状态'}
+        style={{ '--fish-tone': fishingSpecies?.tone ?? '#65b7c1' } as React.CSSProperties}
+      >
+        <div className="fishing-fight__identity">
+          <Fish size={18} />
+          <div>
+            <strong>{fishingSpecies?.name ?? '未知渔获'}</strong>
+            <span>{fishingSize?.label ?? '待辨认'} · {fishing.weightKg.toFixed(2)}kg</span>
+          </div>
+          <em>{fishing.portions} 段</em>
+        </div>
+        <div className="fishing-fight__row">
+          <span>鱼势</span>
+          <i className="fishing-fight__pull"><b style={{ width: `${fishing.pull * 100}%` }} /></i>
+        </div>
         <div className="fishing-fight__row">
           <span>线张力</span>
           <i className="fishing-fight__tension"><b style={{ width: `${fishing.tension * 100}%` }} /></i>

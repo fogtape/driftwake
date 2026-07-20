@@ -170,7 +170,7 @@ export class DeviceSystem {
         if (result.event === 'ready') {
           const waterDevice = runtime.state.type === 'purifier' || runtime.state.type === 'solarPurifier';
           this.audio.playDeviceReady(waterDevice);
-          this.showNotice(waterDevice ? `${DEVICE_DEFINITIONS[runtime.state.type].name}已有淡水` : '银脊鱼火候正好');
+          this.showNotice(waterDevice ? `${DEVICE_DEFINITIONS[runtime.state.type].name}已有淡水` : '鱼排火候正好');
         } else if (result.event === 'burnt') {
           this.audio.playDeviceBurnt();
           this.showNotice('烤架冒出焦烟');
@@ -560,17 +560,17 @@ export class DeviceSystem {
     }
     if (device.type === 'tripleGrill') {
       const counts = tripleGrillCounts(device);
-      if (counts.ready > 0) return `收取烤银脊鱼 · ${counts.ready} 份可取`;
-      if (counts.burnt > 0) return `收取焦黑银脊鱼 · ${counts.burnt} 份`;
+      if (counts.ready > 0) return `收取炭烤鱼排 · ${counts.ready} 份可取`;
+      if (counts.burnt > 0) return `收取焦黑鱼排 · ${counts.burnt} 份`;
       if (device.grillSlots.length < TRIPLE_GRILL_CAPACITY) {
         const needsFuel = device.fuelSeconds < definition.duration;
         const missing = [
-          ...(itemCount(inventory, 'rawFish') < 1 ? ['生鱼'] : []),
+          ...(itemCount(inventory, 'rawFish') < 1 ? ['鲜鱼段'] : []),
           ...(needsFuel && itemCount(inventory, 'timber') < 1 ? ['漂木'] : []),
         ];
         return missing.length > 0
           ? `需要 ${missing.join('、')} · ${device.grillSlots.length}/${TRIPLE_GRILL_CAPACITY}`
-          : `放入一份银脊鱼 · ${device.grillSlots.length}/${TRIPLE_GRILL_CAPACITY}`;
+          : `放入一份鲜鱼段 · ${device.grillSlots.length}/${TRIPLE_GRILL_CAPACITY}`;
       }
       if (device.fuelSeconds <= 0) return '炉膛熄灭 · 需要漂木';
       return `三槽烤制中 · ${remainingDeviceSeconds(device)} 秒`;
@@ -579,11 +579,11 @@ export class DeviceSystem {
     if (device.phase === 'ready') {
       if (device.type === 'purifier') return '收取蒸馏淡水';
       const burnIn = Math.max(0, Math.ceil(definition.duration + (definition.readyWindow ?? 0) - device.elapsed));
-      return `收取烤银脊鱼 · ${burnIn} 秒后焦黑`;
+      return `收取炭烤鱼排 · ${burnIn} 秒后焦黑`;
     }
-    if (device.phase === 'burnt') return '收取焦黑银脊鱼';
+    if (device.phase === 'burnt') return '收取焦黑鱼排';
     if (hasItems(inventory, definition.input)) {
-      return device.type === 'purifier' ? '装入空杯，舀取海水并点燃' : '放上银脊鱼并点燃';
+      return device.type === 'purifier' ? '装入空杯，舀取海水并点燃' : '放上鲜鱼段并点燃';
     }
     const missing = (Object.entries(definition.input) as [ItemId, number][])
       .filter(([id, amount]) => itemCount(inventory, id) < amount)
@@ -663,7 +663,7 @@ export class DeviceSystem {
         if (needsFuel) runtime.state = fuelTripleGrill(runtime.state);
         this.audio.playGrillSlot();
         if (needsFuel) this.audio.playIgnite();
-        this.showNotice(`银脊鱼已放入第 ${runtime.state.grillSlots.length} 槽`);
+        this.showNotice(`鲜鱼段已放入第 ${runtime.state.grillSlots.length} 槽`);
       } else if (runtime.state.fuelSeconds <= 0 && store.spendItems({ timber: 1 })) {
         runtime.state = fuelTripleGrill(runtime.state);
         this.audio.playIgnite();
@@ -686,7 +686,7 @@ export class DeviceSystem {
       }
       runtime.state = startDeviceCycle(runtime.state);
       this.audio.playIgnite();
-      this.showNotice(runtime.state.type === 'purifier' ? '海水已舀入蒸馏槽' : '银脊鱼已放上烤架');
+      this.showNotice(runtime.state.type === 'purifier' ? '海水已舀入蒸馏槽' : '鲜鱼段已放上烤架');
     } else if (runtime.state.phase === 'ready' || runtime.state.phase === 'burnt') {
       const output = deviceOutput(runtime.state);
       const outputId = Object.keys(output)[0] as ItemId;

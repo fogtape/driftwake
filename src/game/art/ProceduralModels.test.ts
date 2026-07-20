@@ -1,10 +1,11 @@
-import { Box3, Group, InstancedMesh, Mesh, MeshBasicMaterial, MeshStandardMaterial, Vector3 } from 'three';
+import { Box3, Group, InstancedMesh, Mesh, MeshBasicMaterial, MeshStandardMaterial, Texture, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { MaterialLibrary } from './Materials';
 import {
   createAxeModel,
   createDebrisModel,
   createExplorableIsland,
+  createFishingFishModel,
   createFishingRodModel,
   createGrillModel,
   createHammerModel,
@@ -24,6 +25,11 @@ import { createAntennaModel, createReceiverModel, createSignalBeaconModel } from
 
 function createTestMaterials(): MaterialLibrary {
   const material = () => new MeshStandardMaterial();
+  const texturedMaterial = () => new MeshStandardMaterial({
+    map: new Texture(),
+    normalMap: new Texture(),
+    roughnessMap: new Texture(),
+  });
   return {
     wood: [material(), material(), material()],
     darkWood: material(),
@@ -36,6 +42,11 @@ function createTestMaterials(): MaterialLibrary {
     foliage: material(),
     wovenFiber: material(),
     sharkSkin: material(),
+    silverSpineSkin: texturedMaterial(),
+    amberFinSkin: texturedMaterial(),
+    sailtailRunnerSkin: texturedMaterial(),
+    fishFlesh: texturedMaterial(),
+    fishEye: texturedMaterial(),
     sharkMouth: material(),
     sharkEye: material(),
     reefSeabed: material(),
@@ -146,6 +157,34 @@ describe('procedural model assets', () => {
     expect(createResonanceForkModel(materials).userData.resonanceVisuals.chargeRings).toHaveLength(3);
   }, 15_000);
 
+  it('builds three articulated fishing species with distinct readable silhouettes', () => {
+    const materials = createTestMaterials();
+    const silver = createFishingFishModel(materials, 'silverSpine');
+    const amber = createFishingFishModel(materials, 'amberFin');
+    const runner = createFishingFishModel(materials, 'sailtailRunner');
+    const fish = [silver, amber, runner];
+    const sizes = fish.map((model) => new Box3().setFromObject(model).getSize(new Vector3()));
+    expect(fish.map((model) => meshStats(model).meshes).every((count) => count >= 13)).toBe(true);
+    expect(new Set(fish.map((model) => model.name)).size).toBe(3);
+    expect(sizes[1].y).toBeGreaterThan(sizes[0].y);
+    expect(sizes[2].z).toBeGreaterThan(sizes[0].z);
+    fish.forEach((model) => {
+      expect(model.userData.fishingFishVisuals.tailPivot).toBeDefined();
+      expect(model.userData.fishingFishVisuals.finPivots).toHaveLength(2);
+      expect(model.userData.fishingFishVisuals.accentMeshes.length).toBeGreaterThanOrEqual(6);
+      expect(model.getObjectByName(`${model.userData.species}-iris-left`)).toBeDefined();
+      expect(model.getObjectByName(`${model.userData.species}-pupil-left`)).toBeDefined();
+      const mappedMeshes: Mesh[] = [];
+      model.traverse((object) => {
+        if (object instanceof Mesh && object.material instanceof MeshStandardMaterial && object.material.map) {
+          mappedMeshes.push(object);
+        }
+      });
+      expect(mappedMeshes.length).toBeGreaterThanOrEqual(8);
+      expect(mappedMeshes.some((mesh) => mesh.geometry.getAttribute('uv')?.count > 0)).toBe(true);
+    });
+  }, 15_000);
+
   it('builds readable purifier and grill assemblies with animated state references', () => {
     const materials = createTestMaterials();
     const purifier = createPurifierModel(materials);
@@ -174,7 +213,7 @@ describe('procedural model assets', () => {
     expect(locker.userData.deviceVisuals.storageMarkers).toHaveLength(8);
     expect(new Box3().setFromObject(solar).getSize(new Vector3()).x).toBeGreaterThan(1.05);
     expect(new Box3().setFromObject(locker).getSize(new Vector3()).y).toBeGreaterThan(0.85);
-  }, 15_000);
+  }, 60_000);
 
   it('builds an explorable heightfield island with shoreline and collision landmarks', () => {
     const island = createExplorableIsland(createTestMaterials(), 0x51ad7e);

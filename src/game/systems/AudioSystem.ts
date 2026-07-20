@@ -1270,15 +1270,16 @@ export class AudioSystem {
     this.noiseBurst(0.11, 420, 0.045, 'lowpass');
   }
 
-  playNibble(): void {
+  playNibble(sizeScale = 1): void {
     if (!this.context || !this.effects) return;
     const now = this.context.currentTime;
+    const weightPitch = Math.max(0.76, Math.min(1.12, 1.08 - (sizeScale - 0.78) * 0.34));
     [0, 0.12, 0.22].forEach((offset, index) => {
       const oscillator = this.context!.createOscillator();
       const gain = this.context!.createGain();
       oscillator.type = 'sine';
-      oscillator.frequency.value = 590 + index * 85;
-      gain.gain.setValueAtTime(0.028 + index * 0.006, now + offset);
+      oscillator.frequency.value = (590 + index * 85) * weightPitch;
+      gain.gain.setValueAtTime((0.028 + index * 0.006) * (0.9 + sizeScale * 0.1), now + offset);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.065);
       oscillator.connect(gain).connect(this.effects!);
       oscillator.start(now + offset);
@@ -1286,31 +1287,32 @@ export class AudioSystem {
     });
   }
 
-  playReel(tension: number): void {
+  playReel(tension: number, fishPull = 0.5): void {
     if (!this.context || !this.effects || this.context.currentTime < this.nextReelAt) return;
     const now = this.context.currentTime;
     this.nextReelAt = now + 0.095 - Math.min(0.035, tension * 0.03);
     const oscillator = this.context.createOscillator();
     const gain = this.context.createGain();
     oscillator.type = 'square';
-    oscillator.frequency.value = 86 + tension * 58;
-    gain.gain.setValueAtTime(0.018 + tension * 0.016, now);
+    oscillator.frequency.value = 78 + tension * 54 + Math.max(0, Math.min(1, fishPull)) * 24;
+    gain.gain.setValueAtTime(0.016 + tension * 0.015 + fishPull * 0.006, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.045);
     oscillator.connect(gain).connect(this.effects);
     oscillator.start(now);
     oscillator.stop(now + 0.05);
   }
 
-  playCatch(): void {
+  playCatch(sizeScale = 1): void {
     if (!this.context || !this.effects) return;
     const now = this.context.currentTime;
+    const weightPitch = Math.max(0.78, Math.min(1.08, 1.05 - (sizeScale - 0.78) * 0.3));
     [320, 480, 710].forEach((frequency, index) => {
       const oscillator = this.context!.createOscillator();
       const gain = this.context!.createGain();
       const start = now + index * 0.065;
       oscillator.type = 'triangle';
-      oscillator.frequency.value = frequency;
-      gain.gain.setValueAtTime(0.04, start);
+      oscillator.frequency.value = frequency * weightPitch;
+      gain.gain.setValueAtTime(0.036 + sizeScale * 0.006, start);
       gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.14);
       oscillator.connect(gain).connect(this.effects!);
       oscillator.start(start);

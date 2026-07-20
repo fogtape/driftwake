@@ -444,12 +444,12 @@ export const ITEM_DEFINITIONS = {
   },
   rawFish: {
     id: 'rawFish',
-    name: '银脊鱼',
-    shortName: '生鱼',
+    name: '海风鲜鱼段',
+    shortName: '鱼段',
     category: 'food',
     maxStack: 8,
     tone: '#84bac1',
-    description: '刚钓起的小型海鱼。生食只能少量充饥，并会损失生命。',
+    description: '按渔获尺寸整理出的新鲜鱼段。生食只能少量充饥，并会损失生命。',
   },
   sharkMeat: {
     id: 'sharkMeat',
@@ -462,8 +462,8 @@ export const ITEM_DEFINITIONS = {
   },
   cookedFish: {
     id: 'cookedFish',
-    name: '烤银脊鱼',
-    shortName: '烤鱼',
+    name: '炭烤鱼排',
+    shortName: '鱼排',
     category: 'food',
     maxStack: 8,
     tone: '#df9b61',
@@ -471,8 +471,8 @@ export const ITEM_DEFINITIONS = {
   },
   burntFish: {
     id: 'burntFish',
-    name: '焦黑银脊鱼',
-    shortName: '焦鱼',
+    name: '焦黑鱼排',
+    shortName: '焦鱼排',
     category: 'food',
     maxStack: 8,
     tone: '#7f6254',

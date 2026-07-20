@@ -17,7 +17,7 @@ import {
 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { MaterialLibrary } from './Materials';
-import { createSilverSpineFishModel, type DeviceModelVisuals } from './ProceduralModels';
+import { createFishFilletModel, type DeviceModelVisuals } from './ProceduralModels';
 
 function shadowed<T extends Mesh>(mesh: T): T {
   mesh.castShadow = true;
@@ -104,7 +104,7 @@ function cloneFood(materials: MaterialLibrary): {
   food: Group;
   meshes: Mesh<BufferGeometry, MeshStandardMaterial>[];
 } {
-  const food = createSilverSpineFishModel(materials);
+  const food = createFishFilletModel(materials);
   const meshes: Mesh<BufferGeometry, MeshStandardMaterial>[] = [];
   food.traverse((object) => {
     if (!(object instanceof Mesh) || !(object.material instanceof MeshStandardMaterial)) return;

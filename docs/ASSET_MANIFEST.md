@@ -1,7 +1,7 @@
 # 原创资产清单
 
-> 更新日期：2026-07-19
-> 状态：第十四轮鲨体采集、战利品浮包与分层反馈基线，发布前仍需做最终授权、DCC 替换与相似性复核
+> 更新日期：2026-07-20
+> 状态：第十五轮 M6 多鱼种与鱼肉原创 PBR 材质场景复验中，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -350,9 +350,109 @@ Avoid: glove silhouette, fingers, palm shape, seams crossing the whole image, la
 
 初次以 144、192、96 和 48 px 羽化带处理时，纵向绝对差仍为 26.66-28.51，未放宽绝对 24 / 相对 1.35 倍门禁。通用处理器新增显式 `--optimize-boundary` 选项，在不改变默认行为的前提下把原图最自然的相邻行列移动到周期边界，再执行原有不规则羽化；最终边界偏移为 `(1,1023)`，三张运行时贴图通过人工内容、2x2 平铺和数值门禁。源 PNG、模型参数和完整提示词随仓库归档，来源链由本清单与提交记录保留。
 
+### TEX-016：银脊鱼皮材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/silver-spine-skin.webp`、`silver-spine-skin-normal.webp`、`silver-spine-skin-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/silver-spine-skin-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 银脊鱼躯干、鳍面与鳞脊细节 |
+| 处理方式 | `scripts/prepare_imagegen_material.py`，seam 156、normal 0.58、roughness 118-196 |
+| 检查 | 无完整鱼体/文字/标志/烘焙光影；接缝 x=9.35/1.29x、y=11.31/1.14x；1024x640 大型捕获近景、六贴图绑定与预热通过 |
+
+最终提示词：
+
+```text
+Asset type: seamless tileable game texture, PBR base-color albedo. Primary request: original skin surface for the Silver Spine, a small open-ocean survival fish, with fine overlapping cycloid scales, a cool pearl-silver base, subtle sea-green countershading, a narrow broken pale dorsal tracer, and sparse graphite pin marks. Subject: continuous fish skin material only, no whole fish, silhouette, eye, mouth, gill, fin, tail, bones, flesh, or separate object. Style/medium: premium production-ready hand-painted stylized realism, crisp controlled scale detail, painterly PBR albedo matching a polished 3D survival game. Composition/framing: exact top-down orthographic square texture, uniform texel density, seamless wrapping on all four edges, directional scales running horizontally with irregular natural rhythm, no central focal point. Lighting: perfectly flat neutral base color with absolutely no baked directional lighting, cast shadows, ambient occlusion, specular highlights, wet gloss, depth-of-field, or perspective. Color palette: pearl gray, muted blue-green, pale celadon, tiny charcoal accents; bright and readable without monochrome blue dominance. Constraints: fully original, seamless tile, no text, symbols, logos, watermark, frame, border, anatomical feature, dramatic stripe, unique scar, or recognizable branded design. Avoid: photographic scan noise, reptile scales, shark denticles, checker repetition, material sphere, product mockup, background scene, heavy contrast, neon color, and existing commercial-game resemblance.
+```
+
+### TEX-017：琥鳍鲷鱼皮材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/amber-fin-skin.webp`、`amber-fin-skin-normal.webp`、`amber-fin-skin-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/amber-fin-skin-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 琥鳍鲷躯干、鳍面与铜琥珀斑组 |
+| 处理方式 | `scripts/prepare_imagegen_material.py`，seam 156、normal 0.62、roughness 126-204 |
+| 检查 | 无完整鱼体/文字/标志/烘焙光影；接缝 x=9.42/1.14x、y=6.86/1.20x；1024x640 大型捕获近景、六贴图绑定与预热通过 |
+
+最终提示词：
+
+```text
+Asset type: seamless tileable game texture, PBR base-color albedo. Primary request: original skin surface for the Amber Fin Bream, a deep-bodied reef-edge survival fish, with medium rounded overlapping scales, a warm copper-amber base, restrained ochre fin-root flecks, soot-gray broken vertical band fragments, and small weathered teal iridescent notes. Subject: continuous fish skin material only, no whole fish, silhouette, eye, mouth, gill, fin, tail, bones, flesh, or separate object. Style/medium: premium production-ready hand-painted stylized realism, tactile painterly PBR albedo with deliberate color layering suitable for close first-person inspection. Composition/framing: exact top-down orthographic square texture, uniform texel density, seamless wrapping on every edge, naturally staggered scale rows and irregular band fragments, no central focal point. Lighting: perfectly flat neutral base color with absolutely no baked directional lighting, cast shadows, ambient occlusion, specular highlights, wet gloss, depth-of-field, or perspective. Color palette: burnt amber, soft copper, muted saffron, charcoal gray, restrained oxidized teal; warm but not brown-dominated. Constraints: fully original, seamless tile, no text, symbols, logos, watermark, frame, border, anatomical feature, unique scar, or recognizable branded design. Avoid: gold foil, koi patterns, tropical neon, reptile skin, checker repetition, material sphere, product mockup, background scene, heavy black bands, and existing commercial-game resemblance.
+```
+
+### TEX-018：旗尾梭鱼皮材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/sailtail-runner-skin.webp`、`sailtail-runner-skin-normal.webp`、`sailtail-runner-skin-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/sailtail-runner-skin-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 旗尾梭躯干、鳍面与青灰流线细节 |
+| 处理方式 | `scripts/prepare_imagegen_material.py`，seam 48、normal 0.54、roughness 114-190 |
+| 检查 | 宽羽化/边界优化版因纵向处理带被拒绝；采用版接缝 x=4.07/1.25x、y=14.32/1.12x；1024x640 中型捕获近景、六贴图绑定与预热通过 |
+
+最终提示词：
+
+```text
+Asset type: seamless tileable game texture, PBR base-color albedo. Primary request: original skin surface for the Sailtail Runner, a fast elongated pelagic survival fish, with very fine swept scales, a slate-cyan base, long broken aquamarine current lines, pale flax-gold micro accents, and restrained indigo mottling that implies speed without forming a logo or emblem. Subject: continuous fish skin material only, no whole fish, silhouette, eye, mouth, gill, fin, sail, tail, bones, flesh, or separate object. Style/medium: premium production-ready hand-painted stylized realism, elegant directional PBR albedo, crisp close-range detail without photographic noise. Composition/framing: exact top-down orthographic square texture, uniform texel density, seamless wrapping on all four edges, fine horizontal flow with naturally varied interruptions, no central focal point. Lighting: perfectly flat neutral base color with absolutely no baked directional lighting, cast shadows, ambient occlusion, specular highlights, wet gloss, depth-of-field, or perspective. Color palette: muted cyan, blue-gray, pale flax, restrained indigo and sea-glass green; balanced against warm raft materials and not a one-note navy surface. Constraints: fully original, seamless tile, no text, symbols, logos, watermark, frame, border, anatomical feature, dramatic unique stripe, or recognizable branded design. Avoid: racing decals, marlin anatomy, reptile skin, checker repetition, material sphere, product mockup, background scene, neon blue, heavy gloss, and existing commercial-game resemblance.
+```
+
+### TEX-019：鲜鱼肉材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/fresh-fish-flesh.webp`、`fresh-fish-flesh-normal.webp`、`fresh-fish-flesh-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/fresh-fish-flesh-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 基础烤架与三槽烤台的鲜鱼段/熟鱼排形体 |
+| 处理方式 | `scripts/prepare_imagegen_material.py --optimize-boundary`，seam 168、normal 0.44、roughness 148-216 |
+| 检查 | 无完整鱼体/骨骼/器官/器具/文字/烘焙光影；接缝 x=3.28/1.00x、y=5.17/0.97x；烹饪场景复验中 |
+
+最终提示词：
+
+```text
+Asset type: seamless tileable game texture, PBR base-color albedo. Primary request: original freshly prepared ocean-fish flesh surface for a stylized survival cooking system, with clean coral-pink muscle grain, pale cream connective lines, sparse muted ruby capillaries, and subtle natural variation suitable for a hand-cut fillet. Subject: continuous boneless fish flesh material only, no whole fish, skin, scales, bones, organs, blood pool, knife, plate, food garnish, or separate object. Style/medium: premium production-ready hand-painted stylized realism, appetizing but grounded painterly PBR albedo with readable fibers and restrained detail. Composition/framing: exact top-down orthographic square texture, uniform texel density, seamless wrapping on all four edges, softly directional muscle fibers with irregular natural rhythm, no central focal point. Lighting: perfectly flat neutral base color with absolutely no baked directional lighting, cast shadows, ambient occlusion, highlights, wet gloss, depth-of-field, or perspective. Color palette: coral salmon, pale shell cream, muted rose and tiny wine-red accents; clean, fresh, and not plastic. Constraints: fully original, seamless tile, no text, symbols, logos, watermark, frame, border, anatomy cross-section, gore, unique mark, or recognizable branded design. Avoid: raw meat product photography, tuna steak rings, marbling like beef, glossy slime, gore, checker repetition, material sphere, product mockup, background scene, and existing commercial-game resemblance.
+```
+
+### TEX-020：远洋鱼虹膜材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/pelagic-fish-eye.webp`、`pelagic-fish-eye-normal.webp`、`pelagic-fish-eye-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/pelagic-fish-eye-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 三种钓获鱼的圆形虹膜、瞳孔与眼缘细节 |
+| 处理方式 | `scripts/prepare_imagegen_eye.py` 保留非重复中心布局，normal 0.28、roughness 58-138 |
+| 检查 | 无眼睑/鱼头/文字/烘焙高光；径向亮度 pupil=2.0、iris=105.5、edge=3.9；三鱼种捕获近景的虹膜、瞳孔、眼缘尺度与朝向通过 |
+
+最终提示词：
+
+```text
+Use case: stylized-concept
+Asset type: production game texture, non-tileable circular eye decal and PBR base-color albedo
+Primary request: an original open-ocean fish iris viewed straight-on, with a deep charcoal round pupil, a layered sea-glass teal iris, pale celadon radial fibers, sparse warm amber flecks, and a narrow dark limbal ring; designed for three original stylized-realistic survival-game fish species
+Scene/backdrop: texture sheet only, the circular eye centered on a uniform near-black outer field that can be clipped by round geometry
+Subject: one centered circular iris and pupil only; no eyelids, skin, scales, fish head, lashes, blood vessels, tears, animal silhouette, or separate objects
+Style/medium: premium hand-painted stylized realism, production-ready PBR albedo with crisp radial detail and controlled painterly variation, readable in a close first-person catch animation without looking cartoonish or photoreal scanned
+Composition/framing: exact top-down orthographic square, pupil exactly centered, iris fills about 82 percent of the canvas, complete circular limbal edge with generous even padding, no perspective and no off-center crop
+Lighting: flat neutral base color with no baked directional light, reflection, catchlight, cast shadow, ambient occlusion, wet gloss, depth-of-field, or three-dimensional eyeball shading
+Color palette: charcoal black, mineral teal, pale celadon, restrained old-gold amber and tiny cool gray fibers; balanced and not monochrome blue
+Constraints: fully original; exact centered circular design; no text, numbers, symbols, logos, watermark, frame, border, recognizable branded motif, or resemblance to a specific commercial game
+Avoid: human eye anatomy, cat/reptile slit pupil, giant black featureless sphere, cute cartoon eye, neon cyan, red eye, photographic macro image, glossy baked highlight, material ball, perspective preview, multiple eyes, and background scene
+```
+
 ## 本轮 Imagegen 尝试
 
-调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider 并执行技能内置 CLI，模型 `gpt-image-2`，质量 `high`。本轮盐封打捞手套以 2048x2048 请求并返回 1254x1254 PNG；没有降级或复用密舱帆布。采用源图通过人工内容、接缝、2x2 平铺和独立 PBR 图检查并随仓库归档。此前信号层压板、磷光玻璃、盐蚀集热玻璃、蜡封密舱帆布、导航合金、飑云、耐火陶土、培养土、帆布和海床同样使用高质量模型。仓库没有保存 provider URL 或 API Key。
+调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider 并执行技能内置 CLI，模型固定为 `gpt-image-2`、质量固定为 `high`。本轮先完成盐封打捞手套，随后为 M6 分别生成银脊鱼皮、琥鳍鲷皮、旗尾梭皮、鲜鱼肉和远洋鱼眼五张 2048x2048 原创源图；没有切换低阶模型、复用旧鲨皮或以纯色占位冒充完成。三种鱼皮与鱼眼已通过人工内容、接缝或径向检查、独立 PBR、材质绑定和三鱼种捕获近景；鲜鱼肉已通过来源/PBR，但继续保持 `IN_REVIEW` 直到烹饪场景验收。采用源图随仓库归档，仓库没有保存 provider URL 或 API Key。
 
 鲨皮最终请求提示词：
 
@@ -398,10 +498,10 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | MOD-004 | 远景岛原型：岩体、沙洲、树干和 42 片叶 | `src/game/art/ProceduralModels.ts` | 保留为历史原型，运行时已由可探索岛替代 |
 | MOD-005 | 建造锤：木柄、金属锤头、撞面、拔钉爪、六圈绑带 | `src/game/art/ProceduralModels.ts` | 已进入第一视角建造与修补 |
 | MOD-006 | 木矛：长杆、金属尖端与五圈扎结 | `src/game/art/ProceduralModels.ts` | 已进入第一视角刺击 |
-| MOD-007 | 钓竿、卷线轮、浮标与银脊鱼 | `src/game/art/ProceduralModels.ts` | 已进入抛投、鱼讯、挣扎和收获循环 |
+| MOD-007 | 钓竿、卷线轮、浮标，以及银脊鱼、旗尾梭、琥鳍鲷三种鱼体 | `src/game/art/ProceduralModels.ts` | 三种鱼使用平滑躯体、独立背/胸/尾鳍轮廓、Image 2 鱼皮与虹膜 PBR；体型缩放、挣扎、捕获展示和单实例显隐进入完整循环 |
 | MOD-008 | 深潮鲨：车削躯干、背鳍、胸鳍、尾柄、双叶尾、眼、口、鳃与三段采集伤痕 | `src/game/art/ProceduralModels.ts` | 15+ 独立网格，已接巡游、袭击、受击、侧翻浮尸与采集阶段 |
 | MOD-009 | 潮汐净水器：绑扎木架、火盆、海水槽、编织蒸馏罩、冷凝沟、滴管与透明杯具 | `src/game/art/ProceduralModels.ts` | 35+ 独立网格，运行阶段驱动海水/净水水位和滴水 |
-| MOD-010 | 折铁烤架：绑扎木架、折铁火盆、九根炉条、横撑、把手与银脊鱼 | `src/game/art/ProceduralModels.ts` | 40+ 独立网格，食物按生/熟/焦状态改变颜色与粗糙度 |
+| MOD-010 | 折铁烤架：绑扎木架、折铁火盆、九根炉条、横撑、把手与鱼段 | `src/game/art/ProceduralModels.ts` | 40+ 独立网格；鱼段已接鲜鱼肉 PBR，生/熟/焦状态与最终烹饪场景材质验收继续在 M6 进行 |
 | MOD-011 | 盐冠浅滩：2115 顶点高度场、顶点色分层、5 个岩石地标、22 个灌木和 30 条岸浪 | `src/game/art/ProceduralModels.ts` | 已进入接近、靠岸、登岛、离流和重生周期 |
 | MOD-012 | 岛屿资源组：4 棕榈、枝料、石堆、潮果、纤维簇与交互高亮 | `src/game/art/ProceduralModels.ts` | 节点独立、内部实例化，支持生命、拾取、倒伏和树桩 |
 | MOD-013 | 潮磨石斧：回收木柄、石质斧头、金属刃口和六圈编织绑带 | `src/game/art/ProceduralModels.ts` | 已进入第一视角挥砍和三击树木循环 |
@@ -418,7 +518,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | MOD-024 | 定潮舵台：双层轮缘、八辐手柄、斜撑、盐蚀合金面板、万向罗盘、四枚航线针、三组齿轮与双侧舵索 | `src/game/art/NavigationModels.ts` | 55+ 网格，筏格附着；轮、罗盘、齿轮与航线针按航向/阵风/模式实时驱动 |
 | MOD-025 | 横风抗扭索具：双金属横撑、四枚帆缘锁扣和双股交叉受力绳 | `src/game/art/NavigationModels.ts` | 直接加装到既有拾风帆，强化状态、拆除返还和 v8 存档已接通 |
 | MOD-026 | 潮镜五联净水器：斜置盐玻璃集热板、合金框、五个独立杯位、分流歧管、冷凝管与蒸汽/滴水层 | `src/game/art/AdvancedDeviceModels.ts` | 55+ 网格、五路水位和完成标记；队列并行推进且无需燃料 |
-| MOD-027 | 三槽烟鳍烤台：宽体耐火炉膛、十三根炉条、三组食物位、共享燃料条、火焰/余烬/烟层 | `src/game/art/AdvancedDeviceModels.ts` | 70+ 网格；三份渔获分别经历生/熟/焦状态，共享漂木燃料 |
+| MOD-027 | 三槽烟鳍烤台：宽体耐火炉膛、十三根炉条、三组鱼段位、共享燃料条、火焰/余烬/烟层 | `src/game/art/AdvancedDeviceModels.ts` | 70+ 网格；三份渔获使用鲜鱼肉 PBR 并分别经历生/熟/焦状态，共享漂木燃料；生活设备专用材质仍在 M6 审计 |
 | MOD-028 | 干舱储物柜：蜡封帆布柜门/顶盖、木质骨架、潮铸铰链、把手、锁扣和八个内容标记 | `src/game/art/AdvancedDeviceModels.ts` | 25+ 网格；柜盖动画、八格真实堆叠与拆除原子返还已接通 |
 | MOD-029 | 深锚锁链棘轮：双爪棘轮、潮铸护圈、短节锁链与加固绞盘 | `src/game/art/NavigationModels.ts` | 直接加装到现有锚具，风暴载荷、滑脱与 v10 强化状态同步 |
 | MOD-030 | 潮听接收台：层压机壳、斜置扫描盘、三环二十四刻度、扫描束、三信号点、参考线圈、三频段鼓轮、六电量条与阵列灯 | `src/game/art/SignalModels.ts` | 90+ 网格；断电/在线发光、扫描、调谐、频段点、电量和诊断灯由 v10 导航状态驱动 |
@@ -432,7 +532,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | ANI-002 | 第一人称移动、镜头与木筏局部坐标 | `src/game/systems/PlayerController.ts` | 已实现基础版 |
 | ANI-003 | 双手钩具待机、蓄力、放绳跟随、受力抓握、交替回收、抛射旋转、拖回、耐久损耗与断裂恢复 | `src/game/systems/HookSystem.ts`、`src/game/presentation/hookPresentation.ts` | 代码原生腕/指关节、19 点张力绳和手持/抛出唯一所有权已接通；最终蒙皮仍待 DCC |
 | ANI-004 | 建造锤挥击、筏格预览、放置、修补与拆除 | `src/game/systems/BuildSystem.ts` | 已实现交互切片 |
-| ANI-005 | 钓竿抛投、浮标升沉、鱼体绕线、张力和收杆 | `src/game/systems/FishingSystem.ts` | 已实现完整单次循环 |
+| ANI-005 | 钓竿抛投、浮标升沉、三鱼种绕线/挣扎、体型缩放、差异化拉力、张力和收杆 | `src/game/systems/FishingSystem.ts` | 连续三轮真实捕获、部分容量、满包返海、单实例显隐和预热门禁通过 |
 | ANI-006 | 鲨鱼尾摆、巡游、逼近、扑咬、受击、撤退、失力侧翻、随浪浮尸与下沉 | `src/game/systems/SharkSystem.ts` | 威胁循环与尸体生命周期共享状态真值 |
 | ANI-007 | 设备朝向预览、筏格放置、运行、收取、拆解、碰撞与落海 | `src/game/systems/DeviceSystem.ts` | 已接净水器和烤架完整周期，并保存阶段与进度 |
 | ANI-008 | 木筏/岛屿双表面移动、岸线切换、地形贴合和障碍滑移 | `src/game/systems/PlayerController.ts` | 无独立场景切换，可保存玩家所在表面 |
@@ -444,7 +544,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | ANI-014 | 研究拨盘/页面反馈、逐砖湿干变化、熔炉炉门/内容物/热光阶段 | `src/game/systems/ProgressionSystem.ts` | 与全局知识、逐砖计时、熔炼工作/完成和 v8 恢复同步 |
 | ANI-015 | 木矛/金属矛与石斧/金属斧实时换模、挥击和分级命中 | `src/game/systems/SpearSystem.ts`、`IslandSystem.ts` | 升级制作后自动替换快捷栏，鲨鱼和棕榈实际接收不同伤害 |
 | ANI-016 | 舵轮修正、罗盘指向、齿轮联动、航线针切换、强化帆鼓动和过载自动泄压 | `src/game/systems/NavigationSystem.ts` | 与四种航线、阵风偏航、帆具载荷、交互、音频和 v10 恢复同步 |
-| ANI-017 | 五杯水位/完成标记、三份鱼体独立火候、共享燃料条、柜盖与内容标记 | `src/game/systems/DeviceSystem.ts` | 与高级设备领域队列、真实库存、HUD、音频和 v10 恢复同步 |
+| ANI-017 | 五杯水位/完成标记、三份鱼段独立火候、共享燃料条、柜盖与内容标记 | `src/game/systems/DeviceSystem.ts` | 与高级设备领域队列、真实库存、HUD、音频和 v10 恢复同步；鲜鱼肉 PBR 已接线，完整烹饪视觉门禁待收敛 |
 | ANI-018 | 锚机棘轮加装、锁链受力、风暴载荷累积与未强化锚滑脱 | `src/game/systems/NavigationSystem.ts` | 与锚泊后果、警报、音频、模型强化和 v10 恢复同步 |
 | ANI-019 | 接收台扫描/调谐/电量、双桅相位/传播、目标浮筒/转子/脉冲与抵达解码 | `src/game/systems/NavigationSystem.ts` | 与电池、间距、活动信号、世界位置、距离、访问解锁和 v10 恢复同步 |
 | ANI-020 | 结构分件幽灵预览、旋转/层高切换、板门开合、连续楼梯登层、上层落地/分层碰撞、楼板/斜顶撞顶、三档受损色泽/确定性松动和承重级联 | `src/game/systems/BuildSystem.ts`、`RaftStructureSystem.ts`、`PlayerController.ts` | 与材料、锤耐久、共享占位、四向楼梯入口、材质撞顶音尘、鲨鱼外沿择靶、修补 HUD、支撑拓扑和 v15 恢复同步；不增加结构实例批次 |
@@ -481,7 +581,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | AMB-STORM | 独立低通风压、带通雨噪、慢速阵风幅度变化，以及双段闪光触发的雷声簇 | `src/game/systems/AudioSystem.ts` |
 | SFX-HOOK/BUILD | 抛钩、HRTF 空间落水、五类物资方位碰撞、居中背包确认、近场受力收绳、断钩、木击、按木/纤维修补、结构空间断裂/坍塌、拆除、拒绝反馈与板门木铰/摩擦层 | `src/game/systems/AudioSystem.ts` |
 | SFX-NET | 木框双击固定、绳格高频收紧、按漂流物重量区分的空间入网、背包收取双音和失托木裂/绳断/水体低频层 | `src/game/systems/AudioSystem.ts` |
-| SFX-FISHING | 抛线、浮标、三连鱼讯、卷线、捕获与断线 | `src/game/systems/AudioSystem.ts` |
+| SFX-FISHING | 抛线、浮标、三连鱼讯、卷线、断线，以及按鱼种拉力与体型份数分层的搏鱼/捕获音 | `src/game/systems/AudioSystem.ts` |
 | SFX-DEVICE | 放置木/铁冲击、五联海水装填、三槽食物位、干舱开合/物资双向转移、点火、完成、焦糊、持续火焰和蒸汽层 | `src/game/systems/AudioSystem.ts` |
 | SFX-ISLAND | 木筏/沙地脚步、石斧破风、入木、倒树、枝料/石料/植被拾取 | `src/game/systems/AudioSystem.ts` |
 | SFX-REEF | 入水/游动、钩刃擦水、细砂/黏土/金属分层撞击和海草收割 | `src/game/systems/AudioSystem.ts` |
@@ -499,7 +599,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 - 用 Blender 或等效 DCC 建立可蒙皮的最终双手、工具、鲨鱼和生活设备资产，当前代码模型是原创近最终形体基线而非最终蒙皮资产；
 - 为木材补充经过人工修整的 normal、roughness 与 AO；鲨皮和编织纤维已使用独立派生图；
-- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005 至 TEX-015 已采用高质量输出；
+- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005 至 TEX-018 与 TEX-020 已采用高质量输出，TEX-019 仍待烹饪场景批准；
 - 建立同一角色比例与材质语言下的模型规范；
 - 为岛屿补充手绘沙地/草地/岩面材质组、草丛层级和更丰富的岸线小物，保持现有确定性地形与碰撞接口；
 - 为漂流箱桶、最终双手/钩具、木筏结构套件、潮兜收集网、珊瑚、海草、鱼群、水下钩具、拾风帆、强化索具/锚具、定潮舵台、接收台/阵列/中继标、高级生活设备、作物、盐翼盗鸟、研究台、通风架、熔炉和金属工具建立最终 DCC 模型、蒙皮与顶点动画，保留当前布局和领域接口；
