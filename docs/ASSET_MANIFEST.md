@@ -537,9 +537,151 @@ Use case: stylized-concept. Asset type: seamless tileable game texture, producti
 Use case: stylized-concept. Asset type: seamless tileable game texture, production PBR base-color albedo. Primary request: an original reclaimed marine polymer surface for an ocean-survival water purifier basin and cup rim, with compact molded grain, cloudy salt bloom, fine crossed cleaning scratches, subtle pressure whitening, sparse sea-glass inclusions, and small worn edges expressed only as micro color variation. Subject: continuous weathered polymer material only, no cup, basin, container, sheet edge, molded part, logo, recycling mark, text, symbols, water droplets, separate objects, or transparency cutout. Style/medium: premium hand-painted stylized realism, clean production-ready PBR albedo with crisp controlled microdetail suitable for close first-person inspection, not photographic noise. Composition/framing: exact top-down orthographic square texture, uniform texel density, seamless wrapping on all four edges, evenly distributed wear with no central focal point, large stripe, panel line, or repeating cell. Lighting: perfectly flat neutral base color with absolutely no baked directional light, cast shadows, ambient occlusion, specular highlights, reflections, wet gloss, depth-of-field, or perspective. Color palette: pale mineral gray, desaturated sea-glass green, cool ivory, restrained oxidized teal scratches, tiny warm salvage-plastic flecks; bright and balanced, not monochrome cyan. Constraints: fully original, seamless tile, no text, numbers, logos, watermark, frame, border, branded resin pattern, or resemblance to a specific commercial game. Avoid: glossy new plastic, translucent product render, bubble wrap, rubber, fabric weave, camouflage, large stains, strong cracks, material sphere, product mockup, background scene, and dramatic lighting.
 ```
 
+### TEX-025：盐冠活叶材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/salt-crown-leaf.webp`、`salt-crown-leaf-normal.webp`、`salt-crown-leaf-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/salt-crown-leaf-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 盐冠作物的茎节与九片生长叶面 |
+| 处理方式 | `prepare_imagegen_material.py --optimize-boundary`，1024、seam 152、normal 0.54、roughness 132-210 |
+| 检查 | boundary=(1,879)，接缝 x=7.01/0.86x、y=8.93/1.16x；2x2 无硬边；活株/成熟株场景与薄叶低光可读性通过 |
+
+最终提示词：
+
+```text
+Use case: stylized-concept. Asset type: seamless tileable production game texture, PBR base-color albedo. Primary request: an original living salt-crown crop leaf and young stem surface for a premium ocean-survival game, with dense sea-green plant tissue, a fine branching celadon vein network, subtle blue-green wax bloom, sparse pale salt freckles, and restrained warm lime new-growth notes. Subject: continuous botanical epidermis material only, no complete leaf silhouette, plant, flower, fruit, pot, soil, insect, water droplet, or separate object. Style/medium: premium hand-painted stylized realism, crisp controlled material detail, grounded painterly PBR that remains readable on small first-person crop leaves. Composition/framing: exact top-down orthographic square texture, uniform texel density, seamless wrapping on all four edges, organically varied veins with no dominant center rib, no central focal point, no repeating grid. Lighting: perfectly flat neutral albedo with absolutely no baked directional light, cast shadow, ambient occlusion, reflection, specular highlight, wet gloss, depth of field, or perspective. Color palette: mineral sea green, muted olive, pale celadon, restrained yellow-green and tiny chalk-white salt accents; lively but not neon or monochrome. Constraints: fully original, edge-to-edge material, no text, numbers, symbols, logos, watermark, frame, border, unique scar, branded motif, or resemblance to a specific commercial game. Avoid: photographic leaf scan, tropical houseplant silhouette, giant center vein, plastic foliage, camouflage, mold, moss carpet, checker repetition, material sphere, product mockup, background scene, and dramatic lighting.
+```
+
+### TEX-026：盐冠枯叶材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/salt-crown-dry-leaf.webp`、`salt-crown-dry-leaf-normal.webp`、`salt-crown-dry-leaf-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/salt-crown-dry-leaf-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` 编辑 |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 枯萎盐冠作物的茎叶表面 |
+| 处理方式 | 以 TEX-025 为高保真输入；1024、seam 152、normal 0.66、roughness 190-244、boundary 优化 |
+| 检查 | boundary=(1,1)，接缝 x=6.31/0.84x、y=6.75/0.97x；保留同源叶脉尺度；活/熟/枯三状态同屏通过 |
+
+最终提示词：
+
+```text
+Use case: precise-object-edit
+Asset type: seamless tileable PBR base-color texture for a premium stylized-realistic ocean survival game
+Input images: Image 1 is the adopted original living salt-crown crop leaf and young-stem material
+Primary request: transform only the plant condition from healthy living tissue to severely dehydrated and salt-withered tissue while preserving Image 1's exact branching vein network, scale, uniform texel density, painterly style, and edge continuity. Replace the green chlorophyll with layered straw ochre, muted olive-brown, pale salt-beige veins, restrained rust-coral stress freckles, and small brittle gray-green remnants. Add fine short dehydration checking between veins and dry curled-color edges inside the tissue, but keep the surface recognizably botanical and related to the living source.
+Composition/framing: exact top-down orthographic square continuous material, seamless on all four edges, no central focal point, no complete leaf silhouette, no large unique crack, and no repeating grid
+Lighting/mood: flat neutral PBR albedo with absolutely no baked directional light, cast shadow, ambient occlusion, reflection, specular highlight, wet gloss, depth of field, or perspective
+Constraints: preserve the vein topology and material scale of Image 1; fully original; no plant object, pot, soil, fruit, insect, text, symbols, logos, watermark, frame, border, branded motif, or resemblance to a specific commercial game
+Avoid: autumn leaf collage, tree bark, timber grain, leather, parchment, mud cracks, mold, black rot, photographic scan, material sphere, product mockup, background scene, neon color, and dramatic lighting
+```
+
+### TEX-027：盐冠潮果材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/salt-crown-fruit.webp`、`salt-crown-fruit-normal.webp`、`salt-crown-fruit-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/salt-crown-fruit-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 成熟作物三枚潮果与播种标记 |
+| 处理方式 | 1024、seam 152、normal 0.48、roughness 138-210、boundary 优化 |
+| 检查 | boundary=(1,1)，接缝 x=5.76/0.93x、y=5.70/0.85x；2x2 无焦点重复；三枚成熟果缩略尺度可辨 |
+
+最终提示词：
+
+```text
+Use case: stylized-concept. Asset type: seamless tileable production game texture, PBR base-color albedo. Primary request: an original salt-crown tide-fruit skin surface for a premium ocean-survival game, with a muted chartreuse and sea-glass green waxy rind, fine organic pores, short pale mineral seams, sparse coral-ochre ripening freckles, and tiny salt-cured russet marks. Subject: continuous fruit epidermis material only, no whole fruit silhouette, cut fruit, seed, leaf, stem, plate, pot, food arrangement, or separate object. Style/medium: premium hand-painted stylized realism, appetizing tactile painterly PBR with controlled close-range detail and natural color layering. Composition/framing: exact top-down orthographic square texture, uniform texel density, seamless wrapping on every edge, irregular pore and freckle distribution, no central focal point, radial emblem, or repeating cells. Lighting: perfectly flat neutral albedo with no baked directional light, cast shadow, ambient occlusion, reflection, highlight, wet gloss, depth of field, or perspective. Color palette: muted chartreuse, sea-glass green, pale flax, restrained coral ochre and russet; balanced against teal ocean and warm cedar without fluorescent green. Constraints: fully original edge-to-edge material, no text, numbers, symbols, logos, watermark, frame, border, unique bruise, branded motif, or resemblance to a specific commercial game. Avoid: citrus peel, watermelon stripes, coconut shell, apple skin, mold, slime, plastic toy surface, photographic scan, checker repetition, material sphere, product mockup, and background scene.
+```
+
+### TEX-028：盐翼体羽材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/saltwing-body-feather.webp`、`saltwing-body-feather-normal.webp`、`saltwing-body-feather-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/saltwing-body-feather-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 盐翼盗鸟躯干、胸羽与头部轮廓羽 |
+| 处理方式 | 1024、seam 168、normal 0.46、roughness 176-236、boundary 优化 |
+| 检查 | boundary=(820,638)，接缝 x=9.54/0.90x、y=4.84/0.96x；2x2 羽列连续；鸟体近景无鱼鳞/瓦片感 |
+
+最终提示词：
+
+```text
+Use case: stylized-concept. Asset type: seamless tileable production game texture, PBR base-color albedo. Primary request: original saltwing seabird contour plumage for a premium ocean-survival game, built from small layered body feathers with pale mineral-gray centers, muted sea-glass green shadows, chalk-white salt tips, sparse warm rust-gold flecks, and soft charcoal separation lines. Subject: continuous compact body-plumage material only, no whole bird, wing, tail, head, eye, beak, leg, skeleton, nest, sky, or separate feather object. Style/medium: premium hand-painted stylized realism, tactile painterly PBR with deliberate feather layering and crisp detail for close first-person inspection, not photoreal scanned. Composition/framing: exact top-down orthographic square texture, uniform texel density, seamless wrapping on all four edges, naturally staggered overlapping contour feathers with varied size and no central focal point or perfect rows. Lighting: perfectly flat neutral albedo with absolutely no baked directional lighting, cast shadow, ambient occlusion, reflection, specular highlight, depth of field, or perspective. Color palette: pale mineral gray, weathered ivory, sea-glass green, cool charcoal, restrained rust-gold accents; airy and readable without monochrome blue or flat white. Constraints: fully original edge-to-edge plumage, no text, numbers, symbols, logos, watermark, frame, border, unique marking, branded motif, or resemblance to a specific commercial game. Avoid: fish scales, fur, shingles, pine cones, owl facial disk, gull photography, cartoon pattern, checker repetition, material sphere, product mockup, background scene, neon color, and dramatic light.
+```
+
+### TEX-029：盐翼飞羽材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/saltwing-flight-feather.webp`、`saltwing-flight-feather-normal.webp`、`saltwing-flight-feather-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/saltwing-flight-feather-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 双翼十四枚主羽、尾羽和眉羽 |
+| 处理方式 | 1024、seam 168、normal 0.58、roughness 174-232、boundary 优化 |
+| 检查 | boundary=(1,762)，接缝 x=11.16/0.91x、y=16.64/0.95x；方向羽片无硬边；飞羽与浅色体羽在近景可辨 |
+
+最终提示词：
+
+```text
+Use case: stylized-concept. Asset type: seamless tileable production game texture, PBR base-color albedo. Primary request: original saltwing seabird flight-feather vane surface for a premium ocean-survival game, with long fine diagonal barbs, dark weathered teal and graphite layers, pale salt-worn edges woven through the vane, restrained flax-gold notches, and sparse oxidized green accents that distinguish the wings from the body plumage. Subject: continuous flight-feather vane material only, no whole bird, complete feather silhouette, central quill object, wing outline, tail, head, eye, beak, leg, sky, or separate object. Style/medium: premium hand-painted stylized realism, elegant directional painterly PBR with crisp barb structure and controlled weathering, readable during wing animation. Composition/framing: exact top-down orthographic square texture, uniform texel density, seamless wrapping on all four edges, long directional barb flow with natural interruptions, no central focal point, emblem, or perfect stripes. Lighting: perfectly flat neutral albedo with absolutely no baked directional light, cast shadow, ambient occlusion, reflection, specular highlight, depth of field, or perspective. Color palette: weathered deep teal, graphite gray, pale celadon salt edge, muted flax gold, tiny oxidized green notes; dark but not navy-black or one-note cyan. Constraints: fully original edge-to-edge material, no text, numbers, symbols, logos, watermark, frame, border, unique insignia, branded motif, or resemblance to a specific commercial game. Avoid: fabric weave, fish scales, fur, wood grain, zebra bands, photographic feather scan, cartoon outline, checker repetition, material sphere, product mockup, background scene, neon blue, and dramatic lighting.
+```
+
+### TEX-030：盐翼角质材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/saltwing-keratin.webp`、`saltwing-keratin-normal.webp`、`saltwing-keratin-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/saltwing-keratin-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 盐翼盗鸟喙、双腿与六趾 |
+| 处理方式 | 1024、seam 144、normal 0.34、roughness 154-218、boundary 优化 |
+| 检查 | boundary=(1,1)，接缝 x=7.12/1.07x、y=6.67/0.95x；首版长纤维石纹、同源精修版大理石感均拒绝；采用版保持毫米级低对比角质 |
+
+最终提示词：
+
+```text
+Use case: stylized-concept
+Asset type: seamless tileable production game texture, PBR base-color albedo
+Primary request: an original low-contrast saltwing seabird beak and foot keratin surface for a premium ocean-survival game. The material is mostly smooth muted amber-gray keratin with compact shell-ivory lamellae, very fine short parallel growth lines, tiny charcoal wear specks, faint pale salt abrasion, and sparse old-coral ochre pin marks. Keep ninety percent of the surface calm, coherent, dense, and smooth; all features must be millimeter-scale and suitable for a small beak and thin toes.
+Subject: continuous bird keratin material only, no beak silhouette, bird, foot, claw, talon, horn, tooth, bone, shell object, anatomy part, or separate object
+Style/medium: premium hand-painted stylized realism, restrained tactile painterly PBR, production-ready and readable at close first-person distance without photographic noise
+Composition/framing: exact top-down orthographic square texture, uniform texel density, seamless wrapping on all four edges, tiny short marks with no central focal point, broad patch, long stripe, flow, wave, or repeating cells
+Lighting: perfectly flat neutral albedo with absolutely no baked directional light, cast shadow, ambient occlusion, reflection, specular highlight, gloss, depth of field, translucency glow, or perspective
+Color palette: muted honey amber, warm shell ivory, cool charcoal gray, pale salt and restrained old-coral ochre; warm but desaturated and not orange-dominated
+Constraints: fully original edge-to-edge material, no text, numbers, symbols, logos, watermark, frame, border, unique crack, branded motif, or resemblance to a specific commercial game
+Avoid: marble, granite, limestone, quartz, tree bark, wood grain, fibers, long striations, leather, reptile scales, polished horn, bright yellow cartoon beak, photographic macro scan, material sphere, product mockup, background scene, dramatic lighting, and high contrast
+```
+
+### TEX-031：盐翼虹膜材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/saltwing-eye.webp`、`saltwing-eye-normal.webp`、`saltwing-eye-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/saltwing-eye-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 盐翼盗鸟左右圆形虹膜面与翼羽眼缘 |
+| 处理方式 | `prepare_imagegen_eye.py`，1024 非平铺中心虹膜、独立 normal/roughness |
+| 检查 | pupil=13.1、iris=92.0、edge=15.3；无眼睑/鸟头/烘焙高光；球眼改为有朝向圆面，近景虹膜与喙缘可辨 |
+
+最终提示词：
+
+```text
+Use case: stylized-concept. Asset type: production game texture, non-tileable circular eye decal and PBR base-color albedo. Primary request: an original saltwing seabird iris viewed straight-on, with a deep round charcoal pupil, a layered muted amber-green iris, pale celadon radial fibers, sparse rust-gold flecks, and a narrow dark limbal ring; designed for a wary crop-thief seabird in a premium stylized-realistic ocean survival game. Scene/backdrop: texture sheet only, the circular eye centered on a uniform near-black outer field that can be clipped by round geometry. Subject: one centered circular iris and pupil only; no eyelids, feathers, bird head, lashes, blood vessels, tears, animal silhouette, or separate objects. Style/medium: premium hand-painted stylized realism, production-ready PBR albedo with crisp radial detail and controlled painterly variation, readable in close first-person inspection without looking cute or photoreal scanned. Composition/framing: exact top-down orthographic square, pupil exactly centered, iris fills about 82 percent of the canvas, complete circular limbal edge with generous even padding, no perspective and no off-center crop. Lighting: flat neutral base color with no baked directional light, reflection, catchlight, cast shadow, ambient occlusion, wet gloss, depth of field, or three-dimensional eyeball shading. Color palette: charcoal black, mineral amber-green, pale celadon, restrained old-gold rust and tiny cool gray fibers; alert and natural, not neon. Constraints: fully original exact centered circular design; no text, numbers, symbols, logos, watermark, frame, border, recognizable branded motif, or resemblance to a specific commercial game. Avoid: human eye anatomy, cat or reptile slit pupil, giant black featureless sphere, cute cartoon eye, neon cyan, red eye, photographic macro image, glossy baked highlight, material ball, perspective preview, multiple eyes, and background scene.
+```
+
 ## 本轮 Imagegen 尝试
 
-调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider 并执行技能内置 CLI，模型固定为 `gpt-image-2`、质量固定为 `high`。本轮先完成盐封打捞手套和 M6 三鱼种/鱼眼，随后以鲜鱼肉为共同尺度锚点编辑熟鱼与焦鱼，并生成耐热折铁、盐蚀聚合物两套生活设备材质；没有切换低阶模型、复用旧锈铁或以纯色占位冒充完成。四套烹饪新增材质均采用 2048x2048 原创源图、独立 1024 albedo/normal/roughness、既定接缝门禁、2x2 人工复核和真实场景绑定。焦鱼第一版因树皮感拒绝，第二版因缩略图区分不足不采用，最终版保留 Image 2 焦斑结构并做可审计离线色阶修正；两张运行时烹饪截图证明生/熟/焦、基础净水/烤架和三槽设备画风统一。采用源图随仓库归档，仓库没有保存 provider URL 或 API Key。
+调用方式：项目 `scripts/imagegen`，运行时读取配置文件 provider 并执行技能内置 CLI，模型固定为 `gpt-image-2`、质量固定为 `high`。本轮先完成盐封打捞手套和 M6 三鱼种/鱼眼，随后以鲜鱼肉为共同尺度锚点编辑熟鱼与焦鱼，并生成耐热折铁、盐蚀聚合物两套生活设备材质；最终又生成盐冠活叶/潮果、盐翼体羽/飞羽/虹膜，以活叶高保真编辑枯叶，并在两次拒绝后重新生成低对比角质。没有切换低阶模型、复用旧纯色材质或以占位冒充完成。所有 M6 新增材质均采用 2048x2048 原创源图、独立 1024 albedo/normal/roughness、既定接缝门禁、2x2 人工复核和真实场景绑定。焦鱼第一版因树皮感拒绝，第二版因缩略图区分不足不采用；角质首版和精修版因长纤维/大理石感不采用。采用源图随仓库归档，仓库没有保存 provider URL 或 API Key。
 
 鲨皮最终请求提示词：
 
@@ -686,7 +828,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 - 用 Blender 或等效 DCC 建立可蒙皮的最终双手、工具、鲨鱼和生活设备资产，当前代码模型是原创近最终形体基线而非最终蒙皮资产；
 - 为木材补充经过人工修整的 normal、roughness 与 AO；鲨皮和编织纤维已使用独立派生图；
-- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005 至 TEX-024 已采用高质量输出；
+- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005 至 TEX-031 已采用高质量输出；
 - 建立同一角色比例与材质语言下的模型规范；
 - 为岛屿补充手绘沙地/草地/岩面材质组、草丛层级和更丰富的岸线小物，保持现有确定性地形与碰撞接口；
 - 为漂流箱桶、最终双手/钩具、木筏结构套件、潮兜收集网、珊瑚、海草、鱼群、水下钩具、拾风帆、强化索具/锚具、定潮舵台、接收台/阵列/中继标、高级生活设备、作物、盐翼盗鸟、研究台、通风架、熔炉和金属工具建立最终 DCC 模型、蒙皮与顶点动画，保留当前布局和领域接口；

@@ -23,18 +23,23 @@ import {
   MAX_PLANTERS,
   PLANTER_DEFINITION,
   PLANT_DRY_GRACE_SECONDS,
+  DEFAULT_PLANTING_CLIMATE,
   advancePlanter,
   applyBirdDamage,
+  birdRaidAllowedInClimate,
   createPlanterState,
   nextBirdVisitSeconds,
   planterHarvest,
   planterProgress,
+  plantingClimateFromWeather,
   resetPlanter,
   sowPlanter,
   waterPlanter,
   type SavedPlanterState,
   type SavedPlantingState,
   type CropBirdPhase,
+  type PlantingClimate,
+  type PlantingWeatherInput,
 } from '../domain/planting';
 import {
   INVENTORY_SLOT_CAPACITY,
@@ -106,6 +111,10 @@ export class PlantingSystem {
   private birdPhaseElapsed = 0;
   private birdTargetId: string | null = null;
   private lastPeckIndex = -1;
+  private climate: PlantingClimate = DEFAULT_PLANTING_CLIMATE;
+  private weatherBirdDismissals = 0;
+  private weatherRainRecoveries = 0;
+  private weatherBirdDismissedThisUpdate = false;
 
   constructor(
     private readonly renderer: WebGLRenderer,
@@ -116,6 +125,7 @@ export class PlantingSystem {
     private readonly audio: AudioSystem,
     private readonly splashes: SplashSystem,
     savedState: SavedPlantingState,
+    private readonly getWeather: () => PlantingWeatherInput,
     private readonly hasExternalOccupant: (coordinate: GridCoordinate) => boolean = () => false,
   ) {
     this.state = {
@@ -167,12 +177,21 @@ export class PlantingSystem {
       this.removeOrphanedPlanters();
     }
 
+    this.climate = plantingClimateFromWeather(this.getWeather());
+    let announcedRainRecovery = false;
+    let rainRecoveryNotice: string | null = null;
+    this.weatherBirdDismissedThisUpdate = false;
     for (const runtime of this.planters.values()) {
       if (delta > 0) {
-        const result = advancePlanter(runtime.state, delta);
+        const phaseBeforeUpdate = runtime.state.phase;
+        const result = advancePlanter(runtime.state, delta, this.climate);
         runtime.state = result.planter;
         if (result.event === 'dry') {
           this.showNotice('潮生作物盆已经缺水');
+        } else if (result.event === 'rainwater' && !announcedRainRecovery) {
+          announcedRainRecovery = true;
+          this.audio.playPlantWater();
+          rainRecoveryNotice = phaseBeforeUpdate === 'sown' ? '风暴雨水催发了盐冠种子' : '风暴雨水救活了缺水作物';
         } else if (result.event === 'mature') {
           this.audio.playPlantReady();
           this.showNotice('盐冠潮果已经成熟');
@@ -180,10 +199,18 @@ export class PlantingSystem {
           this.audio.playPlantWither();
           this.showNotice('一株盐冠作物因缺水枯萎');
         }
+        if (result.event === 'rainwater') this.weatherRainRecoveries += 1;
       }
       this.updatePlanterVisuals(runtime, time, delta);
     }
     this.updateBird(time, delta);
+    if (rainRecoveryNotice && this.weatherBirdDismissedThisUpdate) {
+      this.showNotice('风暴雨水恢复了作物 · 强风驱散盐翼盗鸟');
+    } else if (rainRecoveryNotice) {
+      this.showNotice(rainRecoveryNotice);
+    } else if (this.weatherBirdDismissedThisUpdate) {
+      this.showNotice('强风暴驱散了盐翼盗鸟');
+    }
 
     this.feedbackElapsed -= delta;
     if (this.feedbackElapsed <= 0) {
@@ -210,6 +237,34 @@ export class PlantingSystem {
       birdPhase: this.birdPhase,
       birdElapsed: Number(this.birdPhaseElapsed.toFixed(3)),
       birdTargetId: this.birdTargetId,
+    };
+  }
+
+  getDiagnostics(): {
+    climate: PlantingClimate;
+    planters: Array<Pick<SavedPlanterState, 'id' | 'phase' | 'growth' | 'water' | 'drySeconds'>>;
+    cropMaterialMaps: string;
+    birdMaterialMaps: string;
+    birdPhase: CropBirdPhase;
+    birdRaidAllowed: boolean;
+    weatherBirdDismissals: number;
+    weatherRainRecoveries: number;
+  } {
+    return {
+      climate: { ...this.climate },
+      planters: [...this.planters.values()].map(({ state }) => ({
+        id: state.id,
+        phase: state.phase,
+        growth: Number(state.growth.toFixed(4)),
+        water: Number(state.water.toFixed(4)),
+        drySeconds: Number(state.drySeconds.toFixed(3)),
+      })),
+      cropMaterialMaps: this.preview.userData.materialMaps as string,
+      birdMaterialMaps: this.bird.userData.materialMaps as string,
+      birdPhase: this.birdPhase,
+      birdRaidAllowed: birdRaidAllowedInClimate(this.climate),
+      weatherBirdDismissals: this.weatherBirdDismissals,
+      weatherRainRecoveries: this.weatherRainRecoveries,
     };
   }
 
@@ -468,6 +523,9 @@ export class PlantingSystem {
       const progress = Math.round(state.growth * 100);
       const water = Math.round(state.water * 100);
       if (state.water < 0.38 && itemCount(inventory, 'freshWaterCup') > 0) return `补充淡水 · 生长 ${progress}%`;
+      if (this.climate.effect === 'rain') return `风暴雨养 · 生长 ${progress}%`;
+      if (this.climate.effect === 'drizzle') return `余雨润土 · 生长 ${progress}%`;
+      if (this.climate.effect === 'wind') return `强风耗水 · 生长 ${progress}%`;
       return `生长 ${progress}% · 水分 ${water}%`;
     }
     if (state.phase === 'dry') {
@@ -581,6 +639,13 @@ export class PlantingSystem {
   }
 
   private updateBird(time: number, delta: number): void {
+    const raidWeather = birdRaidAllowedInClimate(this.climate);
+    if (!raidWeather && this.birdPhase !== 'absent' && this.birdPhase !== 'fleeing') {
+      this.weatherBirdDismissals += 1;
+      this.weatherBirdDismissedThisUpdate = true;
+      this.audio.playCropBirdScare();
+      this.beginBirdFlee();
+    }
     this.eligiblePlanters.length = 0;
     for (const runtime of this.planters.values()) {
       const { state } = runtime;
@@ -592,7 +657,7 @@ export class PlantingSystem {
     const eligible = this.eligiblePlanters;
     if (this.birdPhase === 'absent') {
       this.bird.visible = false;
-      if (delta > 0 && eligible.length > 0) {
+      if (raidWeather && delta > 0 && eligible.length > 0) {
         this.state.birdClock += delta;
         if (this.state.birdClock >= nextBirdVisitSeconds(this.state.birdVisit)) this.beginBirdVisit(eligible);
       }
@@ -770,6 +835,11 @@ export class PlantingSystem {
       birdActive: this.birdPhase !== 'absent' && this.birdPhase !== 'fleeing',
       birdThreat:
         this.birdPhase === 'feeding' ? 1 : this.birdPhase === 'diving' ? 0.74 : this.birdPhase === 'circling' ? 0.38 : 0,
+      climateEffect: this.climate.effect,
+      climateLabel: this.climate.label,
+      growthMultiplier: this.climate.growthMultiplier,
+      waterUseMultiplier: this.climate.waterUseMultiplier,
+      rainfallPerSecond: this.climate.rainfallPerSecond,
     };
     let activeWater = 0;
     let activeCount = 0;

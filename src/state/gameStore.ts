@@ -245,6 +245,11 @@ export interface PlantingFeedback {
   water: number;
   birdActive: boolean;
   birdThreat: number;
+  climateEffect: 'steady' | 'wind' | 'rain' | 'drizzle';
+  climateLabel: string;
+  growthMultiplier: number;
+  waterUseMultiplier: number;
+  rainfallPerSecond: number;
 }
 
 export interface ProgressionFeedback extends ProgressionKnowledge {
@@ -460,6 +465,11 @@ function defaultPlanting(): PlantingFeedback {
     water: 0,
     birdActive: false,
     birdThreat: 0,
+    climateEffect: 'steady',
+    climateLabel: '海况平稳',
+    growthMultiplier: 1,
+    waterUseMultiplier: 1,
+    rainfallPerSecond: 0,
   };
 }
 

@@ -1195,6 +1195,12 @@ button:focus-visible {
 .device-status--locker i b { background: #718c87; }
 .device-status--collectionNet i b { background: #68b69e; }
 .device-status--planter i b { background: #83ad67; }
+.device-status--planter.is-climate-wind { border-left-color: #d0a35d; }
+.device-status--planter.is-climate-wind strong { color: #e3bd74; }
+.device-status--planter.is-climate-rain,
+.device-status--planter.is-climate-drizzle { border-left-color: #69bcb7; }
+.device-status--planter.is-climate-rain strong,
+.device-status--planter.is-climate-drizzle strong { color: #8dd4ca; }
 .device-status--progression i b { background: #c97961; }
 .device-status--research strong { color: #79c8bb; }
 .device-status--ready strong { color: #efc35c; }

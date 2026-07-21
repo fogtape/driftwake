@@ -58,6 +58,27 @@ export interface AssetTextures {
   planterSoil: Texture;
   planterSoilNormal: Texture;
   planterSoilRoughness: Texture;
+  cropLeaf: Texture;
+  cropLeafNormal: Texture;
+  cropLeafRoughness: Texture;
+  cropDry: Texture;
+  cropDryNormal: Texture;
+  cropDryRoughness: Texture;
+  cropFruit: Texture;
+  cropFruitNormal: Texture;
+  cropFruitRoughness: Texture;
+  birdFeather: Texture;
+  birdFeatherNormal: Texture;
+  birdFeatherRoughness: Texture;
+  birdWing: Texture;
+  birdWingNormal: Texture;
+  birdWingRoughness: Texture;
+  birdBeak: Texture;
+  birdBeakNormal: Texture;
+  birdBeakRoughness: Texture;
+  birdEye: Texture;
+  birdEyeNormal: Texture;
+  birdEyeRoughness: Texture;
   refractoryClay: Texture;
   refractoryClayNormal: Texture;
   refractoryClayRoughness: Texture;
@@ -179,6 +200,27 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     planterSoil,
     planterSoilNormal,
     planterSoilRoughness,
+    cropLeaf,
+    cropLeafNormal,
+    cropLeafRoughness,
+    cropDry,
+    cropDryNormal,
+    cropDryRoughness,
+    cropFruit,
+    cropFruitNormal,
+    cropFruitRoughness,
+    birdFeather,
+    birdFeatherNormal,
+    birdFeatherRoughness,
+    birdWing,
+    birdWingNormal,
+    birdWingRoughness,
+    birdBeak,
+    birdBeakNormal,
+    birdBeakRoughness,
+    birdEye,
+    birdEyeNormal,
+    birdEyeRoughness,
     refractoryClay,
     refractoryClayNormal,
     refractoryClayRoughness,
@@ -246,6 +288,27 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/planter-soil.webp'),
     loader.loadAsync('/assets/textures/planter-soil-normal.webp'),
     loader.loadAsync('/assets/textures/planter-soil-roughness.webp'),
+    loader.loadAsync('/assets/textures/salt-crown-leaf.webp'),
+    loader.loadAsync('/assets/textures/salt-crown-leaf-normal.webp'),
+    loader.loadAsync('/assets/textures/salt-crown-leaf-roughness.webp'),
+    loader.loadAsync('/assets/textures/salt-crown-dry-leaf.webp'),
+    loader.loadAsync('/assets/textures/salt-crown-dry-leaf-normal.webp'),
+    loader.loadAsync('/assets/textures/salt-crown-dry-leaf-roughness.webp'),
+    loader.loadAsync('/assets/textures/salt-crown-fruit.webp'),
+    loader.loadAsync('/assets/textures/salt-crown-fruit-normal.webp'),
+    loader.loadAsync('/assets/textures/salt-crown-fruit-roughness.webp'),
+    loader.loadAsync('/assets/textures/saltwing-body-feather.webp'),
+    loader.loadAsync('/assets/textures/saltwing-body-feather-normal.webp'),
+    loader.loadAsync('/assets/textures/saltwing-body-feather-roughness.webp'),
+    loader.loadAsync('/assets/textures/saltwing-flight-feather.webp'),
+    loader.loadAsync('/assets/textures/saltwing-flight-feather-normal.webp'),
+    loader.loadAsync('/assets/textures/saltwing-flight-feather-roughness.webp'),
+    loader.loadAsync('/assets/textures/saltwing-keratin.webp'),
+    loader.loadAsync('/assets/textures/saltwing-keratin-normal.webp'),
+    loader.loadAsync('/assets/textures/saltwing-keratin-roughness.webp'),
+    loader.loadAsync('/assets/textures/saltwing-eye.webp'),
+    loader.loadAsync('/assets/textures/saltwing-eye-normal.webp'),
+    loader.loadAsync('/assets/textures/saltwing-eye-roughness.webp'),
     loader.loadAsync('/assets/textures/refractory-clay.webp'),
     loader.loadAsync('/assets/textures/refractory-clay-normal.webp'),
     loader.loadAsync('/assets/textures/refractory-clay-roughness.webp'),
@@ -299,6 +362,27 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     [fishEye, 'pelagic-fish-eye-albedo'],
     [fishEyeNormal, 'pelagic-fish-eye-normal'],
     [fishEyeRoughness, 'pelagic-fish-eye-roughness'],
+    [cropLeaf, 'salt-crown-leaf-albedo'],
+    [cropLeafNormal, 'salt-crown-leaf-normal'],
+    [cropLeafRoughness, 'salt-crown-leaf-roughness'],
+    [cropDry, 'salt-crown-dry-leaf-albedo'],
+    [cropDryNormal, 'salt-crown-dry-leaf-normal'],
+    [cropDryRoughness, 'salt-crown-dry-leaf-roughness'],
+    [cropFruit, 'salt-crown-fruit-albedo'],
+    [cropFruitNormal, 'salt-crown-fruit-normal'],
+    [cropFruitRoughness, 'salt-crown-fruit-roughness'],
+    [birdFeather, 'saltwing-body-feather-albedo'],
+    [birdFeatherNormal, 'saltwing-body-feather-normal'],
+    [birdFeatherRoughness, 'saltwing-body-feather-roughness'],
+    [birdWing, 'saltwing-flight-feather-albedo'],
+    [birdWingNormal, 'saltwing-flight-feather-normal'],
+    [birdWingRoughness, 'saltwing-flight-feather-roughness'],
+    [birdBeak, 'saltwing-keratin-albedo'],
+    [birdBeakNormal, 'saltwing-keratin-normal'],
+    [birdBeakRoughness, 'saltwing-keratin-roughness'],
+    [birdEye, 'saltwing-eye-albedo'],
+    [birdEyeNormal, 'saltwing-eye-normal'],
+    [birdEyeRoughness, 'saltwing-eye-roughness'],
   ];
   textureNames.forEach(([texture, name]) => {
     texture.name = name;
@@ -416,6 +500,30 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   planterSoil.colorSpace = SRGBColorSpace;
   planterSoilNormal.colorSpace = NoColorSpace;
   planterSoilRoughness.colorSpace = NoColorSpace;
+
+  const plantingMaterialSets = [
+    [cropLeaf, cropLeafNormal, cropLeafRoughness, 1, 1],
+    [cropDry, cropDryNormal, cropDryRoughness, 1, 1],
+    [cropFruit, cropFruitNormal, cropFruitRoughness, 1.1, 1.1],
+    [birdFeather, birdFeatherNormal, birdFeatherRoughness, 1, 1],
+    [birdWing, birdWingNormal, birdWingRoughness, 0.72, 0.72],
+    [birdBeak, birdBeakNormal, birdBeakRoughness, 1.35, 1.35],
+  ] as const;
+  for (const [albedo, normal, roughness, repeatX, repeatY] of plantingMaterialSets) {
+    for (const texture of [albedo, normal, roughness]) {
+      texture.wrapS = RepeatWrapping;
+      texture.wrapT = RepeatWrapping;
+      texture.repeat.set(repeatX, repeatY);
+      texture.anisotropy = anisotropy;
+    }
+    albedo.colorSpace = SRGBColorSpace;
+    normal.colorSpace = NoColorSpace;
+    roughness.colorSpace = NoColorSpace;
+  }
+  for (const texture of [birdEye, birdEyeNormal, birdEyeRoughness]) texture.anisotropy = anisotropy;
+  birdEye.colorSpace = SRGBColorSpace;
+  birdEyeNormal.colorSpace = NoColorSpace;
+  birdEyeRoughness.colorSpace = NoColorSpace;
 
   for (const texture of [refractoryClay, refractoryClayNormal, refractoryClayRoughness]) {
     texture.wrapS = RepeatWrapping;
@@ -538,6 +646,27 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     planterSoil,
     planterSoilNormal,
     planterSoilRoughness,
+    cropLeaf,
+    cropLeafNormal,
+    cropLeafRoughness,
+    cropDry,
+    cropDryNormal,
+    cropDryRoughness,
+    cropFruit,
+    cropFruitNormal,
+    cropFruitRoughness,
+    birdFeather,
+    birdFeatherNormal,
+    birdFeatherRoughness,
+    birdWing,
+    birdWingNormal,
+    birdWingRoughness,
+    birdBeak,
+    birdBeakNormal,
+    birdBeakRoughness,
+    birdEye,
+    birdEyeNormal,
+    birdEyeRoughness,
     refractoryClay,
     refractoryClayNormal,
     refractoryClayRoughness,
@@ -809,13 +938,89 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       emissiveMap: textures.phosphorGlass,
       emissiveIntensity: 0.18,
     }),
-    cropLeaf: new MeshStandardMaterial({ color: 0x5f8c54, roughness: 0.86, side: DoubleSide }),
-    cropDry: new MeshStandardMaterial({ color: 0x9b7750, roughness: 0.98, side: DoubleSide }),
-    cropFruit: new MeshStandardMaterial({ color: 0xb6c65f, roughness: 0.76, flatShading: true }),
-    birdFeather: new MeshStandardMaterial({ color: 0xb8c4bc, roughness: 0.82, flatShading: true }),
-    birdWing: new MeshStandardMaterial({ color: 0x536f70, roughness: 0.88, side: DoubleSide, flatShading: true }),
-    birdBeak: new MeshStandardMaterial({ color: 0xd39a55, roughness: 0.78, flatShading: true }),
-    birdEye: new MeshStandardMaterial({ color: 0x111716, roughness: 0.24 }),
+    cropLeaf: new MeshStandardMaterial({
+      color: 0xd6e2ce,
+      map: textures.cropLeaf,
+      normalMap: textures.cropLeafNormal,
+      normalScale: new Vector2(0.34, 0.34),
+      roughnessMap: textures.cropLeafRoughness,
+      roughness: 0.8,
+      metalness: 0,
+      side: DoubleSide,
+      emissive: 0x315431,
+      emissiveMap: textures.cropLeaf,
+      emissiveIntensity: 0.48,
+    }),
+    cropDry: new MeshStandardMaterial({
+      color: 0xe0caa2,
+      map: textures.cropDry,
+      normalMap: textures.cropDryNormal,
+      normalScale: new Vector2(0.42, 0.42),
+      roughnessMap: textures.cropDryRoughness,
+      roughness: 0.98,
+      metalness: 0,
+      side: DoubleSide,
+      emissive: 0x5c431c,
+      emissiveMap: textures.cropDry,
+      emissiveIntensity: 0.34,
+    }),
+    cropFruit: new MeshStandardMaterial({
+      color: 0xe5dda9,
+      map: textures.cropFruit,
+      normalMap: textures.cropFruitNormal,
+      normalScale: new Vector2(0.3, 0.3),
+      roughnessMap: textures.cropFruitRoughness,
+      roughness: 0.68,
+      metalness: 0,
+      flatShading: true,
+    }),
+    birdFeather: new MeshStandardMaterial({
+      color: 0xd1dad4,
+      map: textures.birdFeather,
+      normalMap: textures.birdFeatherNormal,
+      normalScale: new Vector2(0.3, 0.3),
+      roughnessMap: textures.birdFeatherRoughness,
+      roughness: 0.9,
+      metalness: 0,
+      flatShading: true,
+      emissive: 0x303c38,
+      emissiveMap: textures.birdFeather,
+      emissiveIntensity: 0.25,
+    }),
+    birdWing: new MeshStandardMaterial({
+      color: 0xb8ccc6,
+      map: textures.birdWing,
+      normalMap: textures.birdWingNormal,
+      normalScale: new Vector2(0.36, 0.36),
+      roughnessMap: textures.birdWingRoughness,
+      roughness: 0.92,
+      metalness: 0,
+      side: DoubleSide,
+      flatShading: true,
+      emissive: 0x183d39,
+      emissiveMap: textures.birdWing,
+      emissiveIntensity: 0.38,
+    }),
+    birdBeak: new MeshStandardMaterial({
+      color: 0xe7d3ad,
+      map: textures.birdBeak,
+      normalMap: textures.birdBeakNormal,
+      normalScale: new Vector2(0.24, 0.24),
+      roughnessMap: textures.birdBeakRoughness,
+      roughness: 0.74,
+      metalness: 0,
+      flatShading: true,
+    }),
+    birdEye: new MeshStandardMaterial({
+      color: 0xffffff,
+      map: textures.birdEye,
+      normalMap: textures.birdEyeNormal,
+      normalScale: new Vector2(0.1, 0.1),
+      roughnessMap: textures.birdEyeRoughness,
+      roughness: 0.42,
+      metalness: 0,
+      side: DoubleSide,
+    }),
   };
 }
 

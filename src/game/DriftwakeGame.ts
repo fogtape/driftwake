@@ -503,6 +503,7 @@ export class DriftwakeGame {
         this.audio,
         this.splashes,
         save?.raft.planting ?? createDefaultPlantingState(),
+        () => this.navigation?.getWeather() ?? { weatherPhase: 'calm', stormIntensity: 0 },
         (coordinate) =>
           (this.devices?.hasDeviceAt(coordinate) ?? false) ||
           (this.navigation?.hasDeviceAt(coordinate) ?? false) ||
@@ -981,6 +982,22 @@ export class DriftwakeGame {
     this.devices?.update(simulationSeconds, stepSeconds);
     this.navigation?.update(simulationSeconds, stepSeconds);
     this.planting?.update(simulationSeconds, stepSeconds);
+    const plantingDiagnostics = this.planting?.getDiagnostics();
+    if (plantingDiagnostics) {
+      this.mount.dataset.plantingWeatherPhase = plantingDiagnostics.climate.phase;
+      this.mount.dataset.plantingStormIntensity = plantingDiagnostics.climate.intensity.toFixed(3);
+      this.mount.dataset.plantingClimateEffect = plantingDiagnostics.climate.effect;
+      this.mount.dataset.plantingGrowthMultiplier = plantingDiagnostics.climate.growthMultiplier.toFixed(3);
+      this.mount.dataset.plantingWaterUseMultiplier = plantingDiagnostics.climate.waterUseMultiplier.toFixed(3);
+      this.mount.dataset.plantingRainfallPerSecond = plantingDiagnostics.climate.rainfallPerSecond.toFixed(4);
+      this.mount.dataset.plantingStates = JSON.stringify(plantingDiagnostics.planters);
+      this.mount.dataset.plantingCropMaterialMaps = plantingDiagnostics.cropMaterialMaps;
+      this.mount.dataset.plantingBirdMaterialMaps = plantingDiagnostics.birdMaterialMaps;
+      this.mount.dataset.plantingBirdPhase = plantingDiagnostics.birdPhase;
+      this.mount.dataset.plantingBirdRaidAllowed = String(plantingDiagnostics.birdRaidAllowed);
+      this.mount.dataset.plantingWeatherBirdDismissals = String(plantingDiagnostics.weatherBirdDismissals);
+      this.mount.dataset.plantingWeatherRainRecoveries = String(plantingDiagnostics.weatherRainRecoveries);
+    }
     this.progression?.update(simulationSeconds, stepSeconds);
     this.collectionNets?.update(simulationSeconds, stepSeconds);
     const collectionNetDiagnostics = this.collectionNets?.getDiagnostics();

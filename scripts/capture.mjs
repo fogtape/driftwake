@@ -243,6 +243,7 @@ const plantingInteractionSave = {
   },
   raft: {
     ...plantingPlacementSave.raft,
+    devices: [],
     planting: {
       birdClock: 0,
       birdVisit: 0,
@@ -283,6 +284,112 @@ const plantingBirdSave = {
           growth: 1,
           water: 0,
           drySeconds: 0,
+          birdDamage: 0,
+        },
+      ],
+    },
+  },
+};
+
+const plantingWeatherSave = {
+  ...plantingPlacementSave,
+  player: {
+    ...plantingPlacementSave.player,
+    inventory: { hook: 1 },
+    navigation: { surface: 'raft', x: 0, z: 1.08 },
+  },
+  raft: {
+    ...plantingPlacementSave.raft,
+    devices: [],
+    navigation: {
+      ...plantingPlacementSave.raft.navigation,
+      weatherClock: 143,
+      devices: plantingPlacementSave.raft.navigation.devices.filter((device) => device.type === 'anchor'),
+    },
+    planting: {
+      birdClock: 0,
+      birdVisit: 1,
+      birdPhase: 'circling',
+      birdElapsed: 1,
+      birdTargetId: 'weather-dry-planter',
+      planters: [
+        {
+          id: 'weather-dry-planter',
+          x: 0,
+          z: -1,
+          rotation: 0,
+          phase: 'dry',
+          growth: 0.52,
+          water: 0,
+          drySeconds: 35.9,
+          birdDamage: 0,
+        },
+        {
+          id: 'weather-sown-planter',
+          x: 1,
+          z: -1,
+          rotation: 0,
+          phase: 'sown',
+          growth: 0,
+          water: 0,
+          drySeconds: 0,
+          birdDamage: 0,
+        },
+      ],
+    },
+  },
+};
+
+const plantingMaterialSave = {
+  ...plantingPlacementSave,
+  player: {
+    ...plantingPlacementSave.player,
+    inventory: { hook: 1 },
+    navigation: { surface: 'raft', x: 0, z: 1.08 },
+  },
+  raft: {
+    ...plantingPlacementSave.raft,
+    devices: [],
+    navigation: {
+      ...plantingPlacementSave.raft.navigation,
+      weatherClock: 38,
+      devices: plantingPlacementSave.raft.navigation.devices.filter((device) => device.type === 'anchor'),
+    },
+    planting: {
+      birdClock: 0,
+      birdVisit: 0,
+      planters: [
+        {
+          id: 'material-living-planter',
+          x: -1,
+          z: -1,
+          rotation: 0,
+          phase: 'growing',
+          growth: 0.78,
+          water: 0.72,
+          drySeconds: 0,
+          birdDamage: 0,
+        },
+        {
+          id: 'material-mature-planter',
+          x: 0,
+          z: -1,
+          rotation: 0,
+          phase: 'mature',
+          growth: 1,
+          water: 0,
+          drySeconds: 0,
+          birdDamage: 0,
+        },
+        {
+          id: 'material-withered-planter',
+          x: 1,
+          z: -1,
+          rotation: 0,
+          phase: 'withered',
+          growth: 0.74,
+          water: 0,
+          drySeconds: 36,
           birdDamage: 0,
         },
       ],
@@ -4935,23 +5042,118 @@ async function aimAroundToPrompt(page, expected) {
   return prompt;
 }
 
+const PLANTING_CROP_MATERIAL_MAPS = [
+  'salt-crown-leaf-albedo',
+  'salt-crown-leaf-normal',
+  'salt-crown-leaf-roughness',
+  'salt-crown-dry-leaf-albedo',
+  'salt-crown-dry-leaf-normal',
+  'salt-crown-dry-leaf-roughness',
+  'salt-crown-fruit-albedo',
+  'salt-crown-fruit-normal',
+  'salt-crown-fruit-roughness',
+].join('|');
+
+const PLANTING_BIRD_MATERIAL_MAPS = [
+  'saltwing-body-feather-albedo',
+  'saltwing-body-feather-normal',
+  'saltwing-body-feather-roughness',
+  'saltwing-flight-feather-albedo',
+  'saltwing-flight-feather-normal',
+  'saltwing-flight-feather-roughness',
+  'saltwing-keratin-albedo',
+  'saltwing-keratin-normal',
+  'saltwing-keratin-roughness',
+  'saltwing-eye-albedo',
+  'saltwing-eye-normal',
+  'saltwing-eye-roughness',
+].join('|');
+
+async function readPlantingSnapshot(page) {
+  return page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    let planters = [];
+    try {
+      planters = JSON.parse(data?.plantingStates ?? '[]');
+    } catch {
+      planters = [];
+    }
+    return {
+      weatherPhase: data?.plantingWeatherPhase ?? 'missing',
+      stormIntensity: Number(data?.plantingStormIntensity),
+      climateEffect: data?.plantingClimateEffect ?? 'missing',
+      growthMultiplier: Number(data?.plantingGrowthMultiplier),
+      waterUseMultiplier: Number(data?.plantingWaterUseMultiplier),
+      rainfallPerSecond: Number(data?.plantingRainfallPerSecond),
+      birdPhase: data?.plantingBirdPhase ?? 'missing',
+      birdRaidAllowed: data?.plantingBirdRaidAllowed ?? 'missing',
+      weatherBirdDismissals: Number(data?.plantingWeatherBirdDismissals),
+      weatherRainRecoveries: Number(data?.plantingWeatherRainRecoveries),
+      cropMaterialMaps: data?.plantingCropMaterialMaps ?? 'missing',
+      birdMaterialMaps: data?.plantingBirdMaterialMaps ?? 'missing',
+      planters,
+      contextHealthy: data?.contextHealthy ?? 'missing',
+      simulationActive: data?.simulationActive ?? 'missing',
+      hud: document.querySelector('.device-status--planter')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      prompt: document.querySelector('.interaction-prompt')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      notices: globalThis.__driftwakeCaptureNotices ?? [],
+    };
+  });
+}
+
+function validatePlantingMaterials(snapshot, label) {
+  if (
+    snapshot.cropMaterialMaps !== PLANTING_CROP_MATERIAL_MAPS
+    || snapshot.birdMaterialMaps !== PLANTING_BIRD_MATERIAL_MAPS
+    || snapshot.contextHealthy !== 'true'
+    || snapshot.simulationActive !== 'true'
+  ) {
+    throw new Error(`${label} material/context gate failed: ${JSON.stringify(snapshot)}`);
+  }
+}
+
+async function capturePlantingFrame(page, filename, label) {
+  const layout = await readCookingLayout(page);
+  validateCookingLayout(layout, label);
+  const compositedFrame = await inspectCanvasPixels(page, label);
+  const outputPath = new URL(filename, outputDir).pathname;
+  if (compositedFrame) await writeFile(outputPath, Buffer.from(compositedFrame, 'base64'));
+  else await captureCompositedPage(page, outputPath);
+  return layout;
+}
+
 async function capturePlantingPlacement() {
   const { context, page } = await openDesktopPage('planting-placement', { seedSave: true, plantingPlacementStart: true });
   await enterGame(page);
   await page.keyboard.press('KeyI');
   await page.getByRole('dialog', { name: '野外背包' }).waitFor();
-  await page.getByRole('button', { name: /潮生作物盆套件/ }).click();
-  await page.getByRole('button', { name: '安置到木筏' }).click();
+  const planterKit = page.getByRole('button', { name: /潮生作物盆套件/ });
+  await planterKit.waitFor({ state: 'visible' });
+  await planterKit.evaluate((element) => element.click());
+  const placeCommand = page.getByRole('button', { name: '安置到木筏' });
+  await placeCommand.waitFor({ state: 'visible', timeout: 12_000 });
+  if (await placeCommand.isDisabled()) throw new Error('Planter placement command remained disabled after selecting the kit');
+  await placeCommand.click({ force: true });
   const placementPrompt = await aimDownToPrompt(page, '安置潮生作物盆');
   if (!placementPrompt.includes('安置潮生作物盆')) {
     await page.screenshot({ path: new URL('planting-placement-diagnostic.png', outputDir).pathname });
     throw new Error(`Expected planter placement prompt, received: ${placementPrompt}`);
   }
   await page.mouse.click(desktopWidth / 2, desktopHeight / 2);
-  await page.waitForFunction(() => document.querySelector('.loot-notice')?.textContent?.includes('作物盆已固定'), null, { timeout: 4_000 });
-  await page.locator('.device-status--planter').waitFor({ timeout: 4_000 });
-  await inspectCanvasPixels(page, 'planting-placement');
-  await page.screenshot({ path: new URL('planting-placement-desktop.png', outputDir).pathname });
+  await waitForRuntime(
+    page,
+    () => document.querySelector('.loot-notice')?.textContent?.includes('作物盆已固定'),
+    12_000,
+  );
+  await waitForRuntime(
+    page,
+    () => document.querySelector('.device-status--planter') !== null,
+    12_000,
+  );
+  const compositedFrame = await inspectCanvasPixels(page, 'planting-placement');
+  const screenshotPath = new URL('planting-placement-desktop.png', outputDir).pathname;
+  if (compositedFrame) await writeFile(screenshotPath, Buffer.from(compositedFrame, 'base64'));
+  else await captureCompositedPage(page, screenshotPath);
   await context.close();
 }
 
@@ -4979,13 +5181,21 @@ async function capturePlantingInteraction() {
     throw new Error(`Expected planting prompt, received: ${prompt}; ${JSON.stringify(diagnostic)}`);
   }
   await page.keyboard.press('KeyE');
-  await page.locator('.interaction-prompt').filter({ hasText: '浇入一杯蒸馏淡水' }).waitFor({ timeout: 4_000 });
+  await waitForRuntime(
+    page,
+    () => document.querySelector('.interaction-prompt')?.textContent?.includes('浇入一杯蒸馏淡水'),
+    12_000,
+  );
   await page.keyboard.press('KeyE');
-  await page.locator('.interaction-prompt').filter({ hasText: '生长' }).waitFor({ timeout: 4_000 });
-  await page.waitForFunction(
+  await waitForRuntime(
+    page,
+    () => document.querySelector('.interaction-prompt')?.textContent?.includes('生长'),
+    12_000,
+  );
+  await waitForRuntime(
+    page,
     () => document.querySelector('.device-status--planter')?.classList.contains('device-status--working'),
-    null,
-    { timeout: 4_000 },
+    12_000,
   ).catch(async (error) => {
     const planterStatus = await page.locator('.device-status--planter').evaluate((element) => ({
       className: element.className,
@@ -4995,11 +5205,15 @@ async function capturePlantingInteraction() {
   });
   const emptyCupButton = page.getByRole('button', { name: /折边聚合杯/ });
   await page.keyboard.press('KeyI');
-  await emptyCupButton.waitFor({ timeout: 4_000 });
+  await emptyCupButton.waitFor({ state: 'visible', timeout: 12_000 });
   await page.keyboard.press('KeyI');
-  await page.getByRole('button', { name: '继续漂流' }).click();
+  const resumeButton = page.getByRole('button', { name: '继续漂流' });
+  await resumeButton.waitFor({ state: 'visible', timeout: 12_000 });
+  if (await resumeButton.isDisabled()) throw new Error('Continue drifting command remained disabled after closing the backpack');
+  await resumeButton.click({ force: true, timeout: 12_000 });
   await ensurePointerLock(page);
   await assertHookVisualOwnership(page, 'planting-interaction-resumed', 'held');
+  validatePlantingMaterials(await readPlantingSnapshot(page), 'Planting interaction');
   await inspectCanvasPixels(page, 'planting-interaction');
   if (process.env.CAPTURE_FAST !== '1') {
     await captureCompositedPage(page, new URL('planting-interaction-desktop.png', outputDir).pathname);
@@ -5007,8 +5221,98 @@ async function capturePlantingInteraction() {
   await context.close();
 }
 
+async function capturePlantingWeather() {
+  const { context, page } = await openDesktopPage('planting-weather', {
+    seedSave: true,
+    customSave: plantingWeatherSave,
+    simulationTimeScale: 4,
+    quality: 'high',
+    width: 1024,
+    height: 640,
+  });
+  await installNoticeHistory(page);
+  await enterGame(page);
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.plantingWeatherPhase === 'storm'
+      && data?.plantingClimateEffect === 'rain'
+      && (data?.plantingStates?.match(/\"phase\":\"growing\"/g)?.length ?? 0) === 2;
+  }, 12_000).catch(async (error) => {
+    const diagnostic = await readPlantingSnapshot(page);
+    await captureCompositedPage(
+      page,
+      new URL('planting-weather-diagnostic.png', outputDir).pathname,
+    ).catch(() => undefined);
+    throw new Error(`Planting weather recovery timed out: ${JSON.stringify(diagnostic)}`, { cause: error });
+  });
+  const snapshot = await readPlantingSnapshot(page);
+  validatePlantingMaterials(snapshot, 'Planting weather');
+  const dryRecovery = snapshot.planters.find((planter) => planter.id === 'weather-dry-planter');
+  const rainGermination = snapshot.planters.find((planter) => planter.id === 'weather-sown-planter');
+  if (
+    snapshot.weatherPhase !== 'storm'
+    || snapshot.climateEffect !== 'rain'
+    || Math.abs(snapshot.growthMultiplier - 0.72) > 0.001
+    || Math.abs(snapshot.waterUseMultiplier - 0.55) > 0.001
+    || Math.abs(snapshot.rainfallPerSecond - 0.024) > 0.0001
+    || dryRecovery?.phase !== 'growing'
+    || dryRecovery.growth <= 0.52
+    || dryRecovery.water <= 0
+    || dryRecovery.drySeconds !== 0
+    || rainGermination?.phase !== 'growing'
+    || rainGermination.growth <= 0
+    || rainGermination.water <= 0
+    || !['fleeing', 'absent'].includes(snapshot.birdPhase)
+    || snapshot.birdRaidAllowed !== 'false'
+    || snapshot.weatherBirdDismissals !== 1
+    || snapshot.weatherRainRecoveries !== 2
+    || !snapshot.hud.includes('雨水补给')
+    || !snapshot.notices.some((notice) => notice.includes('风暴雨水'))
+    || !snapshot.notices.some((notice) => notice.includes('驱散盐翼盗鸟'))
+  ) {
+    throw new Error(`Planting weather contract failed: ${JSON.stringify(snapshot)}`);
+  }
+  await ensurePointerLock(page);
+  const prompt = await aimLocalPointToPrompt(page, [0, 0.72, -1.38], '生长', 10);
+  if (!prompt.includes('生长')) throw new Error(`Planting weather focus failed: ${JSON.stringify(await readPlantingSnapshot(page))}`);
+  await setCaptureTimeScale(page, 0.0001);
+  const layout = await capturePlantingFrame(page, 'planting-weather-desktop.png', 'planting-weather');
+  console.log(`Planting weather gate: ${JSON.stringify({ snapshot: await readPlantingSnapshot(page), layout })}`);
+  await context.close();
+}
+
+async function capturePlantingMaterials() {
+  const { context, page } = await openDesktopPage('planting-materials', {
+    seedSave: true,
+    customSave: plantingMaterialSave,
+    quality: 'high',
+    width: 1024,
+    height: 640,
+  });
+  await enterGame(page);
+  await ensurePointerLock(page);
+  const prompt = await aimLocalPointToPrompt(page, [0, 0.74, -1.38], '收获', 12);
+  if (!prompt.includes('收获')) throw new Error(`Planting material focus failed: ${JSON.stringify(await readPlantingSnapshot(page))}`);
+  await setCaptureTimeScale(page, 0.0001);
+  const snapshot = await readPlantingSnapshot(page);
+  validatePlantingMaterials(snapshot, 'Planting crop visual');
+  const phases = new Set(snapshot.planters.map((planter) => planter.phase));
+  if (!phases.has('growing') || !phases.has('mature') || !phases.has('withered')) {
+    throw new Error(`Planting crop phase composition failed: ${JSON.stringify(snapshot)}`);
+  }
+  const layout = await capturePlantingFrame(page, 'planting-crop-materials-desktop.png', 'planting-crop-materials');
+  console.log(`Planting crop material gate: ${JSON.stringify({ snapshot, layout })}`);
+  await context.close();
+}
+
 async function capturePlantingBird() {
-  const { context, page } = await openDesktopPage('planting-bird', { seedSave: true, plantingBirdStart: true });
+  const { context, page } = await openDesktopPage('planting-bird', {
+    seedSave: true,
+    plantingBirdStart: true,
+    quality: 'high',
+    width: 1024,
+    height: 640,
+  });
   await enterGame(page);
   await ensurePointerLock(page);
   await assertHookVisualOwnership(page, 'planting-bird', 'held');
@@ -5021,13 +5325,27 @@ async function capturePlantingBird() {
     const warning = await page.locator('.crop-warning').getAttribute('class');
     throw new Error(`Bird interaction prompt missing: prompt=${prompt}; warning=${warning}`, { cause: error });
   });
-  await inspectCanvasPixels(page, 'planting-bird');
+  await setCaptureTimeScale(page, 0.0001);
+  const snapshot = await readPlantingSnapshot(page);
+  validatePlantingMaterials(snapshot, 'Planting bird visual');
   if (process.env.CAPTURE_FAST !== '1') {
-    await captureCompositedPage(page, new URL('planting-bird-desktop.png', outputDir).pathname);
+    const layout = await capturePlantingFrame(page, 'planting-bird-desktop.png', 'planting-bird');
+    console.log(`Planting bird material gate: ${JSON.stringify({ snapshot, layout })}`);
+  } else {
+    await inspectCanvasPixels(page, 'planting-bird');
   }
+  await setCaptureTimeScale(page, 1);
   await page.keyboard.press('KeyE');
-  await page.waitForFunction(() => document.querySelector('.loot-notice')?.textContent?.includes('被惊飞'), null, { timeout: 4_000 });
-  await page.waitForFunction(() => !document.querySelector('.crop-warning')?.classList.contains('is-visible'), null, { timeout: 4_000 });
+  await waitForRuntime(
+    page,
+    () => document.querySelector('.loot-notice')?.textContent?.includes('被惊飞'),
+    10_000,
+  );
+  await waitForRuntime(
+    page,
+    () => !document.querySelector('.crop-warning')?.classList.contains('is-visible'),
+    10_000,
+  );
   await context.close();
 }
 
@@ -7815,9 +8133,11 @@ try {
   if (captureOnly === 'all' || captureOnly === 'cooking') await captureCooking();
   if (captureOnly === 'all' || captureOnly === 'advanced') await captureAdvancedDevices();
   if (captureOnly === 'all' || captureOnly === 'signal') await captureSignalNetwork();
-  if (captureOnly === 'all' || captureOnly === 'planting-placement') await capturePlantingPlacement();
-  if (captureOnly === 'all' || captureOnly === 'planting-interaction') await capturePlantingInteraction();
-  if (captureOnly === 'all' || captureOnly === 'planting-bird') await capturePlantingBird();
+  if (captureOnly === 'all' || captureOnly === 'planting' || captureOnly === 'planting-placement') await capturePlantingPlacement();
+  if (captureOnly === 'all' || captureOnly === 'planting' || captureOnly === 'planting-interaction') await capturePlantingInteraction();
+  if (captureOnly === 'all' || captureOnly === 'planting' || captureOnly === 'planting-weather') await capturePlantingWeather();
+  if (captureOnly === 'all' || captureOnly === 'planting' || captureOnly === 'planting-materials') await capturePlantingMaterials();
+  if (captureOnly === 'all' || captureOnly === 'planting' || captureOnly === 'planting-bird') await capturePlantingBird();
   if (captureOnly === 'all' || captureOnly === 'progression-placement') await captureProgressionPlacement();
   if (captureOnly === 'all' || captureOnly === 'progression-research') await captureProgressionResearch();
   if (captureOnly === 'all' || captureOnly === 'progression-smelting') await captureProgressionSmelting();

@@ -687,10 +687,19 @@ export function Hud({
                 : planting.mature > 0
                   ? '可收获'
                   : planting.growing > 0
-                    ? '生长中'
+                    ? planting.climateEffect === 'rain'
+                      ? '雨水补给'
+                      : planting.climateEffect === 'drizzle'
+                        ? '余雨润土'
+                        : planting.climateEffect === 'wind'
+                          ? '强风耗水'
+                          : '生长中'
                     : '待播种';
           return (
-            <div className={`device-status device-status--planter device-status--${phase}`}>
+            <div
+              className={`device-status device-status--planter device-status--${phase} is-climate-${planting.climateEffect}`}
+              aria-label={`作物盆 ${label} ${planting.climateLabel} 生长倍率${planting.growthMultiplier.toFixed(2)} 水耗倍率${planting.waterUseMultiplier.toFixed(2)}`}
+            >
               <Sprout size={18} />
               <div>
                 <span>作物盆</span>

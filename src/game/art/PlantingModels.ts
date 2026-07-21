@@ -1,6 +1,7 @@
 import {
   BoxGeometry,
   BufferGeometry,
+  CircleGeometry,
   ConeGeometry,
   CylinderGeometry,
   DoubleSide,
@@ -232,6 +233,17 @@ export function createPlanterModel(materials: MaterialLibrary): Group {
     seedMarker,
     highlight,
   } satisfies PlanterModelVisuals;
+  planter.userData.materialMaps = [
+    materials.cropLeaf.map?.name ?? 'none',
+    materials.cropLeaf.normalMap?.name ?? 'none',
+    materials.cropLeaf.roughnessMap?.name ?? 'none',
+    materials.cropDry.map?.name ?? 'none',
+    materials.cropDry.normalMap?.name ?? 'none',
+    materials.cropDry.roughnessMap?.name ?? 'none',
+    materials.cropFruit.map?.name ?? 'none',
+    materials.cropFruit.normalMap?.name ?? 'none',
+    materials.cropFruit.roughnessMap?.name ?? 'none',
+  ].join('|');
   return planter;
 }
 
@@ -272,9 +284,16 @@ export function createSaltwingBirdModel(materials: MaterialLibrary): Group {
   beak.rotation.x = Math.PI / 2;
   head.add(skull, beak);
   for (const side of [-1, 1]) {
-    const eye = new Mesh(new SphereGeometry(0.022, 8, 6), materials.birdEye);
-    eye.position.set(side * 0.105, 0.025, 0.055);
-    head.add(eye);
+    const eye = new Mesh(new CircleGeometry(0.026, 20), materials.birdEye);
+    eye.name = `saltwing-eye-${side < 0 ? 'left' : 'right'}`;
+    eye.position.set(side * 0.116, 0.025, 0.055);
+    eye.rotation.y = side * Math.PI / 2;
+    eye.renderOrder = 2;
+    const eyeRim = shadowed(new Mesh(new TorusGeometry(0.028, 0.003, 5, 18), materials.birdWing));
+    eyeRim.position.copy(eye.position);
+    eyeRim.position.x += side * -0.001;
+    eyeRim.rotation.copy(eye.rotation);
+    head.add(eyeRim, eye);
     const brow = shadowed(new Mesh(createFeatherGeometry(0.11, 0.045), materials.birdWing));
     brow.position.set(side * 0.07, 0.105, -0.02);
     brow.rotation.set(-0.8, side * 0.16, side * 0.16);
@@ -314,5 +333,19 @@ export function createSaltwingBirdModel(materials: MaterialLibrary): Group {
   bird.add(feet);
 
   bird.userData.birdVisuals = { leftWing, rightWing, head, tail, feet } satisfies BirdModelVisuals;
+  bird.userData.materialMaps = [
+    materials.birdFeather.map?.name ?? 'none',
+    materials.birdFeather.normalMap?.name ?? 'none',
+    materials.birdFeather.roughnessMap?.name ?? 'none',
+    materials.birdWing.map?.name ?? 'none',
+    materials.birdWing.normalMap?.name ?? 'none',
+    materials.birdWing.roughnessMap?.name ?? 'none',
+    materials.birdBeak.map?.name ?? 'none',
+    materials.birdBeak.normalMap?.name ?? 'none',
+    materials.birdBeak.roughnessMap?.name ?? 'none',
+    materials.birdEye.map?.name ?? 'none',
+    materials.birdEye.normalMap?.name ?? 'none',
+    materials.birdEye.roughnessMap?.name ?? 'none',
+  ].join('|');
   return bird;
 }

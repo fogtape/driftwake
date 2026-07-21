@@ -1,9 +1,27 @@
 import type { ItemBundle, ItemId } from './items';
 import { normalizeRotation } from './devices';
+import type { NavigationWeatherPhase } from './navigation';
 
 export type PlanterPhase = 'empty' | 'sown' | 'growing' | 'dry' | 'mature' | 'withered';
-export type PlanterEvent = 'none' | 'dry' | 'mature' | 'withered';
+export type PlanterEvent = 'none' | 'dry' | 'rainwater' | 'mature' | 'withered';
 export type CropBirdPhase = 'absent' | 'circling' | 'diving' | 'feeding' | 'fleeing';
+export type PlantingClimateEffect = 'steady' | 'wind' | 'rain' | 'drizzle';
+
+export interface PlantingWeatherInput {
+  weatherPhase: NavigationWeatherPhase;
+  stormIntensity: number;
+}
+
+export interface PlantingClimate {
+  phase: NavigationWeatherPhase;
+  intensity: number;
+  effect: PlantingClimateEffect;
+  label: string;
+  growthMultiplier: number;
+  waterUseMultiplier: number;
+  rainfallPerSecond: number;
+  dryTimeMultiplier: number;
+}
 
 export interface SavedPlanterState {
   id: string;
@@ -33,6 +51,17 @@ export const PLANT_DRY_GRACE_SECONDS = 36;
 export const PLANT_MAX_BIRD_DAMAGE = 2;
 export const PLANT_BIRD_DAMAGE_PER_SECOND = 0.19;
 
+export const DEFAULT_PLANTING_CLIMATE: PlantingClimate = {
+  phase: 'calm',
+  intensity: 0,
+  effect: 'steady',
+  label: '海况平稳',
+  growthMultiplier: 1,
+  waterUseMultiplier: 1,
+  rainfallPerSecond: 0,
+  dryTimeMultiplier: 1,
+};
+
 export const PLANTER_DEFINITION = {
   name: '潮生作物盆',
   kitItem: 'planterKit' as Extract<ItemId, 'planterKit'>,
@@ -47,6 +76,53 @@ function clamp01(value: number): number {
 
 function finite(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+export function plantingClimateFromWeather(
+  weather: PlantingWeatherInput = { weatherPhase: 'calm', stormIntensity: 0 },
+): PlantingClimate {
+  const intensity = clamp01(weather.stormIntensity);
+  if (weather.weatherPhase === 'building') {
+    return {
+      phase: 'building',
+      intensity,
+      effect: intensity > 0.08 ? 'wind' : 'steady',
+      label: intensity > 0.55 ? '强风耗水' : '风起蒸腾',
+      growthMultiplier: 1 - intensity * 0.1,
+      waterUseMultiplier: 1 + intensity * 0.3,
+      rainfallPerSecond: 0,
+      dryTimeMultiplier: 1 + intensity * 0.25,
+    };
+  }
+  if (weather.weatherPhase === 'storm') {
+    return {
+      phase: 'storm',
+      intensity,
+      effect: 'rain',
+      label: '风暴雨养',
+      growthMultiplier: 0.72,
+      waterUseMultiplier: 0.55,
+      rainfallPerSecond: 0.024 * intensity,
+      dryTimeMultiplier: 0,
+    };
+  }
+  if (weather.weatherPhase === 'clearing') {
+    return {
+      phase: 'clearing',
+      intensity,
+      effect: intensity > 0.08 ? 'drizzle' : 'steady',
+      label: intensity > 0.45 ? '余雨润土' : '海况转稳',
+      growthMultiplier: 0.82 + (1 - intensity) * 0.18,
+      waterUseMultiplier: 0.7 + (1 - intensity) * 0.3,
+      rainfallPerSecond: 0.021 * intensity,
+      dryTimeMultiplier: 0.4 + (1 - intensity) * 0.6,
+    };
+  }
+  return DEFAULT_PLANTING_CLIMATE;
+}
+
+export function birdRaidAllowedInClimate(climate: PlantingClimate): boolean {
+  return climate.effect !== 'rain' || climate.intensity < 0.55;
 }
 
 export function createPlanterState(
@@ -81,13 +157,24 @@ export function waterPlanter(planter: SavedPlanterState): SavedPlanterState {
 export function advancePlanter(
   planter: SavedPlanterState,
   seconds: number,
+  climate: PlantingClimate = DEFAULT_PLANTING_CLIMATE,
 ): { planter: SavedPlanterState; event: PlanterEvent } {
-  if (seconds <= 0 || !Number.isFinite(seconds) || (planter.phase !== 'growing' && planter.phase !== 'dry')) {
+  if (seconds <= 0 || !Number.isFinite(seconds)) {
     return { planter, event: 'none' };
   }
 
-  if (planter.phase === 'dry') {
-    const drySeconds = planter.drySeconds + seconds;
+  const rainfall = Math.max(0, finite(climate.rainfallPerSecond));
+  const waterUse = Math.max(0, finite(climate.waterUseMultiplier, 1)) / PLANT_WATER_SECONDS;
+  const netWater = rainfall - waterUse;
+  let active = planter;
+  let revivedByRain = false;
+
+  if ((planter.phase === 'sown' || planter.phase === 'dry') && netWater > 0.000001) {
+    active = { ...planter, phase: 'growing', water: 0, drySeconds: 0 };
+    revivedByRain = true;
+  } else if (planter.phase === 'dry') {
+    const dryRate = Math.max(0, finite(climate.dryTimeMultiplier, 1));
+    const drySeconds = planter.drySeconds + seconds * dryRate;
     if (drySeconds >= PLANT_DRY_GRACE_SECONDS) {
       return {
         planter: { ...planter, phase: 'withered', water: 0, drySeconds: PLANT_DRY_GRACE_SECONDS },
@@ -97,31 +184,42 @@ export function advancePlanter(
     return { planter: { ...planter, drySeconds }, event: 'none' };
   }
 
-  const wetSeconds = Math.min(seconds, planter.water * PLANT_WATER_SECONDS);
-  const growth = Math.min(1, planter.growth + wetSeconds / PLANT_GROWTH_SECONDS);
-  const water = Math.max(0, planter.water - wetSeconds / PLANT_WATER_SECONDS);
-  if (growth >= 1) {
+  if (active.phase !== 'growing') return { planter, event: 'none' };
+
+  const growthRate = Math.max(0, finite(climate.growthMultiplier, 1)) / PLANT_GROWTH_SECONDS;
+  const timeToMature = growthRate > 0 ? (1 - active.growth) / growthRate : Number.POSITIVE_INFINITY;
+  const timeToDry = netWater < 0 ? active.water / -netWater : Number.POSITIVE_INFINITY;
+  if (timeToMature <= seconds && timeToMature <= timeToDry) {
+    const water = clamp01(active.water + netWater * timeToMature);
     return {
-      planter: { ...planter, phase: 'mature', growth: 1, water, drySeconds: 0 },
+      planter: { ...active, phase: 'mature', growth: 1, water, drySeconds: 0 },
       event: 'mature',
     };
   }
 
-  const remainingDrySeconds = seconds - wetSeconds;
-  if (water <= 0.0001) {
-    if (remainingDrySeconds >= PLANT_DRY_GRACE_SECONDS) {
+  if (timeToDry <= seconds) {
+    const growth = clamp01(active.growth + timeToDry * growthRate);
+    const remainingDrySeconds = seconds - timeToDry;
+    const dryRate = Math.max(0, finite(climate.dryTimeMultiplier, 1));
+    const drySeconds = remainingDrySeconds * dryRate;
+    if (drySeconds >= PLANT_DRY_GRACE_SECONDS) {
       return {
-        planter: { ...planter, phase: 'withered', growth, water: 0, drySeconds: PLANT_DRY_GRACE_SECONDS },
+        planter: { ...active, phase: 'withered', growth, water: 0, drySeconds: PLANT_DRY_GRACE_SECONDS },
         event: 'withered',
       };
     }
     return {
-      planter: { ...planter, phase: 'dry', growth, water: 0, drySeconds: remainingDrySeconds },
+      planter: { ...active, phase: 'dry', growth, water: 0, drySeconds },
       event: 'dry',
     };
   }
 
-  return { planter: { ...planter, growth, water }, event: 'none' };
+  const growth = clamp01(active.growth + seconds * growthRate);
+  const water = clamp01(active.water + seconds * netWater);
+  return {
+    planter: { ...active, growth, water, drySeconds: 0 },
+    event: revivedByRain ? 'rainwater' : 'none',
+  };
 }
 
 export function applyBirdDamage(planter: SavedPlanterState, seconds: number): SavedPlanterState {

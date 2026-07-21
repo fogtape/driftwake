@@ -5,9 +5,11 @@ import {
   PLANT_WATER_SECONDS,
   advancePlanter,
   applyBirdDamage,
+  birdRaidAllowedInClimate,
   createPlanterState,
   nextBirdVisitSeconds,
   planterHarvest,
+  plantingClimateFromWeather,
   resetPlanter,
   sanitizePlantingState,
   sowPlanter,
@@ -72,5 +74,60 @@ describe('raft planting domain', () => {
       birdTargetId: 'missing',
       planters: [],
     })).toMatchObject({ birdPhase: 'absent', birdElapsed: 0, birdTargetId: null });
+  });
+
+  it('uses the navigation weather truth to trade wind, rain and growth', () => {
+    const calm = plantingClimateFromWeather({ weatherPhase: 'calm', stormIntensity: 0 });
+    const building = plantingClimateFromWeather({ weatherPhase: 'building', stormIntensity: 1 });
+    const storm = plantingClimateFromWeather({ weatherPhase: 'storm', stormIntensity: 1 });
+    expect(building).toMatchObject({ effect: 'wind', growthMultiplier: 0.9, waterUseMultiplier: 1.3 });
+    expect(storm).toMatchObject({ effect: 'rain', growthMultiplier: 0.72, waterUseMultiplier: 0.55 });
+    expect(storm.rainfallPerSecond).toBeGreaterThan(storm.waterUseMultiplier / PLANT_WATER_SECONDS);
+    expect(birdRaidAllowedInClimate(calm)).toBe(true);
+    expect(birdRaidAllowedInClimate(building)).toBe(true);
+    expect(birdRaidAllowedInClimate(storm)).toBe(false);
+
+    const planted = waterPlanter(sowPlanter(createPlanterState(0, 0)));
+    const calmResult = advancePlanter(planted, 20, calm).planter;
+    const windyResult = advancePlanter(planted, 20, building).planter;
+    expect(windyResult.growth).toBeLessThan(calmResult.growth);
+    expect(windyResult.water).toBeLessThan(calmResult.water);
+  });
+
+  it('lets sustained storm rain germinate seeds and rescue dry crops', () => {
+    const storm = plantingClimateFromWeather({ weatherPhase: 'storm', stormIntensity: 1 });
+    const sown = sowPlanter(createPlanterState(0, 0));
+    const germinated = advancePlanter(sown, 8, storm);
+    expect(germinated.event).toBe('rainwater');
+    expect(germinated.planter.phase).toBe('growing');
+    expect(germinated.planter.water).toBeGreaterThan(0.1);
+    expect(germinated.planter.growth).toBeGreaterThan(0);
+
+    const almostWithered = {
+      ...waterPlanter(sown),
+      phase: 'dry' as const,
+      water: 0,
+      growth: 0.42,
+      drySeconds: PLANT_DRY_GRACE_SECONDS - 0.1,
+    };
+    const rescued = advancePlanter(almostWithered, 12, storm);
+    expect(rescued.event).toBe('rainwater');
+    expect(rescued.planter.phase).toBe('growing');
+    expect(rescued.planter.drySeconds).toBe(0);
+    expect(rescued.planter.water).toBeGreaterThan(0.17);
+  });
+
+  it('keeps constant-weather planting deterministic across coarse and fixed steps', () => {
+    const climate = plantingClimateFromWeather({ weatherPhase: 'building', stormIntensity: 0.82 });
+    const initial = waterPlanter(sowPlanter(createPlanterState(0, 0)));
+    const coarse = advancePlanter(initial, 72, climate).planter;
+    let stepped = initial;
+    for (let index = 0; index < 72 * 60; index += 1) {
+      stepped = advancePlanter(stepped, 1 / 60, climate).planter;
+    }
+    expect(stepped.phase).toBe(coarse.phase);
+    expect(stepped.growth).toBeCloseTo(coarse.growth, 6);
+    expect(stepped.water).toBeCloseTo(coarse.water, 6);
+    expect(stepped.drySeconds).toBeCloseTo(coarse.drySeconds, 6);
   });
 });
