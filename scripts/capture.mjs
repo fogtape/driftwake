@@ -6883,12 +6883,56 @@ async function captureUnderwater() {
   await enterGame(page);
   await page.waitForTimeout(1500);
   await page.locator('.dive-readout.is-visible').waitFor();
+  await page.waitForFunction(() => {
+    const maps = document.querySelector('.game-mount')?.dataset.underwaterMaterialMaps;
+    return Boolean(maps && maps !== 'none');
+  });
   const oxygenLabel = await page.locator('.survival-gauge--oxygen').getAttribute('aria-label');
   const depthLabel = await page.locator('.dive-readout').getAttribute('aria-label');
   console.log(`Underwater HUD: ${oxygenLabel}; ${depthLabel}`);
   console.log(`Underwater FPS: ${(await page.locator('.fps-readout').textContent())?.trim() ?? '--'}`);
+  const rendererState = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return {
+      textures: Number(data?.textures),
+      geometries: Number(data?.geometries),
+      drawCalls: Number(data?.drawCalls),
+      triangles: Number(data?.triangles),
+      contextHealthy: data?.contextHealthy,
+      simulationActive: data?.simulationActive,
+      materialMaps: data?.underwaterMaterialMaps?.split('|') ?? [],
+    };
+  });
+  console.log(`Underwater renderer: ${JSON.stringify(rendererState)}`);
+  const expectedRegions = [
+    'brine-reef-rock',
+    'ember-branch-coral',
+    'tidecrown-pale-coral',
+    'long-ribbon-seaweed',
+    'saltcrust-metal-ore',
+    'tide-red-reef-clay',
+    'saltcrown-reef-fish-skin',
+  ];
+  if (rendererState.textures !== 32) {
+    throw new Error(`Underwater texture budget changed: expected 32, received ${rendererState.textures}`);
+  }
+  if (rendererState.materialMaps.length !== 21 || rendererState.materialMaps.some((entry) => entry.includes('none'))) {
+    throw new Error(`Underwater PBR slot contract failed: ${JSON.stringify(rendererState.materialMaps)}`);
+  }
+  for (const region of expectedRegions) {
+    if (!rendererState.materialMaps.some((entry) => entry.includes(`[${region}]`))) {
+      throw new Error(`Underwater atlas region missing from runtime: ${region}`);
+    }
+  }
+  if (rendererState.contextHealthy !== 'true' || rendererState.simulationActive !== 'true') {
+    throw new Error(`Underwater runtime unhealthy: ${JSON.stringify(rendererState)}`);
+  }
   await inspectCanvasPixels(page, 'underwater');
-  await page.screenshot({ path: new URL('underwater-desktop.png', outputDir).pathname, timeout: 90_000 });
+  if (process.env.CAPTURE_FAST === '1') {
+    await captureCanvasReadback(page, new URL('underwater-materials-canvas.png', outputDir).pathname);
+  } else {
+    await page.screenshot({ path: new URL('underwater-desktop.png', outputDir).pathname, timeout: 90_000 });
+  }
   await context.close();
 }
 
@@ -6905,7 +6949,9 @@ async function captureUnderwaterInteraction() {
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => document.querySelector('.loot-notice')?.textContent?.includes('+2 海草'), null, { timeout: 15_000 });
   await inspectCanvasPixels(page, 'underwater-interaction');
-  await page.screenshot({ path: new URL('underwater-interaction-desktop.png', outputDir).pathname, timeout: 90_000 });
+  if (process.env.CAPTURE_FAST !== '1') {
+    await page.screenshot({ path: new URL('underwater-interaction-desktop.png', outputDir).pathname, timeout: 90_000 });
+  }
   await context.close();
 }
 

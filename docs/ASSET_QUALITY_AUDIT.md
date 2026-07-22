@@ -31,6 +31,7 @@
 | M8 远海目的地 | 铁歌漂流阵共鸣青铜、风针观测标电气陶瓷 | `APPROVED`：两套 Image 2 high 源图、六张独立 PBR、2x2/边界/地图相关性与铁歌/风针近景通过 |
 | M9 工具与打捞基础材质 | 风化雪松 PBR、潮缚索具、盐蚀工具钢、盐蚀聚合物 | `APPROVED`：两套新增 Image 2 high 源图、雪松 PBR 补齐、12 张运行图绑定、2x2 与 framebuffer 近景通过 |
 | M9 岛屿与岸上资源 | 风暴冲刷岛岩、盐冠棕榈树皮/叶面、野生潮果、岸滩地表 | `APPROVED`：五套 Image 2 high 源图、15 个 PBR 槽、2x2、alpha roughness 精确打包与 `32/32` framebuffer 岛屿场景通过 |
+| M9 水下礁区与资源 | 浸水礁岩、暖/浅两类珊瑚、长叶海草、盐壳金属矿、潮红礁泥、盐冠礁鱼皮 | `APPROVED`：七套 Image 2 high 源图、21 个 PBR 槽、2x2、双图集/alpha roughness 与 `32/32` framebuffer/收割场景通过 |
 
 ## 历史占位整改队列
 
@@ -42,7 +43,7 @@
 | P0 | 基础烤架、净水器与三槽烤台 | 通用纯色锈铁、金属、聚合物、暗木和绳材质近景重复 | 耐热折铁、盐蚀聚合物，并复用已审定雪松/编织纤维/耐火陶土/导航合金 | M6 烹饪 | `APPROVED` |
 | P1 | 第一人称工具与漂流物 | 原通用 metal / rustMetal / polymer / rope / darkWood 为纯色或不完整 PBR | 盐蚀工具钢、潮缚索具、盐蚀聚合物与三图雪松统一覆盖；普通钢/锈蚀五金使用不同 PBR 参数 | M2/M3/M5 回溯 | `APPROVED` |
 | P1 | 岛屿与岸上资源 | 原 leaf / rock / foliage 及部分采集节点以纯色和顶点色为主 | 岛岩、树皮、叶面、果皮、纤维、矿物与岸滩微表面原创 PBR 组 | M7 回溯 | `APPROVED` |
-| P1 | 水下礁区与资源 | reefRock / coral / seaweed / ore / clay / reefFish 多为纯色材质 | 礁岩、两类珊瑚、海草、矿砂/黏土及鱼群贴图组 | M7 回溯 | `TODO` |
+| P1 | 水下礁区与资源 | reefRock / coral / seaweed / ore / clay / reefFish 多为纯色材质 | 礁岩、两类珊瑚、海草、矿砂/黏土及鱼群贴图组 | M7 回溯 | `APPROVED` |
 | P1 | 结构与防御设备 | 结构件主要依赖雪松，但连接件、金属、绳和受损变化仍有纯色复用 | 连接件/紧固件/受损截面专用 PBR，并与雪松保持统一 | M4/M5 回溯 | `TODO` |
 | P2 | 生物口腔、眼与小型细节 | 三种钓获鱼与盐翼鸟已使用专用虹膜；sharkMouth / sharkEye 仍是简单纯色材质 | 只在实际屏幕覆盖可辨时增加专用微材质；仍须场景近景证明 | M5/M6/M9 | `DOING` |
 | P2 | UI 位图与图标 | 当前主要为代码图标和 CSS，不得引入低质位图占位 | 新增位图同样执行 Image 2 high、来源和目标分辨率检查 | M9 | `WATCH` |
@@ -90,6 +91,20 @@
 | 盐冠岸滩地表 | 2048x2048 / high / CLI | 1024，seam 168，normal 0.54，roughness 184-242；roughness 打包 alpha | x=18.08/1.14x，y=19.56/1.15x | `APPROVED`：高度场 UV+PBR 保留顶点分区色；alpha 与原 roughness 像素一致 |
 
 `CAPTURE_ONLY=island CAPTURE_FAST=1` 输出真实 `island-materials-canvas.png`，直接画布像素 `variation=234/nonBlack=2763`；15 个材质槽完整，renderer 为 `32 textures / 193 geometries / 165 calls / 87,520 triangles`，Context 与模拟状态健康。首轮独立三图为 33 张纹理并被拒绝，采用 alpha roughness 通道打包后回到硬预算 32，没有抬高预算或删除 PBR 信息。详见 `docs/M9_ISLAND_MATERIAL_ACCEPTANCE.md`。
+
+## M9 水下礁区与资源证据
+
+| 资产 | Image 2 请求 | 运行时处理 | 数值结果 | 视觉状态 |
+| --- | --- | --- | --- | --- |
+| 浸水盐冠礁岩 | 2048x2048 / high / CLI | 1024，seam 176，normal 0.62，roughness 176-238 | x=15.26/1.01x，y=14.63/0.93x | `APPROVED`：礁岩/固着石不再使用纯色，并与岸上岛岩分离 |
+| 暖枝珊瑚 | 2048x2048 / high / CLI | 1024，seam 168，normal 0.52，roughness 156-220 | x=17.79/1.07x，y=17.67/0.93x | `APPROVED`：红色 calcite 与细小 corallite 在枝/芽实例可辨 |
+| 浅色潮冠珊瑚 | 2048x2048 / high / CLI | 1024，seam 168，normal 0.54，roughness 166-228 | x=13.27/0.92x，y=13.77/0.94x | `APPROVED`：骨白/烟绿物种层与暖珊瑚明确分离 |
+| 长叶海草组织 | 2048x2048 / high / CLI | 1024，seam 168，normal 0.46，roughness 136-208 | x=13.96/1.01x，y=9.61/1.01x | `APPROVED`：拒绝整叶重叠初稿；采用连续单层组织并经实景提亮复核 |
+| 盐壳金属矿 | 2048x2048 / high / CLI | 1024，seam 168，normal 0.68，roughness 118-210 | x=12.82/1.02x，y=13.56/0.92x | `APPROVED`：矿点晶体/熔炉矿样共享正确 atlas shader，不再是纯青色 |
+| 潮红礁泥 | 2048x2048 / high / CLI | 1024，seam 168，normal 0.52，roughness 184-242 | x=8.14/1.11x，y=8.54/0.93x | `APPROVED`：水浸黏土与熟陶、锈铁和肉质分离 |
+| 盐冠礁鱼皮 | 2048x2048 / high / CLI | 1024，seam 160，normal 0.42，roughness 112-188 | x=10.97/0.99x，y=9.10/0.88x | `APPROVED`：三组小型鱼群不再使用纯青灰材质 |
+
+七套独立审计 PBR 通过 2x2 人工复核后，以 960 核心 + 32 gutter 写入 4096x2048 双图集；albedo RGB 与 roughness alpha 共图，normal 独立，保存后 alpha 像素一致。`CAPTURE_ONLY=underwater CAPTURE_FAST=1` 验证 21 个带区域名的槽、`32 textures / 118 geometries / 256 calls / 140,650 triangles` 和健康 Context/模拟；首轮直接像素为 `variation=127/nonBlack=2880`，最终调色以 1.13 MB 合成帧和 WebGL framebuffer 双证据复核。`underwater-interaction` 继续真实完成“收割长叶海草”与 `+2 海草`。详见 `docs/M9_UNDERWATER_MATERIAL_ACCEPTANCE.md`。
 
 ## 完成条件
 

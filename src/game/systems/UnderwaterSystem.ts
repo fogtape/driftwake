@@ -178,6 +178,28 @@ export class UnderwaterSystem {
     return height === null ? OPEN_WATER_FLOOR_Y : height * encounter.scale;
   }
 
+  getMaterialMapNames(): string[] {
+    const materials = [
+      ['reefRock', this.materials.reefRock],
+      ['warmCoral', this.materials.coralWarm],
+      ['paleCoral', this.materials.coralPale],
+      ['seaweed', this.materials.seaweed],
+      ['ore', this.materials.ore],
+      ['clay', this.materials.clay],
+      ['reefFish', this.materials.reefFish],
+    ] as const;
+    return materials.flatMap(([role, material]) => {
+      const region = typeof material.userData.pbrAtlasRegion === 'string'
+        ? material.userData.pbrAtlasRegion
+        : 'none';
+      return [
+        `${role}[${region}]:albedo=${material.map?.name ?? 'none'}`,
+        `${role}[${region}]:normal=${material.normalMap?.name ?? 'none'}`,
+        `${role}[${region}]:roughness=${material.roughnessMap?.name ?? 'none'}`,
+      ];
+    });
+  }
+
   resolvePlayerCollision(position: Vector3, previous: Vector3): void {
     const encounter = this.island.getEncounterState();
     if (encounter.phase === 'approaching') return;

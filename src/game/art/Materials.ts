@@ -70,6 +70,8 @@ export interface AssetTextures {
   tidefruitSkinRoughness: Texture;
   shoreGround: Texture;
   shoreGroundNormal: Texture;
+  underwaterPbrAtlas: Texture;
+  underwaterPbrNormalAtlas: Texture;
   reefSeabed: Texture;
   reefSeabedNormal: Texture;
   reefSeabedRoughness: Texture;
@@ -245,6 +247,8 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     tidefruitSkinRoughness,
     shoreGround,
     shoreGroundNormal,
+    underwaterPbrAtlas,
+    underwaterPbrNormalAtlas,
     reefSeabed,
     reefSeabedNormal,
     reefSeabedRoughness,
@@ -361,6 +365,8 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/tidefruit-skin-roughness.webp'),
     loader.loadAsync('/assets/textures/saltcrown-shore-ground-packed.webp'),
     loader.loadAsync('/assets/textures/saltcrown-shore-ground-normal.webp'),
+    loader.loadAsync('/assets/textures/saltcrown-underwater-pbr-atlas.webp'),
+    loader.loadAsync('/assets/textures/saltcrown-underwater-pbr-normal-atlas.webp'),
     loader.loadAsync('/assets/textures/reef-seabed.webp'),
     loader.loadAsync('/assets/textures/reef-seabed-normal.webp'),
     loader.loadAsync('/assets/textures/reef-seabed-roughness.webp'),
@@ -473,6 +479,8 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     [tidefruitSkinRoughness, 'tidefruit-skin-roughness'],
     [shoreGround, 'saltcrown-shore-ground-packed'],
     [shoreGroundNormal, 'saltcrown-shore-ground-normal'],
+    [underwaterPbrAtlas, 'saltcrown-underwater-pbr-atlas'],
+    [underwaterPbrNormalAtlas, 'saltcrown-underwater-pbr-normal-atlas'],
     [cropLeaf, 'salt-crown-leaf-albedo'],
     [cropLeafNormal, 'salt-crown-leaf-normal'],
     [cropLeafRoughness, 'salt-crown-leaf-roughness'],
@@ -582,6 +590,11 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   }
   shoreGround.colorSpace = SRGBColorSpace;
   shoreGroundNormal.colorSpace = NoColorSpace;
+
+  underwaterPbrAtlas.colorSpace = SRGBColorSpace;
+  underwaterPbrNormalAtlas.colorSpace = NoColorSpace;
+  underwaterPbrAtlas.anisotropy = anisotropy;
+  underwaterPbrNormalAtlas.anisotropy = anisotropy;
 
   const fishSkinSets = [
     [silverSpineSkin, silverSpineSkinNormal, silverSpineSkinRoughness],
@@ -846,6 +859,8 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     tidefruitSkinRoughness,
     shoreGround,
     shoreGroundNormal,
+    underwaterPbrAtlas,
+    underwaterPbrNormalAtlas,
     reefSeabed,
     reefSeabedNormal,
     reefSeabedRoughness,
@@ -933,6 +948,58 @@ function woodVariant(
 
 const ALPHA_PACKED_ROUGHNESS_CACHE_KEY = 'driftwake-alpha-packed-roughness-v1';
 
+interface PbrAtlasRegion {
+  name: string;
+  offset: readonly [number, number];
+  scale: readonly [number, number];
+  repeat: readonly [number, number];
+}
+
+const UNDERWATER_ATLAS_REGIONS = {
+  reefRock: {
+    name: 'brine-reef-rock',
+    offset: [0.0078125, 0.515625],
+    scale: [0.234375, 0.46875],
+    repeat: [1.35, 1.35],
+  },
+  coralWarm: {
+    name: 'ember-branch-coral',
+    offset: [0.2578125, 0.515625],
+    scale: [0.234375, 0.46875],
+    repeat: [1, 1.35],
+  },
+  coralPale: {
+    name: 'tidecrown-pale-coral',
+    offset: [0.5078125, 0.515625],
+    scale: [0.234375, 0.46875],
+    repeat: [1, 1.35],
+  },
+  seaweed: {
+    name: 'long-ribbon-seaweed',
+    offset: [0.7578125, 0.515625],
+    scale: [0.234375, 0.46875],
+    repeat: [0.75, 1.15],
+  },
+  ore: {
+    name: 'saltcrust-metal-ore',
+    offset: [0.0078125, 0.015625],
+    scale: [0.234375, 0.46875],
+    repeat: [1.25, 1.25],
+  },
+  clay: {
+    name: 'tide-red-reef-clay',
+    offset: [0.2578125, 0.015625],
+    scale: [0.234375, 0.46875],
+    repeat: [1.15, 1.15],
+  },
+  reefFish: {
+    name: 'saltcrown-reef-fish-skin',
+    offset: [0.5078125, 0.015625],
+    scale: [0.234375, 0.46875],
+    repeat: [1.35, 1],
+  },
+} as const satisfies Record<string, PbrAtlasRegion>;
+
 function useAlphaPackedRoughness(material: MeshStandardMaterial): MeshStandardMaterial {
   material.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace(
@@ -941,6 +1008,34 @@ function useAlphaPackedRoughness(material: MeshStandardMaterial): MeshStandardMa
     );
   };
   material.customProgramCacheKey = () => ALPHA_PACKED_ROUGHNESS_CACHE_KEY;
+  material.userData.alphaPackedRoughness = true;
+  return material;
+}
+
+function usePackedPbrAtlas(material: MeshStandardMaterial, region: PbrAtlasRegion): MeshStandardMaterial {
+  const [offsetX, offsetY] = region.offset.map((value) => value.toFixed(7));
+  const [scaleX, scaleY] = region.scale.map((value) => value.toFixed(7));
+  const [repeatX, repeatY] = region.repeat.map((value) => value.toFixed(7));
+  const transformUv = (varying: string, define: string) => `
+#ifdef ${define}
+  ${varying} = fract(${varying} * vec2(${repeatX}, ${repeatY}))
+    * vec2(${scaleX}, ${scaleY}) + vec2(${offsetX}, ${offsetY});
+#endif`;
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <uv_vertex>',
+      `#include <uv_vertex>${transformUv('vMapUv', 'USE_MAP')}${transformUv('vNormalMapUv', 'USE_NORMALMAP')}${transformUv('vRoughnessMapUv', 'USE_ROUGHNESSMAP')}`,
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      'roughnessFactor *= texelRoughness.g;',
+      'roughnessFactor *= texelRoughness.a;',
+    );
+  };
+  material.customProgramCacheKey = () => `driftwake-underwater-pbr-atlas-v1:${region.name}:${repeatX}:${repeatY}`;
+  material.userData.pbrAtlasRegion = region.name;
+  material.userData.pbrAtlasOffset = [...region.offset];
+  material.userData.pbrAtlasScale = [...region.scale];
+  material.userData.pbrAtlasRepeat = [...region.repeat];
   material.userData.alphaPackedRoughness = true;
   return material;
 }
@@ -1158,13 +1253,71 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       roughness: 0.94,
       metalness: 0,
     }),
-    reefRock: new MeshStandardMaterial({ color: 0x667b70, roughness: 0.91, flatShading: true }),
-    coralWarm: new MeshStandardMaterial({ color: 0xb85f50, roughness: 0.86, flatShading: true }),
-    coralPale: new MeshStandardMaterial({ color: 0xd4c597, roughness: 0.9, flatShading: true }),
-    seaweed: new MeshStandardMaterial({ color: 0x3f7657, roughness: 0.84, side: DoubleSide }),
-    ore: new MeshStandardMaterial({ color: 0x5f8583, roughness: 0.52, metalness: 0.62, flatShading: true }),
-    clay: new MeshStandardMaterial({ color: 0x9a584b, roughness: 1, flatShading: true }),
-    reefFish: new MeshStandardMaterial({ color: 0x7ea4a2, roughness: 0.62, metalness: 0.08, flatShading: true }),
+    reefRock: usePackedPbrAtlas(new MeshStandardMaterial({
+      color: 0xc4d0ca,
+      map: textures.underwaterPbrAtlas,
+      normalMap: textures.underwaterPbrNormalAtlas,
+      normalScale: new Vector2(0.55, 0.55),
+      roughnessMap: textures.underwaterPbrAtlas,
+      roughness: 0.94,
+      flatShading: true,
+    }), UNDERWATER_ATLAS_REGIONS.reefRock),
+    coralWarm: usePackedPbrAtlas(new MeshStandardMaterial({
+      color: 0xf6c8bd,
+      map: textures.underwaterPbrAtlas,
+      normalMap: textures.underwaterPbrNormalAtlas,
+      normalScale: new Vector2(0.42, 0.42),
+      roughnessMap: textures.underwaterPbrAtlas,
+      roughness: 0.84,
+      flatShading: true,
+    }), UNDERWATER_ATLAS_REGIONS.coralWarm),
+    coralPale: usePackedPbrAtlas(new MeshStandardMaterial({
+      color: 0xf4f0d9,
+      map: textures.underwaterPbrAtlas,
+      normalMap: textures.underwaterPbrNormalAtlas,
+      normalScale: new Vector2(0.44, 0.44),
+      roughnessMap: textures.underwaterPbrAtlas,
+      roughness: 0.9,
+      flatShading: true,
+    }), UNDERWATER_ATLAS_REGIONS.coralPale),
+    seaweed: usePackedPbrAtlas(new MeshStandardMaterial({
+      color: 0xd2e1d2,
+      map: textures.underwaterPbrAtlas,
+      normalMap: textures.underwaterPbrNormalAtlas,
+      normalScale: new Vector2(0.38, 0.38),
+      roughnessMap: textures.underwaterPbrAtlas,
+      roughness: 0.82,
+      side: DoubleSide,
+    }), UNDERWATER_ATLAS_REGIONS.seaweed),
+    ore: usePackedPbrAtlas(new MeshStandardMaterial({
+      color: 0xd4e7e4,
+      map: textures.underwaterPbrAtlas,
+      normalMap: textures.underwaterPbrNormalAtlas,
+      normalScale: new Vector2(0.58, 0.58),
+      roughnessMap: textures.underwaterPbrAtlas,
+      roughness: 0.58,
+      metalness: 0.54,
+      flatShading: true,
+    }), UNDERWATER_ATLAS_REGIONS.ore),
+    clay: usePackedPbrAtlas(new MeshStandardMaterial({
+      color: 0xe0b2a8,
+      map: textures.underwaterPbrAtlas,
+      normalMap: textures.underwaterPbrNormalAtlas,
+      normalScale: new Vector2(0.44, 0.44),
+      roughnessMap: textures.underwaterPbrAtlas,
+      roughness: 0.98,
+      flatShading: true,
+    }), UNDERWATER_ATLAS_REGIONS.clay),
+    reefFish: usePackedPbrAtlas(new MeshStandardMaterial({
+      color: 0xdcebea,
+      map: textures.underwaterPbrAtlas,
+      normalMap: textures.underwaterPbrNormalAtlas,
+      normalScale: new Vector2(0.28, 0.28),
+      roughnessMap: textures.underwaterPbrAtlas,
+      roughness: 0.68,
+      metalness: 0.02,
+      flatShading: true,
+    }), UNDERWATER_ATLAS_REGIONS.reefFish),
     reefCaustic: new MeshBasicMaterial({
       color: 0x8be6d8,
       alphaMap: causticMap,

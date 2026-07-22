@@ -1,7 +1,7 @@
 # 原创资产清单
 
 > 更新日期：2026-07-22
-> 状态：第十九轮 M9 岛屿/岸上资源历史材质整改已通过来源、PBR、平铺、通道预算与软件场景门禁，发布前仍需做最终授权、DCC 替换与相似性复核
+> 状态：第二十轮 M9 水下礁区与资源历史材质整改已通过来源、PBR、平铺、双图集预算与软件场景门禁，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -906,6 +906,129 @@ Create an original square tileable base-color material texture for a premium sty
 
 五套源图都由同一项目配置 provider 以 `gpt-image-2 high 2048x2048` 生成。`island-materials-canvas.png` 使用 WebGL framebuffer 直读，证明地表、岩石、树皮、叶片、纤维和潮果在真实岛屿同帧可辨；运行时 15 个材质槽全部有绑定，其中岸滩 albedo/roughness 共用一张无损通道打包纹理，场景维持 `32` 张纹理上限。
 
+### TEX-041：浸水盐冠礁岩材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/saltcrown-underwater-pbr-atlas.webp`（礁岩区域 RGB albedo + A roughness）、`saltcrown-underwater-pbr-normal-atlas.webp`（对应 normal 区域） |
+| 采用源图 | `artifacts/imagegen/brine-reef-rock-raw.png` |
+| 审计 PBR | `artifacts/imagegen/underwater-pbr/brine-reef-rock.webp`、`brine-reef-rock-normal.webp`、`brine-reef-rock-roughness.webp` |
+| 模型 / 质量 | `gpt-image-2` / `high`，项目 `scripts/imagegen` CLI |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 盐冠浅礁 44 个礁岩实例、海草固着石和矿点基岩；与岸上岛岩保持不同水蚀语义 |
+| 处理方式 | 1024、seam 176、normal 0.62、roughness 176-238、boundary 优化；图集核心 960 + 32 gutter |
+| 检查 | seam x=`15.26/1.01x`、y=`14.63/0.93x`，boundary=`(1,1)`；冷色矿层、侵蚀孔和藻痕在低多边形礁岩上可辨 |
+
+采用提示词：
+
+```text
+Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: permanently submerged salt-crown reef rock. Orthographic straight-on material scan, continuous stone surface filling the frame, no rock silhouette and no perspective. Layered cool blue-gray and muted green-gray mineral planes, rounded saltwater erosion pits, narrow chalky calcite seams, sparse dark volcanic grains, delicate teal algae staining inside recesses, and tiny pale shell-mineral inclusions. It must read as water-worn reef substrate and remain distinct from dry island stone. Hand-authored semi-realistic painterly PBR art direction with crisp medium-frequency structure readable on low-poly rocks, no cartoon outlines and no photographic noise. Flat neutral diffuse lighting, no baked caustic, directional highlight, cast shadow, deep vignette, or wet reflection. Uniform detail density on all four edges, seamless in both axes, no border, no large central crack or focal boulder. No coral, plants, fish, sand, open water, bubbles, props, text, symbols, logos, or watermark. Albedo source only: no normal map, roughness map, UV grid, material sphere, atlas, or preview.
+```
+
+### TEX-042：暖枝珊瑚材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时 / 审计 | 双图集 `ember-branch-coral` 区域；独立审计图位于 `artifacts/imagegen/underwater-pbr/ember-branch-coral*.webp` |
+| 采用源图 | `artifacts/imagegen/ember-branch-coral-raw.png` |
+| 模型 / 质量 / 尺寸 | `gpt-image-2` / `high` / `2048x2048` |
+| 用途 | 暖红珊瑚枝体与芽体实例 |
+| 处理方式 | 1024、seam 168、normal 0.52、roughness 156-220、boundary 优化；图集核心 960 + 32 gutter |
+| 检查 | seam x=`17.79/1.07x`、y=`17.67/0.93x`，boundary=`(1,1)`；细小 corallite 孔与红色 calcite 不退化为黏土或肉质 |
+
+采用提示词：
+
+```text
+Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: living warm branch-coral calcite surface. Orthographic macro material scan, continuous coral tissue and mineral skin filling the complete frame, no whole coral colony silhouette and no perspective. Muted coral-red, ember rose, and weathered terracotta planes over pale calcite, thousands of tiny irregular star-shaped corallite pores, fine branching growth striations, restrained cream tips, and sparse cool mineral specks. Healthy but salt-worn, organic and porous rather than clay, meat, or painted stone. Hand-authored semi-realistic painterly PBR art direction, controlled microdetail readable on narrow low-poly branches, no cartoon outline and no photoreal camera grain. Even diffuse neutral lighting, shadowless, no baked caustic, glossy hotspot, translucency glow, ambient occlusion vignette, or wet reflection. Uniform detail density across all edges, seamless in both axes, no border, central flower, large polyp, or repeating rosette grid. No whole coral, fish, seaweed, rock, ocean scene, props, text, symbols, logos, or watermark. Albedo source only: no normal map, roughness map, UV checker, texture atlas, material sphere, or mockup.
+```
+
+### TEX-043：浅色潮冠珊瑚材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时 / 审计 | 双图集 `tidecrown-pale-coral` 区域；独立审计图位于 `artifacts/imagegen/underwater-pbr/tidecrown-pale-coral*.webp` |
+| 采用源图 | `artifacts/imagegen/tidecrown-pale-coral-raw.png` |
+| 模型 / 质量 / 尺寸 | `gpt-image-2` / `high` / `2048x2048` |
+| 用途 | 浅色珊瑚枝体与芽体实例，与暖枝珊瑚形成物种区分 |
+| 处理方式 | 1024、seam 168、normal 0.54、roughness 166-228、boundary 优化；图集核心 960 + 32 gutter |
+| 检查 | seam x=`13.27/0.92x`、y=`13.77/0.94x`，boundary=`(1,1)`；骨白、烟灰绿与细小孔隙无陶瓷/砂岩感 |
+
+采用提示词：
+
+```text
+Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: pale tide-crown branch-coral calcite surface, a distinct species from warm red coral. Orthographic macro material scan, continuous living coral surface filling the frame, no colony silhouette and no perspective. Soft bone ivory, faded straw, smoke-sage, and very pale sea-glass green variation, dense tiny irregular corallite cups, delicate fan-like mineral growth lines, restrained chalk-white ridges, and sparse muted lavender-gray specks. Alive and mineral-rich, not bleached dead coral, ceramic, sandstone, concrete, or skin. Hand-authored semi-realistic painterly PBR art direction with calm broad color and crisp microstructure readable on small buds and branches, no cartoon outline and no photographic noise. Flat neutral diffuse lighting, no baked caustic, cast shadow, glossy highlight, subsurface glow, ambient-occlusion vignette, or wet reflection. Uniform edge-to-edge detail, seamless in both axes, no border, central flower, large polyp, or repeating cellular grid. No whole coral, fish, plant, rock, ocean, props, text, symbols, logos, or watermark. Albedo source only: no normal map, roughness map, UV grid, atlas, material sphere, or presentation board.
+```
+
+### TEX-044：长叶海草组织材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时 / 审计 | 双图集 `long-ribbon-seaweed` 区域；独立审计图位于 `artifacts/imagegen/underwater-pbr/long-ribbon-seaweed*.webp` |
+| 采用源图 | `artifacts/imagegen/long-ribbon-seaweed-raw.png` |
+| 模型 / 质量 / 尺寸 | `gpt-image-2` / `high` / `2048x2048` |
+| 用途 | 34 个环境海草实例与可收割长叶海草节点 |
+| 处理方式 | 1024、seam 168、normal 0.46、roughness 136-208、boundary 优化；图集核心 960 + 32 gutter |
+| 检查 | seam x=`13.96/1.01x`、y=`9.61/1.01x`，boundary=`(1,1)`；首版因整叶重叠/阴影/空隙拒绝，采用版只含连续单层组织和纵向细纤维 |
+
+采用提示词：
+
+```text
+Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: the microscopic flat skin of living long-ribbon seaweed. Show exactly one continuous single-layer tissue surface covering the complete square, like a flat material swatch viewed orthographically; absolutely no separate blades, ribbons, leaf edges, overlaps, folds, gaps, silhouettes, depth, or perspective. Use deep kelp green, muted bottle green, cool teal-green and pale olive micro-variation, thousands of very fine parallel cellulose fibers, many thin broken longitudinal veins, tiny salt pores expressed only through color, restrained amber fiber wear, and sparse pale mineral freckles. Keep all features small, shallow, evenly distributed, and readable as flexible underwater plant tissue rather than palm leaf, fabric, rope, grass, or painted plastic. Premium hand-authored semi-realistic painterly PBR art direction with controlled microdetail, no cartoon outlines and no photographic grain. Perfectly flat neutral diffuse albedo: no directional lighting, cast shadow, ambient occlusion, caustic, glossy hotspot, wet reflection, translucency glow, vignette, or transparent background. Uniform detail density at every edge, seamless in both axes, no border, central vein, tear, or focal mark. No whole plant, leaf, frond, fish, coral, bubbles, water scene, props, text, symbols, logos, or watermark. Albedo source only: no normal map, roughness map, UV grid, atlas, material sphere, or preview.
+```
+
+### TEX-045：盐壳金属矿材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时 / 审计 | 双图集 `saltcrust-metal-ore` 区域；独立审计图位于 `artifacts/imagegen/underwater-pbr/saltcrust-metal-ore*.webp` |
+| 采用源图 | `artifacts/imagegen/saltcrust-metal-ore-raw.png` |
+| 模型 / 质量 / 尺寸 | `gpt-image-2` / `high` / `2048x2048` |
+| 用途 | 盐壳金属矿晶体、回潮熔炉待加工矿样 |
+| 处理方式 | 1024、seam 168、normal 0.68、roughness 118-210、boundary 优化；图集核心 960 + 32 gutter |
+| 检查 | seam x=`12.82/1.02x`、y=`13.56/0.92x`，boundary=`(1,1)`；磁铁矿/含铜矿层与工具钢、岛岩和珠宝语义分离 |
+
+采用提示词：
+
+```text
+Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: salt-crusted marine metal ore embedded in reef mineral. Orthographic straight-on material scan, continuous raw ore surface filling the frame, no ore chunk silhouette and no perspective. Dense charcoal magnetite and muted blue-green copper-bearing mineral planes, small dull nickel crystals, narrow oxidized teal seams, pale salt crust in recesses, sparse rusty red-brown freckles, and rough gray host stone. It must read as valuable unrefined mineral, clearly different from forged tool steel, polished metal, dry island rock, or turquoise jewelry. Hand-authored semi-realistic painterly PBR art direction with crisp faceted inclusions readable on small crystals, no cartoon outlines and no photographic scan noise. Flat neutral diffuse lighting, no baked reflection, specular highlight, cast shadow, glow, sparks, deep vignette, or wet surface. Uniform detail density on all edges, seamless in both axes, no border, central geode, large vein, manufactured plate, or repeated crystal cluster. No tools, coins, machinery, coral, plants, water, props, text, runes, logos, or watermark. Albedo source only: no normal map, roughness map, metallic map, UV grid, material sphere, atlas, or mockup.
+```
+
+### TEX-046：潮红礁泥材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时 / 审计 | 双图集 `tide-red-reef-clay` 区域；独立审计图位于 `artifacts/imagegen/underwater-pbr/tide-red-reef-clay*.webp` |
+| 采用源图 | `artifacts/imagegen/tide-red-reef-clay-raw.png` |
+| 模型 / 质量 / 尺寸 | `gpt-image-2` / `high` / `2048x2048` |
+| 用途 | 潮红黏土采集节点 |
+| 处理方式 | 1024、seam 168、normal 0.52、roughness 184-242、boundary 优化；图集核心 960 + 32 gutter |
+| 检查 | seam x=`8.14/1.11x`、y=`8.54/0.93x`，boundary=`(1,1)`；压实粉砂与水浸深斑保持哑光，不像熟陶、肉、皮革或锈钢 |
+
+采用提示词：
+
+```text
+Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: compact wet tide-red clay from a shallow reef shelf. Orthographic top-down material scan, continuous clay surface filling the frame, no lump silhouette and no perspective. Muted brick red, iron rose, umber, and smoky mauve layers with fine compressed silt, shallow thumb-sized natural shear lines, tiny pale shell dust, sparse gray mineral grains, and subtle darker waterlogged patches expressed without gloss. It must read as raw cohesive clay, not cooked terracotta, meat, leather, rusted steel, or desert soil. Hand-authored semi-realistic painterly PBR art direction, tactile and readable on small harvest lumps but calm enough to tile, no cartoon outline and no photoreal camera grain. Even diffuse neutral lighting, shadowless, no baked caustic, shiny wet hotspot, deep crack, cast shadow, or vignette. Uniform edge-to-edge detail, seamless in both axes, no border, central footprint, pottery mark, large stone, or single focal feature. No plants, coral, water scene, tools, props, text, symbols, logos, or watermark. Albedo source only: no normal map, roughness map, UV checker, material ball, atlas, or presentation mockup.
+```
+
+### TEX-047：盐冠礁鱼皮材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时 / 审计 | 双图集 `saltcrown-reef-fish-skin` 区域；独立审计图位于 `artifacts/imagegen/underwater-pbr/saltcrown-reef-fish-skin*.webp` |
+| 采用源图 | `artifacts/imagegen/saltcrown-reef-fish-skin-raw.png` |
+| 模型 / 质量 / 尺寸 | `gpt-image-2` / `high` / `2048x2048` |
+| 用途 | 三组小型巡游礁鱼的躯体与尾鳍 |
+| 处理方式 | 1024、seam 160、normal 0.42、roughness 112-188、boundary 优化；图集核心 960 + 32 gutter |
+| 检查 | seam x=`10.97/0.99x`、y=`9.10/0.88x`，boundary=`(1,277)`；小尺度青银鳞与三种可钓鱼、金属和爬行皮分离 |
+
+采用提示词：
+
+```text
+Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: skin surface of a small schooling salt-crown reef fish. Orthographic macro material scan, continuous fish skin filling the entire frame, no whole fish silhouette and no perspective. Tight tiny overlapping scales with a muted sea-glass teal and silver-gray base, soft pale aqua lateral shimmer bands, sparse warm sand-gold scale tips, restrained charcoal speckles, and a few subtle coral-red flecks. The surface should look agile, alive, and underwater-readable while remaining distinct from the three catchable fish species and from metal or reptile skin. Hand-authored semi-realistic painterly PBR art direction with controlled scale rhythm suitable for very small low-poly bodies, no cartoon outlines and no photoreal camera noise. Flat neutral diffuse lighting, no baked specular streak, caustic, reflection, shadow, iridescent rainbow, vignette, or wet gloss. Uniform detail density to every edge, seamless in both axes, no border, eye, fin, gill, lateral-line focal stripe, or large unique mark. No whole animal, ocean scene, coral, plants, bubbles, props, text, symbols, logos, or watermark. Albedo source only: no normal map, roughness map, UV grid, texture atlas, material sphere, or mockup.
+```
+
+七套审计 PBR 经 `scripts/build_pbr_atlas.py` 形成 4096x2048 双图集：每格 1024，核心 960，四周 32 像素周期 gutter；RGB albedo + A roughness 的 alpha 保存后逐像素一致，normal 独立。`underwater-materials-canvas.png` 与真实收割流程证明七个区域的 21 个 PBR 槽均绑定，运行时保持 `32/32` 纹理预算；海草首版因整叶轮廓和阴影拒绝，未进入归档或运行时。
+
 ## 代码原生模型与动画
 
 本轮新增鲨体分段伤痕、海面聚焦环和鲨鱼战利品捆扎浮包，继续由代码原生形体驱动；鲨皮沿用独立 TEX-003 PBR，肉、皮、齿、绳结和浮托按材质与轮廓分层。采集段、对象池、耐久与 v18 存档均不依赖视觉对象作为玩法真值；没有因本机软件 WebGL 复验失败而降低运行时贴图质量。
@@ -925,8 +1048,8 @@ Create an original square tileable base-color material texture for a premium sty
 | MOD-011 | 盐冠浅滩：2115 顶点高度场、PBR 微表面/顶点色分层、5 个岩石地标、22 个灌木和 30 条岸浪 | `src/game/art/ProceduralModels.ts` | TEX-036/TEX-038/TEX-040 已接入接近、靠岸、登岛、离流和重生周期；实例化与 32 纹理预算保持 |
 | MOD-012 | 岛屿资源组：4 棕榈、枝料、石堆、潮果、纤维簇与交互高亮 | `src/game/art/ProceduralModels.ts` | TEX-036-TEX-039 独立绑定；节点内部实例化，支持生命、拾取、倒伏和树桩 |
 | MOD-013 | 潮磨石斧：回收木柄、石质斧头、金属刃口和六圈编织绑带 | `src/game/art/ProceduralModels.ts` | 已进入第一视角挥砍和三击树木循环 |
-| MOD-014 | 盐冠礁床：3403+ 顶点下沉地形、44 岩簇、18 珊瑚簇、34 海草和 3 组鱼群 | `src/game/art/UnderwaterModels.ts` | 珊瑚/海草/鱼群按材质实例化，AI 海床 PBR 材质与动态焦散已接通 |
-| MOD-015 | 水下资源组：细砂、黏土、盐壳金属矿和长叶海草 | `src/game/art/UnderwaterModels.ts` | 四套独立轮廓，支持高亮、三段钩击、收割、抖动和消散 |
+| MOD-014 | 盐冠礁床：3403+ 顶点下沉地形、44 岩簇、18 珊瑚簇、34 海草和 3 组鱼群 | `src/game/art/UnderwaterModels.ts` | 海床 TEX-005 与 TEX-041-TEX-047 双图集 PBR 已接通；珊瑚/海草/鱼群继续按材质实例化并使用动态焦散 |
+| MOD-015 | 水下资源组：细砂、黏土、盐壳金属矿和长叶海草 | `src/game/art/UnderwaterModels.ts` | 四套独立轮廓与审定 PBR，支持高亮、三段钩击、收割、抖动和消散 |
 | MOD-016 | 拾风帆：3.4 米桅杆、桅脚、三道绑扎、双侧受力绳、横桁、分段帆面和风标 | `src/game/art/NavigationModels.ts` | 12+ 网格、900+ 顶点，AI 帆布 PBR 双面渲染，筏格附着 |
 | MOD-017 | 潮石锚：木质底座、双立柱、绞盘鼓、轮缘、曲柄、四圈绳卷、垂绳、石坠和双锚爪 | `src/game/art/NavigationModels.ts` | 15+ 网格，自动朝筏外，支持水下部署和筏格损毁 |
 | MOD-018 | 潮生作物盆：风化木板、绑绳、角铁、排水口、PBR 培养土、湿润层、4 茎节、9 叶片枢轴、3 果实和种子标记 | `src/game/art/PlantingModels.ts` | 42+ 网格，生长、供水、枯萎和收获分别驱动，不使用整体静态缩放 |

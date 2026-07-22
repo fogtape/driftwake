@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "atlasSize": [
+    4096,
+    2048
+  ],
+  "cellSize": 1024,
+  "gutter": 32,
+  "coreSize": 960,
+  "columns": 4,
+  "rows": 2,
+  "regions": {
+    "brine-reef-rock": {
+      "index": 0,
+      "column": 0,
+      "row": 0,
+      "uvOffset": [
+        0.0078125,
+        0.515625
+      ],
+      "uvScale": [
+        0.234375,
+        0.46875
+      ]
+    },
+    "ember-branch-coral": {
+      "index": 1,
+      "column": 1,
+      "row": 0,
+      "uvOffset": [
+        0.2578125,
+        0.515625
+      ],
+      "uvScale": [
+        0.234375,
+        0.46875
+      ]
+    },
+    "tidecrown-pale-coral": {
+      "index": 2,
+      "column": 2,
+      "row": 0,
+      "uvOffset": [
+        0.5078125,
+        0.515625
+      ],
+      "uvScale": [
+        0.234375,
+        0.46875
+      ]
+    },
+    "long-ribbon-seaweed": {
+      "index": 3,
+      "column": 3,
+      "row": 0,
+      "uvOffset": [
+        0.7578125,
+        0.515625
+      ],
+      "uvScale": [
+        0.234375,
+        0.46875
+      ]
+    },
+    "saltcrust-metal-ore": {
+      "index": 4,
+      "column": 0,
+      "row": 1,
+      "uvOffset": [
+        0.0078125,
+        0.015625
+      ],
+      "uvScale": [
+        0.234375,
+        0.46875
+      ]
+    },
+    "tide-red-reef-clay": {
+      "index": 5,
+      "column": 1,
+      "row": 1,
+      "uvOffset": [
+        0.2578125,
+        0.015625
+      ],
+      "uvScale": [
+        0.234375,
+        0.46875
+      ]
+    },
+    "saltcrown-reef-fish-skin": {
+      "index": 6,
+      "column": 2,
+      "row": 1,
+      "uvOffset": [
+        0.5078125,
+        0.015625
+      ],
+      "uvScale": [
+        0.234375,
+        0.46875
+      ]
+    }
+  }
+}

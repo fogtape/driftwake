@@ -1,6 +1,6 @@
 # Driftwake
 
-原创桌面网页 3D 海上生存游戏。当前版本为 `0.22.2` 高质量纵向切片，不以基础 Demo 为完成标准。
+原创桌面网页 3D 海上生存游戏。当前版本为 `0.22.3` 高质量纵向切片，不以基础 Demo 为完成标准。
 
 ## 当前内容
 
@@ -38,7 +38,7 @@
 - 18 个确定性岛屿资源节点、石斧三击/金属斧两击砍伐、树木受击/倒伏/树桩、枝料/石料/潮果/纤维拾取和满包保护；
 - 木筏/岛屿/水域三表面移动、上下潜、自动登筏/上岸、潜深和氧气/溺水状态；
 - 18 个确定性浅礁节点、细砂/黏土/金属矿三段钩击、海草收割、满包保护、节点动画和远征进度；
-- 动态水下雾色、曝光、双面海面、滚动焦散、气泡/悬浮物、礁石/珊瑚/海草/鱼群与独立 PBR 海床材质；
+- 动态水下雾色、曝光、双面海面、滚动焦散、气泡/悬浮物，以及海床、礁岩、双珊瑚、海草、矿石、黏土和礁鱼八类原创 PBR 材质；
 - 深潮鲨会在玩家入水后切换目标、追击、扑咬、扣血和击退，水中木矛可命中并驱离；
 - 可制作并占用筏格的拾风帆、潮石锚与定潮舵台，包含边缘放置、筏格损毁、拆除返还、玩家碰撞和完整存档；
 - 普通潮石锚在风暴锚泊时会累积绞盘载荷并可能滑脱；研究后的锁链棘轮可直接加装、改变世界模型并稳定锚具；
@@ -57,7 +57,7 @@
 - 标题、HUD、背包、制作、设置、能力提示和 Playwright 截图回归流程；
 - 原创标题美术、木材、泡沫、鲨皮、编织纤维、AI 辅助海床、拼补帆布、培养土、耐火陶土、导航合金、信号层压板、磷光玻璃、共鸣青铜、电气陶瓷、潮缚索具、盐蚀工具钢、岛岩、棕榈树皮/叶面、野生潮果、岸滩地表、盐蚀集热玻璃、蜡封帆布、盐封手套、三种鱼皮、生/熟/焦鱼肉、远洋鱼眼、耐热折铁、盐蚀聚合物、盐冠活/枯叶与潮果、盐翼体羽/飞羽/角质/虹膜 PBR 与飑云天空材质，以及对应的 normal/roughness 通道；风化雪松也已补齐 normal/roughness。
 
-当前仍不是完整游戏。M6 钓鱼、烹饪/净水、天气农业、盐翼鸟害、M8 分阶段研究与远海目的地，以及 M9 三档存档/备份恢复、无障碍输入、工具/打捞与岛屿/岸上两批历史材质整改的代码与自动视觉闭环已经完成；无说明玩家验收、目标真实 GPU 鼠标/双画质门禁、更多深水生态资源、潜水装备、最终蒙皮资产与其余 M9 发布系统仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
+当前仍不是完整游戏。M6 钓鱼、烹饪/净水、天气农业、盐翼鸟害、M8 分阶段研究与远海目的地，以及 M9 三档存档/备份恢复、无障碍输入、工具/打捞、岛屿/岸上、水下礁区三批历史材质整改的代码与自动视觉闭环已经完成；无说明玩家验收、目标真实 GPU 鼠标/双画质门禁、更多深水生态资源、潜水装备、最终蒙皮资产与其余 M9 发布系统仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
 
 ## 运行
 
@@ -100,6 +100,8 @@ M9 工具/打捞材质门禁复现：`CAPTURE_ONLY=salvage CAPTURE_FAST=1 npm ru
 
 M9 岛屿/岸上材质门禁复现：`CAPTURE_ONLY=island CAPTURE_FAST=1 npm run capture` 验证五套 PBR 的 15 个语义槽、`32/32` 纹理预算、地表 UV 与真实 WebGL framebuffer。详见 [M9 岛屿材质验收记录](docs/M9_ISLAND_MATERIAL_ACCEPTANCE.md)。
 
+M9 水下材质门禁复现：`CAPTURE_ONLY=underwater CAPTURE_FAST=1 npm run capture` 验证七套 PBR 的 21 个语义槽、七个 atlas 区域、`32/32` 纹理预算与真实 WebGL framebuffer；`CAPTURE_ONLY=underwater-interaction CAPTURE_FAST=1 npm run capture` 复验真实海草收割。详见 [M9 水下材质验收记录](docs/M9_UNDERWATER_MATERIAL_ACCEPTANCE.md)。
+
 ## 资产管线
 
 `scripts/imagegen` 会在运行时读取当前 Codex provider 的 `base_url` 与本地认证文件中的 API Key，仓库不会保存服务 URL 或密钥：
@@ -118,6 +120,7 @@ python scripts/prepare_imagegen_soil.py --input output/imagegen/soil.png --albed
 python scripts/prepare_imagegen_material.py --input output/imagegen/material.png --albedo material.webp --normal material-normal.webp --roughness material-roughness.webp
 python scripts/prepare_imagegen_eye.py --input artifacts/imagegen/pelagic-fish-eye-raw.png --albedo public/assets/textures/pelagic-fish-eye.webp --normal public/assets/textures/pelagic-fish-eye-normal.webp --roughness public/assets/textures/pelagic-fish-eye-roughness.webp
 python scripts/pack_roughness_alpha.py --albedo albedo.webp --roughness roughness.webp --output packed.webp
+python scripts/build_pbr_atlas.py --input-dir artifacts/imagegen/underwater-pbr --names brine-reef-rock ember-branch-coral tidecrown-pale-coral long-ribbon-seaweed saltcrust-metal-ore tide-red-reef-clay saltcrown-reef-fish-skin --albedo-output public/assets/textures/saltcrown-underwater-pbr-atlas.webp --normal-output public/assets/textures/saltcrown-underwater-pbr-normal-atlas.webp --manifest-output artifacts/imagegen/underwater-pbr/atlas-layout.json
 ```
 
 完整来源、最终提示词、采用/拒绝结论和模型清单见 [原创资产清单](docs/ASSET_MANIFEST.md)；历史低质、纯色与跨题材复用材质的整改优先级见 [运行时材质质量审计](docs/ASSET_QUALITY_AUDIT.md)。

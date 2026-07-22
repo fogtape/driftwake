@@ -300,7 +300,7 @@ export function createSmelterModel(materials: MaterialLibrary): Group {
   bowlBottom.position.y = -0.15;
   crucible.add(bowl, bowlBottom);
   smelter.add(crucible);
-  const ore = shadowed(new Mesh(new SphereGeometry(0.15, 8, 6), materials.ore.clone()));
+  const ore = shadowed(new Mesh(new SphereGeometry(0.15, 8, 6), materials.ore));
   ore.scale.set(1.1, 0.65, 0.9);
   ore.position.set(0, 0.93, 0.02);
   ore.visible = false;

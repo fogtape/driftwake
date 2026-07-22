@@ -38,6 +38,8 @@ describe('asset texture loading', () => {
     expect(textures.palmFrond.userData.sourcePath).toBe('/assets/textures/saltcrown-palm-frond.webp');
     expect(textures.tidefruitSkin.userData.sourcePath).toBe('/assets/textures/tidefruit-skin.webp');
     expect(textures.shoreGround.userData.sourcePath).toBe('/assets/textures/saltcrown-shore-ground-packed.webp');
+    expect(textures.underwaterPbrAtlas.userData.sourcePath).toBe('/assets/textures/saltcrown-underwater-pbr-atlas.webp');
+    expect(textures.underwaterPbrNormalAtlas.userData.sourcePath).toBe('/assets/textures/saltcrown-underwater-pbr-normal-atlas.webp');
     expect(textures.cropLeaf.userData.sourcePath).toBe('/assets/textures/salt-crown-leaf.webp');
     expect(textures.cropDry.userData.sourcePath).toBe('/assets/textures/salt-crown-dry-leaf.webp');
     expect(textures.cropFruit.userData.sourcePath).toBe('/assets/textures/salt-crown-fruit.webp');
@@ -94,6 +96,43 @@ describe('asset texture loading', () => {
     materials.shoreGround.onBeforeCompile(packedShader, renderer);
     expect(packedShader.fragmentShader).toContain('roughnessFactor *= texelRoughness.a;');
     expect(packedShader.fragmentShader).not.toContain('roughnessFactor *= texelRoughness.g;');
+    const underwaterMaterials = [
+      materials.reefRock,
+      materials.coralWarm,
+      materials.coralPale,
+      materials.seaweed,
+      materials.ore,
+      materials.clay,
+      materials.reefFish,
+    ];
+    expect(underwaterMaterials.map((material) => material.userData.pbrAtlasRegion)).toEqual([
+      'brine-reef-rock',
+      'ember-branch-coral',
+      'tidecrown-pale-coral',
+      'long-ribbon-seaweed',
+      'saltcrust-metal-ore',
+      'tide-red-reef-clay',
+      'saltcrown-reef-fish-skin',
+    ]);
+    for (const material of underwaterMaterials) {
+      expect(material).toMatchObject({
+        map: textures.underwaterPbrAtlas,
+        normalMap: textures.underwaterPbrNormalAtlas,
+        roughnessMap: textures.underwaterPbrAtlas,
+      });
+      expect(material.userData.alphaPackedRoughness).toBe(true);
+    }
+    expect(new Set(underwaterMaterials.map((material) => material.customProgramCacheKey())).size).toBe(7);
+    const atlasShader = {
+      vertexShader: 'void main() {\n#include <uv_vertex>\n}',
+      fragmentShader: 'roughnessFactor *= texelRoughness.g;',
+    } as Parameters<typeof materials.reefRock.onBeforeCompile>[0];
+    materials.reefRock.onBeforeCompile(atlasShader, renderer);
+    expect(atlasShader.vertexShader).toContain('fract(vMapUv * vec2(1.3500000, 1.3500000))');
+    expect(atlasShader.vertexShader).toContain('vec2(0.0078125, 0.5156250)');
+    expect(atlasShader.vertexShader).toContain('fract(vNormalMapUv');
+    expect(atlasShader.vertexShader).toContain('fract(vRoughnessMapUv');
+    expect(atlasShader.fragmentShader).toContain('roughnessFactor *= texelRoughness.a;');
     expect(materials.cropLeaf).toMatchObject({
       map: textures.cropLeaf,
       normalMap: textures.cropLeafNormal,
