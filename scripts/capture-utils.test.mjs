@@ -3,6 +3,7 @@ import {
   assertEncodedFrameContent,
   buildStabilitySchedule,
   isSoftwareRenderer,
+  pointerRecoveryAction,
   resolveStabilityProfile,
   summarizeStabilitySamples,
   validateStabilitySummary,
@@ -31,6 +32,13 @@ describe('stability utilities', () => {
   it('rejects undersized composited canvas evidence', () => {
     expect(() => assertEncodedFrameContent({ contextLost: false, width: 1280, height: 720, encodedBytes: 30_000 }, 'frame')).not.toThrow();
     expect(() => assertEncodedFrameContent({ contextLost: false, width: 1280, height: 720, encodedBytes: 2_000 }, 'frame')).toThrow(/blank/);
+  });
+
+  it('never clicks the canvas after Pointer Lock has already been acquired', () => {
+    expect(pointerRecoveryAction({ pointerLocked: true, simulationActive: true, canvasExposed: true })).toBe('done');
+    expect(pointerRecoveryAction({ pointerLocked: true, simulationActive: false, canvasExposed: true })).toBe('wait');
+    expect(pointerRecoveryAction({ pointerLocked: false, simulationActive: false, resumeAvailable: true })).toBe('resume');
+    expect(pointerRecoveryAction({ pointerLocked: false, simulationActive: false, canvasExposed: true })).toBe('canvas');
   });
 
   it('summarizes retained heap slope and dynamic collider evidence', () => {

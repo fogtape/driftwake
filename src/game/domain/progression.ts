@@ -94,6 +94,38 @@ export const RESEARCH_PROJECTS = {
 >;
 
 export type ResearchProjectId = keyof typeof RESEARCH_PROJECTS;
+export type ResearchStageId = 'forge' | 'raft' | 'signal';
+
+export const RESEARCH_STAGE_ORDER: readonly ResearchStageId[] = ['forge', 'raft', 'signal'];
+export const RESEARCH_STAGES: Record<ResearchStageId, { name: string; summary: string }> = {
+  forge: { name: '炉工基础', summary: '耐火结构、金属件与基础工具' },
+  raft: { name: '筏上工业', summary: '航行强化、生活设备与密封储运' },
+  signal: { name: '远海测向', summary: '信号板、电源、接收与定向阵列' },
+};
+
+export const RESEARCH_STAGE_PROJECTS = {
+  forge: ['smelterKit', 'hinge', 'metalSpear', 'metalAxe'],
+  raft: ['helmKit', 'stormRigKit', 'solarPurifierKit', 'tripleGrillKit', 'lockerKit', 'anchorBraceKit'],
+  signal: ['signalBoard', 'brineCell', 'receiverKit', 'antennaKit', 'resonanceFork'],
+} as const satisfies Record<ResearchStageId, readonly ResearchProjectId[]>;
+
+export const RESEARCH_PROJECT_PREREQUISITES: Record<ResearchProjectId, readonly ResearchProjectId[]> = {
+  smelterKit: [],
+  metalSpear: ['smelterKit'],
+  resonanceFork: ['brineCell'],
+  metalAxe: ['smelterKit'],
+  helmKit: ['hinge'],
+  stormRigKit: ['hinge'],
+  hinge: ['smelterKit'],
+  solarPurifierKit: ['smelterKit'],
+  tripleGrillKit: ['smelterKit'],
+  lockerKit: ['hinge'],
+  anchorBraceKit: ['hinge'],
+  signalBoard: ['hinge'],
+  brineCell: ['signalBoard'],
+  receiverKit: ['brineCell'],
+  antennaKit: ['receiverKit'],
+};
 
 export interface ProgressionKnowledge {
   researched: ResearchSampleId[];
@@ -151,7 +183,35 @@ export function isResearchProjectId(value: unknown): value is ResearchProjectId 
 
 export function canLearnProject(knowledge: ProgressionKnowledge, projectId: ResearchProjectId): boolean {
   if (knowledge.learned.includes(projectId)) return false;
-  return RESEARCH_PROJECTS[projectId].requirements.every((sample) => knowledge.researched.includes(sample));
+  return RESEARCH_PROJECTS[projectId].requirements.every((sample) => knowledge.researched.includes(sample))
+    && RESEARCH_PROJECT_PREREQUISITES[projectId].every((prerequisite) => knowledge.learned.includes(prerequisite));
+}
+
+export function missingProjectPrerequisites(
+  knowledge: ProgressionKnowledge,
+  projectId: ResearchProjectId,
+): ResearchProjectId[] {
+  return RESEARCH_PROJECT_PREREQUISITES[projectId]
+    .filter((prerequisite) => !knowledge.learned.includes(prerequisite));
+}
+
+export function researchProjectStage(projectId: ResearchProjectId): ResearchStageId {
+  return RESEARCH_STAGE_ORDER.find((stage) => {
+    const projects = RESEARCH_STAGE_PROJECTS[stage] as readonly ResearchProjectId[];
+    return projects.includes(projectId);
+  }) ?? 'forge';
+}
+
+export function researchStageProgress(
+  knowledge: ProgressionKnowledge,
+  stage: ResearchStageId,
+): { learned: number; available: number; total: number } {
+  const projects = RESEARCH_STAGE_PROJECTS[stage] as readonly ResearchProjectId[];
+  return {
+    learned: projects.filter((projectId) => knowledge.learned.includes(projectId)).length,
+    available: projects.filter((projectId) => canLearnProject(knowledge, projectId)).length,
+    total: projects.length,
+  };
 }
 
 export function addResearchSample(knowledge: ProgressionKnowledge, sample: ResearchSampleId): ProgressionKnowledge {
@@ -257,9 +317,19 @@ export function sanitizeProgressionState(value: unknown): SavedProgressionState 
   const rawLearned = Array.isArray(candidate.learned)
     ? [...new Set(candidate.learned.filter(isResearchProjectId))]
     : [];
-  const learned = rawLearned.filter((projectId) =>
+  const validLearned = new Set(rawLearned.filter((projectId) =>
     RESEARCH_PROJECTS[projectId].requirements.every((sample) => researched.includes(sample)),
-  );
+  ));
+  let removedInvalidDependency = true;
+  while (removedInvalidDependency) {
+    removedInvalidDependency = false;
+    for (const projectId of validLearned) {
+      if (RESEARCH_PROJECT_PREREQUISITES[projectId].every((prerequisite) => validLearned.has(prerequisite))) continue;
+      validLearned.delete(projectId);
+      removedInvalidDependency = true;
+    }
+  }
+  const learned = rawLearned.filter((projectId) => validLearned.has(projectId));
   const ids = new Set<string>();
   const typeCounts: Record<ProgressionDeviceType, number> = { researchBench: 0, dryingBricks: 0, smelter: 0 };
   const typeLimits: Record<ProgressionDeviceType, number> = { researchBench: 1, dryingBricks: 3, smelter: 2 };

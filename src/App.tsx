@@ -288,7 +288,7 @@ export function App() {
   const learnProject = (projectId: ResearchProjectId) => {
     const learned = useGameStore.getState().learnResearchProject(projectId);
     gameRef.current?.playResearchLearn(learned);
-    showTransientNotice(learned ? `${RESEARCH_PROJECTS[projectId].name} 已写入制作记录` : '研究样本尚未齐全');
+    showTransientNotice(learned ? `${RESEARCH_PROJECTS[projectId].name} 已写入制作记录` : '研究前置或样本尚未齐全');
     return learned;
   };
   const recoverFromFailure = () => {

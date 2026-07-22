@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { launchDriftwakeChromium, preparePlaywrightPlatform } from './browser-runtime.mjs';
-import { assertEncodedFrameContent, assertFrameContent } from './capture-utils.mjs';
+import { assertEncodedFrameContent, assertFrameContent, pointerRecoveryAction } from './capture-utils.mjs';
 
 preparePlaywrightPlatform();
 
@@ -427,6 +427,22 @@ const progressionResearchSave = {
       devices: [
         { id: 'research-table', type: 'researchBench', x: 0, z: -1, rotation: 0, phase: 'idle', elapsed: 0, brickElapsed: [] },
       ],
+    },
+  },
+};
+
+const progressionGrowthSave = {
+  ...progressionResearchSave,
+  player: {
+    ...progressionResearchSave.player,
+    inventory: { hook: 1, hammer: 1 },
+  },
+  raft: {
+    ...progressionResearchSave.raft,
+    progression: {
+      ...progressionResearchSave.raft.progression,
+      researched: ['timber', 'rope', 'scrap', 'dryBrick', 'metalIngot', 'glassPane', 'hinge', 'signalBoard'],
+      learned: ['smelterKit'],
     },
   },
 };
@@ -1585,12 +1601,23 @@ async function exitPointerLockForOverlay(page, label) {
 
 async function ensurePointerLock(page) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const active = await page.evaluate(() => {
+    const lockState = await page.evaluate(() => {
       const mount = document.querySelector('.game-mount');
-      return document.pointerLockElement === document.querySelector('canvas')
-        && mount?.dataset.simulationActive === 'true';
+      return {
+        pointerLocked: document.pointerLockElement === document.querySelector('canvas'),
+        simulationActive: mount?.dataset.simulationActive === 'true',
+      };
     });
-    if (active) return;
+    const initialAction = pointerRecoveryAction(lockState);
+    if (initialAction === 'done') return;
+    if (lockState.pointerLocked) {
+      const resumed = await waitForRuntime(page, () => (
+        document.pointerLockElement === document.querySelector('canvas')
+        && document.querySelector('.game-mount')?.dataset.simulationActive === 'true'
+      ), 12_000).then(() => true).catch(() => false);
+      if (resumed) return;
+      continue;
+    }
     await page.bringToFront();
     const focused = await page.evaluate(() => document.hasFocus());
     if (focused) await page.evaluate(() => window.dispatchEvent(new Event('focus')));
@@ -1598,7 +1625,7 @@ async function ensurePointerLock(page) {
     const resumeConnected = await resume.waitFor({ state: 'attached', timeout: 5_000 })
       .then(() => true)
       .catch(() => false);
-    if (resumeConnected) {
+    if (pointerRecoveryAction({ ...lockState, resumeAvailable: resumeConnected }) === 'resume') {
       try {
         const alreadyRestored = await page.evaluate(() => {
           const canvas = document.querySelector('canvas');
@@ -1645,7 +1672,8 @@ async function ensurePointerLock(page) {
         const point = candidates.find(([x, y]) => document.elementFromPoint(x, y) === canvas);
         return point ? { x: point[0], y: point[1] } : null;
       });
-      if (!exposedCanvasPoint) continue;
+      const action = pointerRecoveryAction({ ...lockState, canvasExposed: Boolean(exposedCanvasPoint) });
+      if (action !== 'canvas' || !exposedCanvasPoint) continue;
       await page.mouse.click(exposedCanvasPoint.x, exposedCanvasPoint.y);
     }
     const restored = await waitForRuntime(page, () => {
@@ -6035,32 +6063,277 @@ async function captureProgressionPlacement() {
 async function captureProgressionResearch() {
   const { context, page } = await openDesktopPage('progression-research', { seedSave: true, progressionResearchStart: true });
   await enterGame(page);
-  await ensurePointerLock(page);
-  const prompt = await aimAroundToPrompt(page, '打开盐迹研究台');
-  if (!prompt.includes('打开盐迹研究台')) {
+  const dialog = page.locator('.field-pack');
+  let prompt = '';
+  let opened = false;
+  for (let attempt = 0; attempt < 3 && !opened; attempt += 1) {
+    await ensurePointerLock(page);
+    prompt = await aimAroundToPrompt(page, '打开研究台');
+    if (!prompt.includes('打开研究台')) continue;
+    await page.keyboard.press('e');
+    opened = await dialog.waitFor({ state: 'visible', timeout: 2_500 })
+      .then(() => true)
+      .catch(() => false);
+  }
+  if (!opened) {
     await page.screenshot({ path: new URL('progression-research-diagnostic.png', outputDir).pathname });
     throw new Error(`Expected research table prompt, received: ${prompt}`);
   }
-  await page.keyboard.press('KeyE');
   await page.getByRole('dialog', { name: '盐迹研究台' }).waitFor({ timeout: 4_000 });
   for (const sample of ['盐蚀漂木', '氧化废铁', '盐壳耐火砖']) {
-    await page.getByRole('button', { name: `研究${sample}` }).click();
+    const researched = await page.evaluate((name) => {
+      const button = [...document.querySelectorAll('button')]
+        .find((candidate) => candidate.getAttribute('aria-label') === `研究${name}`);
+      if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+      button.click();
+      return true;
+    }, sample);
+    if (!researched) throw new Error(`Research sample was not actionable: ${sample}`);
+    await page.waitForFunction((name) => {
+      const button = [...document.querySelectorAll('button')]
+        .find((candidate) => candidate.getAttribute('aria-label') === `研究${name}`);
+      return Boolean(button?.closest('.research-sample')?.classList.contains('is-complete'));
+    }, sample);
   }
-  const smelterProject = page.locator('.research-project').filter({ hasText: '回潮熔炉' });
+  const smelterProject = dialog.locator('.research-project').filter({
+    has: page.getByRole('heading', { name: '回潮熔炉', exact: true }),
+  });
   await smelterProject.waitFor({ state: 'visible' });
   if (!(await smelterProject.evaluate((element) => element.classList.contains('is-ready')))) {
     throw new Error('Smelter project did not become learnable after researching all samples');
   }
-  await page.screenshot({ path: new URL('progression-research-desktop.png', outputDir).pathname });
-  await smelterProject.getByRole('button', { name: '学习配方' }).click();
+  await captureDomOverlayPage(page, new URL('progression-research-desktop.png', outputDir).pathname);
+  const learned = await smelterProject.evaluate((element) => {
+    const button = element.querySelector('.panel-command');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  });
+  if (!learned) throw new Error('Smelter project was not actionable');
   await smelterProject.getByText('已学习').waitFor({ timeout: 4_000 });
-  await page.getByRole('button', { name: '关闭背包' }).click();
-  await page.keyboard.press('KeyC');
+  const closed = await dialog.evaluate((element) => {
+    const button = element.querySelector('button[aria-label="关闭背包"]');
+    if (!(button instanceof HTMLButtonElement)) return false;
+    button.click();
+    return true;
+  });
+  if (!closed) throw new Error('Progression research could not close the research panel');
+  const resumeButton = page.getByRole('button', { name: '继续漂流' });
+  await resumeButton.waitFor({ state: 'visible', timeout: 8_000 });
+  await resumeButton.click({ force: true });
+  await ensurePointerLock(page);
+  await page.keyboard.press('c');
   const smelterRecipe = page.locator('.recipe-row').filter({ hasText: '回潮熔炉' });
   await smelterRecipe.waitFor({ state: 'visible' });
   if (await smelterRecipe.evaluate((element) => element.classList.contains('is-locked'))) {
     throw new Error('Learned smelter recipe remained locked in crafting');
   }
+  console.log('Progression research gate: samples archived, smelter learned, crafting recipe unlocked');
+  await context.close();
+}
+
+async function captureProgressionGrowth() {
+  const { context, page } = await openDesktopPage('progression-growth', {
+    seedSave: true,
+    customSave: progressionGrowthSave,
+    quality: 'high',
+    width: 1024,
+    height: 640,
+  });
+  await enterGame(page);
+  const dialog = page.locator('.field-pack');
+  let prompt = '';
+  let opened = false;
+  for (let attempt = 0; attempt < 3 && !opened; attempt += 1) {
+    opened = await page.evaluate(() => {
+      const element = document.querySelector('.field-pack');
+      return Boolean(element && getComputedStyle(element).display !== 'none' && getComputedStyle(element).visibility !== 'hidden');
+    });
+    if (opened) break;
+    await ensurePointerLock(page);
+    prompt = await aimAroundToPrompt(page, '打开研究台');
+    if (!prompt.includes('打开研究台')) continue;
+    await page.keyboard.press('e');
+    opened = await dialog.waitFor({ state: 'visible', timeout: 2_500 })
+      .then(() => true)
+      .catch(() => false);
+    if (!opened) {
+      opened = await page.evaluate(() => {
+        const element = document.querySelector('.field-pack');
+        return Boolean(element && getComputedStyle(element).display !== 'none' && getComputedStyle(element).visibility !== 'hidden');
+      });
+    }
+  }
+  if (!opened && !prompt.includes('打开研究台')) {
+    throw new Error(`Progression growth expected research table prompt, received: ${prompt}`);
+  }
+  await dialog.waitFor({ state: 'visible', timeout: 8_000 }).catch(async (error) => {
+    const diagnostics = await page.evaluate(() => ({
+      prompt: document.querySelector('.interaction-prompt')?.textContent?.trim() ?? '',
+      pointerLocked: Boolean(document.pointerLockElement),
+      activeElement: document.activeElement?.tagName ?? null,
+      focusPrompt: Boolean(document.querySelector('.focus-prompt')),
+      overlay: document.querySelector('.field-pack')?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 120) ?? null,
+    }));
+    throw new Error(`Progression growth research panel did not open: ${JSON.stringify(diagnostics)}`, { cause: error });
+  });
+  const semantics = await dialog.evaluate((element) => ({
+    role: element.getAttribute('role'),
+    modal: element.getAttribute('aria-modal'),
+    labelledBy: element.getAttribute('aria-labelledby'),
+    heading: element.querySelector('#field-pack-heading')?.textContent?.trim() ?? null,
+  }));
+  if (
+    semantics.role !== 'dialog'
+    || semantics.modal !== 'true'
+    || semantics.labelledBy !== 'field-pack-heading'
+    || semantics.heading !== '盐迹研究台'
+  ) {
+    throw new Error(`Progression growth dialog semantics failed: ${JSON.stringify(semantics)}`);
+  }
+  const stageButtons = dialog.locator('.research-stage-tabs button');
+  if (await stageButtons.count() !== 3) throw new Error('Progression growth expected three research stages');
+
+  const selectStage = async (label) => {
+    const clicked = await page.evaluate((expected) => {
+      const button = [...document.querySelectorAll('.research-stage-tabs button')]
+        .find((candidate) => candidate.textContent?.includes(expected));
+      if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+      button.click();
+      return true;
+    }, label);
+    if (!clicked) throw new Error(`Progression growth could not select research stage: ${label}`);
+    await page.waitForFunction((expected) => (
+      document.querySelector('.research-stage-tabs button.is-active')?.textContent?.includes(expected)
+    ), label);
+  };
+  const project = (name) => dialog.locator('.research-project').filter({
+    has: page.getByRole('heading', { name, exact: true }),
+  });
+  const learnProjectFromPanel = async (name) => {
+    const clicked = await page.evaluate((expected) => {
+      const card = [...document.querySelectorAll('.research-project')]
+        .find((candidate) => candidate.querySelector('h3')?.textContent?.trim() === expected);
+      const button = card?.querySelector('.panel-command');
+      if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+      button.click();
+      return true;
+    }, name);
+    if (!clicked) throw new Error(`Progression growth project was not actionable: ${name}`);
+    await page.waitForFunction((expected) => (
+      [...document.querySelectorAll('.research-project')]
+        .some((candidate) => candidate.querySelector('h3')?.textContent?.trim() === expected && candidate.classList.contains('is-complete'))
+    ), name);
+  };
+
+  await selectStage('远海测向');
+  const lockedBoard = project('潮听信号板');
+  await lockedBoard.waitFor({ state: 'visible' });
+  if (
+    await lockedBoard.evaluate((element) => element.classList.contains('is-ready'))
+    || !(await lockedBoard.getByRole('button', { name: '等待前置推演' }).isDisabled())
+    || !(await lockedBoard.locator('.research-prerequisites').getByText('潮铸密封铰链').isVisible())
+  ) {
+    throw new Error('Signal board bypassed its hinge prerequisite');
+  }
+
+  await selectStage('炉工基础');
+  const hinge = project('潮铸密封铰链');
+  await hinge.waitFor({ state: 'visible' });
+  if (!(await hinge.evaluate((element) => element.classList.contains('is-ready')))) {
+    throw new Error('Hinge did not become available after the smelter prerequisite');
+  }
+  await learnProjectFromPanel('潮铸密封铰链');
+
+  await selectStage('远海测向');
+  await learnProjectFromPanel('潮听信号板');
+  await learnProjectFromPanel('盐差电池');
+  await learnProjectFromPanel('潮听接收台');
+  await page.waitForFunction(() => (
+    [...document.querySelectorAll('.research-project')]
+      .some((element) => element.textContent?.includes('双桅定向阵列') && element.classList.contains('is-ready'))
+  ));
+
+  const readLayout = () => page.evaluate(() => {
+    const rectOf = (selector) => {
+      const rect = document.querySelector(selector)?.getBoundingClientRect();
+      return rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height } : null;
+    };
+    return {
+      dialog: rectOf('.field-pack'),
+      stages: rectOf('.research-stage-tabs'),
+      projects: document.querySelectorAll('.research-project').length,
+      learnedProjects: document.querySelectorAll('.research-project.is-complete').length,
+      readyProjects: document.querySelectorAll('.research-project.is-ready').length,
+      activeStage: document.querySelector('.research-stage-tabs button.is-active')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      summary: document.querySelector('.research-stage-summary')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      bodyWidth: document.body.scrollWidth,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      clipped: [...document.querySelectorAll('.research-stage-tabs button, .research-project h3, .research-project .panel-command')]
+        .filter((element) => element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1)
+        .map((element) => element.textContent?.trim() || element.tagName),
+    };
+  });
+  const desktop = await readLayout();
+  if (
+    !desktop.dialog
+    || !desktop.stages
+    || desktop.projects !== 5
+    || desktop.learnedProjects !== 3
+    || desktop.readyProjects !== 2
+    || !desktop.activeStage.includes('远海测向')
+    || !desktop.summary.includes('2 项可推演')
+    || desktop.dialog.left < -1
+    || desktop.dialog.right > desktop.viewport.width + 1
+    || desktop.dialog.top < -1
+    || desktop.dialog.bottom > desktop.viewport.height + 1
+    || desktop.stages.top < desktop.dialog.top - 1
+    || desktop.stages.bottom > desktop.dialog.bottom + 1
+    || desktop.bodyWidth > desktop.viewport.width + 2
+    || desktop.clipped.length > 0
+  ) {
+    throw new Error(`Progression growth desktop layout failed: ${JSON.stringify(desktop)}`);
+  }
+  await captureDomOverlayPage(page, new URL('progression-growth-desktop.png', outputDir).pathname);
+
+  await page.setViewportSize({ width: 640, height: 720 });
+  await page.waitForTimeout(240);
+  await page.evaluate(() => {
+    document.querySelector('.research-stage-tabs')?.scrollIntoView({ block: 'start', inline: 'nearest' });
+  });
+  await page.waitForTimeout(120);
+  const narrow = await readLayout();
+  if (
+    !narrow.dialog
+    || !narrow.stages
+    || narrow.dialog.left < -1
+    || narrow.dialog.right > narrow.viewport.width + 1
+    || narrow.dialog.top < -1
+    || narrow.dialog.bottom > narrow.viewport.height + 1
+    || narrow.stages.top < narrow.dialog.top - 1
+    || narrow.stages.bottom > narrow.dialog.bottom + 1
+    || narrow.stages.right > narrow.dialog.right + 1
+    || narrow.bodyWidth > narrow.viewport.width + 2
+    || narrow.clipped.length > 0
+  ) {
+    throw new Error(`Progression growth narrow layout failed: ${JSON.stringify(narrow)}`);
+  }
+  if (process.env.CAPTURE_FAST !== '1') {
+    await captureDomOverlayPage(page, new URL('progression-growth-narrow.png', outputDir).pathname);
+  }
+  const closed = await dialog.evaluate((element) => {
+    const button = element.querySelector('button[aria-label="关闭背包"]');
+    if (!(button instanceof HTMLButtonElement)) return false;
+    button.click();
+    return true;
+  });
+  if (!closed) throw new Error('Progression growth could not close the research panel');
+  const resumeButton = page.getByRole('button', { name: '继续漂流' });
+  await resumeButton.waitFor({ state: 'visible', timeout: 8_000 });
+  await resumeButton.click({ force: true });
+  await ensurePointerLock(page);
+  await assertHookVisualOwnership(page, 'progression-growth-resumed', 'held');
+  console.log(`Progression growth gate: ${JSON.stringify({ desktop, narrow })}`);
   await context.close();
 }
 
@@ -8787,6 +9060,7 @@ try {
   if (captureOnly === 'all' || captureOnly === 'planting' || captureOnly === 'planting-bird') await capturePlantingBird();
   if (captureOnly === 'all' || captureOnly === 'progression-placement') await captureProgressionPlacement();
   if (captureOnly === 'all' || captureOnly === 'progression-research') await captureProgressionResearch();
+  if (captureOnly === 'all' || captureOnly === 'progression-growth') await captureProgressionGrowth();
   if (captureOnly === 'all' || captureOnly === 'progression-smelting') await captureProgressionSmelting();
   if (captureOnly === 'all' || captureOnly === 'island') await captureIsland();
   if (captureOnly === 'all' || captureOnly === 'island-interaction') await captureIslandInteraction();

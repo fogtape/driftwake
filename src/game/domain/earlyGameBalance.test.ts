@@ -25,6 +25,9 @@ import {
   type SavedDeviceState,
 } from './devices';
 import { INITIAL_SURVIVAL, advanceSurvival, consumeItem, type SurvivalState } from './survival';
+import { RECIPES, type RecipeId } from './recipes';
+import { generateHarvestNodes } from './island';
+import { generateReefNodes } from './underwater';
 
 const FIRST_BELT = [
   ['timber', 0.5],
@@ -171,5 +174,57 @@ describe('early-game 60-minute balance contract', () => {
     }
     expect(failedAt).toBeGreaterThanOrEqual(2100);
     expect(failedAt).toBeLessThanOrEqual(2160);
+  });
+
+  it('budgets the first signal array for three complete reef expeditions instead of one lucky dive', () => {
+    const routeCrafts: Partial<Record<RecipeId, number>> = {
+      wetBrick: 7,
+      smelterKit: 1,
+      hinge: 2,
+      signalBoard: 4,
+      brineCell: 1,
+      receiverKit: 1,
+      antennaKit: 1,
+    };
+    const craftingCosts = mergeBundles(
+      (Object.entries(routeCrafts) as [RecipeId, number][]).map(([recipeId, count]) => (
+        Object.fromEntries(
+          (Object.entries(RECIPES[recipeId].cost) as [ItemId, number][])
+            .map(([itemId, amount]) => [itemId, amount * count]),
+        ) as ItemBundle
+      )),
+    );
+    const sampleCosts: ItemBundle = {
+      timber: 1,
+      rope: 1,
+      scrap: 1,
+      dryBrick: 1,
+      metalIngot: 1,
+      glassPane: 1,
+      hinge: 1,
+      signalBoard: 1,
+    };
+    const metalCharges = (craftingCosts.metalIngot ?? 0) + (sampleCosts.metalIngot ?? 0);
+    const glassCharges = (craftingCosts.glassPane ?? 0) + (sampleCosts.glassPane ?? 0);
+    const rawBudget = {
+      sand: (craftingCosts.sand ?? 0) + glassCharges,
+      clay: craftingCosts.clay ?? 0,
+      metalOre: metalCharges,
+      timber: (craftingCosts.timber ?? 0) + (sampleCosts.timber ?? 0) + (metalCharges + glassCharges) * 2,
+      scrap: (craftingCosts.scrap ?? 0) + (sampleCosts.scrap ?? 0),
+      polymer: craftingCosts.polymer ?? 0,
+      rope: (craftingCosts.rope ?? 0) + (sampleCosts.rope ?? 0),
+    };
+    expect(rawBudget).toEqual({ sand: 19, clay: 14, metalOre: 10, timber: 48, scrap: 22, polymer: 16, rope: 3 });
+
+    const reefYield = mergeBundles(generateReefNodes(0x51ad7e).map((node) => node.output));
+    const islandYield = mergeBundles(generateHarvestNodes(0x51ad7e).map((node) => node.output));
+    expect(reefYield).toMatchObject({ sand: 8, clay: 8, metalOre: 4 });
+    expect((reefYield.sand ?? 0) * 2).toBeLessThan(rawBudget.sand);
+    expect((reefYield.metalOre ?? 0) * 2).toBeLessThan(rawBudget.metalOre);
+    expect((reefYield.sand ?? 0) * 3).toBeGreaterThanOrEqual(rawBudget.sand);
+    expect((reefYield.clay ?? 0) * 3).toBeGreaterThanOrEqual(rawBudget.clay);
+    expect((reefYield.metalOre ?? 0) * 3).toBeGreaterThanOrEqual(rawBudget.metalOre);
+    expect((islandYield.timber ?? 0) * 3).toBeGreaterThanOrEqual(rawBudget.timber);
   });
 });

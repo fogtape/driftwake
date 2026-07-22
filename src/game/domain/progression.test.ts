@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { ProgressionKnowledge } from './progression';
 import {
   BRICK_DRY_SECONDS,
+  RESEARCH_PROJECTS,
+  RESEARCH_STAGE_ORDER,
+  RESEARCH_STAGE_PROJECTS,
   SMELT_SECONDS,
   addResearchSample,
   addWetBrick,
@@ -11,6 +15,9 @@ import {
   createDefaultProgressionState,
   createProgressionDevice,
   learnProject,
+  missingProjectPrerequisites,
+  researchProjectStage,
+  researchStageProgress,
   sanitizeProgressionState,
   startSmelter,
 } from './progression';
@@ -30,21 +37,41 @@ describe('research progression', () => {
 
   it('chains signal electronics through a crafted board sample before receiver equipment', () => {
     let knowledge = createDefaultProgressionState();
-    for (const sample of ['scrap', 'metalIngot', 'glassPane'] as const) {
+    for (const sample of ['timber', 'rope', 'scrap', 'dryBrick', 'metalIngot', 'glassPane'] as const) {
       knowledge = { ...knowledge, ...addResearchSample(knowledge, sample) };
     }
+    expect(canLearnProject(knowledge, 'signalBoard')).toBe(false);
+    expect(missingProjectPrerequisites(knowledge, 'signalBoard')).toEqual(['hinge']);
+    knowledge = { ...knowledge, ...learnProject(knowledge, 'smelterKit') };
+    knowledge = { ...knowledge, ...learnProject(knowledge, 'hinge') };
     expect(canLearnProject(knowledge, 'signalBoard')).toBe(true);
     knowledge = { ...knowledge, ...learnProject(knowledge, 'signalBoard') };
     expect(canLearnProject(knowledge, 'receiverKit')).toBe(false);
     knowledge = { ...knowledge, ...addResearchSample(knowledge, 'signalBoard') };
-    knowledge = { ...knowledge, ...addResearchSample(knowledge, 'timber') };
-    knowledge = { ...knowledge, ...addResearchSample(knowledge, 'rope') };
-    expect(canLearnProject(knowledge, 'receiverKit')).toBe(true);
-    expect(canLearnProject(knowledge, 'antennaKit')).toBe(true);
     expect(canLearnProject(knowledge, 'brineCell')).toBe(true);
-    expect(canLearnProject(knowledge, 'resonanceFork')).toBe(false);
+    expect(canLearnProject(knowledge, 'receiverKit')).toBe(false);
     knowledge = { ...knowledge, ...addResearchSample(knowledge, 'hinge') };
+    knowledge = { ...knowledge, ...learnProject(knowledge, 'brineCell') };
+    expect(canLearnProject(knowledge, 'receiverKit')).toBe(true);
     expect(canLearnProject(knowledge, 'resonanceFork')).toBe(true);
+    expect(canLearnProject(knowledge, 'antennaKit')).toBe(false);
+    knowledge = { ...knowledge, ...learnProject(knowledge, 'receiverKit') };
+    expect(canLearnProject(knowledge, 'antennaKit')).toBe(true);
+  });
+
+  it('partitions every project into one staged dependency view', () => {
+    const staged = RESEARCH_STAGE_ORDER.flatMap((stage) => RESEARCH_STAGE_PROJECTS[stage]);
+    expect(new Set(staged).size).toBe(Object.keys(RESEARCH_PROJECTS).length);
+    expect(staged).toHaveLength(Object.keys(RESEARCH_PROJECTS).length);
+    expect(researchProjectStage('smelterKit')).toBe('forge');
+    expect(researchProjectStage('helmKit')).toBe('raft');
+    expect(researchProjectStage('receiverKit')).toBe('signal');
+
+    const knowledge: ProgressionKnowledge = {
+      researched: ['timber', 'scrap', 'dryBrick'],
+      learned: [],
+    };
+    expect(researchStageProgress(knowledge, 'forge')).toEqual({ learned: 0, available: 1, total: 4 });
   });
 
   it('dries separately timed bricks without advancing newly added bricks', () => {
@@ -75,7 +102,7 @@ describe('research progression', () => {
   it('sanitizes device limits, timers and forged knowledge claims', () => {
     const state = sanitizeProgressionState({
       researched: ['timber', 'scrap', 'dryBrick', 'not-real', 'timber'],
-      learned: ['smelterKit', 'metalSpear'],
+      learned: ['smelterKit', 'metalSpear', 'receiverKit'],
       devices: [
         { id: 'table', type: 'researchBench', x: 99, z: -99, rotation: 1.4 },
         { id: 'table-2', type: 'researchBench', x: 0, z: 0 },

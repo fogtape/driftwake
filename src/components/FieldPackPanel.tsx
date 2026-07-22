@@ -50,10 +50,17 @@ import { TOOL_MAX_DURABILITY, toolDurabilityRatio, type ToolDurability } from '.
 import { canBenefitFromConsumable, type SurvivalState } from '../game/domain/survival';
 import {
   RESEARCH_PROJECTS,
+  RESEARCH_PROJECT_PREREQUISITES,
   RESEARCH_SAMPLE_IDS,
+  RESEARCH_STAGE_ORDER,
+  RESEARCH_STAGE_PROJECTS,
+  RESEARCH_STAGES,
   canLearnProject,
+  missingProjectPrerequisites,
+  researchStageProgress,
   type ResearchProjectId,
   type ResearchSampleId,
+  type ResearchStageId,
 } from '../game/domain/progression';
 import type {
   OverlayPanel,
@@ -177,7 +184,15 @@ export function FieldPackPanel({
   const [transferAmount, setTransferAmount] = useState(1);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<StorageSide | null>(null);
+  const [researchStage, setResearchStage] = useState<ResearchStageId>(() => (
+    RESEARCH_STAGE_ORDER.find((stage) => {
+      const progress = researchStageProgress(progression, stage);
+      return progress.learned < progress.total;
+    }) ?? 'signal'
+  ));
   const draggedStackRef = useRef<DraggedStorageStack | null>(null);
+  const stageProjects = RESEARCH_STAGE_PROJECTS[researchStage] as readonly ResearchProjectId[];
+  const stageProgress = researchStageProgress(progression, researchStage);
 
   const selectedTransferStack = transferSelection
     ? (transferSelection.side === 'pack' ? stacks : storageStacks).find(
@@ -760,11 +775,36 @@ export function FieldPackPanel({
                 <div><FlaskConical size={20} /><span id="research-projects-heading">可推演项目</span></div>
                 <small>{progression.learned.length}/{Object.keys(RESEARCH_PROJECTS).length} 已学习</small>
               </div>
+              <nav className="research-stage-tabs" aria-label="研究阶段">
+                {RESEARCH_STAGE_ORDER.map((stage, index) => {
+                  const progress = researchStageProgress(progression, stage);
+                  const active = stage === researchStage;
+                  return (
+                    <button
+                      className={active ? 'is-active' : progress.learned >= progress.total ? 'is-complete' : ''}
+                      type="button"
+                      onClick={() => setResearchStage(stage)}
+                      aria-pressed={active}
+                      key={stage}
+                    >
+                      <span>{String(index + 1).padStart(2, '0')}</span>
+                      <strong>{RESEARCH_STAGES[stage].name}</strong>
+                      <small>{progress.learned}/{progress.total}</small>
+                    </button>
+                  );
+                })}
+              </nav>
+              <div className="research-stage-summary">
+                <span>{RESEARCH_STAGES[researchStage].summary}</span>
+                <strong>{stageProgress.available > 0 ? `${stageProgress.available} 项可推演` : `${stageProgress.learned}/${stageProgress.total} 已完成`}</strong>
+              </div>
               <div className="research-project-list">
-                {(Object.keys(RESEARCH_PROJECTS) as ResearchProjectId[]).map((projectId) => {
+                {stageProjects.map((projectId) => {
                   const project = RESEARCH_PROJECTS[projectId];
                   const learned = progression.learned.includes(projectId);
                   const ready = canLearnProject(progression, projectId);
+                  const prerequisites = RESEARCH_PROJECT_PREREQUISITES[projectId];
+                  const missingPrerequisites = missingProjectPrerequisites(progression, projectId);
                   return (
                     <article className={`research-project ${learned ? 'is-complete' : ready ? 'is-ready' : ''}`} key={projectId}>
                       <header>
@@ -774,6 +814,15 @@ export function FieldPackPanel({
                         <div><span>{learned ? '已学习' : ready ? '可推演' : '缺少样本'}</span><h3>{project.name}</h3></div>
                       </header>
                       <p>{project.description}</p>
+                      {prerequisites.length > 0 && (
+                        <div className="research-prerequisites" aria-label={`${project.name}前置项目`}>
+                          <span>前置</span>
+                          {prerequisites.map((prerequisite) => {
+                            const met = progression.learned.includes(prerequisite);
+                            return <b className={met ? 'is-met' : 'is-missing'} key={prerequisite}>{met && <Check size={12} />}{RESEARCH_PROJECTS[prerequisite].name}</b>;
+                          })}
+                        </div>
+                      )}
                       <div className="recipe-costs">
                         {project.requirements.map((sample) => {
                           const met = progression.researched.includes(sample);
@@ -782,7 +831,7 @@ export function FieldPackPanel({
                       </div>
                       <button className="panel-command" type="button" disabled={!ready} onClick={() => onLearn(projectId)}>
                         {learned ? <Check size={18} /> : ready ? <FlaskConical size={18} /> : <LockKeyhole size={18} />}
-                        {learned ? '已写入制作记录' : '学习配方'}
+                        {learned ? '已写入制作记录' : missingPrerequisites.length > 0 ? '等待前置推演' : '学习配方'}
                       </button>
                     </article>
                   );

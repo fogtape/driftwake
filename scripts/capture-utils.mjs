@@ -174,6 +174,18 @@ export function isCriticalBrowserMessage(type, value) {
   return type === 'error' || /context[\s_-]*lost|CONTEXT_LOST_WEBGL/i.test(value);
 }
 
+export function pointerRecoveryAction({
+  pointerLocked,
+  simulationActive,
+  resumeAvailable = false,
+  canvasExposed = false,
+}) {
+  if (pointerLocked) return simulationActive ? 'done' : 'wait';
+  if (resumeAvailable) return 'resume';
+  if (canvasExposed) return 'canvas';
+  return 'wait';
+}
+
 function percentile(sorted, ratio) {
   return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * ratio) - 1)];
 }
