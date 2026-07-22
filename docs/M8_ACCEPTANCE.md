@@ -78,4 +78,4 @@ CAPTURE_ONLY=progression-growth DRIFTWAKE_URL=http://127.0.0.1:4173 npm run capt
 
 ## M9 发布门禁
 
-M8 的代码与自动验收已关闭。30-60 分钟无说明玩家节奏仍需验证实际迷路率、研究阶段理解和废铁压力；最终 DCC 蒙皮、多样本录音、多存档位/备份、真 Context Lost/Restore 与目标 GPU 发布验证统一进入 M9，不以本机软件证据冒充通过。
+M8 的代码与自动验收已关闭。30-60 分钟无说明玩家节奏仍需验证实际迷路率、研究阶段理解和废铁压力；最终 DCC 蒙皮、多样本录音、真 Context Lost/Restore 与目标 GPU 发布验证统一进入 M9，不以本机软件证据冒充通过。

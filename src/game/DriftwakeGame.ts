@@ -31,7 +31,13 @@ import { useGameStore, type AudioMix, type QualityPreset } from '../state/gameSt
 import { ITEM_DEFINITIONS, itemCount, preferredToolOrder, type ItemId, type ToolId } from './domain/items';
 import { TOOL_MAX_DURABILITY } from './domain/toolDurability';
 import type { DeviceType } from './domain/devices';
-import { SAVE_VERSION, createDefaultRaftTiles, loadSave, writeSave, type DriftwakeSave } from './domain/save';
+import { SAVE_VERSION, createDefaultRaftTiles, type DriftwakeSave } from './domain/save';
+import {
+  getActiveSaveSlot,
+  loadSaveSlot,
+  writeSaveSlot,
+  type SaveSlotId,
+} from './domain/saveRepository';
 import { createDefaultIslandState } from './domain/island';
 import { createDefaultUnderwaterState } from './domain/underwater';
 import { createDefaultNavigationState, type SignalTargetId } from './domain/navigation';
@@ -227,7 +233,10 @@ export class DriftwakeGame {
   private frameWatchdog: number | null = null;
   private pointerLockTimer: number | null = null;
 
-  constructor(private readonly mount: HTMLElement) {
+  constructor(
+    private readonly mount: HTMLElement,
+    private readonly saveSlot: SaveSlotId = getActiveSaveSlot(),
+  ) {
     this.renderer = new WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
     this.renderer.domElement.className = 'game-canvas';
     this.renderer.domElement.setAttribute('aria-label', 'Driftwake 3D 游戏画面');
@@ -242,6 +251,9 @@ export class DriftwakeGame {
     this.scene.fog = new FogExp2(0xa9cfd2, 0.0065);
     this.mount.dataset.simulationActive = 'false';
     this.mount.dataset.contextHealthy = 'true';
+    this.mount.dataset.saveSlot = this.saveSlot;
+    this.mount.dataset.saveLoadSource = 'empty';
+    this.mount.dataset.saveRecovered = 'false';
     this.mount.dataset.raftTileCount = '0';
     this.mount.dataset.hookState = 'uninitialized';
     this.mount.dataset.hookHeldVisible = 'false';
@@ -330,6 +342,7 @@ export class DriftwakeGame {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('beforeunload', this.onBeforeUnload);
+    window.addEventListener('pagehide', this.onPageHide);
     this.renderer.domElement.addEventListener('click', this.onCanvasClick);
     this.renderer.domElement.addEventListener('webglcontextlost', this.onContextLost);
     this.renderer.domElement.addEventListener('webglcontextrestored', this.onContextRestored);
@@ -338,9 +351,13 @@ export class DriftwakeGame {
   async initialize(): Promise<void> {
     const store = useGameStore.getState();
     try {
+      store.resetSession();
       store.setLoadingLabel('正在调校光线');
       this.setupLightingAndSky();
-      const save = loadSave();
+      const loaded = loadSaveSlot(this.saveSlot);
+      const save = loaded.save;
+      this.mount.dataset.saveLoadSource = loaded.source;
+      this.mount.dataset.saveRecovered = String(loaded.recovered);
       if (save) store.hydratePlayer(save.player);
       this.textures = await loadAssetTextures(this.renderer);
       if (this.disposed) return;
@@ -685,6 +702,8 @@ export class DriftwakeGame {
       store.setLoadingLabel('海况稳定');
       this.syncFailureDiagnostics(useGameStore.getState().failure);
       this.settlePendingFailureDrop(useGameStore.getState().failure);
+      this.saveNow();
+      if (loaded.recovered) this.showTransientNotice('主航迹损坏 · 已从备份恢复');
     } catch (error) {
       console.error('Failed to initialize Driftwake', error);
       store.setLoadingLabel('初始化失败');
@@ -825,6 +844,7 @@ export class DriftwakeGame {
 
   dispose(): void {
     if (this.disposed) return;
+    this.saveNow();
     this.disposed = true;
     this.renderer.setAnimationLoop(null);
     if (this.frameWatchdog !== null) window.clearInterval(this.frameWatchdog);
@@ -838,6 +858,7 @@ export class DriftwakeGame {
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('beforeunload', this.onBeforeUnload);
+    window.removeEventListener('pagehide', this.onPageHide);
     this.renderer.domElement.removeEventListener('click', this.onCanvasClick);
     this.renderer.domElement.removeEventListener('webglcontextlost', this.onContextLost);
     this.renderer.domElement.removeEventListener('webglcontextrestored', this.onContextRestored);
@@ -1370,6 +1391,7 @@ export class DriftwakeGame {
 
   private readonly onContextLost = (event: Event): void => {
     event.preventDefault();
+    this.saveNow();
     this.contextLost = true;
     this.mount.dataset.contextHealthy = 'false';
     this.pauseInput();
@@ -1410,8 +1432,10 @@ export class DriftwakeGame {
 
   private readonly onVisibilityChange = (): void => {
     this.syncAudioFocusMuted();
-    if (document.visibilityState !== 'visible') this.pauseInput();
-    else this.clock.start();
+    if (document.visibilityState !== 'visible') {
+      this.saveNow();
+      this.pauseInput();
+    } else this.clock.start();
   };
 
   private syncAudioFocusMuted(): void {
@@ -1547,7 +1571,7 @@ export class DriftwakeGame {
         shark: this.shark?.getSavedState() ?? createDefaultSharkState(),
       },
     };
-    useGameStore.getState().setSaveStatus(writeSave(save) ? 'saved' : 'error');
+    useGameStore.getState().setSaveStatus(writeSaveSlot(save, this.saveSlot) ? 'saved' : 'error');
   }
 
   private syncCraftingDiagnostics(): void {
@@ -1676,6 +1700,10 @@ export class DriftwakeGame {
   }
 
   private readonly onBeforeUnload = (): void => {
+    this.saveNow();
+  };
+
+  private readonly onPageHide = (): void => {
     this.saveNow();
   };
 

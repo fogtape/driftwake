@@ -110,6 +110,27 @@ const seededSave = {
   },
 };
 
+const saveSlotCaptureSeed = {
+  active: 'slot-2',
+  primary: {
+    'slot-1': {
+      ...seededSave,
+      version: 18,
+      savedAt: 1_784_550_400_000,
+      player: { ...seededSave.player, playSeconds: 4_260 },
+    },
+  },
+  backup: {
+    'slot-2': {
+      ...seededSave,
+      version: 18,
+      savedAt: 1_784_550_100_000,
+      player: { ...seededSave.player, playSeconds: 1_560 },
+    },
+  },
+  corrupt: ['slot-2', 'slot-3'],
+};
+
 const salvageSave = {
   ...seededSave,
   version: 11,
@@ -1531,6 +1552,20 @@ async function openDesktopPage(label, options = {}) {
       localStorage.setItem(`driftwake.save.v${save.version}`, JSON.stringify(save));
     }, options.customSave ?? (options.structureCollapseStart ? structureCollapseSave : options.perimeterDefenseVisualStart ? perimeterDefenseVisualSave : options.perimeterDefenseStart ? perimeterDefenseSave : options.collectionNetStart ? collectionNetSave : options.failureStart ? failureSave : options.survivalPressureStart ? survivalPressureSave : options.structureDamageStart ? structureDamageSave : options.structureFloorCeilingStart ? structureFloorCeilingSave : options.structureRoofCeilingStart ? structureRoofCeilingSave : options.structureTraversalStart ? structureTraversalSave : options.structureVisualStart ? structureVisualSave : options.structureBuildStart ? structureBuildSave : options.durabilityHammerStart ? durabilityHammerSave : options.durabilityFishingStart ? durabilityFishingSave : options.durabilityAxeStart ? durabilityAxeSave : options.salvageStart ? salvageSave : options.signalStart ? signalNetworkSave : options.advancedStorageStart ? advancedStorageSave : options.advancedStart ? advancedDeviceSave : options.navigationStormStart ? navigationStormSave : options.navigationRiggingStart ? navigationRiggingSave : options.navigationHelmPlacementStart ? navigationHelmPlacementSave : options.progressionReadyStart ? progressionReadySave : options.progressionSmeltingStart ? progressionSmeltingSave : options.progressionResearchStart ? progressionResearchSave : options.progressionPlacementStart ? progressionPlacementSave : options.plantingBirdStart ? plantingBirdSave : options.plantingPlacementStart ? plantingPlacementSave : options.plantingStart ? plantingInteractionSave : options.driftRiskStart ? driftRiskSave : options.anchorStart ? anchorInteractionSave : options.underwaterStart ? underwaterSeededSave : options.interactionStart ? islandInteractionSave : options.islandStart ? islandSeededSave : seededSave));
   }
+  if (options.saveSlotSeed) {
+    await context.addInitScript((seed) => {
+      localStorage.setItem('driftwake.save.active.v1', seed.active);
+      for (const [slot, save] of Object.entries(seed.primary)) {
+        localStorage.setItem(`driftwake.save.${slot}.v18`, JSON.stringify(save));
+      }
+      for (const [slot, save] of Object.entries(seed.backup)) {
+        localStorage.setItem(`driftwake.save.${slot}.backup.v18`, JSON.stringify(save));
+      }
+      for (const slot of seed.corrupt) {
+        localStorage.setItem(`driftwake.save.${slot}.v18`, '{corrupt');
+      }
+    }, options.saveSlotSeed);
+  }
   const page = await context.newPage();
   if (options.focusEmulation) {
     const cdp = await context.newCDPSession(page);
@@ -1560,7 +1595,7 @@ async function openDesktopPage(label, options = {}) {
 }
 
 async function enterGame(page) {
-  await page.getByRole('button', { name: '开始漂流', exact: true }).click({ force: true });
+  await page.getByRole('button', { name: /^(开始漂流|开始新航次|继续航次|恢复航次|重建航次)$/ }).click({ force: true });
   const enter = page.getByRole('button', { name: '继续漂流', exact: true });
   await enter.waitFor({ timeout: 120_000 });
   await enter.click({ force: true });
@@ -2318,6 +2353,144 @@ async function captureTitle() {
   await context.close();
 }
 
+async function captureSaveSlots() {
+  const { context, page } = await openDesktopPage('save-slots', { saveSlotSeed: saveSlotCaptureSeed });
+  const slots = page.getByRole('radiogroup', { name: '远海航次' });
+  await slots.waitFor({ state: 'visible' });
+  const readState = () => page.evaluate(() => ({
+    canvasFound: document.querySelector('canvas') !== null,
+    worldResources: performance.getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .filter((name) => /DriftwakeGame(?:-[^/?]+)?\.(?:js|ts)(?:\?|$)/.test(name)),
+    activeSlot: document.querySelector('.title-screen__masthead span')?.textContent?.trim() ?? '',
+    command: document.querySelector('.primary-command')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    slots: [...document.querySelectorAll('.title-save-slot')].map((element) => ({
+      state: [...element.classList].find((name) => name.startsWith('title-save-slot--'))?.replace('title-save-slot--', '') ?? 'missing',
+      active: element.classList.contains('is-active'),
+      text: element.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    })),
+    bodyWidth: document.body.scrollWidth,
+    viewport: { width: innerWidth, height: innerHeight },
+    clipped: [...document.querySelectorAll('.title-save-slot__status, .title-save-slot__select small')]
+      .filter((element) => element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1)
+      .map((element) => element.textContent?.trim() ?? element.tagName),
+  }));
+  const initial = await readState();
+  if (
+    initial.canvasFound
+    || initial.worldResources.length > 0
+    || initial.activeSlot !== '远海航次 02'
+    || !initial.command.includes('恢复航次')
+    || initial.slots.map((slot) => slot.state).join(',') !== 'ready,recovered,corrupt'
+    || initial.slots.filter((slot) => slot.active).length !== 1
+    || !initial.slots[1]?.active
+    || initial.bodyWidth > initial.viewport.width + 2
+    || initial.clipped.length > 0
+  ) {
+    throw new Error(`Save slot title state failed: ${JSON.stringify(initial)}`);
+  }
+  await page.screenshot({ path: new URL('save-slots-desktop.png', outputDir).pathname });
+
+  await page.getByRole('radio', { name: '航次 1，航迹稳定' }).click();
+  await page.getByRole('button', { name: '继续航次', exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('radio', { name: '航次 3，航迹损坏' }).click();
+  await page.getByRole('button', { name: '重建航次', exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('radio', { name: '航次 2，备份可恢复' }).click();
+  await page.getByRole('button', { name: '恢复航次', exact: true }).waitFor({ state: 'visible' });
+
+  await page.setViewportSize({ width: 640, height: 720 });
+  await page.waitForTimeout(180);
+  const narrow = await readState();
+  if (
+    narrow.canvasFound
+    || narrow.worldResources.length > 0
+    || narrow.bodyWidth > narrow.viewport.width + 2
+    || narrow.clipped.length > 0
+    || narrow.slots.map((slot) => slot.state).join(',') !== 'ready,recovered,corrupt'
+  ) {
+    throw new Error(`Save slot narrow layout failed: ${JSON.stringify(narrow)}`);
+  }
+  if (process.env.CAPTURE_FAST !== '1') {
+    await page.screenshot({ path: new URL('save-slots-narrow.png', outputDir).pathname });
+  }
+  console.log(`Save slot gate: ${JSON.stringify({ initial, narrow })}`);
+  await context.close();
+}
+
+async function captureSaveRecovery() {
+  const { context, page } = await openDesktopPage('save-recovery', {
+    saveSlotSeed: saveSlotCaptureSeed,
+    quality: 'low',
+  });
+  await enterGame(page);
+  const recovery = await page.evaluate(() => {
+    const parse = (key) => {
+      try {
+        return JSON.parse(localStorage.getItem(key) ?? 'null');
+      } catch {
+        return null;
+      }
+    };
+    const mount = document.querySelector('.game-mount');
+    const slotOne = parse('driftwake.save.slot-1.v18');
+    const slotTwo = parse('driftwake.save.slot-2.v18');
+    const backup = parse('driftwake.save.slot-2.backup.v18');
+    return {
+      active: localStorage.getItem('driftwake.save.active.v1'),
+      slot: mount?.dataset.saveSlot ?? null,
+      source: mount?.dataset.saveLoadSource ?? null,
+      recovered: mount?.dataset.saveRecovered ?? null,
+      slotOneSeconds: slotOne?.player?.playSeconds ?? null,
+      slotTwoSeconds: slotTwo?.player?.playSeconds ?? null,
+      backupSeconds: backup?.player?.playSeconds ?? null,
+      slotTwoVersion: slotTwo?.version ?? null,
+      simulationActive: mount?.dataset.simulationActive ?? null,
+      contextHealthy: mount?.dataset.contextHealthy ?? null,
+    };
+  });
+  if (
+    recovery.active !== 'slot-2'
+    || recovery.slot !== 'slot-2'
+    || recovery.recovered !== 'true'
+    || recovery.slotOneSeconds !== 4_260
+    || recovery.slotTwoVersion !== 18
+    || !Number.isFinite(recovery.slotTwoSeconds)
+    || recovery.slotTwoSeconds < 1_560
+    || recovery.backupSeconds !== 1_560
+    || recovery.simulationActive !== 'true'
+    || recovery.contextHealthy !== 'true'
+  ) {
+    throw new Error(`Save recovery runtime failed: ${JSON.stringify(recovery)}`);
+  }
+  const pageHide = await page.evaluate(() => {
+    const parse = (key) => {
+      try {
+        return JSON.parse(localStorage.getItem(key) ?? 'null');
+      } catch {
+        return null;
+      }
+    };
+    const before = parse('driftwake.save.slot-2.v18')?.savedAt ?? null;
+    window.dispatchEvent(new Event('pagehide'));
+    return {
+      before,
+      primary: parse('driftwake.save.slot-2.v18')?.savedAt ?? null,
+      backup: parse('driftwake.save.slot-2.backup.v18')?.savedAt ?? null,
+    };
+  });
+  if (
+    !Number.isFinite(pageHide.before)
+    || !Number.isFinite(pageHide.primary)
+    || pageHide.primary < pageHide.before
+    || pageHide.backup !== pageHide.before
+  ) {
+    throw new Error(`Save recovery pagehide checkpoint failed: ${JSON.stringify(pageHide)}`);
+  }
+  await assertHookVisualOwnership(page, 'save-recovery', 'held');
+  console.log(`Save recovery gate: ${JSON.stringify({ recovery, pageHide })}`);
+  await context.close();
+}
+
 async function captureGame() {
   const { context, page } = await openDesktopPage('game');
   await enterGame(page);
@@ -2357,7 +2530,7 @@ async function capturePause() {
   const page = await context.newPage();
   monitorPage(page, 'pause');
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: '开始漂流', exact: true }).click();
+  await page.getByRole('button', { name: /^(开始漂流|开始新航次|继续航次|恢复航次|重建航次)$/ }).click();
   await page.getByRole('button', { name: '继续漂流', exact: true }).waitFor({ timeout: 45_000 });
   await page.waitForTimeout(700);
   const state = await page.evaluate(() => {
@@ -4060,7 +4233,7 @@ async function captureBuildingTraversal() {
   monitorPage(page, 'building-traversal-restored');
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 });
   await page.waitForSelector('.primary-command:not(:disabled)', { timeout: 45_000 });
-  await page.getByRole('button', { name: '开始漂流', exact: true }).waitFor({ timeout: 45_000 });
+  await page.getByRole('button', { name: /^(开始漂流|开始新航次|继续航次|恢复航次|重建航次)$/ }).waitFor({ timeout: 45_000 });
   await enterGame(page);
   await waitForRuntime(page, () => {
     const data = document.querySelector('.game-mount')?.dataset;
@@ -7331,7 +7504,7 @@ async function capturePerimeterDefense() {
 
 async function captureFailureRecovery() {
   const { context, page } = await openDesktopPage('failure', { seedSave: true, failureStart: true });
-  await page.getByRole('button', { name: '开始漂流', exact: true }).click();
+  await page.getByRole('button', { name: /^(开始漂流|开始新航次|继续航次|恢复航次|重建航次)$/ }).click();
   await page.locator('.failure-screen.is-visible').waitFor({ timeout: 45_000 });
   await page.waitForFunction(
     () => document.querySelector('.game-mount')?.dataset.failureDropPending === 'false',
@@ -9019,6 +9192,8 @@ async function captureMobile() {
 
 try {
   if (captureOnly === 'all' || captureOnly === 'title') await captureTitle();
+  if (captureOnly === 'all' || captureOnly === 'save-slots') await captureSaveSlots();
+  if (captureOnly === 'save-recovery') await captureSaveRecovery();
   if (captureOnly === 'all' || captureOnly === 'game') await captureGame();
   if (captureOnly === 'all' || captureOnly === 'pause') await capturePause();
   if (captureOnly === 'all' || captureOnly === 'hook') await captureHook();

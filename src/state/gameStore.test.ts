@@ -29,6 +29,32 @@ describe('game store item use', () => {
     expect(state.inventorySlots).toBe(1);
   });
 
+  it('resets gameplay between save slots without changing user preferences', () => {
+    useGameStore.setState({
+      audioEnabled: false,
+      quality: 'low',
+      dynamicResolutionEnabled: false,
+      playSeconds: 999,
+      failure: { cause: 'shark', dropped: { timber: 1 }, occurredAt: 998, dropPending: false },
+    });
+
+    useGameStore.getState().resetSession();
+
+    const state = useGameStore.getState();
+    expect(state).toMatchObject({
+      phase: 'title',
+      ready: false,
+      audioEnabled: false,
+      quality: 'low',
+      dynamicResolutionEnabled: false,
+      playSeconds: 0,
+      failure: null,
+      selectedTool: 'hook',
+      saveStatus: 'idle',
+    });
+    expect(itemCount(state.inventory, 'hook')).toBe(1);
+  });
+
   it('commits a structure replacement exchange as one inventory update', () => {
     const inventory = { timber: 4, rope: 3 } as const;
     useGameStore.setState({ inventory, inventorySlots: usedInventorySlots(inventory) });

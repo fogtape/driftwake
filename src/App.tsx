@@ -12,6 +12,15 @@ import { RECIPES, type RecipeId } from './game/domain/recipes';
 import type { RaftBuildCategory, RaftBuildPiece } from './game/domain/raftStructures';
 import { RESEARCH_PROJECTS, type ResearchProjectId, type ResearchSampleId } from './game/domain/progression';
 import { loadPreferences, writePreferences } from './game/domain/preferences';
+import {
+  activateSaveSlot,
+  deleteSaveSlot,
+  getActiveSaveSlot,
+  prepareSaveSlots,
+  readSaveSlotSummaries,
+  type SaveSlotId,
+  type SaveSlotSummary,
+} from './game/domain/saveRepository';
 import type { CameraMotionMode } from './game/domain/settings';
 import { useGameStore, type AudioMix, type OverlayPanel, type PlacementType, type QualityPreset } from './state/gameStore';
 
@@ -22,6 +31,11 @@ function detectUnsupportedDevice(): boolean {
   return !webgl2 || (narrow && coarse);
 }
 
+function initialSaveSelection(): { active: SaveSlotId; slots: SaveSlotSummary[] } {
+  prepareSaveSlots();
+  return { active: getActiveSaveSlot(), slots: readSaveSlotSummaries() };
+}
+
 export function App() {
   const mountRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<DriftwakeGame | null>(null);
@@ -29,6 +43,7 @@ export function App() {
   const mountedRef = useRef(true);
   const [loadingGame, setLoadingGame] = useState(false);
   const [unsupported] = useState(detectUnsupportedDevice);
+  const [saveSelection, setSaveSelection] = useState(initialSaveSelection);
   const phase = useGameStore((state) => state.phase);
   const ready = useGameStore((state) => state.ready);
   const loadingLabel = useGameStore((state) => state.loadingLabel);
@@ -126,6 +141,27 @@ export function App() {
     useGameStore.getState().setSettingsOpen(false);
     gameRef.current?.playUi();
   };
+  const refreshSaveSelection = (active = getActiveSaveSlot()) => {
+    setSaveSelection({ active, slots: readSaveSlotSummaries() });
+  };
+  const selectSaveSlot = (slot: SaveSlotId) => {
+    if (loadingGame || initializingRef.current || gameRef.current) return;
+    activateSaveSlot(slot);
+    const active = getActiveSaveSlot();
+    if (active !== slot) {
+      useGameStore.getState().setLoadingLabel('存档位切换失败');
+      return;
+    }
+    refreshSaveSelection(active);
+  };
+  const removeSaveSlot = (slot: SaveSlotId) => {
+    if (loadingGame || initializingRef.current || gameRef.current) return;
+    const index = saveSelection.slots.findIndex((candidate) => candidate.slot === slot) + 1;
+    if (!window.confirm(`删除航次 ${index}？该航迹与备份都将清除。`)) return;
+    deleteSaveSlot(slot);
+    if (slot === saveSelection.active) activateSaveSlot(slot);
+    refreshSaveSelection();
+  };
   const begin = async () => {
     const store = useGameStore.getState();
     if (gameRef.current) {
@@ -140,6 +176,15 @@ export function App() {
     }
     if (initializingRef.current || !mountRef.current) return;
 
+    const selected = saveSelection.slots.find((slot) => slot.slot === saveSelection.active);
+    if (selected?.status === 'corrupt') deleteSaveSlot(saveSelection.active);
+    activateSaveSlot(saveSelection.active);
+    if (getActiveSaveSlot() !== saveSelection.active) {
+      store.setLoadingLabel('存档位切换失败');
+      return;
+    }
+    refreshSaveSelection(saveSelection.active);
+
     initializingRef.current = true;
     setLoadingGame(true);
     store.setLoadingLabel('正在唤醒海面');
@@ -147,13 +192,14 @@ export function App() {
     try {
       const { DriftwakeGame: Game } = await import('./game/DriftwakeGame');
       if (!mountedRef.current || !mountRef.current) return;
-      game = new Game(mountRef.current);
+      game = new Game(mountRef.current, saveSelection.active);
       gameRef.current = game;
       await game.initialize();
       if (!mountedRef.current || gameRef.current !== game) return;
       if (!useGameStore.getState().ready) throw new Error('game initialization completed without becoming ready');
       const initializedStore = useGameStore.getState();
       initializedStore.setPhase(initializedStore.failure ? 'failed' : 'playing');
+      refreshSaveSelection(saveSelection.active);
     } catch (error) {
       console.error('Failed to load Driftwake game module', error);
       game?.dispose();
@@ -308,7 +354,11 @@ export function App() {
         visible={phase === 'title'}
         loading={loadingGame}
         loadingLabel={loadingLabel}
+        slots={saveSelection.slots}
+        activeSlot={saveSelection.active}
         onBegin={begin}
+        onSelectSlot={selectSaveSlot}
+        onDeleteSlot={removeSaveSlot}
         onSettings={openSettings}
       />
       <div className={`underwater-veil ${player.submerged ? 'is-visible' : ''}`} aria-hidden="true" />

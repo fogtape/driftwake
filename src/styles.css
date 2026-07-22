@@ -135,7 +135,7 @@ button:focus-visible {
   position: absolute;
   left: max(34px, env(safe-area-inset-left));
   bottom: max(72px, calc(env(safe-area-inset-bottom) + 54px));
-  width: min(520px, calc(100% - 68px));
+  width: min(640px, calc(100% - 68px));
 }
 
 .title-screen__eyebrow {
@@ -158,11 +158,107 @@ button:focus-visible {
 }
 
 .title-screen__subtitle {
-  margin: 10px 0 28px;
+  margin: 10px 0 18px;
   color: rgba(237, 246, 242, 0.72);
   font-size: 17px;
   font-weight: 500;
 }
+
+.title-save-slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.title-save-slot {
+  position: relative;
+  min-width: 0;
+  height: 76px;
+  overflow: hidden;
+  border: 1px solid rgba(209, 229, 222, 0.24);
+  border-radius: 4px;
+  background: rgba(5, 25, 30, 0.68);
+  box-shadow: 0 8px 24px rgba(1, 13, 17, 0.18);
+  backdrop-filter: blur(10px);
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.title-save-slot:hover { border-color: rgba(221, 235, 229, 0.48); background: rgba(10, 39, 44, 0.78); }
+.title-save-slot.is-active {
+  border-color: rgba(230, 196, 104, 0.78);
+  background: rgba(18, 48, 49, 0.84);
+  box-shadow: inset 0 -2px #e4c46a, 0 10px 26px rgba(1, 13, 17, 0.24);
+}
+.title-save-slot--recovered { border-color: rgba(96, 194, 160, 0.56); }
+.title-save-slot--corrupt { border-color: rgba(224, 113, 87, 0.58); }
+
+.title-save-slot__select {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-rows: 28px 1fr;
+  align-items: center;
+  gap: 0 7px;
+  padding: 8px 31px 8px 9px;
+  color: #dbe9e4;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.title-save-slot__select:disabled,
+.title-save-slot__delete:disabled { cursor: wait; }
+.title-save-slot__number {
+  grid-row: 1 / 3;
+  color: rgba(230, 196, 104, 0.76);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+}
+.title-save-slot__status {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.title-save-slot--recovered .title-save-slot__status { color: #85d3b7; }
+.title-save-slot--corrupt .title-save-slot__status { color: #f0a38e; }
+.title-save-slot__select small {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  color: rgba(205, 224, 217, 0.62);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.title-save-slot__select small span { display: inline-flex; min-width: 0; align-items: center; gap: 3px; }
+.title-save-slot__select small b { color: #f0ad8d; font-weight: 650; }
+.title-save-slot__delete {
+  position: absolute;
+  top: 6px;
+  right: 5px;
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  color: rgba(208, 225, 219, 0.48);
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+.title-save-slot__delete:hover:not(:disabled) { color: #f0a38e; background: rgba(125, 54, 43, 0.46); }
 
 .title-screen__actions {
   display: flex;
@@ -2763,6 +2859,18 @@ button:focus-visible {
   .research-projects { padding: 16px; }
 }
 
+@media (max-width: 620px) {
+  .title-screen__content { left: 22px; width: calc(100% - 44px); }
+  .title-save-slots { gap: 5px; }
+  .title-save-slot { height: 70px; }
+  .title-save-slot__select { grid-template-columns: 22px minmax(0, 1fr); gap: 0 5px; padding-right: 26px; padding-left: 6px; }
+  .title-save-slot__number { font-size: 18px; }
+  .title-save-slot__status { gap: 3px; font-size: 9px; }
+  .title-save-slot__select small { gap: 4px; font-size: 8px; }
+  .title-save-slot__select small span:nth-child(2) { display: none; }
+  .title-save-slot__delete { right: 2px; }
+}
+
 @media (max-width: 1100px) {
   .navigation-readout {
     top: auto;
@@ -2914,7 +3022,9 @@ button:focus-visible {
 @media (max-height: 640px) {
   .title-screen__content { bottom: 32px; }
   .title-screen h1 { font-size: 58px; }
-  .title-screen__subtitle { margin-bottom: 18px; }
+  .title-screen__subtitle { margin: 6px 0 10px; }
+  .title-save-slots { margin-bottom: 10px; }
+  .title-save-slot { height: 66px; }
   .title-screen__footer { display: none; }
   .field-pack { height: calc(100dvh - 20px); grid-template-rows: 72px 32px minmax(0, 1fr); }
   .crafting-catalog { padding: 14px 18px; }

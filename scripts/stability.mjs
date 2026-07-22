@@ -117,7 +117,7 @@ try {
   const eagerRuntime = initial.resources.find((name) => /DriftwakeGame(?:-[^/?]+)?\.(?:js|ts)(?:\?|$)/.test(name));
   if (initial.canvasFound || eagerRuntime) throw new Error('world runtime loaded before player intent');
 
-  await page.getByRole('button', { name: '开始漂流', exact: true }).click();
+  await page.getByRole('button', { name: /^(开始漂流|开始新航次|继续航次|恢复航次|重建航次)$/ }).click();
   const enter = page.getByRole('button', { name: '继续漂流', exact: true });
   await enter.waitFor({ timeout: 45_000 });
   runtimeResource = await page.evaluate(() => performance.getEntriesByType('resource')

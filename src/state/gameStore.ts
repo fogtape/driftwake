@@ -324,6 +324,7 @@ interface GameState {
   notice: string | null;
   playSeconds: number;
   saveStatus: 'idle' | 'saved' | 'error';
+  resetSession: () => void;
   setPhase: (phase: GamePhase) => void;
   setReady: (ready: boolean) => void;
   setLoadingLabel: (loadingLabel: string) => void;
@@ -617,6 +618,50 @@ export const useGameStore = create<GameState>((set, get) => ({
   notice: null,
   playSeconds: 0,
   saveStatus: 'idle',
+  resetSession: () => set({
+    phase: 'title',
+    ready: false,
+    loadingLabel: '正在唤醒海面',
+    pointerLocked: false,
+    pointerLockDenied: false,
+    settingsOpen: false,
+    overlayPanel: null,
+    selectedTool: 'hook',
+    hookCharge: 0,
+    inventory: { ...STARTING_INVENTORY },
+    toolDurability: normalizeToolDurability(STARTING_INVENTORY, null),
+    inventorySlots: usedInventorySlots(STARTING_INVENTORY),
+    survival: { ...INITIAL_SURVIVAL },
+    failure: null,
+    crafting: createDefaultCraftingQueue(),
+    player: defaultPlayer(),
+    fishing: defaultFishing(),
+    resonanceFork: defaultResonanceFork(),
+    shark: defaultShark(),
+    raft: { tiles: 9, damagedTiles: 0, averageIntegrity: 100 },
+    build: defaultBuild(),
+    collectionNets: { placed: 0, stored: 0, capacity: 0, full: 0, damaged: 0, progress: 0 },
+    devices: {
+      purifier: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
+      grill: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
+      solarPurifier: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
+      tripleGrill: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
+      locker: { placed: 0, working: 0, ready: 0, burnt: 0, progress: 0 },
+    },
+    storage: null,
+    navigation: defaultNavigation(),
+    planting: defaultPlanting(),
+    progression: defaultProgression(),
+    placementDevice: null,
+    island: { phase: 'approaching', distance: 80, remaining: 72, ashore: false, harvested: 0, total: 18 },
+    reef: { harvested: 0, total: 18 },
+    interaction: null,
+    interactionOwner: null,
+    fps: 0,
+    notice: null,
+    playSeconds: 0,
+    saveStatus: 'idle',
+  }),
   setPhase: (phase) => set({ phase }),
   setReady: (ready) => set({ ready }),
   setLoadingLabel: (loadingLabel) => set({ loadingLabel }),
