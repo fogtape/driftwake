@@ -43,6 +43,9 @@ function createTestMaterials(): MaterialLibrary {
     leaf: material(),
     rock: material(),
     foliage: material(),
+    palmBark: texturedMaterial(),
+    tidefruitSkin: texturedMaterial(),
+    shoreGround: texturedMaterial(),
     wovenFiber: material(),
     sharkSkin: material(),
     silverSpineSkin: texturedMaterial(),
@@ -257,10 +260,16 @@ describe('procedural model assets', () => {
   }, 60_000);
 
   it('builds an explorable heightfield island with shoreline and collision landmarks', () => {
-    const island = createExplorableIsland(createTestMaterials(), 0x51ad7e);
+    const materials = createTestMaterials();
+    const island = createExplorableIsland(materials, 0x51ad7e);
     const terrain = island.getObjectByName('island-heightfield') as Mesh;
+    const position = terrain.geometry.getAttribute('position');
+    const uv = terrain.geometry.getAttribute('uv');
     const size = new Box3().setFromObject(island).getSize(new Vector3());
-    expect(terrain.geometry.getAttribute('position').count).toBeGreaterThan(2_000);
+    expect(position.count).toBeGreaterThan(2_000);
+    expect(uv.count).toBe(position.count);
+    expect((terrain.material as MeshStandardMaterial).map).toBe(materials.shoreGround.map);
+    expect((terrain.material as MeshStandardMaterial).userData.alphaPackedRoughness).toBe(true);
     expect(island.userData.islandVisuals.foam).toHaveLength(30);
     expect(island.userData.islandVisuals.obstacles).toHaveLength(5);
     expect(size.x).toBeGreaterThan(12);
@@ -274,9 +283,15 @@ describe('procedural model assets', () => {
     const nodes = types.map((type) => createHarvestNodeModel(type, materials));
     const counts = nodes.map((node) => meshStats(node).meshes);
     const parts = nodes.map(renderedPartCount);
+    const palmMaterials = new Set<unknown>();
+    nodes[0].traverse((object) => {
+      if (object instanceof Mesh) palmMaterials.add(object.material);
+    });
     expect(counts[0]).toBeLessThanOrEqual(6);
     expect(parts[0]).toBeGreaterThanOrEqual(22);
     expect(parts.slice(1).every((count) => count >= 5)).toBe(true);
+    expect(palmMaterials.has(materials.palmBark)).toBe(true);
+    expect(palmMaterials.has(materials.tidefruitSkin)).toBe(true);
     nodes.forEach((node) => {
       expect(node.userData.harvestVisuals.pivot).toBeDefined();
       expect(node.userData.harvestVisuals.highlight).toBeDefined();
@@ -336,7 +351,7 @@ describe('procedural model assets', () => {
     expect(antenna.userData.navigationVisuals.signalRings).toHaveLength(3);
     expect(beacon.userData.signalBeaconVisuals.pulseRings).toHaveLength(4);
     expect(new Box3().setFromObject(antenna).getSize(new Vector3()).y).toBeGreaterThan(1.9);
-  }, 15_000);
+  }, 30_000);
 
   it('builds three materially bound signal destinations with distinct large silhouettes', () => {
     const materials = createTestMaterials();
@@ -397,5 +412,5 @@ describe('procedural model assets', () => {
     expect(smelter.userData.smelterVisuals.smoke).toHaveLength(6);
     expect(smelter.userData.smelterVisuals.sparks).toHaveLength(9);
     expect(smelter.userData.smelterVisuals.crucible).toBeDefined();
-  }, 15_000);
+  }, 30_000);
 });

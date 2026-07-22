@@ -6801,9 +6801,41 @@ async function captureProgressionSmelting() {
 async function captureIsland() {
   const { context, page } = await openDesktopPage('island', { seedSave: true, islandStart: true });
   await enterGame(page);
+  await page.waitForFunction(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return Number.isFinite(Number(data?.textures))
+      && Boolean(data?.islandMaterialMaps)
+      && data?.islandMaterialMaps !== 'none';
+  }, null, { timeout: 30_000 });
   await page.waitForTimeout(1200);
+  const materialState = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return {
+      textures: Number(data?.textures),
+      geometries: Number(data?.geometries),
+      drawCalls: Number(data?.drawCalls),
+      triangles: Number(data?.triangles),
+      maps: data?.islandMaterialMaps?.split('|') ?? [],
+      contextHealthy: data?.contextHealthy,
+      simulationActive: data?.simulationActive,
+    };
+  });
+  if (
+    !Number.isFinite(materialState.textures)
+    || materialState.textures > 32
+    || materialState.maps.length !== 15
+    || new Set(materialState.maps).size !== 15
+    || materialState.contextHealthy !== 'true'
+    || materialState.simulationActive !== 'true'
+  ) {
+    throw new Error(`Island material runtime gate failed: ${JSON.stringify(materialState)}`);
+  }
   await inspectCanvasPixels(page, 'island');
-  await page.screenshot({ path: new URL('island-desktop.png', outputDir).pathname });
+  await captureCanvasReadback(page, new URL('island-materials-canvas.png', outputDir).pathname);
+  if (process.env.CAPTURE_FAST !== '1') {
+    await page.screenshot({ path: new URL('island-desktop.png', outputDir).pathname, timeout: 90_000 });
+  }
+  console.log(`Island material gate: ${JSON.stringify(materialState)}`);
   await context.close();
 }
 
@@ -6840,7 +6872,9 @@ async function captureIslandInteraction() {
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => document.querySelector('.loot-notice')?.textContent?.includes('+2 漂木'));
   await inspectCanvasPixels(page, 'island-interaction');
-  await page.screenshot({ path: new URL('island-interaction-desktop.png', outputDir).pathname });
+  if (process.env.CAPTURE_FAST !== '1') {
+    await page.screenshot({ path: new URL('island-interaction-desktop.png', outputDir).pathname, timeout: 90_000 });
+  }
   await context.close();
 }
 

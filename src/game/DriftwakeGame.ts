@@ -1322,6 +1322,7 @@ export class DriftwakeGame {
     this.mount.dataset.raftTileCount = String(this.raft?.tileCount ?? 0);
     this.mount.dataset.sailAttachment = this.navigation?.getSailAttachmentState() ?? 'missing';
     this.mount.dataset.islandRaftClearance = (this.island?.getRaftClearance() ?? 0).toFixed(3);
+    this.mount.dataset.islandMaterialMaps = this.island?.getMaterialMapNames().join('|') ?? 'none';
     this.frameTimingElapsed = 0;
     this.frameTimesMs.length = 0;
   }

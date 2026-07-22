@@ -1,7 +1,7 @@
 # 原创资产清单
 
 > 更新日期：2026-07-22
-> 状态：第十八轮 M9 工具/打捞历史材质整改已通过来源、PBR、平铺与软件场景门禁，发布前仍需做最终授权、DCC 替换与相似性复核
+> 状态：第十九轮 M9 岛屿/岸上资源历史材质整改已通过来源、PBR、平铺、通道预算与软件场景门禁，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -814,6 +814,98 @@ Avoid: polished chrome, mirror reflection, diamond plate, corrugated steel, brus
 
 两套源图均由项目配置 provider 直接生成，仓库不含 URL 或密钥。`salvage-pickup-canvas.png` 使用 WebGL framebuffer 直读规避 X11 空合成层，证明雪松/深木、索具、工具钢、聚合物、手套与真实回收包在同一运行场景绑定；工具钢乘色经该场景校准，未修改源图或降低贴图规格。
 
+### TEX-036：风暴冲刷岛岩材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/stormwashed-island-stone.webp`、`stormwashed-island-stone-normal.webp`、`stormwashed-island-stone-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/stormwashed-island-stone-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high`，项目 `scripts/imagegen` CLI |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 盐冠浅滩地标岩、岸上潮磨石堆、石斧与石质锚爪 |
+| 处理方式 | `prepare_imagegen_material.py --size 1024 --seam-width 160 --normal-strength 0.62 --roughness-min 176 --roughness-max 238 --optimize-boundary` |
+| 检查 | seam x=`9.38`/`0.96x`、y=`12.74`/`0.88x`，boundary=`(1,1)`；2x2 无硬缝，暖灰/橄榄矿层与小型盐粒在低多边形岩体上可辨 |
+
+采用提示词：
+
+```text
+Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: storm-washed island limestone and volcanic beach stone. Orthographic straight-on material scan, the surface fills the entire frame, no object silhouette and no perspective. Layered warm gray, muted olive, and cool charcoal mineral planes with small pale salt inclusions, fine erosion pits, narrow mineral seams, and a few restrained rust-brown flecks. Hand-authored semi-realistic painterly PBR art direction with crisp medium-frequency facets that remain readable on low-poly boulders, but no cartoon outlines and no photoreal camera noise. Even diffuse neutral lighting, essentially shadowless, no baked directional highlight, no ambient occlusion vignette. Uniform detail density across all four edges, visually seamless in both axes, no border, no centered feature, no cracks forming a single large focal shape. No sand, moss, plants, shells, water, props, text, symbols, logos, or watermark. This is an albedo source only: do not depict a normal map, roughness map, UV checker, texture sheet, or material sphere.
+```
+
+### TEX-037：盐冠棕榈树皮材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/saltcrown-palm-bark.webp`、`saltcrown-palm-bark-normal.webp`、`saltcrown-palm-bark-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/saltcrown-palm-bark-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high`，项目 `scripts/imagegen` CLI |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 远景与可探索棕榈树干、四段采集树干和砍伐后树桩 |
+| 处理方式 | `prepare_imagegen_material.py --size 1024 --seam-width 176 --normal-strength 0.66 --roughness-min 184 --roughness-max 242 --optimize-boundary` |
+| 检查 | seam x=`20.48`/`0.97x`、y=`10.97`/`1.03x`，boundary=`(1,1)`；横向节理为连续生长带而非处理接缝，纵纤维与筏板雪松明确分离 |
+
+采用提示词：
+
+```text
+Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: weathered salt-crown palm trunk bark. Orthographic straight-on material scan, bark surface filling the complete frame, no trunk silhouette, no perspective. Dense narrow vertical fibers and shallow broken horizontal growth bands, dark umber and smoked brown underlayers, sun-bleached ochre ridges, subtle desaturated green-gray salt staining, and tiny pale salt deposits embedded between fibers. The identity must be clearly tropical palm bark and distinct from sawn raft planks or generic tree bark. Hand-authored semi-realistic painterly PBR art direction, tactile at close range but calm enough for repeated trunks; no cartoon outline, no photoreal camera grain. Even diffuse neutral lighting, shadowless, no baked highlight or deep black crevice. Uniform detail density to every edge, visually seamless in both axes, no border, no central knot, no cut ends or rings, no large scars. No leaves, rope, wood boards, nails, beach, water, props, text, symbols, logos, or watermark. Albedo source only: do not depict a normal map, roughness map, UV grid, material ball, or atlas.
+```
+
+### TEX-038：盐冠棕榈叶面材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/saltcrown-palm-frond.webp`、`saltcrown-palm-frond-normal.webp`、`saltcrown-palm-frond-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/saltcrown-palm-frond-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high`，项目 `scripts/imagegen` CLI |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 棕榈叶片、岛上灌木、纤维簇与海面棕榈纤维漂流物 |
+| 处理方式 | `prepare_imagegen_material.py --size 1024 --seam-width 168 --normal-strength 0.52 --roughness-min 148 --roughness-max 220 --optimize-boundary` |
+| 检查 | seam x=`8.16`/`1.09x`、y=`17.91`/`0.91x`，boundary=`(1,1023)`；细胞纤维、浅色叶脉和干纤维在 2x2 与岛屿 framebuffer 中连续 |
+
+采用提示词：
+
+```text
+Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: close surface of living salt-crown palm frond tissue used on leaves, shrubs, and harvestable fibers. Orthographic flat material scan with the leaf tissue filling the complete frame; no whole leaf silhouette and no perspective. Interwoven fine longitudinal cellulose fibers, several soft parallel veins, deep ocean green and muted bottle green planes, pale sage ridges, restrained sun-yellow edge wear, tiny salt-white specks, and occasional dry fiber strands. It must read as living fibrous palm material at thumbnail scale while staying natural and not neon. Hand-authored semi-realistic painterly PBR art direction with controlled medium and fine detail, no cartoon outline and no photoreal camera grain. Even diffuse neutral lighting, shadowless, no glossy hotspot, no transparent background. Uniform detail density across every edge, visually seamless in both axes, no border, no centered vein or large focal feature. No whole plant, branch, fruit, insects, water, props, text, symbols, logos, or watermark. Albedo source only: no normal map, roughness map, UV grid, texture sheet, material sphere, or presentation mockup.
+```
+
+### TEX-039：野生潮果果皮材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/tidefruit-skin.webp`、`tidefruit-skin-normal.webp`、`tidefruit-skin-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/tidefruit-skin-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high`，项目 `scripts/imagegen` CLI |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 棕榈冠层潮果与落地潮果采集节点；不复用 M6 作物盆盐冠果皮 |
+| 处理方式 | `prepare_imagegen_material.py --size 1024 --seam-width 160 --normal-strength 0.42 --roughness-min 116 --roughness-max 188 --optimize-boundary` |
+| 检查 | seam x=`11.43`/`1.09x`、y=`9.29`/`0.90x`，boundary=`(1,1)`；橙红成熟色、细毛孔和纵向生长纹在冠层缩略尺度可辨，无鱼肉/皮革/锈铁语义 |
+
+采用提示词：
+
+```text
+Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: edible wild tidefruit skin from a salt-crown island palm. Orthographic macro material scan, fruit skin filling the entire frame, no whole fruit silhouette and no perspective. A distinctive mature palette of muted coral-russet and weathered amber over olive-brown undertones, fine pebbled pores, faint irregular longitudinal growth striations, tiny pale salt bloom, and restrained darker ripening freckles. It should look juicy and edible yet rugged from sea air, clearly different from crop fruit and from leather, stone, or rusted metal. Hand-authored semi-realistic painterly PBR art direction, polished game asset with controlled microdetail, no cartoon outlines and no photoreal camera grain. Even diffuse neutral lighting, shadowless, no baked specular hotspot, no deep vignette. Uniform detail density to every edge, visually seamless in both axes, no border, no centered blemish or single large focal mark. No stem, leaves, cut fruit, pulp, basket, beach, water, props, text, symbols, logos, or watermark. Albedo source only: do not depict a normal map, roughness map, UV checker, texture atlas, material sphere, or presentation board.
+```
+
+### TEX-040：盐冠岸滩地表材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/saltcrown-shore-ground-packed.webp`（RGB albedo + A roughness）、`saltcrown-shore-ground-normal.webp`；审计中间图为 `artifacts/imagegen/saltcrown-shore-ground-albedo-1024.webp` 与 `saltcrown-shore-ground-roughness-1024.webp` |
+| 采用源图 | `artifacts/imagegen/saltcrown-shore-ground-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high`，项目 `scripts/imagegen` CLI |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 可探索岛高度场、远景沙洲；顶点色继续表达沙地、旱草、绿地、岩区和浸水带的大尺度分层 |
+| 处理方式 | `prepare_imagegen_material.py --size 1024 --seam-width 168 --normal-strength 0.54 --roughness-min 184 --roughness-max 242 --optimize-boundary`，再由 `pack_roughness_alpha.py --quality 92` 精确写入 alpha |
+| 检查 | seam x=`18.08`/`1.14x`、y=`19.56`/`1.15x`，boundary=`(1,1)`；packed alpha 与原 roughness 像素差为空；岛屿帧由 33 降至硬预算 `32/32`，未删除 PBR 信息 |
+
+采用提示词：
+
+```text
+Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: neutral salt-crown island shore ground used beneath vertex-color tinting. Orthographic straight-down material scan with the ground surface filling the entire frame, no landscape horizon and no perspective. Fine compact pale mineral sand mixed with tiny weathered shell grains, short dry cellulose fragments, sparse muted olive mineral flecks, subtle gray clay dust, and restrained charcoal grit. Keep the overall albedo near neutral light warm gray-beige so game vertex colors can tint it into beach sand, dry grass, green upland, and stony soil without muddying. Hand-authored semi-realistic painterly PBR art direction, crisp millimeter-scale grain readable close up but calm at distance; no cartoon outline and no photoreal camera noise. Even diffuse neutral lighting, shadowless, no footprints, no ripples forming directional bands, no wet glossy area, no ambient occlusion vignette. Uniform detail density across every edge, visually seamless in both axes, no border, no centered shell or large focal feature. No plants, whole shells, rocks, water, props, text, symbols, logos, or watermark. Albedo source only: do not depict a normal map, roughness map, UV grid, texture sheet, material sphere, or presentation mockup.
+```
+
+五套源图都由同一项目配置 provider 以 `gpt-image-2 high 2048x2048` 生成。`island-materials-canvas.png` 使用 WebGL framebuffer 直读，证明地表、岩石、树皮、叶片、纤维和潮果在真实岛屿同帧可辨；运行时 15 个材质槽全部有绑定，其中岸滩 albedo/roughness 共用一张无损通道打包纹理，场景维持 `32` 张纹理上限。
+
 ## 代码原生模型与动画
 
 本轮新增鲨体分段伤痕、海面聚焦环和鲨鱼战利品捆扎浮包，继续由代码原生形体驱动；鲨皮沿用独立 TEX-003 PBR，肉、皮、齿、绳结和浮托按材质与轮廓分层。采集段、对象池、耐久与 v18 存档均不依赖视觉对象作为玩法真值；没有因本机软件 WebGL 复验失败而降低运行时贴图质量。
@@ -830,8 +922,8 @@ Avoid: polished chrome, mirror reflection, diamond plate, corrugated steel, brus
 | MOD-008 | 深潮鲨：车削躯干、背鳍、胸鳍、尾柄、双叶尾、眼、口、鳃与三段采集伤痕 | `src/game/art/ProceduralModels.ts` | 15+ 独立网格，已接巡游、袭击、受击、侧翻浮尸与采集阶段 |
 | MOD-009 | 潮汐净水器：绑扎木架、火盆、海水槽、编织蒸馏罩、冷凝沟、滴管与透明杯具 | `src/game/art/ProceduralModels.ts` | 35+ 独立网格，运行阶段驱动海水/净水水位和滴水 |
 | MOD-010 | 折铁烤架：绑扎木架、折铁火盆、九根炉条、横撑、把手与鱼段 | `src/game/art/ProceduralModels.ts` | 40+ 独立网格；折铁/雪松/编织纤维与生/熟/焦鱼肉均使用审定 PBR，平放姿态、真实收取和基础设备近景通过 |
-| MOD-011 | 盐冠浅滩：2115 顶点高度场、顶点色分层、5 个岩石地标、22 个灌木和 30 条岸浪 | `src/game/art/ProceduralModels.ts` | 已进入接近、靠岸、登岛、离流和重生周期 |
-| MOD-012 | 岛屿资源组：4 棕榈、枝料、石堆、潮果、纤维簇与交互高亮 | `src/game/art/ProceduralModels.ts` | 节点独立、内部实例化，支持生命、拾取、倒伏和树桩 |
+| MOD-011 | 盐冠浅滩：2115 顶点高度场、PBR 微表面/顶点色分层、5 个岩石地标、22 个灌木和 30 条岸浪 | `src/game/art/ProceduralModels.ts` | TEX-036/TEX-038/TEX-040 已接入接近、靠岸、登岛、离流和重生周期；实例化与 32 纹理预算保持 |
+| MOD-012 | 岛屿资源组：4 棕榈、枝料、石堆、潮果、纤维簇与交互高亮 | `src/game/art/ProceduralModels.ts` | TEX-036-TEX-039 独立绑定；节点内部实例化，支持生命、拾取、倒伏和树桩 |
 | MOD-013 | 潮磨石斧：回收木柄、石质斧头、金属刃口和六圈编织绑带 | `src/game/art/ProceduralModels.ts` | 已进入第一视角挥砍和三击树木循环 |
 | MOD-014 | 盐冠礁床：3403+ 顶点下沉地形、44 岩簇、18 珊瑚簇、34 海草和 3 组鱼群 | `src/game/art/UnderwaterModels.ts` | 珊瑚/海草/鱼群按材质实例化，AI 海床 PBR 材质与动态焦散已接通 |
 | MOD-015 | 水下资源组：细砂、黏土、盐壳金属矿和长叶海草 | `src/game/art/UnderwaterModels.ts` | 四套独立轮廓，支持高亮、三段钩击、收割、抖动和消散 |

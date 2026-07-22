@@ -33,6 +33,11 @@ describe('asset texture loading', () => {
     expect(textures.fishEye.userData.sourcePath).toBe('/assets/textures/pelagic-fish-eye.webp');
     expect(textures.tideboundRigging.userData.sourcePath).toBe('/assets/textures/tidebound-rigging.webp');
     expect(textures.brinewornToolSteel.userData.sourcePath).toBe('/assets/textures/brineworn-tool-steel.webp');
+    expect(textures.islandStone.userData.sourcePath).toBe('/assets/textures/stormwashed-island-stone.webp');
+    expect(textures.palmBark.userData.sourcePath).toBe('/assets/textures/saltcrown-palm-bark.webp');
+    expect(textures.palmFrond.userData.sourcePath).toBe('/assets/textures/saltcrown-palm-frond.webp');
+    expect(textures.tidefruitSkin.userData.sourcePath).toBe('/assets/textures/tidefruit-skin.webp');
+    expect(textures.shoreGround.userData.sourcePath).toBe('/assets/textures/saltcrown-shore-ground-packed.webp');
     expect(textures.cropLeaf.userData.sourcePath).toBe('/assets/textures/salt-crown-leaf.webp');
     expect(textures.cropDry.userData.sourcePath).toBe('/assets/textures/salt-crown-dry-leaf.webp');
     expect(textures.cropFruit.userData.sourcePath).toBe('/assets/textures/salt-crown-fruit.webp');
@@ -65,6 +70,30 @@ describe('asset texture loading', () => {
       roughnessMap: textures.saltEtchedPolymerRoughness,
     });
     expect(materials.darkWood.normalMap).not.toBeNull();
+    expect(materials.rock).toMatchObject({
+      map: textures.islandStone,
+      normalMap: textures.islandStoneNormal,
+      roughnessMap: textures.islandStoneRoughness,
+    });
+    expect(materials.palmBark).toMatchObject({
+      map: textures.palmBark,
+      normalMap: textures.palmBarkNormal,
+      roughnessMap: textures.palmBarkRoughness,
+    });
+    expect(materials.leaf.map).toBe(textures.palmFrond);
+    expect(materials.foliage.normalMap).toBe(textures.palmFrondNormal);
+    expect(materials.tidefruitSkin.roughnessMap).toBe(textures.tidefruitSkinRoughness);
+    expect(materials.shoreGround).toMatchObject({
+      map: textures.shoreGround,
+      normalMap: textures.shoreGroundNormal,
+      roughnessMap: textures.shoreGround,
+    });
+    const packedShader = {
+      fragmentShader: 'roughnessFactor *= texelRoughness.g;',
+    } as Parameters<typeof materials.shoreGround.onBeforeCompile>[0];
+    materials.shoreGround.onBeforeCompile(packedShader, renderer);
+    expect(packedShader.fragmentShader).toContain('roughnessFactor *= texelRoughness.a;');
+    expect(packedShader.fragmentShader).not.toContain('roughnessFactor *= texelRoughness.g;');
     expect(materials.cropLeaf).toMatchObject({
       map: textures.cropLeaf,
       normalMap: textures.cropLeafNormal,

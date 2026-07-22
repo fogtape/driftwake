@@ -40,7 +40,7 @@ import {
   type HarvestNodeType,
 } from '../domain/island';
 import type { FishSpeciesId } from '../domain/fishing';
-import type { MaterialLibrary } from './Materials';
+import { cloneAlphaPackedRoughnessMaterial, type MaterialLibrary } from './Materials';
 
 export type DebrisKind = 'timber' | 'polymer' | 'fiber' | 'barrel' | 'cache';
 
@@ -1294,7 +1294,7 @@ export function createGrillModel(materials: MaterialLibrary): Group {
 
 function createPalm(materials: MaterialLibrary): Group {
   const palm = new Group();
-  const trunk = shadowed(new Mesh(new CylinderGeometry(0.12, 0.19, 2.8, 7), materials.darkWood));
+  const trunk = shadowed(new Mesh(new CylinderGeometry(0.12, 0.19, 2.8, 7), materials.palmBark));
   trunk.rotation.z = 0.09;
   trunk.position.y = 1.3;
   palm.add(trunk);
@@ -1337,7 +1337,7 @@ export function createDistantIsland(materials: MaterialLibrary): Group {
 
   const trunkGeometry = new CylinderGeometry(0.12, 0.19, 2.8, 7);
   const leafGeometry = createPalmLeaf(materials.foliage).geometry;
-  const trunks = new InstancedMesh(trunkGeometry, materials.darkWood, 6);
+  const trunks = new InstancedMesh(trunkGeometry, materials.palmBark, 6);
   const leaves = new InstancedMesh(leafGeometry, materials.foliage, 42);
   let leafIndex = 0;
   const parentMatrix = new Matrix4();
@@ -1378,10 +1378,10 @@ export function createDistantIsland(materials: MaterialLibrary): Group {
     island.add(mesh);
   }
 
-  const sand = new Mesh(
-    new CylinderGeometry(4.5, 5.6, 0.35, 18),
-    new MeshStandardMaterial({ color: 0xd2bd87, roughness: 0.98, flatShading: true }),
-  );
+  const sandMaterial = cloneAlphaPackedRoughnessMaterial(materials.shoreGround);
+  sandMaterial.color.setHex(0xead7a7);
+  sandMaterial.flatShading = true;
+  const sand = new Mesh(new CylinderGeometry(4.5, 5.6, 0.35, 18), sandMaterial);
   sand.position.y = -0.75;
   sand.scale.z = 0.62;
   island.add(shadowed(sand));
@@ -1393,11 +1393,11 @@ export function createDistantIsland(materials: MaterialLibrary): Group {
   return island;
 }
 
-const TERRAIN_SAND = new Color(0xd6bf86);
-const TERRAIN_DRY_GRASS = new Color(0x80915d);
-const TERRAIN_GREEN = new Color(0x5e8053);
-const TERRAIN_STONE = new Color(0x77756b);
-const TERRAIN_SUBMERGED = new Color(0x547d72);
+const TERRAIN_SAND = new Color(0xf1dba6);
+const TERRAIN_DRY_GRASS = new Color(0xa8b77b);
+const TERRAIN_GREEN = new Color(0x80a873);
+const TERRAIN_STONE = new Color(0xa7a298);
+const TERRAIN_SUBMERGED = new Color(0x76a095);
 
 function terrainColor(height: number, x: number, z: number, target: Color): Color {
   if (height < 0.12) return target.copy(TERRAIN_SAND).multiplyScalar(0.9 + Math.sin(x * 2.7 + z) * 0.025);
@@ -1415,6 +1415,7 @@ export function createExplorableIsland(materials: MaterialLibrary, seed: number)
   const depth = ISLAND_RADIUS_Z * 2.22;
   const positions: number[] = [];
   const colors: number[] = [];
+  const uvs: number[] = [];
   const indices: number[] = [];
   const color = new Color();
   for (let zIndex = 0; zIndex <= segmentsZ; zIndex += 1) {
@@ -1425,6 +1426,7 @@ export function createExplorableIsland(materials: MaterialLibrary, seed: number)
       const radial = Math.sqrt((x / ISLAND_RADIUS_X) ** 2 + (z / ISLAND_RADIUS_Z) ** 2);
       const height = sampled ?? -0.68 - Math.max(0, radial - 1.08) * 1.8;
       positions.push(x, height, z);
+      uvs.push(xIndex / segmentsX, 1 - zIndex / segmentsZ);
       terrainColor(height, x, z, color);
       if (height < -0.05) color.lerp(TERRAIN_SUBMERGED, MathUtils.clamp((-height - 0.05) * 0.5, 0, 0.42));
       colors.push(color.r, color.g, color.b);
@@ -1444,13 +1446,11 @@ export function createExplorableIsland(materials: MaterialLibrary, seed: number)
   const terrainGeometry = new BufferGeometry();
   terrainGeometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
   terrainGeometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  terrainGeometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
   terrainGeometry.setIndex(indices);
   terrainGeometry.computeVertexNormals();
-  const terrainMaterial = new MeshStandardMaterial({
-    vertexColors: true,
-    roughness: 0.94,
-    metalness: 0,
-  });
+  const terrainMaterial = cloneAlphaPackedRoughnessMaterial(materials.shoreGround);
+  terrainMaterial.vertexColors = true;
   const terrain = shadowed(new Mesh(terrainGeometry, terrainMaterial));
   terrain.name = 'island-heightfield';
   island.add(terrain);
@@ -1572,7 +1572,7 @@ export function createHarvestNodeModel(type: HarvestNodeType, materials: Materia
   if (type === 'palm') {
     radius = 0.62;
     const trunkSegments = 4;
-    const trunks = new InstancedMesh(new CylinderGeometry(0.13, 0.18, 0.76, 8), materials.darkWood, trunkSegments);
+    const trunks = new InstancedMesh(new CylinderGeometry(0.13, 0.18, 0.76, 8), materials.palmBark, trunkSegments);
     const rings = new InstancedMesh(new TorusGeometry(0.155, 0.012, 5, 12), materials.rope, trunkSegments);
     for (let index = 0; index < trunkSegments; index += 1) {
       const taper = 1 - index * 0.07;
@@ -1600,7 +1600,7 @@ export function createHarvestNodeModel(type: HarvestNodeType, materials: Materia
       leaves.setMatrixAt(index, matrix);
     }
     pivot.add(finishInstances(leaves));
-    const fruits = new InstancedMesh(new SphereGeometry(0.115, 9, 7), materials.leaf, 3);
+    const fruits = new InstancedMesh(new SphereGeometry(0.115, 9, 7), materials.tidefruitSkin, 3);
     for (let index = 0; index < 3; index += 1) {
       const angle = (index / 3) * Math.PI * 2;
       position.set(Math.cos(angle) * 0.17, 2.63 - index * 0.04, Math.sin(angle) * 0.17);
@@ -1610,7 +1610,7 @@ export function createHarvestNodeModel(type: HarvestNodeType, materials: Materia
       fruits.setMatrixAt(index, matrix);
     }
     pivot.add(finishInstances(fruits));
-    stump = shadowed(new Mesh(new CylinderGeometry(0.15, 0.2, 0.28, 8), materials.darkWood));
+    stump = shadowed(new Mesh(new CylinderGeometry(0.15, 0.2, 0.28, 8), materials.palmBark));
     stump.position.y = 0.14;
     stump.visible = false;
     node.add(stump);
@@ -1636,7 +1636,7 @@ export function createHarvestNodeModel(type: HarvestNodeType, materials: Materia
     pivot.add(finishInstances(stones));
   } else if (type === 'fruit') {
     radius = 0.34;
-    const fruits = new InstancedMesh(new SphereGeometry(0.16, 10, 8), materials.leaf, 4);
+    const fruits = new InstancedMesh(new SphereGeometry(0.16, 10, 8), materials.tidefruitSkin, 4);
     for (let index = 0; index < 4; index += 1) {
       const angle = (index / 4) * Math.PI * 2;
       position.set(Math.cos(angle) * 0.15, 0.14 + (index % 2) * 0.1, Math.sin(angle) * 0.15);

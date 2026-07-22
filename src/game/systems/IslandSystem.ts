@@ -275,6 +275,21 @@ export class IslandSystem {
     return raftFront - islandFront;
   }
 
+  getMaterialMapNames(): string[] {
+    const materials = [
+      ['ground', this.materials.shoreGround],
+      ['stone', this.materials.rock],
+      ['bark', this.materials.palmBark],
+      ['frond', this.materials.foliage],
+      ['fruit', this.materials.tidefruitSkin],
+    ] as const;
+    return materials.flatMap(([role, material]) => [
+      `${role}:albedo=${material.map?.name ?? 'none'}`,
+      `${role}:normal=${material.normalMap?.name ?? 'none'}`,
+      `${role}:roughness=${material.roughnessMap?.name ?? 'none'}`,
+    ]);
+  }
+
   getAxeAimDiagnostics(): {
     equipped: boolean;
     focused: string | null;

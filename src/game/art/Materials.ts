@@ -1,6 +1,5 @@
 import {
   AdditiveBlending,
-  Color,
   DoubleSide,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -57,6 +56,20 @@ export interface AssetTextures {
   brinewornToolSteel: Texture;
   brinewornToolSteelNormal: Texture;
   brinewornToolSteelRoughness: Texture;
+  islandStone: Texture;
+  islandStoneNormal: Texture;
+  islandStoneRoughness: Texture;
+  palmBark: Texture;
+  palmBarkNormal: Texture;
+  palmBarkRoughness: Texture;
+  palmFrond: Texture;
+  palmFrondNormal: Texture;
+  palmFrondRoughness: Texture;
+  tidefruitSkin: Texture;
+  tidefruitSkinNormal: Texture;
+  tidefruitSkinRoughness: Texture;
+  shoreGround: Texture;
+  shoreGroundNormal: Texture;
   reefSeabed: Texture;
   reefSeabedNormal: Texture;
   reefSeabedRoughness: Texture;
@@ -127,6 +140,9 @@ export interface MaterialLibrary {
   leaf: MeshStandardMaterial;
   rock: MeshStandardMaterial;
   foliage: MeshStandardMaterial;
+  palmBark: MeshStandardMaterial;
+  tidefruitSkin: MeshStandardMaterial;
+  shoreGround: MeshStandardMaterial;
   wovenFiber: MeshStandardMaterial;
   sharkSkin: MeshStandardMaterial;
   silverSpineSkin: MeshStandardMaterial;
@@ -215,6 +231,20 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     brinewornToolSteel,
     brinewornToolSteelNormal,
     brinewornToolSteelRoughness,
+    islandStone,
+    islandStoneNormal,
+    islandStoneRoughness,
+    palmBark,
+    palmBarkNormal,
+    palmBarkRoughness,
+    palmFrond,
+    palmFrondNormal,
+    palmFrondRoughness,
+    tidefruitSkin,
+    tidefruitSkinNormal,
+    tidefruitSkinRoughness,
+    shoreGround,
+    shoreGroundNormal,
     reefSeabed,
     reefSeabedNormal,
     reefSeabedRoughness,
@@ -317,6 +347,20 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/brineworn-tool-steel.webp'),
     loader.loadAsync('/assets/textures/brineworn-tool-steel-normal.webp'),
     loader.loadAsync('/assets/textures/brineworn-tool-steel-roughness.webp'),
+    loader.loadAsync('/assets/textures/stormwashed-island-stone.webp'),
+    loader.loadAsync('/assets/textures/stormwashed-island-stone-normal.webp'),
+    loader.loadAsync('/assets/textures/stormwashed-island-stone-roughness.webp'),
+    loader.loadAsync('/assets/textures/saltcrown-palm-bark.webp'),
+    loader.loadAsync('/assets/textures/saltcrown-palm-bark-normal.webp'),
+    loader.loadAsync('/assets/textures/saltcrown-palm-bark-roughness.webp'),
+    loader.loadAsync('/assets/textures/saltcrown-palm-frond.webp'),
+    loader.loadAsync('/assets/textures/saltcrown-palm-frond-normal.webp'),
+    loader.loadAsync('/assets/textures/saltcrown-palm-frond-roughness.webp'),
+    loader.loadAsync('/assets/textures/tidefruit-skin.webp'),
+    loader.loadAsync('/assets/textures/tidefruit-skin-normal.webp'),
+    loader.loadAsync('/assets/textures/tidefruit-skin-roughness.webp'),
+    loader.loadAsync('/assets/textures/saltcrown-shore-ground-packed.webp'),
+    loader.loadAsync('/assets/textures/saltcrown-shore-ground-normal.webp'),
     loader.loadAsync('/assets/textures/reef-seabed.webp'),
     loader.loadAsync('/assets/textures/reef-seabed-normal.webp'),
     loader.loadAsync('/assets/textures/reef-seabed-roughness.webp'),
@@ -415,6 +459,20 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     [brinewornToolSteel, 'brineworn-tool-steel-albedo'],
     [brinewornToolSteelNormal, 'brineworn-tool-steel-normal'],
     [brinewornToolSteelRoughness, 'brineworn-tool-steel-roughness'],
+    [islandStone, 'stormwashed-island-stone-albedo'],
+    [islandStoneNormal, 'stormwashed-island-stone-normal'],
+    [islandStoneRoughness, 'stormwashed-island-stone-roughness'],
+    [palmBark, 'saltcrown-palm-bark-albedo'],
+    [palmBarkNormal, 'saltcrown-palm-bark-normal'],
+    [palmBarkRoughness, 'saltcrown-palm-bark-roughness'],
+    [palmFrond, 'saltcrown-palm-frond-albedo'],
+    [palmFrondNormal, 'saltcrown-palm-frond-normal'],
+    [palmFrondRoughness, 'saltcrown-palm-frond-roughness'],
+    [tidefruitSkin, 'tidefruit-skin-albedo'],
+    [tidefruitSkinNormal, 'tidefruit-skin-normal'],
+    [tidefruitSkinRoughness, 'tidefruit-skin-roughness'],
+    [shoreGround, 'saltcrown-shore-ground-packed'],
+    [shoreGroundNormal, 'saltcrown-shore-ground-normal'],
     [cropLeaf, 'salt-crown-leaf-albedo'],
     [cropLeafNormal, 'salt-crown-leaf-normal'],
     [cropLeafRoughness, 'salt-crown-leaf-roughness'],
@@ -498,6 +556,32 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   brinewornToolSteel.colorSpace = SRGBColorSpace;
   brinewornToolSteelNormal.colorSpace = NoColorSpace;
   brinewornToolSteelRoughness.colorSpace = NoColorSpace;
+
+  const islandMaterialSets = [
+    [islandStone, islandStoneNormal, islandStoneRoughness, 1.65, 1.55],
+    [palmBark, palmBarkNormal, palmBarkRoughness, 1.05, 1.05],
+    [palmFrond, palmFrondNormal, palmFrondRoughness, 1.12, 1.12],
+    [tidefruitSkin, tidefruitSkinNormal, tidefruitSkinRoughness, 1.15, 1.15],
+  ] as const;
+  for (const [albedo, normal, roughness, repeatX, repeatY] of islandMaterialSets) {
+    for (const texture of [albedo, normal, roughness]) {
+      texture.wrapS = RepeatWrapping;
+      texture.wrapT = RepeatWrapping;
+      texture.repeat.set(repeatX, repeatY);
+      texture.anisotropy = anisotropy;
+    }
+    albedo.colorSpace = SRGBColorSpace;
+    normal.colorSpace = NoColorSpace;
+    roughness.colorSpace = NoColorSpace;
+  }
+  for (const texture of [shoreGround, shoreGroundNormal]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(4.4, 3.8);
+    texture.anisotropy = anisotropy;
+  }
+  shoreGround.colorSpace = SRGBColorSpace;
+  shoreGroundNormal.colorSpace = NoColorSpace;
 
   const fishSkinSets = [
     [silverSpineSkin, silverSpineSkinNormal, silverSpineSkinRoughness],
@@ -748,6 +832,20 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     brinewornToolSteel,
     brinewornToolSteelNormal,
     brinewornToolSteelRoughness,
+    islandStone,
+    islandStoneNormal,
+    islandStoneRoughness,
+    palmBark,
+    palmBarkNormal,
+    palmBarkRoughness,
+    palmFrond,
+    palmFrondNormal,
+    palmFrondRoughness,
+    tidefruitSkin,
+    tidefruitSkinNormal,
+    tidefruitSkinRoughness,
+    shoreGround,
+    shoreGroundNormal,
     reefSeabed,
     reefSeabedNormal,
     reefSeabedRoughness,
@@ -833,6 +931,24 @@ function woodVariant(
   });
 }
 
+const ALPHA_PACKED_ROUGHNESS_CACHE_KEY = 'driftwake-alpha-packed-roughness-v1';
+
+function useAlphaPackedRoughness(material: MeshStandardMaterial): MeshStandardMaterial {
+  material.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      'roughnessFactor *= texelRoughness.g;',
+      'roughnessFactor *= texelRoughness.a;',
+    );
+  };
+  material.customProgramCacheKey = () => ALPHA_PACKED_ROUGHNESS_CACHE_KEY;
+  material.userData.alphaPackedRoughness = true;
+  return material;
+}
+
+export function cloneAlphaPackedRoughnessMaterial(source: MeshStandardMaterial): MeshStandardMaterial {
+  return useAlphaPackedRoughness(source.clone());
+}
+
 export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary {
   const causticMap = textures.foam.clone();
   causticMap.repeat.set(9.5, 9.5);
@@ -880,9 +996,58 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       roughness: 0.68,
       metalness: 0.0,
     }),
-    leaf: new MeshStandardMaterial({ color: 0x718e55, roughness: 0.92, side: DoubleSide }),
-    rock: new MeshStandardMaterial({ color: new Color('#766f62'), roughness: 0.96, flatShading: true }),
-    foliage: new MeshStandardMaterial({ color: new Color('#54784f'), roughness: 0.92, flatShading: true }),
+    leaf: new MeshStandardMaterial({
+      color: 0xb9cba3,
+      map: textures.palmFrond,
+      normalMap: textures.palmFrondNormal,
+      normalScale: new Vector2(0.42, 0.42),
+      roughnessMap: textures.palmFrondRoughness,
+      roughness: 0.88,
+      side: DoubleSide,
+    }),
+    rock: new MeshStandardMaterial({
+      color: 0xc4c0b3,
+      map: textures.islandStone,
+      normalMap: textures.islandStoneNormal,
+      normalScale: new Vector2(0.58, 0.58),
+      roughnessMap: textures.islandStoneRoughness,
+      roughness: 0.96,
+      flatShading: true,
+    }),
+    foliage: new MeshStandardMaterial({
+      color: 0x9fbb8f,
+      map: textures.palmFrond,
+      normalMap: textures.palmFrondNormal,
+      normalScale: new Vector2(0.38, 0.38),
+      roughnessMap: textures.palmFrondRoughness,
+      roughness: 0.9,
+      flatShading: true,
+      side: DoubleSide,
+    }),
+    palmBark: new MeshStandardMaterial({
+      color: 0xd5c1a5,
+      map: textures.palmBark,
+      normalMap: textures.palmBarkNormal,
+      normalScale: new Vector2(0.62, 0.62),
+      roughnessMap: textures.palmBarkRoughness,
+      roughness: 0.97,
+    }),
+    tidefruitSkin: new MeshStandardMaterial({
+      color: 0xd9b497,
+      map: textures.tidefruitSkin,
+      normalMap: textures.tidefruitSkinNormal,
+      normalScale: new Vector2(0.34, 0.34),
+      roughnessMap: textures.tidefruitSkinRoughness,
+      roughness: 0.68,
+    }),
+    shoreGround: useAlphaPackedRoughness(new MeshStandardMaterial({
+      color: 0xffffff,
+      map: textures.shoreGround,
+      normalMap: textures.shoreGroundNormal,
+      normalScale: new Vector2(0.42, 0.42),
+      roughnessMap: textures.shoreGround,
+      roughness: 0.98,
+    })),
     wovenFiber: new MeshStandardMaterial({
       color: 0xe1c18c,
       map: textures.wovenFiber,
