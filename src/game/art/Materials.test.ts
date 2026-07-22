@@ -23,11 +23,16 @@ describe('asset texture loading', () => {
 
     expect(paths).toHaveLength(Object.keys(textures).length);
     expect(new Set(paths).size).toBe(paths.length);
+    expect(textures.wood.userData.sourcePath).toBe('/assets/textures/weathered-cedar.webp');
+    expect(textures.woodNormal.userData.sourcePath).toBe('/assets/textures/weathered-cedar-normal.webp');
+    expect(textures.woodRoughness.userData.sourcePath).toBe('/assets/textures/weathered-cedar-roughness.webp');
     expect(textures.cookedFishFlesh.userData.sourcePath).toBe('/assets/textures/cooked-fish-flesh.webp');
     expect(textures.burntFishFlesh.userData.sourcePath).toBe('/assets/textures/burnt-fish-flesh.webp');
     expect(textures.saltfireIron.userData.sourcePath).toBe('/assets/textures/saltfire-folded-iron.webp');
     expect(textures.saltEtchedPolymer.userData.sourcePath).toBe('/assets/textures/salt-etched-polymer.webp');
     expect(textures.fishEye.userData.sourcePath).toBe('/assets/textures/pelagic-fish-eye.webp');
+    expect(textures.tideboundRigging.userData.sourcePath).toBe('/assets/textures/tidebound-rigging.webp');
+    expect(textures.brinewornToolSteel.userData.sourcePath).toBe('/assets/textures/brineworn-tool-steel.webp');
     expect(textures.cropLeaf.userData.sourcePath).toBe('/assets/textures/salt-crown-leaf.webp');
     expect(textures.cropDry.userData.sourcePath).toBe('/assets/textures/salt-crown-dry-leaf.webp');
     expect(textures.cropFruit.userData.sourcePath).toBe('/assets/textures/salt-crown-fruit.webp');
@@ -43,6 +48,23 @@ describe('asset texture loading', () => {
     expect(textures.stormClouds.userData.sourcePath).toBe('/assets/textures/storm-clouds.webp');
 
     const materials = createMaterialLibrary(textures);
+    expect(materials.rope).toMatchObject({
+      map: textures.tideboundRigging,
+      normalMap: textures.tideboundRiggingNormal,
+      roughnessMap: textures.tideboundRiggingRoughness,
+    });
+    expect(materials.metal).toMatchObject({
+      map: textures.brinewornToolSteel,
+      normalMap: textures.brinewornToolSteelNormal,
+      roughnessMap: textures.brinewornToolSteelRoughness,
+    });
+    expect(materials.rustMetal.normalMap).toBe(textures.brinewornToolSteelNormal);
+    expect(materials.polymer).toMatchObject({
+      map: textures.saltEtchedPolymer,
+      normalMap: textures.saltEtchedPolymerNormal,
+      roughnessMap: textures.saltEtchedPolymerRoughness,
+    });
+    expect(materials.darkWood.normalMap).not.toBeNull();
     expect(materials.cropLeaf).toMatchObject({
       map: textures.cropLeaf,
       normalMap: textures.cropLeafNormal,

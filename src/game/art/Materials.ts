@@ -15,6 +15,8 @@ import {
 
 export interface AssetTextures {
   wood: Texture;
+  woodNormal: Texture;
+  woodRoughness: Texture;
   foam: Texture;
   sharkSkin: Texture;
   sharkSkinNormal: Texture;
@@ -49,6 +51,12 @@ export interface AssetTextures {
   wovenFiber: Texture;
   wovenFiberNormal: Texture;
   wovenFiberRoughness: Texture;
+  tideboundRigging: Texture;
+  tideboundRiggingNormal: Texture;
+  tideboundRiggingRoughness: Texture;
+  brinewornToolSteel: Texture;
+  brinewornToolSteelNormal: Texture;
+  brinewornToolSteelRoughness: Texture;
   reefSeabed: Texture;
   reefSeabedNormal: Texture;
   reefSeabedRoughness: Texture;
@@ -165,6 +173,8 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   const loader = new TextureLoader();
   const [
     wood,
+    woodNormal,
+    woodRoughness,
     foam,
     sharkSkin,
     sharkSkinNormal,
@@ -199,6 +209,12 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     wovenFiber,
     wovenFiberNormal,
     wovenFiberRoughness,
+    tideboundRigging,
+    tideboundRiggingNormal,
+    tideboundRiggingRoughness,
+    brinewornToolSteel,
+    brinewornToolSteelNormal,
+    brinewornToolSteelRoughness,
     reefSeabed,
     reefSeabedNormal,
     reefSeabedRoughness,
@@ -259,6 +275,8 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     stormClouds,
   ] = await Promise.all([
     loader.loadAsync('/assets/textures/weathered-cedar.webp'),
+    loader.loadAsync('/assets/textures/weathered-cedar-normal.webp'),
+    loader.loadAsync('/assets/textures/weathered-cedar-roughness.webp'),
     loader.loadAsync('/assets/textures/ocean-foam-mask.png'),
     loader.loadAsync('/assets/textures/shark-skin.webp'),
     loader.loadAsync('/assets/textures/shark-skin-normal.webp'),
@@ -293,6 +311,12 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/woven-palm-fiber.webp'),
     loader.loadAsync('/assets/textures/woven-palm-fiber-normal.webp'),
     loader.loadAsync('/assets/textures/woven-palm-fiber-roughness.webp'),
+    loader.loadAsync('/assets/textures/tidebound-rigging.webp'),
+    loader.loadAsync('/assets/textures/tidebound-rigging-normal.webp'),
+    loader.loadAsync('/assets/textures/tidebound-rigging-roughness.webp'),
+    loader.loadAsync('/assets/textures/brineworn-tool-steel.webp'),
+    loader.loadAsync('/assets/textures/brineworn-tool-steel-normal.webp'),
+    loader.loadAsync('/assets/textures/brineworn-tool-steel-roughness.webp'),
     loader.loadAsync('/assets/textures/reef-seabed.webp'),
     loader.loadAsync('/assets/textures/reef-seabed-normal.webp'),
     loader.loadAsync('/assets/textures/reef-seabed-roughness.webp'),
@@ -355,6 +379,9 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
 
   const anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const textureNames: Array<[Texture, string]> = [
+    [wood, 'weathered-cedar-albedo'],
+    [woodNormal, 'weathered-cedar-normal'],
+    [woodRoughness, 'weathered-cedar-roughness'],
     [silverSpineSkin, 'silver-spine-skin-albedo'],
     [silverSpineSkinNormal, 'silver-spine-skin-normal'],
     [silverSpineSkinRoughness, 'silver-spine-skin-roughness'],
@@ -382,6 +409,12 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     [fishEye, 'pelagic-fish-eye-albedo'],
     [fishEyeNormal, 'pelagic-fish-eye-normal'],
     [fishEyeRoughness, 'pelagic-fish-eye-roughness'],
+    [tideboundRigging, 'tidebound-rigging-albedo'],
+    [tideboundRiggingNormal, 'tidebound-rigging-normal'],
+    [tideboundRiggingRoughness, 'tidebound-rigging-roughness'],
+    [brinewornToolSteel, 'brineworn-tool-steel-albedo'],
+    [brinewornToolSteelNormal, 'brineworn-tool-steel-normal'],
+    [brinewornToolSteelRoughness, 'brineworn-tool-steel-roughness'],
     [cropLeaf, 'salt-crown-leaf-albedo'],
     [cropLeafNormal, 'salt-crown-leaf-normal'],
     [cropLeafRoughness, 'salt-crown-leaf-roughness'],
@@ -413,11 +446,15 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   textureNames.forEach(([texture, name]) => {
     texture.name = name;
   });
+  for (const texture of [wood, woodNormal, woodRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(1.35, 0.72);
+    texture.anisotropy = anisotropy;
+  }
   wood.colorSpace = SRGBColorSpace;
-  wood.wrapS = RepeatWrapping;
-  wood.wrapT = RepeatWrapping;
-  wood.repeat.set(1.35, 0.72);
-  wood.anisotropy = anisotropy;
+  woodNormal.colorSpace = NoColorSpace;
+  woodRoughness.colorSpace = NoColorSpace;
 
   foam.colorSpace = NoColorSpace;
   foam.wrapS = RepeatWrapping;
@@ -441,6 +478,26 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   wovenFiber.repeat.set(1.8, 1.8);
   wovenFiberNormal.repeat.copy(wovenFiber.repeat);
   wovenFiberRoughness.repeat.copy(wovenFiber.repeat);
+
+  for (const texture of [tideboundRigging, tideboundRiggingNormal, tideboundRiggingRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(1.4, 1.4);
+    texture.anisotropy = anisotropy;
+  }
+  tideboundRigging.colorSpace = SRGBColorSpace;
+  tideboundRiggingNormal.colorSpace = NoColorSpace;
+  tideboundRiggingRoughness.colorSpace = NoColorSpace;
+
+  for (const texture of [brinewornToolSteel, brinewornToolSteelNormal, brinewornToolSteelRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(1.55, 1.45);
+    texture.anisotropy = anisotropy;
+  }
+  brinewornToolSteel.colorSpace = SRGBColorSpace;
+  brinewornToolSteelNormal.colorSpace = NoColorSpace;
+  brinewornToolSteelRoughness.colorSpace = NoColorSpace;
 
   const fishSkinSets = [
     [silverSpineSkin, silverSpineSkinNormal, silverSpineSkinRoughness],
@@ -649,6 +706,8 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
 
   return {
     wood,
+    woodNormal,
+    woodRoughness,
     foam,
     sharkSkin,
     sharkSkinNormal,
@@ -683,6 +742,12 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     wovenFiber,
     wovenFiberNormal,
     wovenFiberRoughness,
+    tideboundRigging,
+    tideboundRiggingNormal,
+    tideboundRiggingRoughness,
+    brinewornToolSteel,
+    brinewornToolSteelNormal,
+    brinewornToolSteelRoughness,
     reefSeabed,
     reefSeabedNormal,
     reefSeabedRoughness,
@@ -744,15 +809,25 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   };
 }
 
-function woodVariant(source: Texture, color: number, offsetX: number): MeshStandardMaterial {
-  const map = source.clone();
-  map.offset.x = offsetX;
-  map.needsUpdate = true;
+function woodVariant(
+  source: Texture,
+  normalSource: Texture,
+  roughnessSource: Texture,
+  color: number,
+  offsetX: number,
+): MeshStandardMaterial {
+  const [map, normalMap, roughnessMap] = [source, normalSource, roughnessSource].map((texture) => {
+    const copy = texture.clone();
+    copy.offset.x = offsetX;
+    copy.needsUpdate = true;
+    return copy;
+  });
   return new MeshStandardMaterial({
     color,
     map,
-    bumpMap: map,
-    bumpScale: 0.018,
+    normalMap,
+    normalScale: new Vector2(0.38, 0.38),
+    roughnessMap,
     roughness: 0.88,
     metalness: 0.0,
   });
@@ -765,15 +840,46 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
   causticMap.needsUpdate = true;
   return {
     wood: [
-      woodVariant(textures.wood, 0xffffff, 0.0),
-      woodVariant(textures.wood, 0xe7d2ae, 0.29),
-      woodVariant(textures.wood, 0xc8d1c6, 0.61),
+      woodVariant(textures.wood, textures.woodNormal, textures.woodRoughness, 0xffffff, 0.0),
+      woodVariant(textures.wood, textures.woodNormal, textures.woodRoughness, 0xe7d2ae, 0.29),
+      woodVariant(textures.wood, textures.woodNormal, textures.woodRoughness, 0xc8d1c6, 0.61),
     ],
-    darkWood: new MeshStandardMaterial({ color: 0x72513a, roughness: 0.96 }),
-    rope: new MeshStandardMaterial({ color: 0xc49b63, roughness: 1.0 }),
-    metal: new MeshStandardMaterial({ color: 0x8fa7a4, roughness: 0.58, metalness: 0.72 }),
-    rustMetal: new MeshStandardMaterial({ color: 0x8f5742, roughness: 0.76, metalness: 0.58 }),
-    polymer: new MeshStandardMaterial({ color: 0x4b9aa3, roughness: 0.67, metalness: 0.0 }),
+    darkWood: woodVariant(textures.wood, textures.woodNormal, textures.woodRoughness, 0x9a7659, 0.77),
+    rope: new MeshStandardMaterial({
+      color: 0xffefd1,
+      map: textures.tideboundRigging,
+      normalMap: textures.tideboundRiggingNormal,
+      normalScale: new Vector2(0.52, 0.52),
+      roughnessMap: textures.tideboundRiggingRoughness,
+      roughness: 0.98,
+    }),
+    metal: new MeshStandardMaterial({
+      color: 0xf0f5f0,
+      map: textures.brinewornToolSteel,
+      normalMap: textures.brinewornToolSteelNormal,
+      normalScale: new Vector2(0.5, 0.5),
+      roughnessMap: textures.brinewornToolSteelRoughness,
+      roughness: 0.48,
+      metalness: 0.72,
+    }),
+    rustMetal: new MeshStandardMaterial({
+      color: 0xefc2ae,
+      map: textures.brinewornToolSteel,
+      normalMap: textures.brinewornToolSteelNormal,
+      normalScale: new Vector2(0.58, 0.58),
+      roughnessMap: textures.brinewornToolSteelRoughness,
+      roughness: 0.62,
+      metalness: 0.54,
+    }),
+    polymer: new MeshStandardMaterial({
+      color: 0x8dbdc1,
+      map: textures.saltEtchedPolymer,
+      normalMap: textures.saltEtchedPolymerNormal,
+      normalScale: new Vector2(0.32, 0.32),
+      roughnessMap: textures.saltEtchedPolymerRoughness,
+      roughness: 0.68,
+      metalness: 0.0,
+    }),
     leaf: new MeshStandardMaterial({ color: 0x718e55, roughness: 0.92, side: DoubleSide }),
     rock: new MeshStandardMaterial({ color: new Color('#766f62'), roughness: 0.96, flatShading: true }),
     foliage: new MeshStandardMaterial({ color: new Color('#54784f'), roughness: 0.92, flatShading: true }),

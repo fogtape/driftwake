@@ -1,6 +1,6 @@
 # Driftwake
 
-原创桌面网页 3D 海上生存游戏。当前版本为 `0.22.0` 高质量纵向切片，不以基础 Demo 为完成标准。
+原创桌面网页 3D 海上生存游戏。当前版本为 `0.22.1` 高质量纵向切片，不以基础 Demo 为完成标准。
 
 ## 当前内容
 
@@ -55,9 +55,9 @@
 - 设置提供 18 项可重映射物理键位、冲突拒绝与默认恢复；危险/天气/钓鱼/工具/失败恢复声音可选显示为字幕，支持标准、红弱、绿弱、蓝弱和高对比语义配色，以及减少镜头起伏、受击晃动和界面动态；
 - 六总线程序音频混音、随完整相机姿态更新的 HRTF 落水/打捞定位、近场绳索受力与断裂层，以及水下低通、鲨鱼失力/浮尸/分段割取/下沉、震叉分段蓄能/就绪/失调/脉冲、生活/信号设备、锚帆、风雨雷声、种植、研究、礁区和生物声音；
 - 标题、HUD、背包、制作、设置、能力提示和 Playwright 截图回归流程；
-- 原创标题美术、木材、泡沫、鲨皮、编织纤维、AI 辅助海床、拼补帆布、培养土、耐火陶土、导航合金、信号层压板、磷光玻璃、共鸣青铜、电气陶瓷、盐蚀集热玻璃、蜡封帆布、盐封手套、三种鱼皮、生/熟/焦鱼肉、远洋鱼眼、耐热折铁、盐蚀聚合物、盐冠活/枯叶与潮果、盐翼体羽/飞羽/角质/虹膜 PBR 与飑云天空材质，以及对应的独立 normal/roughness 图。
+- 原创标题美术、木材、泡沫、鲨皮、编织纤维、AI 辅助海床、拼补帆布、培养土、耐火陶土、导航合金、信号层压板、磷光玻璃、共鸣青铜、电气陶瓷、潮缚索具、盐蚀工具钢、盐蚀集热玻璃、蜡封帆布、盐封手套、三种鱼皮、生/熟/焦鱼肉、远洋鱼眼、耐热折铁、盐蚀聚合物、盐冠活/枯叶与潮果、盐翼体羽/飞羽/角质/虹膜 PBR 与飑云天空材质，以及对应的独立 normal/roughness 图；风化雪松也已补齐 normal/roughness。
 
-当前仍不是完整游戏。M6 钓鱼、烹饪/净水、天气农业、盐翼鸟害、M8 分阶段研究与远海目的地，以及 M9 三档存档/备份恢复与无障碍输入的代码和自动视觉闭环已经完成；无说明玩家验收、目标真实 GPU 鼠标/双画质门禁、更多深水生态资源、潜水装备、最终蒙皮资产与其余 M9 发布系统仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
+当前仍不是完整游戏。M6 钓鱼、烹饪/净水、天气农业、盐翼鸟害、M8 分阶段研究与远海目的地，以及 M9 三档存档/备份恢复、无障碍输入和首批工具/打捞历史材质整改的代码与自动视觉闭环已经完成；无说明玩家验收、目标真实 GPU 鼠标/双画质门禁、更多深水生态资源、潜水装备、最终蒙皮资产与其余 M9 发布系统仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
 
 ## 运行
 
@@ -95,6 +95,8 @@ M8 专用截图目标包括 `signal-destinations`、`signal-destination-material
 M9 存档门禁复现：`CAPTURE_ONLY=save-slots npm run capture` 验证三档标题页；`CAPTURE_ONLY=save-recovery CAPTURE_FAST=1 npm run capture` 验证同槽备份进入、主档修复与 `pagehide` 检查点。详见 [M9 验收记录](docs/M9_ACCEPTANCE.md)。
 
 M9 无障碍门禁复现：`CAPTURE_ONLY=accessibility npm run capture` 验证设置与窄屏；`CAPTURE_ONLY=accessibility-caption npm run capture` 验证真实恢复字幕；`CAPTURE_ONLY=accessibility-bindings CAPTURE_FAST=1 npm run capture` 验证重映射输入。详见 [M9 无障碍验收记录](docs/M9_ACCESSIBILITY_ACCEPTANCE.md)。
+
+M9 工具/打捞材质门禁复现：`CAPTURE_ONLY=salvage CAPTURE_FAST=1 npm run capture` 使用精确世界掉落瞄准和真实键鼠完成拾取、断钩与重制，并输出 WebGL framebuffer 场景图，避开 X11 空合成层。详见 [M9 材质整改验收记录](docs/M9_MATERIAL_ACCEPTANCE.md)。
 
 ## 资产管线
 

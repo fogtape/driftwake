@@ -139,7 +139,7 @@ const salvageSave = {
     inventory: { hook: 1, timber: 2, polymer: 2, rope: 1 },
     toolDurability: { hook: 1 },
     selectedTool: 'hook',
-    navigation: { surface: 'raft', x: 0, z: 2.9 },
+    navigation: { surface: 'raft', x: 0, z: 1.4 },
   },
   raft: {
     ...seededSave.raft,
@@ -156,7 +156,7 @@ const salvageSave = {
   world: {
     ...seededSave.world,
     island: { ...seededSave.world.island, phase: 'approaching', elapsed: 0 },
-    drops: [{ loot: { fiber: 2, scrap: 1 }, x: 0, y: 0.1, z: -1.25 }],
+    drops: [{ loot: { fiber: 2, scrap: 1 }, x: 0, y: 0.1, z: -0.5 }],
   },
 };
 
@@ -2277,6 +2277,45 @@ async function captureDomOverlayPage(page, path) {
       }, previous).catch(() => undefined);
     }
   }
+}
+
+async function captureCanvasReadback(page, path) {
+  const frame = await page.evaluate(() => new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const canvas = document.querySelector('canvas');
+      const gl = canvas?.getContext('webgl2');
+      if (!canvas || !gl || gl.isContextLost()) {
+        resolve(null);
+        return;
+      }
+      const width = canvas.width;
+      const height = canvas.height;
+      const source = new Uint8Array(width * height * 4);
+      gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, source);
+      const flipped = new Uint8ClampedArray(source.length);
+      const stride = width * 4;
+      for (let y = 0; y < height; y += 1) {
+        flipped.set(source.subarray(y * stride, (y + 1) * stride), (height - y - 1) * stride);
+      }
+      const output = document.createElement('canvas');
+      output.width = width;
+      output.height = height;
+      const context = output.getContext('2d');
+      if (!context) {
+        resolve(null);
+        return;
+      }
+      context.putImageData(new ImageData(flipped, width, height), 0, 0);
+      resolve({
+        width,
+        height,
+        data: output.toDataURL('image/png').split(',', 2)[1],
+      });
+    }));
+  }));
+  if (!frame?.data) throw new Error(`Canvas framebuffer readback failed for ${path}`);
+  await writeFile(path, Buffer.from(frame.data, 'base64'));
+  console.log(`Canvas framebuffer capture: ${JSON.stringify({ path, width: frame.width, height: frame.height })}`);
 }
 
 async function inspectCanvasPixels(page, label) {
@@ -5944,19 +5983,19 @@ async function readInteractionPrompt(page) {
   return page.evaluate(() => document.querySelector('.interaction-prompt')?.textContent?.trim() ?? '');
 }
 
-async function aimLocalPointToPrompt(page, target, expected, iterations = 6) {
+async function aimLocalPointToPrompt(page, target, expected, iterations = 6, diagnosticsKey = 'collectionNetAim') {
   let prompt = await readInteractionPrompt(page);
   if (prompt.includes(expected)) return prompt;
-  const diagnosticsReady = await page.waitForFunction(() => {
-    const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.collectionNetAim ?? '{}');
+  const diagnosticsReady = await page.waitForFunction((key) => {
+    const aim = JSON.parse(document.querySelector('.game-mount')?.dataset[key] ?? '{}');
     return Array.isArray(aim.camera)
       && Array.isArray(aim.forward)
       && Math.hypot(...aim.forward) > 0.5;
-  }, undefined, { timeout: 8_000 }).then(() => true).catch(() => false);
+  }, diagnosticsKey, { timeout: 8_000 }).then(() => true).catch(() => false);
   if (!diagnosticsReady) return prompt;
   for (let iteration = 0; iteration < iterations && !prompt.includes(expected); iteration += 1) {
-    await page.evaluate(([targetX, targetY, targetZ]) => {
-      const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.collectionNetAim ?? '{}');
+    await page.evaluate(([targetX, targetY, targetZ, key]) => {
+      const aim = JSON.parse(document.querySelector('.game-mount')?.dataset[key] ?? '{}');
       const [cameraX, cameraY, cameraZ] = aim.camera;
       const [forwardX, forwardY, forwardZ] = aim.forward;
       const deltaX = targetX - cameraX;
@@ -5978,7 +6017,7 @@ async function aimLocalPointToPrompt(page, target, expected, iterations = 6) {
         movementY: { value: (currentPitch - desiredPitch) / 0.00155 },
       });
       document.dispatchEvent(movement);
-    }, target);
+    }, [...target, diagnosticsKey]);
     await page.waitForTimeout(280);
     prompt = await readInteractionPrompt(page);
   }
@@ -5995,6 +6034,30 @@ async function aimCollectionNetToPrompt(page, id, expected) {
     return aim.firstNet.center;
   });
   return aimLocalPointToPrompt(page, center, expected);
+}
+
+async function aimSalvageDropToPrompt(page, expected) {
+  let firstDrop = '';
+  for (let attempt = 0; attempt < 40 && !firstDrop; attempt += 1) {
+    firstDrop = await page.evaluate(() => {
+      const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.salvageAim ?? '{}');
+      return Array.isArray(aim.firstDrop) && aim.firstDrop.length === 3 ? JSON.stringify(aim.firstDrop) : '';
+    });
+    if (!firstDrop) await page.waitForTimeout(200);
+  }
+  if (!firstDrop) {
+    const diagnostic = await page.evaluate(() => {
+      const mount = document.querySelector('.game-mount');
+      return {
+        salvageAim: mount?.dataset.salvageAim ?? 'missing',
+        worldDropCount: mount?.dataset.worldDropCount ?? 'missing',
+        simulationActive: mount?.dataset.simulationActive ?? 'missing',
+        pointerLocked: document.pointerLockElement === document.querySelector('canvas'),
+      };
+    });
+    throw new Error(`Salvage aim diagnostics were unavailable: ${JSON.stringify(diagnostic)}`);
+  }
+  return aimLocalPointToPrompt(page, JSON.parse(firstDrop), expected, 8, 'salvageAim');
 }
 
 async function aimDownToPrompt(page, expected, steps = 50) {
@@ -7108,7 +7171,7 @@ async function captureSalvage() {
   const { context, page } = await openDesktopPage('salvage', { seedSave: true, salvageStart: true });
   await enterGame(page);
   await ensurePointerLock(page);
-  const prompt = await aimDownToPrompt(page, '捡起散落物资', 60);
+  let prompt = await aimSalvageDropToPrompt(page, '捡起散落物资');
   if (!prompt.includes('捡起散落物资')) {
     const diagnostic = await page.evaluate(() => ({
       prompt: document.querySelector('.interaction-prompt')?.textContent?.trim() ?? '',
@@ -7118,22 +7181,59 @@ async function captureSalvage() {
     await page.screenshot({ path: new URL('salvage-pickup-diagnostic.png', outputDir).pathname });
     throw new Error(`Near-pickup salvage prompt missing: ${JSON.stringify(diagnostic)}`);
   }
+  await captureCanvasReadback(page, new URL('salvage-pickup-canvas.png', outputDir).pathname);
   if (process.env.CAPTURE_FAST !== '1') {
     await inspectCanvasPixels(page, 'salvage-pickup');
     await captureCompositedPage(page, new URL('salvage-pickup-desktop.png', outputDir).pathname);
   }
-  await page.keyboard.press('KeyE');
-  await page.waitForFunction(
-    () => document.querySelector('.loot-notice')?.textContent?.includes('+2 纤维'),
-    null,
-    { timeout: 5_000 },
-  );
-  await page.waitForFunction(
-    () => document.querySelector('.game-mount')?.dataset.worldDropCount === '0',
-    null,
-    { timeout: 5_000 },
-  );
+  let pickupComplete = false;
+  for (let attempt = 0; attempt < 4 && !pickupComplete; attempt += 1) {
+    await page.keyboard.press('KeyE');
+    await page.waitForTimeout(240);
+    const attemptState = await page.evaluate(() => ({
+      worldDropCount: document.querySelector('.game-mount')?.dataset.worldDropCount ?? 'missing',
+    }));
+    pickupComplete = attemptState.worldDropCount === '0';
+    if (!pickupComplete) prompt = await aimSalvageDropToPrompt(page, '捡起散落物资');
+  }
+  const pickupState = await page.evaluate(() => {
+    const mount = document.querySelector('.game-mount');
+    return {
+      worldDropCount: mount?.dataset.worldDropCount ?? 'missing',
+      salvageFocus: mount?.dataset.salvageFocus ?? 'missing',
+      simulationActive: mount?.dataset.simulationActive ?? 'missing',
+      textures: Number(mount?.dataset.textures ?? Number.NaN),
+      resources: Object.fromEntries([...document.querySelectorAll('.resource-readout')].map((readout) => [
+        readout.getAttribute('title') ?? '',
+        readout.querySelector('strong')?.textContent?.trim() ?? '',
+      ])),
+    };
+  });
+  console.log(`Salvage pickup state: ${JSON.stringify(pickupState)}`);
+  if (
+    !pickupComplete
+    || pickupState.resources['棕榈纤维'] !== '2'
+    || pickupState.resources['氧化废铁'] !== '1'
+    || !Number.isFinite(pickupState.textures)
+    || pickupState.textures > 32
+  ) {
+    throw new Error(`Recovered world drop was not collected: ${JSON.stringify({ prompt, pickupState })}`);
+  }
 
+  const hookBeforeBreak = await page.evaluate(() => {
+    const mount = document.querySelector('.game-mount');
+    return {
+      title: document.querySelector('.hotbar-slot[title^="打捞钩"]')?.getAttribute('title') ?? 'missing',
+      pointerLocked: document.pointerLockElement !== null,
+      hookState: mount?.dataset.hookState ?? 'missing',
+      hookHeldVisible: mount?.dataset.hookHeldVisible ?? 'missing',
+      playerSurface: mount?.dataset.playerSurface ?? 'missing',
+      playerLocalZ: mount?.dataset.playerLocalZ ?? 'missing',
+    };
+  });
+  console.log(`Salvage hook before break: ${JSON.stringify(hookBeforeBreak)}`);
+  await page.mouse.move(720, 450);
+  await page.waitForTimeout(200);
   await page.mouse.down();
   await page.waitForTimeout(180);
   await page.mouse.up();
@@ -7142,6 +7242,10 @@ async function captureSalvage() {
     null,
     { timeout: 5_000 },
   );
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return data?.hookState === 'idle' && data?.hookHeldVisible === 'false';
+  }, 5_000);
   const brokenOwnership = await assertHookVisualOwnership(page, 'salvage-broken-hook');
   if (brokenOwnership.heldVisible) throw new Error('Broken hook remained visible in the player hand');
 

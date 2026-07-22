@@ -1,7 +1,7 @@
 # 原创资产清单
 
 > 更新日期：2026-07-22
-> 状态：第十七轮 M8 远海目的地原创 PBR 材质已通过场景门禁，发布前仍需做最终授权、DCC 替换与相似性复核
+> 状态：第十八轮 M9 工具/打捞历史材质整改已通过来源、PBR、平铺与软件场景门禁，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -34,17 +34,18 @@
 Use case: stylized-concept. Asset type: original game environment key art and title-screen background. Primary request: a polished first-person ocean survival scene on a small hand-built raft, with an original salvaged hook tool resting in the lower foreground, scattered driftwood and useful debris following a current across the water, and a compact lush island far on the horizon. Scene/backdrop: an immense open sea just after a brief tropical rain, broken clouds opening to clear morning light. Style/medium: premium stylized 3D game render with painterly PBR materials, hand-sculpted shapes, restrained detail, believable scale, and a distinctive original visual identity; not photorealistic and not based on any existing game. Composition/framing: cinematic 16:9 first-person establishing view, stable horizon in the upper third, raft construction visible along the lower third, clear central view into the playable ocean, readable foreground-to-horizon depth. Lighting/mood: fresh warm sunlight crossing cool sea light, soft cloud shadows, calm wonder with a trace of danger. Color palette: turquoise and deep green-blue water balanced by sun-bleached timber, oxidized metal, coral-red cord, green island foliage, and warm golden light. Materials/textures: salt-worn wood grain, wet rope fibers, hammered recycled metal, translucent water, crisp white foam. Constraints: fully original art; no logos, trademarks, copyrighted characters, recognizable branded UI, text, watermark, frame, or border. Avoid: direct resemblance to a specific commercial survival game, generic stock-art composition, exaggerated cartoon proportions, muddy colors, heavy bloom, dark vignette, blurred foreground, extra characters, boats, or buildings.
 ```
 
-### TEX-001：风化雪松 Albedo
+### TEX-001：风化雪松材质组
 
 | 字段 | 内容 |
 | --- | --- |
-| 运行时文件 | `public/assets/textures/weathered-cedar.webp` |
+| 运行时文件 | `public/assets/textures/weathered-cedar.webp`、`weathered-cedar-normal.webp`、`weathered-cedar-roughness.webp` |
 | 模型 | `gpt-image-2` |
 | 请求质量 | `high` |
 | 请求尺寸 | `2048x2048` |
-| 实际尺寸 | `1254x1254` |
+| 实际尺寸 | `1254x1254`，各三张 |
 | 用途 | 木筏、钩具木柄与木质漂流物 |
-| 检查 | 2x2 平铺无明显边缝；无透视、文字、金属件和强烘焙阴影 |
+| 处理方式 | 审定 Image 2 albedo 保持不变；`derive_material_maps.py --strength 0.52 --roughness-min 178 --roughness-max 238` 补齐 normal/roughness |
+| 检查 | 2x2 平铺无明显边缝；无透视、文字、金属件和强烘焙阴影；木筏/深木/工具柄均不再使用颜色图作 bump |
 
 最终提示词：
 
@@ -754,6 +755,64 @@ Create an original seamless PBR albedo texture for a matte salt-fired porcelain 
 ```
 
 首轮 terrazzo/混凝土感候选与连接失败重试均未进入运行时；采用版经过 2x2、地图相关性和风针目的地近景复核。
+
+### TEX-034：潮缚索具材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/tidebound-rigging.webp`、`tidebound-rigging-normal.webp`、`tidebound-rigging-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/tidebound-rigging-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high`，项目 `scripts/imagegen` CLI |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 打捞钩扎结、网具绳床、浮包绑绳、筏面索具、工具与设备绑扎 |
+| 处理方式 | `prepare_imagegen_material.py --size 1024 --seam-width 160 --normal-strength 0.68 --roughness-min 184 --roughness-max 246 --optimize-boundary` |
+| 检查 | seam x=`13.52`/`1.00x`、y=`13.73`/`1.02x`，boundary=`(1,1)`；2x2 无硬缝/十字带，珊瑚修补线和矿物青痕保持稀疏 |
+
+采用提示词：
+
+```text
+Use case: stylized-concept
+Asset type: seamless tileable production PBR base-color albedo for first-person tools, hook line details, salvage bundles, raft rigging and collection-net ties in an original ocean survival game.
+Primary request: an original tidebound marine rigging surface made from tightly laid weathered hemp strands, darker tar-waxed cord, pale salt-crusted fibers, sparse muted coral repair thread, subtle sea-glass green mineral staining and a few frayed microfibers held under believable tension.
+Scene/backdrop: texture sheet only.
+Subject: continuous practical braided rope and cord material only, with an irregular diagonal lay that reads at close first-person scale but remains calm at distance.
+Style/medium: premium hand-painted stylized realism, tactile production-ready PBR albedo with controlled fiber detail, physically plausible weathering, no photographic scan noise.
+Composition/framing: exact orthographic top-down square, uniform texel density, edge-to-edge coverage, seamless wrapping on all four edges, no central rope coil, knot, buckle, splice, object silhouette or repeated emblem.
+Lighting/mood: perfectly flat neutral base color with absolutely no baked directional lighting, cast shadow, ambient occlusion, highlight, reflection, wet gloss, depth of field or perspective.
+Color palette: weathered flax, charcoal tar, pale salt gray, restrained coral repair fibers and sparse mineral teal; balanced against warm cedar and deep ocean without becoming monochrome brown or blue.
+Constraints: fully original; no text, letters, numbers, logos, watermark, border, frame, tools, hands, hooks, nets, boats, animals, horizon, background scene, recognizable branded pattern or resemblance to any named commercial game.
+Avoid: rope coil, macrame wall hanging, basket weave, knitted wool, clean new nylon, fishing net grid, large knots, dramatic fraying, thick stripes, leather, fabric canvas, checker repetition, material ball, product mockup, perspective preview, dark vignette or hard directional shadow.
+```
+
+### TEX-035：盐蚀工具钢材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/brineworn-tool-steel.webp`、`brineworn-tool-steel-normal.webp`、`brineworn-tool-steel-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/brineworn-tool-steel-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high`，项目 `scripts/imagegen` CLI |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 第一人称钩、锤、矛、斧、钓具金属，补给箱/桶箍、网具卡扣与通用打捞五金 |
+| 处理方式 | `prepare_imagegen_material.py --size 1024 --seam-width 152 --normal-strength 0.56 --roughness-min 112 --roughness-max 194 --optimize-boundary` |
+| 检查 | seam x=`7.29`/`1.08x`、y=`10.22`/`1.00x`，boundary=`(1,1)`；2x2 无硬缝，运行时以两档 PBR 参数区分维护钢与锈蚀五金，未复制烹饪折铁 |
+
+采用提示词：
+
+```text
+Use case: stylized-concept
+Asset type: seamless tileable production PBR base-color albedo for first-person salvage tools, hook hardware, spear points, axe heads, hammer caps, metal brackets and recovered ocean debris in an original survival game.
+Primary request: an original brineworn marine tool-steel surface with fine hand-forged planishing, restrained graphite-blue mill oxide, small salt pits, pale nickel edge scuffs, sparse muted red-brown oxidation freckles and a few cool mineral teal corrosion traces, maintained enough to remain mechanically sound.
+Scene/backdrop: texture sheet only.
+Subject: continuous forged salvage steel material only, without a complete blade, hook, nail, rivet, bolt, plate, seam or manufactured object silhouette.
+Style/medium: premium hand-painted stylized realism, close-range production-ready PBR albedo with tactile controlled microdetail and physically plausible metal wear, not photographic scan noise.
+Composition/framing: exact orthographic top-down square, uniform texel density, edge-to-edge material coverage, seamless wrapping on all four sides, no central focal mark, no directional long band and no repeated hardware layout.
+Lighting/mood: perfectly flat neutral base color with absolutely no baked directional light, cast shadows, ambient occlusion, reflection, specular highlight, wet gloss, depth of field or perspective.
+Color palette: cool gunmetal, charcoal graphite, restrained old nickel, tiny oxide red-brown and sparse mineral teal; dark but readable, balanced against cedar and sea-glass surfaces without a one-note blue, brown or black palette.
+Constraints: fully original; no text, letters, numbers, symbols, logo, watermark, border, frame, tools, hands, weapons, hooks, grills, cookware, machinery, ship parts, animals, horizon, background scene, recognizable branded pattern or resemblance to any named commercial game.
+Avoid: polished chrome, mirror reflection, diamond plate, corrugated steel, brushed stainless bands, heavy orange rust, orange-brown dominance, large cracks, holes, sparks, flame soot, fantasy runes, rivet grid, checker repetition, material ball, product mockup, perspective preview, dark vignette or dramatic lighting.
+```
+
+两套源图均由项目配置 provider 直接生成，仓库不含 URL 或密钥。`salvage-pickup-canvas.png` 使用 WebGL framebuffer 直读规避 X11 空合成层，证明雪松/深木、索具、工具钢、聚合物、手套与真实回收包在同一运行场景绑定；工具钢乘色经该场景校准，未修改源图或降低贴图规格。
 
 ## 代码原生模型与动画
 

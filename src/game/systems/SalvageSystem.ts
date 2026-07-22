@@ -18,6 +18,12 @@ export interface SalvageClaimResult extends InventoryMutation {
   kind: SalvageTarget['kind'];
 }
 
+export interface SalvageAimDiagnostics {
+  camera: [number, number, number];
+  forward: [number, number, number];
+  firstDrop: [number, number, number] | null;
+}
+
 export function claimSalvageTarget(target: SalvageTarget, debris: DebrisField): SalvageClaimResult {
   const result = useGameStore.getState().receiveItemBundle(debris.getLoot(target));
   debris.settleCollection(target, result.accepted, result.rejected);
@@ -32,20 +38,24 @@ export function selectSalvageFocus(
 ): SalvageTarget | null {
   let best: SalvageTarget | null = null;
   let bestAlong = Number.POSITIVE_INFINITY;
+  let bestPriority = -1;
   for (const target of targets) {
     if (!target.active || target.latched) continue;
     toTarget.copy(target.model.position).sub(cameraPosition);
     const distanceSquared = toTarget.lengthSq();
     const largeTarget = target.kind === 'cache' || target.kind === 'barrel' || target.source === 'drop';
-    const range = largeTarget ? 3.8 : 3.25;
+    const recoveredDrop = target.source === 'drop';
+    const range = recoveredDrop ? 4.5 : largeTarget ? 3.8 : 3.25;
     if (distanceSquared > range * range) continue;
     const along = toTarget.dot(forward);
-    if (along <= 0 || along >= bestAlong) continue;
-    const radius = largeTarget ? 0.72 : 0.48;
+    const priority = target.source === 'drop' ? 1 : 0;
+    if (along <= 0 || priority < bestPriority || (priority === bestPriority && along >= bestAlong)) continue;
+    const radius = recoveredDrop ? 1.1 : largeTarget ? 0.72 : 0.48;
     const perpendicularSquared = Math.max(0, distanceSquared - along * along);
     if (perpendicularSquared > radius * radius) continue;
     best = target;
     bestAlong = along;
+    bestPriority = priority;
   }
   return best;
 }
@@ -87,6 +97,18 @@ export class SalvageSystem {
 
   get focusedKind(): SalvageTarget['kind'] | null {
     return this.focused?.kind ?? null;
+  }
+
+  getAimDiagnostics(): SalvageAimDiagnostics {
+    this.camera.getWorldDirection(this.forward);
+    const firstDrop = this.debris.worldDrops.find((drop) => drop.active);
+    return {
+      camera: [this.camera.position.x, this.camera.position.y, this.camera.position.z],
+      forward: [this.forward.x, this.forward.y, this.forward.z],
+      firstDrop: firstDrop
+        ? [firstDrop.model.position.x, firstDrop.model.position.y, firstDrop.model.position.z]
+        : null,
+    };
   }
 
   setInputEnabled(enabled: boolean): void {

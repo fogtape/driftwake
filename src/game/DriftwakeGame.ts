@@ -267,6 +267,7 @@ export class DriftwakeGame {
     this.mount.dataset.hookRopeTension = '0';
     this.mount.dataset.hookRopeSag = '0';
     this.mount.dataset.salvageFocus = 'none';
+    this.mount.dataset.salvageAim = '{}';
     this.mount.dataset.worldDropCount = '0';
     this.mount.dataset.collectionNetCount = '0';
     this.mount.dataset.collectionNetStored = '0';
@@ -1159,6 +1160,9 @@ export class DriftwakeGame {
     }
     this.mount.dataset.salvageFocus = this.salvage?.focusedKind ?? 'none';
     this.mount.dataset.worldDropCount = String(this.debris?.activeWorldDropCount ?? 0);
+    if (this.simulationTickCount % 6 === 0) {
+      this.mount.dataset.salvageAim = JSON.stringify(this.salvage?.getAimDiagnostics());
+    }
     this.splashes?.update(stepSeconds);
 
     const weather = this.navigation?.getWeather() ?? { weatherPhase: 'calm' as const, stormIntensity: 0, gust: 0 };
