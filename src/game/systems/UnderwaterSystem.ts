@@ -36,6 +36,7 @@ import {
 import { addItems, bundleLabel } from '../domain/items';
 import { createSeededRandom, randomRange } from '../math/random';
 import { useGameStore } from '../../state/gameStore';
+import { matchesInputAction } from '../domain/inputBindings';
 import type { PlayerSurface } from '../domain/save';
 import type { AudioSystem } from './AudioSystem';
 import type { IslandSystem } from './IslandSystem';
@@ -567,7 +568,7 @@ export class UnderwaterSystem {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (
-      event.code !== 'KeyE' ||
+      !matchesInputAction('interact', event.code) ||
       event.repeat ||
       !this.inputEnabled ||
       this.player.getSurface() !== 'water' ||

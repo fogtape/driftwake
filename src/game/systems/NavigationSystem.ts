@@ -69,6 +69,7 @@ import {
 } from '../domain/navigation';
 import { ITEM_DEFINITIONS, addItems, itemCount, type ItemBundle } from '../domain/items';
 import { useGameStore } from '../../state/gameStore';
+import { matchesInputAction } from '../domain/inputBindings';
 import type { AudioSystem } from './AudioSystem';
 import type { IslandSystem } from './IslandSystem';
 import type { PlayerController } from './PlayerController';
@@ -1260,15 +1261,15 @@ export class NavigationSystem {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.repeat || !this.inputEnabled || this.placementType) return;
-    if (event.code === 'KeyE' && this.focused && useGameStore.getState().interactionOwner === 'navigation') {
+    if (matchesInputAction('interact', event.code) && this.focused && useGameStore.getState().interactionOwner === 'navigation') {
       this.interact();
       return;
     }
-    if (event.code === 'KeyR' && this.focused?.state.type === 'receiver') {
+    if (matchesInputAction('alternate', event.code) && this.focused?.state.type === 'receiver') {
       this.adjustSignal(event.shiftKey);
       return;
     }
-    if (event.code === 'KeyR' && (this.focused?.state.type === 'sail' || this.focused?.state.type === 'helm')) {
+    if (matchesInputAction('alternate', event.code) && (this.focused?.state.type === 'sail' || this.focused?.state.type === 'helm')) {
       this.adjustCourse(event.shiftKey);
     }
   };

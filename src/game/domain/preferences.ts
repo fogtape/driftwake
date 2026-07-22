@@ -1,26 +1,40 @@
 import type { AudioMix, QualityPreset } from '../../state/gameStore';
-import type { CameraMotionMode } from './settings';
+import {
+  DEFAULT_INPUT_BINDINGS,
+  sanitizeInputBindings,
+  type InputBindings,
+} from './inputBindings';
+import { COLOR_VISION_MODES, type CameraMotionMode, type ColorVisionMode } from './settings';
 
-export const PREFERENCES_KEY = 'driftwake.preferences.v2';
-export const LEGACY_PREFERENCES_KEY = 'driftwake.preferences.v1';
+export const PREFERENCES_KEY = 'driftwake.preferences.v3';
+export const LEGACY_PREFERENCES_KEY = 'driftwake.preferences.v2';
+export const OLDER_PREFERENCES_KEY = 'driftwake.preferences.v1';
 
 export interface GamePreferences {
-  version: 2;
+  version: 3;
   audioEnabled: boolean;
   muteOnFocusLoss: boolean;
   cameraMotionMode: CameraMotionMode;
   quality: QualityPreset;
   dynamicResolutionEnabled: boolean;
+  keyBindings: InputBindings;
+  captionsEnabled: boolean;
+  colorVisionMode: ColorVisionMode;
+  reducedMotion: boolean;
   audioMix: AudioMix;
 }
 
 export const DEFAULT_PREFERENCES: GamePreferences = {
-  version: 2,
+  version: 3,
   audioEnabled: true,
   muteOnFocusLoss: true,
   cameraMotionMode: 'balanced',
   quality: 'high',
   dynamicResolutionEnabled: true,
+  keyBindings: { ...DEFAULT_INPUT_BINDINGS },
+  captionsEnabled: false,
+  colorVisionMode: 'standard',
+  reducedMotion: false,
   audioMix: { master: 0.78, music: 0.2, ambience: 0.43, effects: 0.72, creatures: 0.78, ui: 0.56 },
 };
 
@@ -33,7 +47,7 @@ export function sanitizePreferences(value: unknown): GamePreferences {
   const candidate = value as Partial<GamePreferences>;
   const mix = candidate.audioMix as Partial<AudioMix> | undefined;
   return {
-    version: 2,
+    version: 3,
     audioEnabled: typeof candidate.audioEnabled === 'boolean' ? candidate.audioEnabled : DEFAULT_PREFERENCES.audioEnabled,
     muteOnFocusLoss:
       typeof candidate.muteOnFocusLoss === 'boolean'
@@ -50,6 +64,20 @@ export function sanitizePreferences(value: unknown): GamePreferences {
       typeof candidate.dynamicResolutionEnabled === 'boolean'
         ? candidate.dynamicResolutionEnabled
         : DEFAULT_PREFERENCES.dynamicResolutionEnabled,
+    keyBindings: sanitizeInputBindings(candidate.keyBindings),
+    captionsEnabled:
+      typeof candidate.captionsEnabled === 'boolean'
+        ? candidate.captionsEnabled
+        : DEFAULT_PREFERENCES.captionsEnabled,
+    colorVisionMode:
+      typeof candidate.colorVisionMode === 'string'
+      && (COLOR_VISION_MODES as readonly string[]).includes(candidate.colorVisionMode)
+        ? candidate.colorVisionMode as ColorVisionMode
+        : DEFAULT_PREFERENCES.colorVisionMode,
+    reducedMotion:
+      typeof candidate.reducedMotion === 'boolean'
+        ? candidate.reducedMotion
+        : DEFAULT_PREFERENCES.reducedMotion,
     audioMix: {
       master: normalizedLevel(mix?.master, DEFAULT_PREFERENCES.audioMix.master),
       music: normalizedLevel(mix?.music, DEFAULT_PREFERENCES.audioMix.music),
@@ -62,7 +90,7 @@ export function sanitizePreferences(value: unknown): GamePreferences {
 }
 
 export function loadPreferences(storage: Pick<Storage, 'getItem'> = window.localStorage): GamePreferences {
-  for (const key of [PREFERENCES_KEY, LEGACY_PREFERENCES_KEY]) {
+  for (const key of [PREFERENCES_KEY, LEGACY_PREFERENCES_KEY, OLDER_PREFERENCES_KEY]) {
     try {
       const raw = storage.getItem(key);
       if (raw) return sanitizePreferences(JSON.parse(raw));

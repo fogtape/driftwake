@@ -101,6 +101,7 @@ interface HudProps {
   placementDevice: PlacementType | null;
   interaction: string | null;
   notice: string | null;
+  caption: string | null;
   fps: number;
   onResume: () => void;
   onSettings: () => void;
@@ -185,6 +186,7 @@ export function Hud({
   placementDevice,
   interaction,
   notice,
+  caption,
   fps,
   onResume,
   onSettings,
@@ -755,6 +757,7 @@ export function Hud({
 
       <div className={`interaction-prompt ${interaction ? 'is-visible' : ''} ${placementDevice ? 'is-placement' : ''}`}>{interaction}</div>
       <div className={`loot-notice ${notice ? 'is-visible' : ''}`} aria-live="polite">{notice}</div>
+      <div className={`sound-caption ${caption ? 'is-visible' : ''}`} role="status" aria-live="polite">{caption}</div>
 
       {!pointerLocked && visible && !overlayOpen && (
         <div className="focus-prompt" role="dialog" aria-modal="true" aria-labelledby="focus-prompt-heading">

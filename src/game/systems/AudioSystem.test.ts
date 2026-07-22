@@ -32,4 +32,28 @@ describe('signal destination audio state', () => {
       layerCount: 0,
     });
   });
+
+  it('emits decision-relevant captions even before the browser audio graph begins', () => {
+    const audio = new AudioSystem();
+    const captions: string[] = [];
+    audio.setCaptionSink((caption) => captions.push(caption));
+
+    audio.playThunder(0.9);
+    audio.playSharkWarning();
+    audio.playSharkWindup(true, false);
+    audio.playLineBreak();
+    audio.playSignalArrival();
+    audio.playCropBirdWarning();
+    audio.playCropBirdPeck();
+
+    expect(captions).toEqual([
+      '近处雷鸣',
+      '水下搅动，鲨鱼接近',
+      '鲨鱼正向你蓄势',
+      '钓线断裂',
+      '接收台捕获到新信号',
+      '鸟翼逼近作物',
+      '鸟翼正在啄食作物',
+    ]);
+  });
 });

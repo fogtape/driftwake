@@ -13,6 +13,14 @@ import type { RaftBuildCategory, RaftBuildPiece } from './game/domain/raftStruct
 import { RESEARCH_PROJECTS, type ResearchProjectId, type ResearchSampleId } from './game/domain/progression';
 import { loadPreferences, writePreferences } from './game/domain/preferences';
 import {
+  DEFAULT_INPUT_BINDINGS,
+  assignInputBinding,
+  setRuntimeInputBindings,
+  type InputAction,
+  type InputBindingChange,
+  type InputBindings,
+} from './game/domain/inputBindings';
+import {
   activateSaveSlot,
   deleteSaveSlot,
   getActiveSaveSlot,
@@ -21,7 +29,7 @@ import {
   type SaveSlotId,
   type SaveSlotSummary,
 } from './game/domain/saveRepository';
-import type { CameraMotionMode } from './game/domain/settings';
+import type { CameraMotionMode, ColorVisionMode } from './game/domain/settings';
 import { useGameStore, type AudioMix, type OverlayPanel, type PlacementType, type QualityPreset } from './state/gameStore';
 
 function detectUnsupportedDevice(): boolean {
@@ -57,6 +65,10 @@ export function App() {
   const cameraMotionMode = useGameStore((state) => state.cameraMotionMode);
   const quality = useGameStore((state) => state.quality);
   const dynamicResolutionEnabled = useGameStore((state) => state.dynamicResolutionEnabled);
+  const keyBindings = useGameStore((state) => state.keyBindings);
+  const captionsEnabled = useGameStore((state) => state.captionsEnabled);
+  const colorVisionMode = useGameStore((state) => state.colorVisionMode);
+  const reducedMotion = useGameStore((state) => state.reducedMotion);
   const hookCharge = useGameStore((state) => state.hookCharge);
   const selectedTool = useGameStore((state) => state.selectedTool);
   const inventory = useGameStore((state) => state.inventory);
@@ -83,6 +95,7 @@ export function App() {
   const interaction = useGameStore((state) => state.interaction);
   const saveStatus = useGameStore((state) => state.saveStatus);
   const notice = useGameStore((state) => state.notice);
+  const caption = useGameStore((state) => state.caption);
   const fps = useGameStore((state) => state.fps);
 
   useEffect(() => {
@@ -98,6 +111,12 @@ export function App() {
     store.setCameraMotionMode(preferences.cameraMotionMode);
     store.setQuality(preferences.quality);
     store.setDynamicResolutionEnabled(preferences.dynamicResolutionEnabled);
+    store.setKeyBindings(preferences.keyBindings);
+    setRuntimeInputBindings(preferences.keyBindings);
+    store.setCaptionsEnabled(preferences.captionsEnabled);
+    store.setColorVisionMode(preferences.colorVisionMode);
+    store.setReducedMotion(preferences.reducedMotion);
+    writePreferences(preferences);
     const unsubscribePreferences = useGameStore.subscribe((state, previous) => {
       if (
         state.audioEnabled !== previous.audioEnabled ||
@@ -105,16 +124,25 @@ export function App() {
         state.muteOnFocusLoss !== previous.muteOnFocusLoss ||
         state.cameraMotionMode !== previous.cameraMotionMode ||
         state.quality !== previous.quality ||
-        state.dynamicResolutionEnabled !== previous.dynamicResolutionEnabled
+        state.dynamicResolutionEnabled !== previous.dynamicResolutionEnabled ||
+        state.keyBindings !== previous.keyBindings ||
+        state.captionsEnabled !== previous.captionsEnabled ||
+        state.colorVisionMode !== previous.colorVisionMode ||
+        state.reducedMotion !== previous.reducedMotion
       ) {
+        setRuntimeInputBindings(state.keyBindings);
         writePreferences({
-          version: 2,
+          version: 3,
           audioEnabled: state.audioEnabled,
           audioMix: state.audioMix,
           muteOnFocusLoss: state.muteOnFocusLoss,
           cameraMotionMode: state.cameraMotionMode,
           quality: state.quality,
           dynamicResolutionEnabled: state.dynamicResolutionEnabled,
+          keyBindings: state.keyBindings,
+          captionsEnabled: state.captionsEnabled,
+          colorVisionMode: state.colorVisionMode,
+          reducedMotion: state.reducedMotion,
         });
       }
     });
@@ -237,6 +265,28 @@ export function App() {
     useGameStore.getState().setDynamicResolutionEnabled(enabled);
     gameRef.current?.setDynamicResolutionEnabled(enabled);
   };
+  const changeKeyBinding = (action: InputAction, code: string): InputBindingChange => {
+    const result = assignInputBinding(useGameStore.getState().keyBindings, action, code);
+    if (result.ok) {
+      useGameStore.getState().setKeyBindings(result.bindings);
+      setRuntimeInputBindings(result.bindings);
+    }
+    return result;
+  };
+  const resetKeyBindings = () => {
+    useGameStore.getState().setKeyBindings({ ...DEFAULT_INPUT_BINDINGS });
+    setRuntimeInputBindings({ ...DEFAULT_INPUT_BINDINGS });
+  };
+  const changeCaptionsEnabled = (enabled: boolean) => {
+    useGameStore.getState().setCaptionsEnabled(enabled);
+  };
+  const changeColorVisionMode = (mode: ColorVisionMode) => {
+    useGameStore.getState().setColorVisionMode(mode);
+  };
+  const changeReducedMotion = (enabled: boolean) => {
+    useGameStore.getState().setReducedMotion(enabled);
+    gameRef.current?.setReducedMotion(enabled);
+  };
   const showTransientNotice = (message: string) => {
     useGameStore.getState().showNotice(message);
     window.setTimeout(() => {
@@ -348,7 +398,7 @@ export function App() {
   };
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-color-vision={colorVisionMode} data-reduced-motion={reducedMotion ? 'true' : 'false'}>
       <div ref={mountRef} className="game-mount" />
       <TitleScreen
         visible={phase === 'title'}
@@ -390,6 +440,7 @@ export function App() {
         placementDevice={placementDevice}
         interaction={interaction}
         notice={notice}
+        caption={caption}
         fps={fps}
         onResume={() => gameRef.current?.begin()}
         onSettings={openSettings}
@@ -453,12 +504,21 @@ export function App() {
         cameraMotionMode={cameraMotionMode}
         quality={quality}
         dynamicResolutionEnabled={dynamicResolutionEnabled}
+        keyBindings={keyBindings}
+        captionsEnabled={captionsEnabled}
+        colorVisionMode={colorVisionMode}
+        reducedMotion={reducedMotion}
         onAudioChange={changeAudio}
         onAudioMixChange={changeAudioMix}
         onMuteOnFocusLossChange={changeMuteOnFocusLoss}
         onCameraMotionModeChange={changeCameraMotionMode}
         onQualityChange={changeQuality}
         onDynamicResolutionChange={changeDynamicResolution}
+        onKeyBindingChange={changeKeyBinding}
+        onKeyBindingsReset={resetKeyBindings}
+        onCaptionsEnabledChange={changeCaptionsEnabled}
+        onColorVisionModeChange={changeColorVisionMode}
+        onReducedMotionChange={changeReducedMotion}
         onClose={closeSettings}
       />
     </main>

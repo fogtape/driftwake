@@ -48,6 +48,7 @@ import {
   type ItemBundle,
 } from '../domain/items';
 import { useGameStore, type ProgressionFeedback } from '../../state/gameStore';
+import { matchesInputAction } from '../domain/inputBindings';
 import type { AudioSystem } from './AudioSystem';
 import type { PlayerController } from './PlayerController';
 import { RAFT_TILE_X, RAFT_TILE_Z, type GridCoordinate, type RaftSystem } from './RaftSystem';
@@ -717,7 +718,7 @@ export class ProgressionSystem {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (
-      event.code === 'KeyR' &&
+      matchesInputAction('alternate', event.code) &&
       !event.repeat &&
       this.inputEnabled &&
       !this.placementType &&
@@ -732,7 +733,7 @@ export class ProgressionSystem {
       return;
     }
     if (
-      event.code !== 'KeyE' ||
+      !matchesInputAction('interact', event.code) ||
       event.repeat ||
       !this.inputEnabled ||
       this.placementType ||

@@ -1547,6 +1547,11 @@ async function openDesktopPage(label, options = {}) {
       }));
     }, pageQuality);
   }
+  if (options.accessibilityPreferences) {
+    await context.addInitScript((preferences) => {
+      localStorage.setItem('driftwake.preferences.v3', JSON.stringify(preferences));
+    }, options.accessibilityPreferences);
+  }
   if (options.seedSave) {
     await context.addInitScript((save) => {
       localStorage.setItem(`driftwake.save.v${save.version}`, JSON.stringify(save));
@@ -4779,6 +4784,190 @@ async function captureSettings() {
   await page.getByRole('button', { name: '设置' }).first().click();
   await page.getByRole('dialog', { name: '设置' }).waitFor();
   await page.screenshot({ path: new URL('settings-desktop.png', outputDir).pathname });
+  await context.close();
+}
+
+async function captureAccessibility() {
+  const { context, page } = await openDesktopPage('accessibility');
+  await page.getByRole('button', { name: '设置' }).first().click();
+  const dialog = page.getByRole('dialog', { name: '设置' });
+  await dialog.waitFor();
+
+  await page.getByRole('switch', { name: '声音字幕' }).click();
+  await page.getByLabel('色觉辅助').selectOption('highContrast');
+  await page.getByRole('switch', { name: '减少动态' }).click();
+  const visualState = await page.evaluate(() => ({
+    colorVision: document.querySelector('.app-shell')?.getAttribute('data-color-vision'),
+    reducedMotion: document.querySelector('.app-shell')?.getAttribute('data-reduced-motion'),
+    preferences: JSON.parse(localStorage.getItem('driftwake.preferences.v3') ?? 'null'),
+  }));
+  if (
+    visualState.colorVision !== 'highContrast'
+    || visualState.reducedMotion !== 'true'
+    || visualState.preferences?.captionsEnabled !== true
+    || visualState.preferences?.colorVisionMode !== 'highContrast'
+    || visualState.preferences?.reducedMotion !== true
+  ) {
+    throw new Error(`Accessibility preference state failed: ${JSON.stringify(visualState)}`);
+  }
+
+  const interactBinding = page.getByRole('button', { name: '设置交互 / 收取，当前为E' });
+  await interactBinding.click();
+  await page.locator('.keybinding-button.is-capturing').waitFor();
+  await page.keyboard.press('KeyG');
+  await page.getByRole('button', { name: '设置交互 / 收取，当前为G' }).waitFor();
+
+  const alternateBinding = page.getByRole('button', { name: '设置替代操作，当前为R' });
+  await alternateBinding.click();
+  await page.locator('.keybinding-button.is-capturing').waitFor();
+  await page.keyboard.press('KeyG');
+  const conflict = await page.locator('.keybinding-status').textContent();
+  if (!conflict?.includes('已分配给交互 / 收取')) {
+    throw new Error(`Accessibility binding conflict was not announced: ${conflict}`);
+  }
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '恢复默认' }).click();
+  await page.getByRole('button', { name: '设置交互 / 收取，当前为E' }).waitFor();
+
+  await dialog.evaluate((element) => { element.scrollTop = 0; });
+  await page.screenshot({ path: new URL('accessibility-settings-desktop.png', outputDir).pathname });
+  await page.setViewportSize({ width: 640, height: 720 });
+  await dialog.evaluate((element) => { element.scrollTop = 0; });
+  await page.waitForTimeout(120);
+  const narrow = await page.evaluate(() => {
+    const panel = document.querySelector('.settings-panel')?.getBoundingClientRect();
+    const root = document.querySelector('.app-shell');
+    return {
+      bodyWidth: document.body.scrollWidth,
+      viewport: { width: innerWidth, height: innerHeight },
+      panel: panel ? { left: panel.left, right: panel.right, top: panel.top, bottom: panel.bottom } : null,
+      captions: root ? JSON.parse(localStorage.getItem('driftwake.preferences.v3') ?? 'null')?.captionsEnabled : null,
+    };
+  });
+  if (
+    !narrow.panel
+    || narrow.bodyWidth > narrow.viewport.width + 2
+    || narrow.panel.left < -1
+    || narrow.panel.right > narrow.viewport.width + 1
+    || narrow.captions !== true
+  ) {
+    throw new Error(`Accessibility narrow layout failed: ${JSON.stringify(narrow)}`);
+  }
+  if (process.env.CAPTURE_FAST !== '1') {
+    await page.screenshot({ path: new URL('accessibility-settings-narrow.png', outputDir).pathname });
+  }
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  console.log(`Accessibility gate: ${JSON.stringify({ visualState, conflict, narrow })}`);
+  await context.close();
+}
+
+async function captureAccessibilityCaption() {
+  const { context, page } = await openDesktopPage('accessibility-caption', {
+    seedSave: true,
+    failureStart: true,
+    accessibilityPreferences: { captionsEnabled: true, colorVisionMode: 'highContrast', reducedMotion: true },
+  });
+  await page.getByRole('button', { name: /^(开始漂流|开始新航次|继续航次|恢复航次|重建航次)$/ }).click({ force: true });
+  await page.locator('.failure-screen.is-visible').waitFor({ timeout: 45_000 });
+  await page.waitForFunction(
+    () => document.querySelector('.game-mount')?.dataset.failureDropPending === 'false',
+    undefined,
+    { timeout: 12_000 },
+  );
+  await page.waitForFunction(() => {
+    const command = [...document.querySelectorAll('button')]
+      .find((button) => button.textContent?.trim() === '回到木筏');
+    return command instanceof HTMLButtonElement && !command.disabled;
+  }, undefined, { timeout: 8_000 });
+  await page.evaluate(() => {
+    const command = [...document.querySelectorAll('button')]
+      .find((button) => button.textContent?.trim() === '回到木筏');
+    if (!(command instanceof HTMLButtonElement) || command.disabled) throw new Error('Accessibility recovery command unavailable');
+    command.click();
+  });
+  await page.waitForFunction(
+    () => document.querySelector('.sound-caption.is-visible')?.textContent?.includes('海面与木筏声渐渐清晰'),
+    undefined,
+    { timeout: 10_000 },
+  );
+  const state = await page.evaluate(() => {
+    const box = (selector) => {
+      const rect = document.querySelector(selector)?.getBoundingClientRect();
+      return rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null;
+    };
+    const mount = document.querySelector('.game-mount');
+    return {
+      caption: document.querySelector('.sound-caption')?.textContent?.trim() ?? '',
+      captionVisible: document.querySelector('.sound-caption')?.classList.contains('is-visible') ?? false,
+      captionBox: box('.sound-caption'),
+      hotbar: box('.hotbar'),
+      viewport: { width: innerWidth, height: innerHeight },
+      reducedMotion: mount?.dataset.reducedMotion ?? null,
+      cameraMotionMode: mount?.dataset.cameraMotionMode ?? null,
+    };
+  });
+  if (
+    !state.captionVisible
+    || !state.caption.includes('海面与木筏声渐渐清晰')
+    || !state.captionBox
+    || !state.hotbar
+    || state.captionBox.bottom > state.hotbar.top - 8
+    || state.captionBox.left < 0
+    || state.captionBox.right > state.viewport.width
+    || state.reducedMotion !== 'true'
+    || state.cameraMotionMode !== 'comfort'
+  ) {
+    throw new Error(`Accessibility caption runtime failed: ${JSON.stringify(state)}`);
+  }
+  if (process.env.CAPTURE_FAST !== '1') {
+    await captureCompositedPage(page, new URL('accessibility-caption-desktop.png', outputDir).pathname);
+  }
+  console.log(`Accessibility caption gate: ${JSON.stringify(state)}`);
+  await context.close();
+}
+
+async function captureAccessibilityBindings() {
+  const { context, page } = await openDesktopPage('accessibility-bindings', { quality: 'low' });
+  await page.getByRole('button', { name: '设置' }).first().click();
+  await page.getByRole('dialog', { name: '设置' }).waitFor();
+  await page.getByRole('button', { name: '设置前进，当前为W' }).click();
+  await page.locator('.keybinding-button.is-capturing').waitFor();
+  await page.keyboard.press('KeyT');
+  await page.getByRole('button', { name: '设置前进，当前为T' }).waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog', { name: '设置' }).waitFor({ state: 'hidden' });
+  await enterGame(page);
+
+  const readPosition = () => page.evaluate(() => ({
+    localZ: Number(document.querySelector('.game-mount')?.dataset.playerLocalZ),
+    simulationActive: document.querySelector('.game-mount')?.dataset.simulationActive,
+    contextHealthy: document.querySelector('.game-mount')?.dataset.contextHealthy,
+    forwardBinding: JSON.parse(localStorage.getItem('driftwake.preferences.v3') ?? 'null')?.keyBindings?.moveForward,
+  }));
+  const before = await readPosition();
+  await page.keyboard.down('KeyT');
+  await page.waitForTimeout(380);
+  await page.keyboard.up('KeyT');
+  await page.waitForTimeout(120);
+  const remapped = await readPosition();
+  await page.keyboard.down('KeyW');
+  await page.waitForTimeout(300);
+  await page.keyboard.up('KeyW');
+  await page.waitForTimeout(120);
+  const legacy = await readPosition();
+  const remappedDistance = Math.abs(remapped.localZ - before.localZ);
+  const legacyDistance = Math.abs(legacy.localZ - remapped.localZ);
+  if (
+    before.simulationActive !== 'true'
+    || before.contextHealthy !== 'true'
+    || before.forwardBinding !== 'KeyT'
+    || remappedDistance < 0.08
+    || legacyDistance > 0.035
+  ) {
+    throw new Error(`Accessibility runtime binding failed: ${JSON.stringify({ before, remapped, legacy, remappedDistance, legacyDistance })}`);
+  }
+  console.log(`Accessibility binding gate: ${JSON.stringify({ before, remapped, legacy, remappedDistance, legacyDistance })}`);
   await context.close();
 }
 
@@ -9221,6 +9410,9 @@ try {
   if (captureOnly === 'all' || captureOnly === 'building') await captureBuildingStructures();
   if (captureOnly === 'structure-collapse') await captureStructureCollapse();
   if (captureOnly === 'all' || captureOnly === 'settings') await captureSettings();
+  if (captureOnly === 'accessibility') await captureAccessibility();
+  if (captureOnly === 'accessibility-caption') await captureAccessibilityCaption();
+  if (captureOnly === 'accessibility-bindings') await captureAccessibilityBindings();
   if (captureOnly === 'all' || captureOnly === 'devices') await captureDevices();
   if (captureOnly === 'all' || captureOnly === 'cooking') await captureCooking();
   if (captureOnly === 'all' || captureOnly === 'advanced') await captureAdvancedDevices();

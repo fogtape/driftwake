@@ -42,6 +42,7 @@ import {
   type StructureReplacementReason,
 } from '../domain/raftStructures';
 import { useGameStore } from '../../state/gameStore';
+import { matchesInputAction } from '../domain/inputBindings';
 import type { AudioSystem } from './AudioSystem';
 import { RAFT_TILE_X, RAFT_TILE_Z, type GridCoordinate, type RaftSystem } from './RaftSystem';
 import type { RaftStructureSystem, StructurePlacementCandidate } from './RaftStructureSystem';
@@ -1060,22 +1061,25 @@ export class BuildSystem {
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
+    const alternate = matchesInputAction('alternate', event.code);
+    const buildCycle = matchesInputAction('buildCycle', event.code);
+    const buildCategory = matchesInputAction('buildCategory', event.code);
     if (
       !this.equipped
       || !this.inputEnabled
       || event.repeat
-      || (event.code !== 'KeyR' && event.code !== 'KeyF' && event.code !== 'KeyQ')
+      || (!alternate && !buildCycle && !buildCategory)
       || (
-        event.code === 'KeyF'
+        buildCycle
         && (this.selectedPiece === 'foundation' || this.selectedPiece === 'reinforcement')
       )
     ) return;
     event.preventDefault();
-    if (event.code === 'KeyQ') {
+    if (buildCategory) {
       this.selectCategory(event.shiftKey ? -1 : 1);
       return;
     }
-    if (event.code === 'KeyR') {
+    if (alternate) {
       this.selectedRotation = normalizeRaftRotation(this.selectedRotation + 1);
     } else {
       const minimum = pieceLevel(this.selectedPiece);

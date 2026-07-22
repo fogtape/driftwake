@@ -13,6 +13,7 @@ import { createSharkModel } from '../art/ProceduralModels';
 import { createSeededRandom, randomRange } from '../math/random';
 import { sampleWaveHeight } from '../math/waves';
 import { useGameStore, type SharkMode } from '../../state/gameStore';
+import { matchesInputAction } from '../domain/inputBindings';
 import { COLLECTION_NET_MAX_HEALTH, collectionNetOutsideCoordinate } from '../domain/collectionNets';
 import {
   RAFT_STRUCTURE_DEFINITIONS,
@@ -1167,7 +1168,7 @@ export class SharkSystem {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (
-      event.code !== 'KeyE'
+      !matchesInputAction('interact', event.code)
       || event.repeat
       || !this.inputEnabled
       || this.carcassPhase !== 'available'
@@ -1179,7 +1180,7 @@ export class SharkSystem {
   };
 
   private readonly onKeyUp = (event: KeyboardEvent): void => {
-    if (event.code !== 'KeyE') return;
+    if (!matchesInputAction('interact', event.code)) return;
     this.harvestHeld = false;
     this.harvestProgress = 0;
   };

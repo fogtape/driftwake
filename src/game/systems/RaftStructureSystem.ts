@@ -48,6 +48,7 @@ import {
   type StructureReplacementReason,
 } from '../domain/raftStructures';
 import { useGameStore } from '../../state/gameStore';
+import { matchesInputAction } from '../domain/inputBindings';
 import { RAFT_TILE_X, RAFT_TILE_Z, type GridCoordinate, type RaftSystem } from './RaftSystem';
 
 const MAX_PARTS_PER_BUCKET = MAX_RAFT_STRUCTURES * 24;
@@ -718,7 +719,7 @@ export class RaftStructureSystem {
     if (
       !this.inputEnabled
       || event.repeat
-      || event.code !== 'KeyE'
+      || !matchesInputAction('interact', event.code)
       || !this.focusedDoorId
       || useGameStore.getState().interactionOwner !== 'build'
     ) return;

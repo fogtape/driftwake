@@ -8,6 +8,7 @@ import {
 } from 'three';
 import { ITEM_DEFINITIONS, bundleLabel, type InventoryMutation } from '../domain/items';
 import { useGameStore } from '../../state/gameStore';
+import { matchesInputAction } from '../domain/inputBindings';
 import type { AudioSystem } from './AudioSystem';
 import type { DebrisField, SalvageTarget } from './DebrisField';
 import type { SplashSystem } from './SplashSystem';
@@ -166,7 +167,7 @@ export class SalvageSystem {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (
-      event.code !== 'KeyE'
+      !matchesInputAction('interact', event.code)
       || event.repeat
       || !this.enabled
       || !this.focused

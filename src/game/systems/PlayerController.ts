@@ -1,6 +1,7 @@
 import { Euler, MathUtils, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import type { PlayerSurface, SavedPlayerNavigation } from '../domain/save';
 import { CAMERA_MOTION_PROFILES, type CameraMotionMode } from '../domain/settings';
+import { matchesInputAction, type InputAction } from '../domain/inputBindings';
 import { CameraMotionFilter } from '../player/CameraMotionFilter';
 import { OPEN_WATER_FLOOR_Y, WATER_SURFACE_Y } from '../domain/underwater';
 import { RAFT_TILE_X, RAFT_TILE_Z, type RaftSystem } from './RaftSystem';
@@ -81,6 +82,7 @@ export class PlayerController {
   private shakeTime = 0;
   private enabled = false;
   private cameraMotionMode: CameraMotionMode = 'balanced';
+  private reducedMotion = false;
   private cameraPoseInitialized = false;
   private readonly verticalMotion: VerticalMotionState = {
     mode: 'grounded',
@@ -135,6 +137,11 @@ export class PlayerController {
     if (mode === 'comfort') this.moveCycle = 0;
   }
 
+  setReducedMotion(reducedMotion: boolean): void {
+    this.reducedMotion = reducedMotion;
+    if (reducedMotion) this.moveCycle = 0;
+  }
+
   update(delta: number): void {
     if (this.cameraPoseInitialized) {
       this.camera.position.copy(this.simulationCameraPosition);
@@ -152,13 +159,13 @@ export class PlayerController {
     let inputZ = 0;
     let inputY = 0;
     if (this.enabled) {
-      if (this.keys.has('KeyA')) inputX -= 1;
-      if (this.keys.has('KeyD')) inputX += 1;
-      if (this.keys.has('KeyW')) inputZ -= 1;
-      if (this.keys.has('KeyS')) inputZ += 1;
+      if (this.hasInputAction('moveLeft')) inputX -= 1;
+      if (this.hasInputAction('moveRight')) inputX += 1;
+      if (this.hasInputAction('moveForward')) inputZ -= 1;
+      if (this.hasInputAction('moveBackward')) inputZ += 1;
       if (this.surface === 'water') {
-        if (this.keys.has('Space')) inputY += 1;
-        if (this.keys.has('ControlLeft') || this.keys.has('ControlRight')) inputY -= 1;
+        if (this.hasInputAction('jump')) inputY += 1;
+        if (this.hasInputAction('dive')) inputY -= 1;
       }
     }
 
@@ -282,7 +289,8 @@ export class PlayerController {
   }
 
   addCameraShake(strength: number): void {
-    this.shake = Math.max(this.shake, MathUtils.clamp(strength, 0, 1));
+    const scale = this.reducedMotion ? 0.2 : 1;
+    this.shake = Math.max(this.shake, MathUtils.clamp(strength * scale, 0, 1));
   }
 
   applyWaterImpulse(origin: Vector3, strength: number): void {
@@ -485,11 +493,11 @@ export class PlayerController {
     this.receivedKeyboardEventCount += 1;
     if (!this.enabled) return;
     this.keys.add(event.code);
-    if (!event.repeat && event.code === 'Space' && this.surface !== 'water') {
+    if (!event.repeat && matchesInputAction('jump', event.code) && this.surface !== 'water') {
       this.jumpQueued = true;
       this.jumpDiagnostic = 'queued';
     }
-    if (event.code === 'Space') event.preventDefault();
+    if (matchesInputAction('jump', event.code)) event.preventDefault();
   }
 
   handleKeyUp(event: KeyboardEvent): void {
@@ -795,7 +803,7 @@ export class PlayerController {
   }
 
   private tryClimbToRaft(probe: Vector3): boolean {
-    if (!this.enabled || !this.keys.has('Space') || this.waterPosition.y < WATER_SURFACE_Y - RAFT_CLIMB_VERTICAL_REACH) {
+    if (!this.enabled || !this.hasInputAction('jump') || this.waterPosition.y < WATER_SURFACE_Y - RAFT_CLIMB_VERTICAL_REACH) {
       return false;
     }
     this.raftHorizontalFrame.update(this.raft.getHeading());
@@ -821,6 +829,13 @@ export class PlayerController {
     this.verticalMotion.mode = 'grounded';
     this.verticalMotion.velocityY = 0;
     return true;
+  }
+
+  private hasInputAction(action: InputAction): boolean {
+    for (const code of this.keys) {
+      if (matchesInputAction(action, code)) return true;
+    }
+    return false;
   }
 
   private renderOnWater(moving: boolean): void {

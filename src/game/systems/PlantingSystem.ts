@@ -49,6 +49,7 @@ import {
   itemCount,
 } from '../domain/items';
 import { useGameStore, type PlantingFeedback } from '../../state/gameStore';
+import { matchesInputAction } from '../domain/inputBindings';
 import type { AudioSystem } from './AudioSystem';
 import type { PlayerController } from './PlayerController';
 import { RAFT_TILE_X, RAFT_TILE_Z, type GridCoordinate, type RaftSystem } from './RaftSystem';
@@ -896,7 +897,7 @@ export class PlantingSystem {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (
-      event.code !== 'KeyE' ||
+      !matchesInputAction('interact', event.code) ||
       event.repeat ||
       !this.inputEnabled ||
       this.placementActive ||

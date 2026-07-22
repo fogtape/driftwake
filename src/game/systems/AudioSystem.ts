@@ -55,6 +55,7 @@ export class AudioSystem {
   private readonly random = createSeededRandom(0xa0d10);
   private enabled = true;
   private focusMuted = false;
+  private captionSink: ((caption: string) => void) | null = null;
   private deviceFireActivity = 0;
   private deviceSteamActivity = 0;
   private progressionForgeActivity = 0;
@@ -125,6 +126,10 @@ export class AudioSystem {
     this.applyMasterGain(0.06);
   }
 
+  setCaptionSink(captionSink: ((caption: string) => void) | null): void {
+    this.captionSink = captionSink;
+  }
+
   setMix(mix: AudioMix): void {
     this.mix = { ...mix };
     if (!this.context) return;
@@ -175,6 +180,10 @@ export class AudioSystem {
 
   private effectiveMasterGain(): number {
     return this.enabled && !this.focusMuted ? this.mix.master : 0;
+  }
+
+  private emitCaption(caption: string): void {
+    this.captionSink?.(caption);
   }
 
   private applyMasterGain(timeConstant: number): void {
@@ -332,6 +341,7 @@ export class AudioSystem {
   }
 
   playHookBreak(): void {
+    this.emitCaption('绳索断裂');
     this.noiseBurst(0.16, 3350, 0.095, 'highpass');
     this.noiseBurst(0.09, 620, 0.065, 'bandpass');
     if (!this.context || !this.effects) return;
@@ -349,6 +359,7 @@ export class AudioSystem {
   }
 
   playToolBreak(tool: ToolId): void {
+    this.emitCaption(tool === 'fishingRod' ? '钓竿断裂' : '工具断裂');
     if (tool === 'fishingRod') {
       this.playLineBreak();
       this.playWoodKnock(0.11, 0.16);
@@ -435,6 +446,7 @@ export class AudioSystem {
   }
 
   playStructureDamage(position: AudioPosition, severity: number, destroyed: boolean, fibrous = false): void {
+    this.emitCaption(destroyed ? '结构断裂，落入海中' : '木筏结构受损');
     const normalized = Math.max(0, Math.min(1, severity));
     const spatialTarget = this.createSpatialTarget(position);
     const target = spatialTarget ?? this.effects;
@@ -580,6 +592,7 @@ export class AudioSystem {
   }
 
   playThunder(strength = 1): void {
+    this.emitCaption(strength > 0.7 ? '近处雷鸣' : '远处雷鸣');
     const level = Math.max(0, Math.min(1, strength));
     this.noiseBurstTo(1.1, 190, 0.2 * level, 'lowpass', this.ambience);
     this.noiseBurstTo(0.52, 720, 0.08 * level, 'bandpass', this.ambience);
@@ -736,6 +749,7 @@ export class AudioSystem {
   }
 
   playSignalArrival(): void {
+    this.emitCaption('接收台捕获到新信号');
     this.noiseBurst(0.38, 3200, 0.045, 'bandpass');
     if (!this.context || !this.effects) return;
     const now = this.context.currentTime;
@@ -892,6 +906,7 @@ export class AudioSystem {
   }
 
   playBreathWarning(critical: boolean): void {
+    this.emitCaption(critical ? '氧气危险' : '呼吸急促');
     if (!this.context || !this.effects) return;
     const now = this.context.currentTime;
     for (let index = 0; index < (critical ? 3 : 2); index += 1) {
@@ -914,6 +929,7 @@ export class AudioSystem {
   }
 
   playSurvivalWarning(need: 'thirst' | 'hunger', critical: boolean): void {
+    this.emitCaption(`${need === 'thirst' ? '缺水' : '饥饿'}${critical ? '危险' : '警报'}`);
     if (!this.context || !this.effects) return;
     const now = this.context.currentTime;
     if (need === 'thirst') {
@@ -1261,6 +1277,7 @@ export class AudioSystem {
   }
 
   playCropBirdWarning(): void {
+    this.emitCaption('鸟翼逼近作物');
     if (!this.context || !this.creatures) return;
     const now = this.context.currentTime;
     [1480, 1920, 1650].forEach((frequency, index) => {
@@ -1279,6 +1296,7 @@ export class AudioSystem {
   }
 
   playCropBirdPeck(): void {
+    this.emitCaption('鸟翼正在啄食作物');
     this.noiseBurstTo(0.075, 1780, 0.024, 'bandpass', this.creatures);
     this.playWoodKnock(0.018, 0.024);
   }
@@ -1320,6 +1338,7 @@ export class AudioSystem {
   }
 
   playNibble(sizeScale = 1): void {
+    this.emitCaption(sizeScale >= 1.08 ? '强烈鱼讯' : '鱼讯');
     if (!this.context || !this.effects) return;
     const now = this.context.currentTime;
     const weightPitch = Math.max(0.76, Math.min(1.12, 1.08 - (sizeScale - 0.78) * 0.34));
@@ -1352,6 +1371,7 @@ export class AudioSystem {
   }
 
   playCatch(sizeScale = 1): void {
+    this.emitCaption(sizeScale >= 1.1 ? '大鱼上钩' : '鱼已上钩');
     if (!this.context || !this.effects) return;
     const now = this.context.currentTime;
     const weightPitch = Math.max(0.78, Math.min(1.08, 1.05 - (sizeScale - 0.78) * 0.3));
@@ -1370,6 +1390,7 @@ export class AudioSystem {
   }
 
   playLineBreak(): void {
+    this.emitCaption('钓线断裂');
     this.noiseBurst(0.18, 2600, 0.08, 'highpass');
     this.noiseBurst(0.09, 520, 0.055, 'bandpass');
   }
@@ -1471,6 +1492,7 @@ export class AudioSystem {
   }
 
   playSharkWarning(): void {
+    this.emitCaption('水下搅动，鲨鱼接近');
     if (!this.context || !this.creatures) return;
     const now = this.context.currentTime;
     const oscillator = this.context.createOscillator();
@@ -1490,6 +1512,7 @@ export class AudioSystem {
   }
 
   playSharkWindup(playerTarget: boolean, secondBite: boolean): void {
+    this.emitCaption(playerTarget ? '鲨鱼正向你蓄势' : secondBite ? '鲨鱼准备再次撕咬' : '鲨鱼正向筏体蓄势');
     if (!this.context || !this.creatures) return;
     const now = this.context.currentTime;
     const oscillator = this.context.createOscillator();
@@ -1533,6 +1556,7 @@ export class AudioSystem {
   }
 
   playSharkBite(): void {
+    this.emitCaption('鲨鱼撕咬');
     this.noiseBurstTo(0.34, 310, 0.2, 'lowpass', this.creatures);
     this.noiseBurstTo(0.12, 1850, 0.11, 'bandpass', this.creatures);
     if (!this.context || !this.creatures) return;
@@ -1550,6 +1574,7 @@ export class AudioSystem {
   }
 
   playSharkDefeat(): void {
+    this.emitCaption('鲨鱼失去反应');
     this.noiseBurstTo(0.42, 260, 0.24, 'lowpass', this.creatures);
     this.noiseBurstTo(0.13, 1180, 0.11, 'bandpass', this.creatures);
     if (!this.context || !this.creatures) return;
@@ -1595,6 +1620,7 @@ export class AudioSystem {
   }
 
   playFailure(cause: FailureCause): void {
+    this.emitCaption(cause === 'drowning' ? '水流淹没了你' : cause === 'shark' ? '鲨鱼击倒了你' : '你失去了意识');
     if (!this.context || !this.effects) return;
     const target = cause === 'shark' ? this.creatures ?? this.effects : this.effects;
     const underwater = cause === 'drowning';
@@ -1621,6 +1647,7 @@ export class AudioSystem {
   }
 
   playRecovery(): void {
+    this.emitCaption('海面与木筏声渐渐清晰');
     if (!this.context || !this.effects) return;
     const now = this.context.currentTime;
     [196, 294, 440].forEach((frequency, index) => {

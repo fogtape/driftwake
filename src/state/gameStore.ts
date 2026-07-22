@@ -42,7 +42,8 @@ import type { DeviceType } from '../game/domain/devices';
 import type { IslandPhase } from '../game/domain/island';
 import type { NavigationDeviceType, NavigationRouteMode, NavigationWeatherPhase, SignalArrayStatus, SignalTargetId } from '../game/domain/navigation';
 import type { PlayerSurface } from '../game/domain/save';
-import type { CameraMotionMode } from '../game/domain/settings';
+import type { CameraMotionMode, ColorVisionMode } from '../game/domain/settings';
+import { DEFAULT_INPUT_BINDINGS, type InputBindings } from '../game/domain/inputBindings';
 import type { SharkAttackPhase } from '../game/domain/shark';
 import type { FishSizeId, FishSpeciesId } from '../game/domain/fishing';
 import type {
@@ -295,6 +296,10 @@ interface GameState {
   cameraMotionMode: CameraMotionMode;
   quality: QualityPreset;
   dynamicResolutionEnabled: boolean;
+  keyBindings: InputBindings;
+  captionsEnabled: boolean;
+  colorVisionMode: ColorVisionMode;
+  reducedMotion: boolean;
   selectedTool: ToolId;
   hookCharge: number;
   inventory: Inventory;
@@ -322,6 +327,7 @@ interface GameState {
   interactionOwner: InteractionOwner | null;
   fps: number;
   notice: string | null;
+  caption: string | null;
   playSeconds: number;
   saveStatus: 'idle' | 'saved' | 'error';
   resetSession: () => void;
@@ -338,6 +344,10 @@ interface GameState {
   setCameraMotionMode: (cameraMotionMode: CameraMotionMode) => void;
   setQuality: (quality: QualityPreset) => void;
   setDynamicResolutionEnabled: (dynamicResolutionEnabled: boolean) => void;
+  setKeyBindings: (keyBindings: InputBindings) => void;
+  setCaptionsEnabled: (captionsEnabled: boolean) => void;
+  setColorVisionMode: (colorVisionMode: ColorVisionMode) => void;
+  setReducedMotion: (reducedMotion: boolean) => void;
   setSelectedTool: (selectedTool: ToolId) => boolean;
   setHookCharge: (hookCharge: number) => void;
   addLoot: (kind: SalvageKind, roll?: number) => ItemBundle;
@@ -376,6 +386,7 @@ interface GameState {
   setInteraction: (interaction: string | null, owner?: InteractionOwner) => void;
   setFps: (fps: number) => void;
   showNotice: (notice: string | null) => void;
+  showCaption: (caption: string | null) => void;
   advancePlayTime: (seconds: number) => void;
   setSaveStatus: (saveStatus: 'idle' | 'saved' | 'error') => void;
   hydratePlayer: (snapshot: PlayerSaveSnapshot) => void;
@@ -583,6 +594,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   cameraMotionMode: 'balanced',
   quality: 'high',
   dynamicResolutionEnabled: true,
+  keyBindings: { ...DEFAULT_INPUT_BINDINGS },
+  captionsEnabled: false,
+  colorVisionMode: 'standard',
+  reducedMotion: false,
   selectedTool: 'hook',
   hookCharge: 0,
   inventory: { ...STARTING_INVENTORY },
@@ -616,6 +631,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   interactionOwner: null,
   fps: 0,
   notice: null,
+  caption: null,
   playSeconds: 0,
   saveStatus: 'idle',
   resetSession: () => set({
@@ -659,6 +675,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     interactionOwner: null,
     fps: 0,
     notice: null,
+    caption: null,
     playSeconds: 0,
     saveStatus: 'idle',
   }),
@@ -675,6 +692,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   setCameraMotionMode: (cameraMotionMode) => set({ cameraMotionMode }),
   setQuality: (quality) => set({ quality }),
   setDynamicResolutionEnabled: (dynamicResolutionEnabled) => set({ dynamicResolutionEnabled }),
+  setKeyBindings: (keyBindings) => set({ keyBindings: { ...keyBindings } }),
+  setCaptionsEnabled: (captionsEnabled) => set({ captionsEnabled }),
+  setColorVisionMode: (colorVisionMode) => set({ colorVisionMode }),
+  setReducedMotion: (reducedMotion) => set({ reducedMotion }),
   setSelectedTool: (selectedTool) => {
     if (itemCount(get().inventory, selectedTool) <= 0) return false;
     set({ selectedTool, interaction: null, interactionOwner: null });
@@ -1015,6 +1036,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
   setFps: (fps) => set({ fps }),
   showNotice: (notice) => set({ notice }),
+  showCaption: (caption) => set({ caption }),
   advancePlayTime: (seconds) => set((state) => ({ playSeconds: state.playSeconds + Math.max(0, seconds) })),
   setSaveStatus: (saveStatus) => set({ saveStatus }),
   hydratePlayer: (snapshot) =>

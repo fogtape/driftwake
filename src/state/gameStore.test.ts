@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { itemCount, usedInventorySlots, type ToolId } from '../game/domain/items';
 import { TOOL_MAX_DURABILITY, normalizeToolDurability } from '../game/domain/toolDurability';
 import { createDefaultCraftingQueue } from '../game/domain/craftingQueue';
+import { DEFAULT_INPUT_BINDINGS } from '../game/domain/inputBindings';
 import { useGameStore } from './gameStore';
 
 describe('game store item use', () => {
@@ -34,6 +35,10 @@ describe('game store item use', () => {
       audioEnabled: false,
       quality: 'low',
       dynamicResolutionEnabled: false,
+      keyBindings: { ...DEFAULT_INPUT_BINDINGS, interact: 'KeyG' },
+      captionsEnabled: true,
+      colorVisionMode: 'highContrast',
+      reducedMotion: true,
       playSeconds: 999,
       failure: { cause: 'shark', dropped: { timber: 1 }, occurredAt: 998, dropPending: false },
     });
@@ -47,6 +52,10 @@ describe('game store item use', () => {
       audioEnabled: false,
       quality: 'low',
       dynamicResolutionEnabled: false,
+      keyBindings: { ...DEFAULT_INPUT_BINDINGS, interact: 'KeyG' },
+      captionsEnabled: true,
+      colorVisionMode: 'highContrast',
+      reducedMotion: true,
       playSeconds: 0,
       failure: null,
       selectedTool: 'hook',

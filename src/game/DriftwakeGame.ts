@@ -32,6 +32,7 @@ import { ITEM_DEFINITIONS, itemCount, preferredToolOrder, type ItemId, type Tool
 import { TOOL_MAX_DURABILITY } from './domain/toolDurability';
 import type { DeviceType } from './domain/devices';
 import { SAVE_VERSION, createDefaultRaftTiles, type DriftwakeSave } from './domain/save';
+import { HOTBAR_INPUT_ACTIONS, matchesInputAction } from './domain/inputBindings';
 import {
   getActiveSaveSlot,
   loadSaveSlot,
@@ -224,6 +225,9 @@ export class DriftwakeGame {
   private simulationTickCount = 0;
   private unsubscribeStore: (() => void) | null = null;
   private noticeTimer: number | null = null;
+  private captionTimer: number | null = null;
+  private lastCaption = '';
+  private lastCaptionAt = -Infinity;
   private windowFocused = document.hasFocus();
   private initialized = false;
   private contextLost = false;
@@ -328,9 +332,11 @@ export class DriftwakeGame {
     this.mount.dataset.resonanceMissCount = '0';
     this.mount.dataset.resonanceCancelledCount = '0';
     this.audio.setMix(useGameStore.getState().audioMix);
+    this.audio.setCaptionSink((caption) => this.showSoundCaption(caption));
     this.syncAudioFocusMuted();
     this.setQuality(useGameStore.getState().quality);
     this.setDynamicResolutionEnabled(useGameStore.getState().dynamicResolutionEnabled);
+    this.setReducedMotion(useGameStore.getState().reducedMotion);
     this.resize();
 
     window.addEventListener('resize', this.resize);
@@ -431,6 +437,7 @@ export class DriftwakeGame {
         this.audio.playCeilingBump(fibrous);
         this.splashes?.spawnCeilingDust(position, fibrous);
       });
+      this.setReducedMotion(useGameStore.getState().reducedMotion);
       this.setCameraMotionMode(useGameStore.getState().cameraMotionMode);
       this.island.setPlayer(this.player);
       this.underwater = new UnderwaterSystem(
@@ -661,6 +668,13 @@ export class DriftwakeGame {
         if (state.devices !== previous.devices || state.inventory !== previous.inventory) this.syncCookingDiagnostics();
         if (state.phase === 'failed' && previous.phase !== 'failed' && state.failure) {
           this.pauseInput();
+          this.showSoundCaption(
+            state.failure.cause === 'drowning'
+              ? '水流淹没了你'
+              : state.failure.cause === 'shark'
+                ? '鲨鱼击倒了你'
+                : '你失去了意识',
+          );
           if (state.audioEnabled) {
             void this.audio.begin().then(() => this.audio.playFailure(state.failure!.cause)).catch(() => undefined);
           }
@@ -730,6 +744,7 @@ export class DriftwakeGame {
     if (!store.recoverPlayer()) return false;
     this.player.respawnOnRaft();
     this.syncEquipment();
+    this.showSoundCaption('海面与木筏声渐渐清晰');
     if (store.audioEnabled) void this.audio.begin().then(() => this.audio.playRecovery()).catch(() => undefined);
     this.saveNow();
     return true;
@@ -757,8 +772,15 @@ export class DriftwakeGame {
   }
 
   setCameraMotionMode(mode: CameraMotionMode): void {
-    this.player?.setCameraMotionMode(mode);
-    this.mount.dataset.cameraMotionMode = mode;
+    const effective = useGameStore.getState().reducedMotion ? 'comfort' : mode;
+    this.player?.setCameraMotionMode(effective);
+    this.mount.dataset.cameraMotionMode = effective;
+  }
+
+  setReducedMotion(reducedMotion: boolean): void {
+    this.player?.setReducedMotion(reducedMotion);
+    this.mount.dataset.reducedMotion = String(reducedMotion);
+    this.setCameraMotionMode(useGameStore.getState().cameraMotionMode);
   }
 
   setDynamicResolutionEnabled(enabled: boolean): void {
@@ -902,6 +924,8 @@ export class DriftwakeGame {
     this.unsubscribeStore?.();
     this.unsubscribeStore = null;
     if (this.noticeTimer !== null) window.clearTimeout(this.noticeTimer);
+    if (this.captionTimer !== null) window.clearTimeout(this.captionTimer);
+    this.audio.setCaptionSink(null);
     this.clearPointerLockTimer();
 
     geometries.forEach((geometry) => geometry.dispose());
@@ -1803,9 +1827,13 @@ export class DriftwakeGame {
     this.mount.dataset.playerJumpState = this.player?.jumpState ?? 'unavailable';
     const state = useGameStore.getState();
     if (state.phase !== 'playing') return;
-    if (event.code === 'Tab' || event.code === 'KeyI' || event.code === 'KeyC') {
+    const requested = matchesInputAction('crafting', event.code)
+      ? 'crafting'
+      : matchesInputAction('inventory', event.code)
+        ? 'pack'
+        : null;
+    if (requested) {
       event.preventDefault();
-      const requested = event.code === 'KeyC' ? 'crafting' : 'pack';
       const nextPanel = state.overlayPanel === requested ? null : requested;
       if (state.overlayPanel === 'storage') this.devices?.closeStorage();
       if (nextPanel !== null) state.setPlacementDevice(null);
@@ -1814,9 +1842,9 @@ export class DriftwakeGame {
       this.audio.playUi();
       return;
     }
-    const digit = /^Digit([1-6])$/.exec(event.code);
-    if (digit && state.overlayPanel === null && !state.settingsOpen && state.placementDevice === null) {
-      const tool = preferredToolOrder(state.inventory)[Number(digit[1]) - 1];
+    const hotbarIndex = HOTBAR_INPUT_ACTIONS.findIndex((action) => matchesInputAction(action, event.code));
+    if (hotbarIndex >= 0 && state.overlayPanel === null && !state.settingsOpen && state.placementDevice === null) {
+      const tool = preferredToolOrder(state.inventory)[hotbarIndex];
       if (!state.setSelectedTool(tool)) {
         this.audio.playDenied();
         this.showTransientNotice('需要先制作该工具');
@@ -1834,5 +1862,21 @@ export class DriftwakeGame {
     this.noticeTimer = window.setTimeout(() => {
       if (useGameStore.getState().notice === message) useGameStore.getState().showNotice(null);
     }, 1500);
+  }
+
+  private showSoundCaption(caption: string): void {
+    const state = useGameStore.getState();
+    if (!state.captionsEnabled) return;
+    const now = performance.now();
+    if (caption === this.lastCaption && now - this.lastCaptionAt < 900) return;
+    this.lastCaption = caption;
+    this.lastCaptionAt = now;
+    state.showCaption(caption);
+    this.mount.dataset.lastSoundCaption = caption;
+    if (this.captionTimer !== null) window.clearTimeout(this.captionTimer);
+    const captionDuration = Math.max(2800, Math.min(5200, 1700 + caption.length * 240));
+    this.captionTimer = window.setTimeout(() => {
+      if (useGameStore.getState().caption === caption) useGameStore.getState().showCaption(null);
+    }, captionDuration);
   }
 }

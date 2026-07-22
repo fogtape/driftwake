@@ -36,6 +36,7 @@ import {
 } from '../domain/island';
 import { addItems, bundleLabel } from '../domain/items';
 import { useGameStore } from '../../state/gameStore';
+import { matchesInputAction } from '../domain/inputBindings';
 import type { PlayerSurface } from '../domain/save';
 import type { AudioSystem } from './AudioSystem';
 import type { PlayerController } from './PlayerController';
@@ -619,7 +620,7 @@ export class IslandSystem {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (
-      event.code !== 'KeyE' ||
+      !matchesInputAction('interact', event.code) ||
       event.repeat ||
       !this.inputEnabled ||
       this.player?.getSurface() !== 'island' ||
