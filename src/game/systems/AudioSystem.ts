@@ -6,12 +6,28 @@ import type { ReefNodeType } from '../domain/underwater';
 import type { DebrisKind } from '../art/ProceduralModels';
 import type { FailureCause } from '../domain/failure';
 import type { ToolId } from '../domain/items';
+import type { SignalTargetId } from '../domain/navigation';
 
 export interface AudioPosition {
   x: number;
   y: number;
   z: number;
 }
+
+export interface SignalDestinationAudioDiagnostics {
+  targetId: SignalTargetId | null;
+  proximity: number;
+  pan: number;
+  emphasized: boolean;
+  layersReady: boolean;
+  layerCount: number;
+}
+
+const SIGNAL_DESTINATION_GAINS: Record<SignalTargetId, number> = {
+  tideRelay: 0.034,
+  ironChoir: 0.03,
+  stormNeedle: 0.032,
+};
 
 export class AudioSystem {
   private context: AudioContext | null = null;
@@ -29,6 +45,8 @@ export class AudioSystem {
   private sailLoop: GainNode | null = null;
   private receiverLoop: GainNode | null = null;
   private stormLoop: GainNode | null = null;
+  private readonly signalDestinationLoops: Partial<Record<SignalTargetId, GainNode>> = {};
+  private readonly signalDestinationPanners: Partial<Record<SignalTargetId, StereoPannerNode>> = {};
   private nextCreakAt = 4;
   private nextBirdAt = 6;
   private nextReelAt = 0;
@@ -45,6 +63,12 @@ export class AudioSystem {
   private sailActivity = 0;
   private receiverActivity = 0;
   private stormActivity = 0;
+  private signalDestinationAudio: Omit<SignalDestinationAudioDiagnostics, 'layersReady' | 'layerCount'> = {
+    targetId: null,
+    proximity: 0,
+    pan: 0,
+    emphasized: false,
+  };
   private mix: AudioMix = {
     master: 0.78,
     music: 0.2,
@@ -85,6 +109,7 @@ export class AudioSystem {
       this.startIslandLayer();
       this.startUnderwaterLayer();
       this.startNavigationLayer();
+      this.startSignalDestinationLayers();
       this.startStormLayer();
     }
     if (this.context.state !== 'running') await this.context.resume();
@@ -522,6 +547,30 @@ export class AudioSystem {
     this.receiverActivity = Math.max(0, Math.min(1, activity));
     if (!this.context) return;
     this.receiverLoop?.gain.setTargetAtTime(this.receiverActivity * 0.026, this.context.currentTime, 0.22);
+  }
+
+  setSignalDestinationActivity(
+    targetId: SignalTargetId | null,
+    proximity: number,
+    pan: number,
+    emphasized: boolean,
+  ): void {
+    this.signalDestinationAudio = {
+      targetId,
+      proximity: Math.max(0, Math.min(1, proximity)),
+      pan: Math.max(-1, Math.min(1, pan)),
+      emphasized,
+    };
+    this.applySignalDestinationMix();
+  }
+
+  getSignalDestinationAudioDiagnostics(): SignalDestinationAudioDiagnostics {
+    const layerCount = Object.keys(this.signalDestinationLoops).length;
+    return {
+      ...this.signalDestinationAudio,
+      layersReady: Boolean(this.context) && layerCount === 3,
+      layerCount,
+    };
   }
 
   setStormActivity(activity: number): void {
@@ -1609,6 +1658,11 @@ export class AudioSystem {
     this.sailLoop = null;
     this.receiverLoop = null;
     this.stormLoop = null;
+    Object.keys(this.signalDestinationLoops).forEach((key) => {
+      delete this.signalDestinationLoops[key as SignalTargetId];
+      delete this.signalDestinationPanners[key as SignalTargetId];
+    });
+    this.signalDestinationAudio = { targetId: null, proximity: 0, pan: 0, emphasized: false };
   }
 
   private startAmbientLayers(): void {
@@ -1699,6 +1753,131 @@ export class AudioSystem {
     this.receiverLoop.gain.value = this.receiverActivity * 0.026;
     receiverSource.connect(receiverFilter).connect(receiverNotch).connect(this.receiverLoop).connect(this.effects);
     receiverSource.start(0, 2.2);
+  }
+
+  private startSignalDestinationLayers(): void {
+    if (!this.context || !this.effects) return;
+
+    const createBus = (targetId: SignalTargetId): GainNode => {
+      const input = this.context!.createGain();
+      const output = this.context!.createGain();
+      output.gain.value = 0;
+      if (typeof this.context!.createStereoPanner === 'function') {
+        const panner = this.context!.createStereoPanner();
+        panner.pan.value = 0;
+        input.connect(panner).connect(output);
+        this.signalDestinationPanners[targetId] = panner;
+      } else {
+        input.connect(output);
+      }
+      output.connect(this.effects!);
+      this.signalDestinationLoops[targetId] = output;
+      return input;
+    };
+
+    const tideBus = createBus('tideRelay');
+    const tideTone = this.context.createOscillator();
+    const tideHarmonic = this.context.createOscillator();
+    const tideFilter = this.context.createBiquadFilter();
+    const tideMix = this.context.createGain();
+    const tideLfo = this.context.createOscillator();
+    const tideLfoDepth = this.context.createGain();
+    tideTone.type = 'sine';
+    tideTone.frequency.value = 73.14;
+    tideHarmonic.type = 'triangle';
+    tideHarmonic.frequency.value = 146.28;
+    tideFilter.type = 'lowpass';
+    tideFilter.frequency.value = 420;
+    tideFilter.Q.value = 1.2;
+    tideMix.gain.value = 0.56;
+    tideLfo.type = 'sine';
+    tideLfo.frequency.value = 0.37;
+    tideLfoDepth.gain.value = 0.19;
+    tideTone.connect(tideFilter);
+    tideHarmonic.connect(tideFilter);
+    tideFilter.connect(tideMix).connect(tideBus);
+    tideLfo.connect(tideLfoDepth).connect(tideMix.gain);
+    tideTone.start();
+    tideHarmonic.start(this.context.currentTime + 0.31);
+    tideLfo.start(this.context.currentTime + 0.7);
+
+    const choirBus = createBus('ironChoir');
+    const choirFilter = this.context.createBiquadFilter();
+    const choirMix = this.context.createGain();
+    const choirLfo = this.context.createOscillator();
+    const choirDetune = this.context.createGain();
+    choirFilter.type = 'bandpass';
+    choirFilter.frequency.value = 760;
+    choirFilter.Q.value = 0.72;
+    choirMix.gain.value = 0.32;
+    choirLfo.type = 'sine';
+    choirLfo.frequency.value = 0.16;
+    choirDetune.gain.value = 7;
+    choirLfo.connect(choirDetune);
+    [164.81, 246.94, 329.63, 494.88].forEach((frequency, index) => {
+      const oscillator = this.context!.createOscillator();
+      const voice = this.context!.createGain();
+      oscillator.type = index % 2 === 0 ? 'triangle' : 'sine';
+      oscillator.frequency.value = frequency;
+      voice.gain.value = 0.2 / (index + 1);
+      choirDetune.connect(oscillator.detune);
+      oscillator.connect(voice).connect(choirFilter);
+      oscillator.start(this.context!.currentTime + index * 0.19);
+    });
+    choirFilter.connect(choirMix).connect(choirBus);
+    choirLfo.start();
+
+    const stormBus = createBus('stormNeedle');
+    const stormDuration = 5;
+    const sampleRate = this.context.sampleRate;
+    const stormBuffer = this.context.createBuffer(1, stormDuration * sampleRate, sampleRate);
+    const stormChannel = stormBuffer.getChannelData(0);
+    let charge = 0;
+    for (let index = 0; index < stormChannel.length; index += 1) {
+      const white = this.random() * 2 - 1;
+      charge += (white - charge) * 0.18;
+      const corona = this.random() > 0.993 ? white * 0.7 : 0;
+      stormChannel[index] = charge * 0.24 + white * 0.08 + corona;
+    }
+    const stormSource = this.context.createBufferSource();
+    const stormFilter = this.context.createBiquadFilter();
+    const stormTone = this.context.createOscillator();
+    const stormToneGain = this.context.createGain();
+    const stormMix = this.context.createGain();
+    const stormLfo = this.context.createOscillator();
+    const stormLfoDepth = this.context.createGain();
+    stormSource.buffer = stormBuffer;
+    stormSource.loop = true;
+    stormFilter.type = 'bandpass';
+    stormFilter.frequency.value = 2480;
+    stormFilter.Q.value = 2.7;
+    stormTone.type = 'sine';
+    stormTone.frequency.value = 712.48;
+    stormToneGain.gain.value = 0.09;
+    stormMix.gain.value = 0.62;
+    stormLfo.type = 'sine';
+    stormLfo.frequency.value = 0.23;
+    stormLfoDepth.gain.value = 0.17;
+    stormSource.connect(stormFilter).connect(stormMix);
+    stormTone.connect(stormToneGain).connect(stormMix);
+    stormMix.connect(stormBus);
+    stormLfo.connect(stormLfoDepth).connect(stormMix.gain);
+    stormSource.start(0, 1.3);
+    stormTone.start();
+    stormLfo.start(this.context.currentTime + 0.45);
+
+    this.applySignalDestinationMix();
+  }
+
+  private applySignalDestinationMix(): void {
+    if (!this.context) return;
+    const now = this.context.currentTime;
+    const { targetId, proximity, pan, emphasized } = this.signalDestinationAudio;
+    (Object.keys(SIGNAL_DESTINATION_GAINS) as SignalTargetId[]).forEach((id) => {
+      const activity = id === targetId ? proximity * (emphasized ? 1 : 0.76) : 0;
+      this.signalDestinationLoops[id]?.gain.setTargetAtTime(activity * SIGNAL_DESTINATION_GAINS[id], now, 0.24);
+      this.signalDestinationPanners[id]?.pan.setTargetAtTime(id === targetId ? pan : 0, now, 0.18);
+    });
   }
 
   private startStormLayer(): void {

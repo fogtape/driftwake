@@ -221,7 +221,7 @@ export function FieldPackPanel({
     );
   }, [inventory, selectedTransferStack, storage, transferAmount, transferSelection]);
 
-  if (!panel || (panel === 'storage' && !storage)) return null;
+  if (!panel || panel === 'chart' || (panel === 'storage' && !storage)) return null;
 
   const previewStorageTransfer = (payload: DraggedStorageStack) => {
     if (!storage) return null;

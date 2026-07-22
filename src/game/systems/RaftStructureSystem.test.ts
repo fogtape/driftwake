@@ -44,6 +44,8 @@ function createTestMaterials(): MaterialLibrary {
     saltsealedGlove: material(),
     signalLaminate: material(),
     phosphorGlass: material(),
+    choirBronze: material(),
+    stormCeramic: material(),
     cropLeaf: material(),
     cropDry: material(),
     cropFruit: material(),

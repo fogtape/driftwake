@@ -24,7 +24,7 @@ import { createAnchorModel, createHelmModel, createSailModel } from './Navigatio
 import { createPlanterModel, createSaltwingBirdModel } from './PlantingModels';
 import { createDryingRackModel, createResearchBenchModel, createSmelterModel } from './ProgressionModels';
 import { createLockerModel, createSolarPurifierModel, createTripleGrillModel } from './AdvancedDeviceModels';
-import { createAntennaModel, createReceiverModel, createSignalBeaconModel } from './SignalModels';
+import { createAntennaModel, createReceiverModel, createSignalBeaconModel, createSignalDestinationModel } from './SignalModels';
 
 function createTestMaterials(): MaterialLibrary {
   const material = () => new MeshStandardMaterial();
@@ -74,6 +74,8 @@ function createTestMaterials(): MaterialLibrary {
     saltsealedGlove: material(),
     signalLaminate: material(),
     phosphorGlass: material(),
+    choirBronze: texturedMaterial(),
+    stormCeramic: texturedMaterial(),
     cropLeaf: material(),
     cropDry: material(),
     cropFruit: material(),
@@ -334,6 +336,33 @@ describe('procedural model assets', () => {
     expect(antenna.userData.navigationVisuals.signalRings).toHaveLength(3);
     expect(beacon.userData.signalBeaconVisuals.pulseRings).toHaveLength(4);
     expect(new Box3().setFromObject(antenna).getSize(new Vector3()).y).toBeGreaterThan(1.9);
+  }, 15_000);
+
+  it('builds three materially bound signal destinations with distinct large silhouettes', () => {
+    const materials = createTestMaterials();
+    [materials.choirBronze.map, materials.choirBronze.normalMap, materials.choirBronze.roughnessMap]
+      .forEach((texture, index) => { if (texture) texture.name = `choir-${index}`; });
+    [materials.stormCeramic.map, materials.stormCeramic.normalMap, materials.stormCeramic.roughnessMap]
+      .forEach((texture, index) => { if (texture) texture.name = `storm-${index}`; });
+    const relay = createSignalDestinationModel(materials, 'tideRelay');
+    const choir = createSignalDestinationModel(materials, 'ironChoir');
+    const needle = createSignalDestinationModel(materials, 'stormNeedle');
+    const models = [relay, choir, needle];
+    const stats = models.map(meshStats);
+    const sizes = models.map((model) => new Box3().setFromObject(model).getSize(new Vector3()));
+    expect(new Set(models.map((model) => model.name)).size).toBe(3);
+    expect(stats[0].meshes).toBeGreaterThanOrEqual(45);
+    expect(stats[1].meshes).toBeGreaterThanOrEqual(90);
+    expect(stats[2].meshes).toBeGreaterThanOrEqual(75);
+    expect(sizes[0].y).toBeGreaterThan(3.8);
+    expect(sizes[1].x).toBeGreaterThan(8);
+    expect(sizes[2].y).toBeGreaterThan(9);
+    expect(choir.userData.signalDestinationVisuals.pendulums).toHaveLength(5);
+    expect(needle.userData.signalDestinationVisuals.streamers).toHaveLength(3);
+    models.forEach((model) => {
+      expect(model.userData.signalDestinationVisuals.pulseRings.length).toBeGreaterThanOrEqual(3);
+      expect(model.userData.materialMaps).not.toContain('none');
+    });
   }, 15_000);
 
   it('builds a staged crop planter and an articulated crop-thief bird', () => {

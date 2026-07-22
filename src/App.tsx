@@ -4,6 +4,7 @@ import { FieldPackPanel } from './components/FieldPackPanel';
 import { FailureScreen } from './components/FailureScreen';
 import { Hud } from './components/Hud';
 import { SettingsPanel } from './components/SettingsPanel';
+import { SeaChartPanel } from './components/SeaChartPanel';
 import { TitleScreen } from './components/TitleScreen';
 import type { DriftwakeGame } from './game/DriftwakeGame';
 import { ITEM_DEFINITIONS, type ItemId, type ToolId } from './game/domain/items';
@@ -347,6 +348,7 @@ export function App() {
         onSelectBuildPiece={selectBuildPiece}
         onSelectBuildCategory={selectBuildCategory}
         onOpenPack={() => openPack('pack')}
+        onOpenChart={() => openPack('chart')}
       />
       <FailureScreen
         visible={phase === 'failed' && !settingsOpen}
@@ -380,6 +382,15 @@ export function App() {
         onStorageTransfer={(itemId, direction, amount) => gameRef.current?.transferStorage(itemId, direction, amount) ?? false}
         onClose={() => {
           gameRef.current?.closeStorage();
+          useGameStore.getState().setOverlayPanel(null);
+          gameRef.current?.playUi();
+        }}
+      />
+      <SeaChartPanel
+        open={overlayPanel === 'chart'}
+        navigation={navigation}
+        onSelect={(targetId) => gameRef.current?.selectSignalTarget(targetId) ?? false}
+        onClose={() => {
           useGameStore.getState().setOverlayPanel(null);
           gameRef.current?.playUi();
         }}

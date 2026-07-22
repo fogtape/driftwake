@@ -17,6 +17,7 @@ import {
 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { MaterialLibrary } from './Materials';
+import type { SignalTargetId } from '../domain/navigation';
 
 export interface ReceiverModelVisuals {
   kind: 'receiver';
@@ -50,6 +51,17 @@ export interface SignalBeaconVisuals {
   floats: Group[];
 }
 
+export interface SignalDestinationVisuals {
+  targetId: SignalTargetId;
+  floats: Group[];
+  rotors: Group[];
+  pendulums: Group[];
+  streamers: Group[];
+  pulseRings: Mesh[];
+  lightMaterials: MeshStandardMaterial[];
+  materialMaps: string;
+}
+
 export type SignalModelVisuals = ReceiverModelVisuals | AntennaModelVisuals;
 
 function shadowed<T extends Mesh>(mesh: T): T {
@@ -78,7 +90,7 @@ function createHighlight(radius: number): Mesh {
 
 function cable(group: Group, materials: MaterialLibrary, points: Vector3[], radius = 0.009): void {
   const curve = new CatmullRomCurve3(points);
-  group.add(shadowed(new Mesh(new TubeGeometry(curve, 18, radius, 5, false), materials.rope)));
+  group.add(shadowed(new Mesh(new TubeGeometry(curve, 18, radius, 5, false), materials.wovenFiber)));
 }
 
 function indicator(color: number): { mesh: Mesh; material: MeshStandardMaterial } {
@@ -104,12 +116,12 @@ export function createReceiverModel(materials: MaterialLibrary): Group {
   receiver.add(base);
   for (const x of [-0.43, 0.43]) {
     for (const z of [-0.29, 0.29]) {
-      const foot = shadowed(new Mesh(new CylinderGeometry(0.047, 0.06, 0.22, 8), materials.darkWood));
+      const foot = shadowed(new Mesh(new CylinderGeometry(0.047, 0.06, 0.22, 8), materials.wood[2]));
       foot.position.set(x, 0.13, z);
       foot.rotation.z = x * 0.06;
       foot.rotation.x = z * 0.06;
       receiver.add(foot);
-      const binding = shadowed(new Mesh(new TorusGeometry(0.054, 0.009, 5, 14), materials.rope));
+      const binding = shadowed(new Mesh(new TorusGeometry(0.054, 0.009, 5, 14), materials.wovenFiber));
       binding.position.set(x, 0.18, z);
       binding.rotation.x = Math.PI / 2;
       receiver.add(binding);
@@ -124,7 +136,7 @@ export function createReceiverModel(materials: MaterialLibrary): Group {
   receiver.add(rearPlate);
   for (const x of [-0.39, 0.39]) {
     for (const y of [0.28, 0.58]) {
-      const screw = shadowed(new Mesh(new CylinderGeometry(0.021, 0.021, 0.018, 8), materials.metal));
+      const screw = shadowed(new Mesh(new CylinderGeometry(0.021, 0.021, 0.018, 8), materials.navigationAlloy));
       screw.position.set(x, y, 0.322);
       screw.rotation.x = Math.PI / 2;
       receiver.add(screw);
@@ -221,7 +233,7 @@ export function createReceiverModel(materials: MaterialLibrary): Group {
     core.rotation.x = Math.PI / 2;
     drum.add(core);
     for (let ridge = 0; ridge < 10; ridge += 1) {
-      const tooth = shadowed(new Mesh(new BoxGeometry(0.008, 0.009, 0.062), materials.darkWood));
+      const tooth = shadowed(new Mesh(new BoxGeometry(0.008, 0.009, 0.062), materials.wood[2]));
       const angle = ridge / 10 * Math.PI * 2;
       tooth.position.set(Math.cos(angle) * 0.036, Math.sin(angle) * 0.036, 0);
       tooth.rotation.z = angle;
@@ -266,7 +278,7 @@ export function createReceiverModel(materials: MaterialLibrary): Group {
     loopFrame.add(coil);
   }
   for (const side of [-1, 1]) {
-    const brace = shadowed(new Mesh(new CylinderGeometry(0.018, 0.024, 0.43, 7), materials.darkWood));
+    const brace = shadowed(new Mesh(new CylinderGeometry(0.018, 0.024, 0.43, 7), materials.wood[2]));
     brace.position.set(0, -0.19, side * 0.14);
     brace.rotation.z = side * 0.2;
     loopFrame.add(brace);
@@ -326,7 +338,7 @@ export function createAntennaModel(materials: MaterialLibrary): Group {
       crossbar.rotation.z = Math.PI / 2;
       pivot.add(crossbar);
       for (const end of [-1, 1]) {
-        const cap = shadowed(new Mesh(new SphereGeometry(0.024, 8, 5), materials.metal));
+        const cap = shadowed(new Mesh(new SphereGeometry(0.024, 8, 5), materials.navigationAlloy));
         cap.position.set(end * (0.22 - y * 0.04), y, 0);
         pivot.add(cap);
       }
@@ -417,7 +429,7 @@ export function createSignalBeaconModel(materials: MaterialLibrary): Group {
   mast.position.y = 1.42;
   beacon.add(mast);
   for (const y of [0.62, 1.05, 1.48]) {
-    const collar = shadowed(new Mesh(new TorusGeometry(0.09, 0.018, 6, 20), materials.rustMetal));
+    const collar = shadowed(new Mesh(new TorusGeometry(0.09, 0.018, 6, 20), materials.choirBronze));
     collar.position.y = y;
     collar.rotation.x = Math.PI / 2;
     beacon.add(collar);
@@ -469,4 +481,355 @@ export function createSignalBeaconModel(materials: MaterialLibrary): Group {
   } satisfies SignalBeaconVisuals;
   beacon.visible = false;
   return beacon;
+}
+
+function destinationPulseRings(
+  group: Group,
+  y: number,
+  colors: readonly number[],
+  baseRadius: number,
+  spacing: number,
+): Mesh[] {
+  return colors.map((color, index) => {
+    const ring = new Mesh(
+      new TorusGeometry(baseRadius + index * spacing, 0.018, 6, 48),
+      new MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: AdditiveBlending,
+      }),
+    );
+    ring.position.y = y;
+    ring.rotation.x = Math.PI / 2;
+    group.add(ring);
+    return ring;
+  });
+}
+
+function destinationLight(group: Group, position: Vector3, color: number, scale = 1): MeshStandardMaterial {
+  const light = indicator(color);
+  light.mesh.position.copy(position);
+  light.mesh.scale.setScalar(scale);
+  group.add(light.mesh);
+  return light.material;
+}
+
+function destinationMaterialMaps(materials: MaterialLibrary, specialty: MeshStandardMaterial[] = []): string {
+  const maps = [
+    materials.signalLaminate.map?.name || 'signal-laminate-albedo',
+    materials.signalLaminate.normalMap?.name || 'signal-laminate-normal',
+    materials.signalLaminate.roughnessMap?.name || 'signal-laminate-roughness',
+    materials.phosphorGlass.map?.name || 'phosphor-glass-albedo',
+    materials.phosphorGlass.normalMap?.name || 'phosphor-glass-normal',
+    materials.phosphorGlass.roughnessMap?.name || 'phosphor-glass-roughness',
+  ];
+  specialty.forEach((material) => {
+    maps.push(
+      material.map?.name || 'none',
+      material.normalMap?.name || 'none',
+      material.roughnessMap?.name || 'none',
+    );
+  });
+  return maps.join('|');
+}
+
+function createTideRelayDestination(materials: MaterialLibrary): Group {
+  const destination = new Group();
+  destination.name = 'signal-destination-tide-relay';
+  const beacon = createSignalBeaconModel(materials);
+  beacon.visible = true;
+  const beaconVisuals = beacon.userData.signalBeaconVisuals as SignalBeaconVisuals;
+  beacon.scale.setScalar(1.34);
+  destination.add(beacon);
+
+  const lowerFrame = new Group();
+  lowerFrame.position.y = 0.23;
+  for (let arm = 0; arm < 6; arm += 1) {
+    const angle = arm / 6 * Math.PI * 2;
+    const beam = shadowed(new Mesh(new BoxGeometry(2.35, 0.11, 0.12), materials.navigationAlloy));
+    beam.position.set(Math.cos(angle) * 1.02, 0, Math.sin(angle) * 1.02);
+    beam.rotation.y = -angle;
+    lowerFrame.add(beam);
+    const endCap = shadowed(new Mesh(new CylinderGeometry(0.18, 0.22, 0.42, 10), materials.signalLaminate));
+    endCap.position.set(Math.cos(angle) * 2.1, 0.02, Math.sin(angle) * 2.1);
+    lowerFrame.add(endCap);
+  }
+  destination.add(lowerFrame);
+
+  for (const y of [1.35, 2.05, 2.78]) {
+    const crownRing = shadowed(new Mesh(new TorusGeometry(0.76 - y * 0.09, 0.026, 7, 42), materials.navigationAlloy));
+    crownRing.position.y = y;
+    crownRing.rotation.x = Math.PI / 2;
+    destination.add(crownRing);
+  }
+  const routeLens = shadowed(new Mesh(new SphereGeometry(0.24, 16, 10), materials.phosphorGlass));
+  routeLens.scale.y = 0.7;
+  routeLens.position.y = 3.74;
+  destination.add(routeLens);
+  const lightMaterials = [
+    beaconVisuals.beaconMaterial,
+    destinationLight(destination, new Vector3(0, 3.96, 0), 0x79e1bd, 2.2),
+  ];
+  const extraPulses = destinationPulseRings(destination, 3.76, [0x79e1bd, 0xefc35c, 0x79e1bd], 0.72, 0.28);
+  const visuals: SignalDestinationVisuals = {
+    targetId: 'tideRelay',
+    floats: beaconVisuals.floats,
+    rotors: [beaconVisuals.rotor],
+    pendulums: [],
+    streamers: [],
+    pulseRings: [...beaconVisuals.pulseRings, ...extraPulses],
+    lightMaterials,
+    materialMaps: destinationMaterialMaps(materials, [materials.choirBronze]),
+  };
+  destination.userData.signalDestinationVisuals = visuals;
+  destination.userData.materialMaps = visuals.materialMaps;
+  return destination;
+}
+
+function createIronChoirDestination(materials: MaterialLibrary): Group {
+  const destination = new Group();
+  destination.name = 'signal-destination-iron-choir';
+  const floats: Group[] = [];
+  for (const x of [-3.25, -1.65, 0, 1.65, 3.25]) {
+    const float = new Group();
+    float.position.set(x, 0, 0);
+    const pontoon = shadowed(new Mesh(new CylinderGeometry(0.34, 0.4, 2.35, 14), materials.sealedCanvas));
+    pontoon.rotation.x = Math.PI / 2;
+    float.add(pontoon);
+    for (const z of [-0.72, 0.72]) {
+      const band = shadowed(new Mesh(new TorusGeometry(0.37, 0.034, 7, 24), materials.navigationAlloy));
+      band.position.z = z;
+      float.add(band);
+    }
+    floats.push(float);
+    destination.add(float);
+  }
+
+  const deck = shadowed(new Mesh(new RoundedBoxGeometry(8.4, 0.2, 2.55, 5, 0.07), materials.signalLaminate));
+  deck.position.y = 0.32;
+  destination.add(deck);
+  for (const z of [-1.05, 1.05]) {
+    const rail = shadowed(new Mesh(new BoxGeometry(8.7, 0.12, 0.12), materials.navigationAlloy));
+    rail.position.set(0, 0.54, z);
+    destination.add(rail);
+    for (const x of [-4, -3, -2, -1, 0, 1, 2, 3, 4]) {
+      const post = shadowed(new Mesh(new CylinderGeometry(0.035, 0.045, 0.72, 7), materials.navigationAlloy));
+      post.position.set(x, 0.82, z);
+      destination.add(post);
+    }
+  }
+
+  const pendulums: Group[] = [];
+  for (let index = 0; index < 5; index += 1) {
+    const x = (index - 2) * 1.55;
+    const arch = new Group();
+    arch.position.x = x;
+    for (const side of [-1, 1]) {
+      const leg = shadowed(new Mesh(new CylinderGeometry(0.055, 0.075, 3.15, 9), materials.navigationAlloy));
+      leg.position.set(0, 1.82, side * 0.72);
+      leg.rotation.x = side * 0.18;
+      arch.add(leg);
+    }
+    const crown = shadowed(new Mesh(new CylinderGeometry(0.055, 0.055, 1.54, 8), materials.navigationAlloy));
+    crown.position.y = 3.26;
+    crown.rotation.x = Math.PI / 2;
+    arch.add(crown);
+    const resonator = shadowed(new Mesh(
+      new CylinderGeometry(0.34 + index * 0.018, 0.58 + index * 0.025, 1.82 + index * 0.12, 18, 2, true),
+      materials.choirBronze,
+    ));
+    resonator.position.y = 2.08;
+    arch.add(resonator);
+    for (const y of [1.3, 2.88]) {
+      const lip = shadowed(new Mesh(new TorusGeometry(y < 2 ? 0.58 + index * 0.025 : 0.35, 0.045, 8, 30), materials.choirBronze));
+      lip.position.y = y;
+      lip.rotation.x = Math.PI / 2;
+      arch.add(lip);
+    }
+    const pendulum = new Group();
+    pendulum.position.y = 3.2;
+    const cableMesh = shadowed(new Mesh(new CylinderGeometry(0.018, 0.018, 2.1, 7), materials.wovenFiber));
+    cableMesh.position.y = -1.05;
+    pendulum.add(cableMesh);
+    const clapper = shadowed(new Mesh(new SphereGeometry(0.2, 12, 8), materials.choirBronze));
+    clapper.position.y = -2.08;
+    pendulum.add(clapper);
+    pendulums.push(pendulum);
+    arch.add(pendulum);
+    destination.add(arch);
+  }
+
+  const rotor = new Group();
+  rotor.position.set(0, 4.45, 0);
+  for (let bladeIndex = 0; bladeIndex < 4; bladeIndex += 1) {
+    const blade = shadowed(new Mesh(new BoxGeometry(1.45, 0.16, 0.38), materials.choirBronze));
+    blade.position.x = 0.7;
+    const bladePivot = new Group();
+    bladePivot.rotation.z = bladeIndex * Math.PI / 2;
+    bladePivot.add(blade);
+    rotor.add(bladePivot);
+  }
+  const hub = shadowed(new Mesh(new SphereGeometry(0.28, 14, 9), materials.navigationAlloy));
+  rotor.add(hub);
+  destination.add(rotor);
+
+  const consoleBody = shadowed(new Mesh(new RoundedBoxGeometry(1.2, 0.75, 0.82, 5, 0.07), materials.signalLaminate));
+  consoleBody.position.set(0, 0.86, 0);
+  destination.add(consoleBody);
+  const consoleLens = shadowed(new Mesh(new SphereGeometry(0.23, 14, 9), materials.phosphorGlass));
+  consoleLens.scale.z = 0.42;
+  consoleLens.position.set(0, 1.08, 0.43);
+  destination.add(consoleLens);
+  const lightMaterials = [
+    destinationLight(destination, new Vector3(-0.36, 1.26, 0.44), 0xefc35c, 1.25),
+    destinationLight(destination, new Vector3(0.36, 1.26, 0.44), 0x79e1bd, 1.25),
+    destinationLight(destination, new Vector3(0, 4.47, 0), 0xefc35c, 2),
+  ];
+  const pulseRings = destinationPulseRings(destination, 4.45, [0xefc35c, 0x79e1bd, 0xefc35c, 0x79e1bd], 0.82, 0.33);
+  const visuals: SignalDestinationVisuals = {
+    targetId: 'ironChoir',
+    floats,
+    rotors: [rotor],
+    pendulums,
+    streamers: [],
+    pulseRings,
+    lightMaterials,
+    materialMaps: destinationMaterialMaps(materials, [materials.choirBronze]),
+  };
+  destination.userData.signalDestinationVisuals = visuals;
+  destination.userData.materialMaps = visuals.materialMaps;
+  return destination;
+}
+
+function createStormNeedleDestination(materials: MaterialLibrary): Group {
+  const destination = new Group();
+  destination.name = 'signal-destination-storm-needle';
+  const floats: Group[] = [];
+  for (let index = 0; index < 3; index += 1) {
+    const angle = index / 3 * Math.PI * 2;
+    const float = new Group();
+    float.position.set(Math.cos(angle) * 2.45, 0, Math.sin(angle) * 2.45);
+    float.rotation.y = -angle;
+    const buoy = shadowed(new Mesh(new CylinderGeometry(0.48, 0.62, 2.4, 14), materials.sealedCanvas));
+    buoy.rotation.z = Math.PI / 2;
+    float.add(buoy);
+    for (const x of [-0.76, 0.76]) {
+      const band = shadowed(new Mesh(new TorusGeometry(0.53, 0.045, 8, 26), materials.navigationAlloy));
+      band.position.x = x;
+      band.rotation.y = Math.PI / 2;
+      float.add(band);
+    }
+    floats.push(float);
+    destination.add(float);
+    const brace = shadowed(new Mesh(new BoxGeometry(3.2, 0.16, 0.16), materials.navigationAlloy));
+    brace.position.set(Math.cos(angle) * 1.42, 0.38, Math.sin(angle) * 1.42);
+    brace.rotation.y = -angle;
+    destination.add(brace);
+  }
+  const base = shadowed(new Mesh(new CylinderGeometry(1.45, 1.72, 0.34, 12), materials.signalLaminate));
+  base.position.y = 0.38;
+  destination.add(base);
+
+  for (let legIndex = 0; legIndex < 3; legIndex += 1) {
+    const angle = legIndex / 3 * Math.PI * 2;
+    const leg = shadowed(new Mesh(new CylinderGeometry(0.08, 0.14, 7.2, 10), materials.navigationAlloy));
+    leg.position.set(Math.cos(angle) * 0.72, 3.88, Math.sin(angle) * 0.72);
+    leg.rotation.z = Math.cos(angle) * -0.12;
+    leg.rotation.x = Math.sin(angle) * 0.12;
+    destination.add(leg);
+    for (const y of [1.35, 2.6, 3.85, 5.1, 6.35]) {
+      const insulator = shadowed(new Mesh(new TorusGeometry(0.16, 0.052, 8, 24), materials.stormCeramic));
+      insulator.position.set(Math.cos(angle) * (1.12 - y * 0.095), y, Math.sin(angle) * (1.12 - y * 0.095));
+      insulator.rotation.x = Math.PI / 2;
+      destination.add(insulator);
+    }
+  }
+  for (const y of [1.55, 3.05, 4.55, 6.05]) {
+    const platform = shadowed(new Mesh(new TorusGeometry(1.28 - y * 0.105, 0.07, 8, 36), materials.navigationAlloy));
+    platform.position.y = y;
+    platform.rotation.x = Math.PI / 2;
+    destination.add(platform);
+    for (let sensorIndex = 0; sensorIndex < 3; sensorIndex += 1) {
+      const angle = sensorIndex / 3 * Math.PI * 2 + y * 0.08;
+      const radius = 1.18 - y * 0.075;
+      const arm = shadowed(new Mesh(new CylinderGeometry(0.025, 0.032, 0.62, 7), materials.navigationAlloy));
+      arm.position.set(Math.cos(angle) * radius, y + 0.04, Math.sin(angle) * radius);
+      arm.rotation.z = Math.PI / 2;
+      arm.rotation.y = -angle;
+      destination.add(arm);
+      const sampler = shadowed(new Mesh(new CylinderGeometry(0.1, 0.13, 0.3, 12), materials.stormCeramic));
+      sampler.position.set(Math.cos(angle) * (radius + 0.3), y + 0.04, Math.sin(angle) * (radius + 0.3));
+      destination.add(sampler);
+    }
+  }
+  const mast = shadowed(new Mesh(new CylinderGeometry(0.055, 0.11, 8.3, 10), materials.choirBronze));
+  mast.position.y = 4.65;
+  destination.add(mast);
+
+  const cage = new Group();
+  cage.position.y = 7.15;
+  [0.48, 0.72, 0.96].forEach((radius, index) => {
+    const loop = shadowed(new Mesh(new TorusGeometry(radius, 0.03, 7, 42), materials.choirBronze));
+    if (index === 0) loop.rotation.y = Math.PI / 2;
+    else if (index === 1) loop.rotation.x = Math.PI / 2;
+    cage.add(loop);
+  });
+  for (let spoke = 0; spoke < 6; spoke += 1) {
+    const angle = spoke / 6 * Math.PI * 2;
+    const rod = shadowed(new Mesh(new CylinderGeometry(0.025, 0.025, 1.92, 7), materials.navigationAlloy));
+    rod.rotation.z = Math.PI / 2;
+    rod.rotation.y = angle;
+    cage.add(rod);
+  }
+  destination.add(cage);
+
+  const streamers: Group[] = [];
+  for (let index = 0; index < 3; index += 1) {
+    const streamer = new Group();
+    streamer.position.set(0, 5.35 + index * 0.46, 0);
+    streamer.rotation.y = index * Math.PI * 2 / 3;
+    const arm = shadowed(new Mesh(new CylinderGeometry(0.022, 0.026, 1.18, 7), materials.navigationAlloy));
+    arm.rotation.z = Math.PI / 2;
+    arm.position.x = 0.58;
+    streamer.add(arm);
+    const cloth = shadowed(new Mesh(new PlaneGeometry(1.38, 0.38, 4, 1), materials.sealedCanvas));
+    cloth.position.x = 1.68;
+    cloth.rotation.y = Math.PI / 2;
+    streamer.add(cloth);
+    streamers.push(streamer);
+    destination.add(streamer);
+  }
+  const sensor = shadowed(new Mesh(new SphereGeometry(0.34, 16, 10), materials.stormCeramic));
+  sensor.scale.y = 1.28;
+  sensor.position.y = 8.62;
+  destination.add(sensor);
+  const needle = shadowed(new Mesh(new ConeGeometry(0.12, 1.3, 10), materials.choirBronze));
+  needle.position.y = 9.43;
+  destination.add(needle);
+  const lightMaterials = [
+    destinationLight(destination, new Vector3(0, 8.7, 0.34), 0x79e1bd, 1.8),
+    destinationLight(destination, new Vector3(0, 9.75, 0), 0xefc35c, 2.15),
+  ];
+  const pulseRings = destinationPulseRings(destination, 8.72, [0x79e1bd, 0xd7edf0, 0xefc35c, 0x79e1bd], 0.8, 0.38);
+  const visuals: SignalDestinationVisuals = {
+    targetId: 'stormNeedle',
+    floats,
+    rotors: [cage],
+    pendulums: [],
+    streamers,
+    pulseRings,
+    lightMaterials,
+    materialMaps: destinationMaterialMaps(materials, [materials.choirBronze, materials.stormCeramic]),
+  };
+  destination.userData.signalDestinationVisuals = visuals;
+  destination.userData.materialMaps = visuals.materialMaps;
+  return destination;
+}
+
+export function createSignalDestinationModel(materials: MaterialLibrary, targetId: SignalTargetId): Group {
+  if (targetId === 'tideRelay') return createTideRelayDestination(materials);
+  if (targetId === 'ironChoir') return createIronChoirDestination(materials);
+  return createStormNeedleDestination(materials);
 }

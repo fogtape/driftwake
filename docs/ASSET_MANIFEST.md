@@ -1,7 +1,7 @@
 # 原创资产清单
 
-> 更新日期：2026-07-20
-> 状态：第十六轮 M6 多鱼种与烹饪原创 PBR 材质已通过场景门禁，发布前仍需做最终授权、DCC 替换与相似性复核
+> 更新日期：2026-07-22
+> 状态：第十七轮 M8 远海目的地原创 PBR 材质已通过场景门禁，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -715,6 +715,46 @@ Constraints: fully original; seamless tile; no knots larger than the weave, meta
 Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furniture presentation, dark brown dominance, glossy plastic rope, large holes, material ball, perspective preview
 ```
 
+### TEX-032：铁歌漂流阵共鸣青铜材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/iron-choir-resonant-bronze.webp`、`iron-choir-resonant-bronze-normal.webp`、`iron-choir-resonant-bronze-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/iron-choir-resonant-bronze-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 铁歌漂流阵五组共鸣腔、摆锤、顶部转子与旧铜镍连接件 |
+| 处理方式 | `prepare_imagegen_material.py --size 1024 --seam-width 160 --normal-strength 0.52 --roughness-min 142 --roughness-max 224 --optimize-boundary` |
+| 检查 | seam x=`7.46`/`1.10x`、y=`7.40`/`0.93x`，boundary=`(1,1)`；2x2 无十字带/方向性高光，铁歌近景旧金/冷镍层可辨 |
+
+采用提示词：
+
+```text
+Create one original seamless tileable game-material albedo: resonant marine copper-nickel bronze used on a wind-driven open-ocean signal array. Show only one continuous flat material surface, viewed exactly top-down and orthographic, filling the entire square. The surface is premium hand-painted stylized realism with broad muted old-gold and cool nickel variation, shallow hand-planished hammer facets, very fine acoustic stress freckles, sparse mineral-teal patina only in micro-recesses, restrained chalk-white salt bloom, and a few charcoal damping traces. Keep the metal dense, maintained, and readable both close up and at distance. Use uniform texel density and irregular non-directional detail so all four edges wrap seamlessly. Flat neutral base color only: no directional light, reflection, specular highlight, cast shadow, ambient occlusion, depth, glow, or perspective. Do not depict any bell, chime, instrument, plate edge, rivet layout, wire, machinery, tower, ocean, separate object, center emblem, circles, stripes, repeating cells, text, symbols, logos, watermark, frame, polished brass, orange rust, large corrosion holes, thick verdigris, photographic scan, material sphere, or product mockup.
+```
+
+首轮有器物轮廓/方向性高光的候选拒绝；采用版只保留连续材料表面。源图、运行时三图和 `iron-choir` 近景证据均归档。
+
+### TEX-033：风针观测标电气陶瓷材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时文件 | `public/assets/textures/storm-needle-electret-ceramic.webp`、`storm-needle-electret-ceramic-normal.webp`、`storm-needle-electret-ceramic-roughness.webp` |
+| 采用源图 | `artifacts/imagegen/storm-needle-electret-ceramic-raw.png` |
+| 模型 / 质量 | `gpt-image-2` / `high` |
+| 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
+| 用途 | 风针观测标传感器绝缘环、取样器、顶端电气陶瓷与微型仪器罩 |
+| 处理方式 | `prepare_imagegen_material.py --size 1024 --seam-width 168 --normal-strength 0.32 --roughness-min 170 --roughness-max 232 --optimize-boundary` |
+| 检查 | seam x=`3.05`/`1.06x`、y=`2.63`/`0.92x`，boundary=`(1,1023)`；2x2 为连续哑光瓷釉，无 terrazzo/混凝土/石屑，风针近景与青铜/信号层压板层次清晰 |
+
+采用提示词：
+
+```text
+Create an original seamless PBR albedo texture for a matte salt-fired porcelain enamel coating used on precision storm instruments at sea. Fill the square with one continuous smooth dense coating, exactly top-down and orthographic. Use a pale smoke-ivory base, soft cool-slate cloudy brush variation, tiny desaturated celadon ion marks, a few muted coral mineral pinpoints, faint graphite dust, and delicate chalk-white salt frosting. The finish is premium hand-painted stylized realism: calm broad color structure with crisp microscopic wear, non-directional, uniform texel density, and tileable on all four edges. It must look like engineered matte porcelain enamel, not rock. Flat base color with no baked lighting, highlight, reflection, shadow, ambient occlusion, glow, depth, or perspective. No aggregate, pebbles, stone chips, terrazzo, concrete, marble, granite, cracks, tiles, panel seams, objects, instruments, lightning, ocean, text, symbols, logos, border, material sphere, or product mockup.
+```
+
+首轮 terrazzo/混凝土感候选与连接失败重试均未进入运行时；采用版经过 2x2、地图相关性和风针目的地近景复核。
+
 ## 代码原生模型与动画
 
 本轮新增鲨体分段伤痕、海面聚焦环和鲨鱼战利品捆扎浮包，继续由代码原生形体驱动；鲨皮沿用独立 TEX-003 PBR，肉、皮、齿、绳结和浮托按材质与轮廓分层。采集段、对象池、耐久与 v18 存档均不依赖视觉对象作为玩法真值；没有因本机软件 WebGL 复验失败而降低运行时贴图质量。
@@ -752,11 +792,13 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | MOD-029 | 深锚锁链棘轮：双爪棘轮、潮铸护圈、短节锁链与加固绞盘 | `src/game/art/NavigationModels.ts` | 直接加装到现有锚具，风暴载荷、滑脱与 v10 强化状态同步 |
 | MOD-030 | 潮听接收台：层压机壳、斜置扫描盘、三环二十四刻度、扫描束、三信号点、参考线圈、三频段鼓轮、六电量条与阵列灯 | `src/game/art/SignalModels.ts` | 90+ 网格；断电/在线发光、扫描、调谐、频段点、电量和诊断灯由 v10 导航状态驱动 |
 | MOD-031 | 双桅定向阵列：相位箱、双桅、八组绝缘/横臂、六定向环、端帽、冠尖、四股拉索、馈线和传播环 | `src/game/art/SignalModels.ts` | 50+ 网格；桅杆风摆、相位灯和三层传播环按阵列/天气/接收台状态驱动 |
-| MOD-032 | 原创信号中继标：三密封浮筒、合金箍、三臂甲板、中央桅杆、双环转子、磷光核心和四层脉冲环 | `src/game/art/SignalModels.ts` | 25+ 网格；位于持续世界坐标，浮筒错相升沉、转子、灯和距离脉冲实时驱动 |
+| MOD-032 | 潮痕中继站：三密封浮筒、合金箍、六臂低框、三层冠环、中央桅杆、双环转子、磷光核心和四层脉冲环 | `src/game/art/SignalModels.ts` | 47 网格；位于持续世界坐标，浮筒错相升沉、转子、灯和距离脉冲实时驱动 |
 | MOD-033 | 盐封打捞手套：双前臂、编织袖口、掌垫、指节护条、金属扣具、八组双段手指与双拇指 | `src/game/art/FirstPersonModels.ts` | 双手与钩具合计 40+ 网格；主体使用独立 TEX-015，麻编/金属/绳边分层，腕、指、导绳点和投射起点独立驱动 |
 | MOD-034 | 木筏结构套件：交错承力墙、绳铰板门、盐封承重柱、双梁七级楼梯、上层拼板和编叶斜顶 | `src/game/art/RaftStructureParts.ts` | 六类结构使用木材/深木/绳/金属/纤维分件和一致尺度语法；门框/门扇分离，运行时合并为最多七个实例批次 |
 | MOD-035 | 潮兜收集网：盐蚀木框、铁卡扣、双侧承臂、悬垂绳格、绳结、三浮子、六档装载物、磨损绳与满载标记 | `src/game/art/CollectionNetModel.ts` | 原创程序模型；静态木框/铁件/绳床/浮子按材质合批，货物和健康阶段保持独立动画，筏缘局部坐标防止航行或靠岛时脱离 |
 | MOD-036 | 鲨鱼战利品浮包：盐封浮托、交叉绑绳、分件鲨肉、折叠鲨皮与齿板 | `src/game/art/ProceduralModels.ts` | 只用于背包拒收的真实鲨鱼战利品；按内容显隐并复用八槽世界掉落池，不把普通漂流物换皮 |
+| MOD-037 | 铁歌漂流阵：五联浮舱、双侧轨道、九组栏柱、五座共鸣腔、摆锤、顶部转子、控制台与脉冲环 | `src/game/art/SignalModels.ts` | 90 网格；宽体远海实体使用 TEX-032，五个摆锤/共鸣腔按目标状态同步 |
+| MOD-038 | 风针观测标：三浮舱、三脚塔、四层传感平台、十二组陶瓷取样器、三轴电气笼、三组风向飘带与尖针 | `src/game/art/SignalModels.ts` | 83 网格；高 9m 级实体使用 TEX-033/TEX-032，平台、笼、飘带和脉冲随风/目标驱动 |
 | ANI-001 | 木筏三轴波浪升沉 | `src/game/systems/RaftSystem.ts` | 已实现 |
 | ANI-002 | 第一人称移动、镜头与木筏局部坐标 | `src/game/systems/PlayerController.ts` | 已实现基础版 |
 | ANI-003 | 双手钩具待机、蓄力、放绳跟随、受力抓握、交替回收、抛射旋转、拖回、耐久损耗与断裂恢复 | `src/game/systems/HookSystem.ts`、`src/game/presentation/hookPresentation.ts` | 代码原生腕/指关节、19 点张力绳和手持/抛出唯一所有权已接通；最终蒙皮仍待 DCC |
@@ -775,7 +817,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | ANI-016 | 舵轮修正、罗盘指向、齿轮联动、航线针切换、强化帆鼓动和过载自动泄压 | `src/game/systems/NavigationSystem.ts` | 与四种航线、阵风偏航、帆具载荷、交互、音频和 v10 恢复同步 |
 | ANI-017 | 五杯水位/完成标记、三份鱼段独立火候、共享燃料条、柜盖与内容标记 | `src/game/systems/DeviceSystem.ts` | 与高级设备领域队列、真实库存、HUD、音频和 v10 恢复同步；共享燃料、断火续燃、熟优先收取、停止空烧和三状态 PBR 门禁通过 |
 | ANI-018 | 锚机棘轮加装、锁链受力、风暴载荷累积与未强化锚滑脱 | `src/game/systems/NavigationSystem.ts` | 与锚泊后果、警报、音频、模型强化和 v10 恢复同步 |
-| ANI-019 | 接收台扫描/调谐/电量、双桅相位/传播、目标浮筒/转子/脉冲与抵达解码 | `src/game/systems/NavigationSystem.ts` | 与电池、间距、活动信号、世界位置、距离、访问解锁和 v10 恢复同步 |
+| ANI-019 | 接收台扫描/调谐/电量、双桅相位/传播、三座目标实体浮舱/转子/摆锤/飘带/脉冲与抵达解码 | `src/game/systems/NavigationSystem.ts` | 与电池、间距、活动信号、世界位置、距离、访问解锁、海图选择和 v18 恢复同步 |
 | ANI-020 | 结构分件幽灵预览、旋转/层高切换、板门开合、连续楼梯登层、上层落地/分层碰撞、楼板/斜顶撞顶、三档受损色泽/确定性松动和承重级联 | `src/game/systems/BuildSystem.ts`、`RaftStructureSystem.ts`、`PlayerController.ts` | 与材料、锤耐久、共享占位、四向楼梯入口、材质撞顶音尘、鲨鱼外沿择靶、修补 HUD、支撑拓扑和 v15 恢复同步；不增加结构实例批次 |
 | ANI-021 | 收集网边缘预览、四向固定、网床波动/装载下沉、六档货物显隐、两档磨损绳、满载脉冲、被动入网、鲨鱼撕咬、修补、收取、锤拆与失托落海 | `src/game/art/CollectionNetModel.ts`、`src/game/systems/CollectionNetSystem.ts` | 与动态筏缘、未钩漂流物、12 件容量、真实生命、背包接收、锤耐久、世界掉落和 v17 恢复同步 |
 | ANI-022 | 潮铸筏缘护甲预览、安装、盐蚀合金四边导轨、锈蚀角片、铆固件和拆卸返料 | `src/game/systems/BuildSystem.ts`、`src/game/systems/RaftSystem.ts` | 固定实例预算随动态筏格姿态和 v17 `reinforced` 真值同步，保护同格基础、暴露结构和边挂网具 |
@@ -795,6 +837,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | VFX-013 | 近距打捞聚焦环、分类拾取冲击与池化海面剩余物资 | `src/game/systems/SalvageSystem.ts`、`DebrisField.ts` | 注视角、距离、背包接收结果和 v11 世界掉落状态共同驱动，不静默吞物资 |
 | VFX-014 | 收集网固定冲击、分类入网飞沫、装载下沉、满载灯、鲨鱼受击/毁坏、锤修金屑、锤拆碎屑和失托落海双层水花 | `src/game/systems/CollectionNetSystem.ts`、`CollectionNetModel.ts` | 所有状态由真实网具容量、生命、筏格 revision、缘甲减伤和漂流物结算驱动，不使用菜单假状态 |
 | VFX-015 | 鲨鱼失力冲击、浮尸出水、四段肉屑/水滴、青色聚焦环和取尽/超时下沉 | `src/game/systems/SplashSystem.ts`、`SharkSystem.ts` | 粒子、镜头反馈和伤痕只由实际击杀/采集事务触发，满包拒收不会伪造入包反馈 |
+| VFX-016 | 三座远海目的地的浮舱错相、共鸣摆锤、三轴观测笼、风向飘带和距离/访问脉冲 | `src/game/systems/NavigationSystem.ts`、`src/game/art/SignalModels.ts` | 发现/接近/激活/访问共享领域状态，隐藏目标不运行发光和脉冲 |
 
 ## 程序音频分层
 
@@ -816,6 +859,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 | SFX-REEF | 入水/游动、钩刃擦水、细砂/黏土/金属分层撞击和海草收割 | `src/game/systems/AudioSystem.ts` |
 | SFX-NAV | 帆布受风持续带通层、展收帆摩擦、调帆绳索、索具锁紧、帆具过载、舵台拨档、锚链坠落、棘轮强化与滑脱/绞盘回收 | `src/game/systems/AudioSystem.ts` |
 | SFX-SIGNAL | 接收机带通底噪、电池接通、继电器开关、调谐扫频、距离驱动双音脉冲、目标抵达和阵列成功/故障诊断 | `src/game/systems/AudioSystem.ts` |
+| SFX-DESTINATION | 潮痕中继站低频继电脉冲、铁歌漂流阵多谐波金属合唱、风针观测标滤波风噪/电气层；距离衰减、立体声声像和当前目标强调 | `src/game/systems/AudioSystem.ts` |
 | SFX-PLANT | 土壤落种、倒水低通/水滴音、成熟三音提示、干裂叶响和收获层 | `src/game/systems/AudioSystem.ts` |
 | SFX-RESEARCH | 开台、样本落盘/刻度确认、项目学习和纸页/金属拨盘反馈 | `src/game/systems/AudioSystem.ts` |
 | SFX-FORGE | 湿砖落架、干砖裂响、矿石/细砂/燃料装填、持续炉火、金属或玻璃完成凝固与收取层 | `src/game/systems/AudioSystem.ts` |
@@ -828,7 +872,7 @@ Avoid: checkerboard perfection, macrame decoration, fabric cloth, wicker furnitu
 
 - 用 Blender 或等效 DCC 建立可蒙皮的最终双手、工具、鲨鱼和生活设备资产，当前代码模型是原创近最终形体基线而非最终蒙皮资产；
 - 为木材补充经过人工修整的 normal、roughness 与 AO；鲨皮和编织纤维已使用独立派生图；
-- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005 至 TEX-031 已采用高质量输出；
+- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005 至 TEX-033 已采用高质量输出；
 - 建立同一角色比例与材质语言下的模型规范；
 - 为岛屿补充手绘沙地/草地/岩面材质组、草丛层级和更丰富的岸线小物，保持现有确定性地形与碰撞接口；
 - 为漂流箱桶、最终双手/钩具、木筏结构套件、潮兜收集网、珊瑚、海草、鱼群、水下钩具、拾风帆、强化索具/锚具、定潮舵台、接收台/阵列/中继标、高级生活设备、作物、盐翼盗鸟、研究台、通风架、熔炉和金属工具建立最终 DCC 模型、蒙皮与顶点动画，保留当前布局和领域接口；

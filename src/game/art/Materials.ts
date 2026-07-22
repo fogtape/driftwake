@@ -100,6 +100,12 @@ export interface AssetTextures {
   phosphorGlass: Texture;
   phosphorGlassNormal: Texture;
   phosphorGlassRoughness: Texture;
+  choirBronze: Texture;
+  choirBronzeNormal: Texture;
+  choirBronzeRoughness: Texture;
+  stormCeramic: Texture;
+  stormCeramicNormal: Texture;
+  stormCeramicRoughness: Texture;
   stormClouds: Texture;
 }
 
@@ -144,6 +150,8 @@ export interface MaterialLibrary {
   saltsealedGlove: MeshStandardMaterial;
   signalLaminate: MeshStandardMaterial;
   phosphorGlass: MeshStandardMaterial;
+  choirBronze: MeshStandardMaterial;
+  stormCeramic: MeshStandardMaterial;
   cropLeaf: MeshStandardMaterial;
   cropDry: MeshStandardMaterial;
   cropFruit: MeshStandardMaterial;
@@ -242,6 +250,12 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     phosphorGlass,
     phosphorGlassNormal,
     phosphorGlassRoughness,
+    choirBronze,
+    choirBronzeNormal,
+    choirBronzeRoughness,
+    stormCeramic,
+    stormCeramicNormal,
+    stormCeramicRoughness,
     stormClouds,
   ] = await Promise.all([
     loader.loadAsync('/assets/textures/weathered-cedar.webp'),
@@ -330,6 +344,12 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/phosphor-glass.webp'),
     loader.loadAsync('/assets/textures/phosphor-glass-normal.webp'),
     loader.loadAsync('/assets/textures/phosphor-glass-roughness.webp'),
+    loader.loadAsync('/assets/textures/iron-choir-resonant-bronze.webp'),
+    loader.loadAsync('/assets/textures/iron-choir-resonant-bronze-normal.webp'),
+    loader.loadAsync('/assets/textures/iron-choir-resonant-bronze-roughness.webp'),
+    loader.loadAsync('/assets/textures/storm-needle-electret-ceramic.webp'),
+    loader.loadAsync('/assets/textures/storm-needle-electret-ceramic-normal.webp'),
+    loader.loadAsync('/assets/textures/storm-needle-electret-ceramic-roughness.webp'),
     loader.loadAsync('/assets/textures/storm-clouds.webp'),
   ]);
 
@@ -383,6 +403,12 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     [birdEye, 'saltwing-eye-albedo'],
     [birdEyeNormal, 'saltwing-eye-normal'],
     [birdEyeRoughness, 'saltwing-eye-roughness'],
+    [choirBronze, 'iron-choir-resonant-bronze-albedo'],
+    [choirBronzeNormal, 'iron-choir-resonant-bronze-normal'],
+    [choirBronzeRoughness, 'iron-choir-resonant-bronze-roughness'],
+    [stormCeramic, 'storm-needle-electret-ceramic-albedo'],
+    [stormCeramicNormal, 'storm-needle-electret-ceramic-normal'],
+    [stormCeramicRoughness, 'storm-needle-electret-ceramic-roughness'],
   ];
   textureNames.forEach(([texture, name]) => {
     texture.name = name;
@@ -595,6 +621,26 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   phosphorGlassNormal.colorSpace = NoColorSpace;
   phosphorGlassRoughness.colorSpace = NoColorSpace;
 
+  for (const texture of [choirBronze, choirBronzeNormal, choirBronzeRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(1.35, 1.35);
+    texture.anisotropy = anisotropy;
+  }
+  choirBronze.colorSpace = SRGBColorSpace;
+  choirBronzeNormal.colorSpace = NoColorSpace;
+  choirBronzeRoughness.colorSpace = NoColorSpace;
+
+  for (const texture of [stormCeramic, stormCeramicNormal, stormCeramicRoughness]) {
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(1.7, 1.5);
+    texture.anisotropy = anisotropy;
+  }
+  stormCeramic.colorSpace = SRGBColorSpace;
+  stormCeramicNormal.colorSpace = NoColorSpace;
+  stormCeramicRoughness.colorSpace = NoColorSpace;
+
   stormClouds.colorSpace = SRGBColorSpace;
   stormClouds.wrapS = RepeatWrapping;
   stormClouds.wrapT = RepeatWrapping;
@@ -688,6 +734,12 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     phosphorGlass,
     phosphorGlassNormal,
     phosphorGlassRoughness,
+    choirBronze,
+    choirBronzeNormal,
+    choirBronzeRoughness,
+    stormCeramic,
+    stormCeramicNormal,
+    stormCeramicRoughness,
     stormClouds,
   };
 }
@@ -937,6 +989,24 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       emissive: 0x071b19,
       emissiveMap: textures.phosphorGlass,
       emissiveIntensity: 0.18,
+    }),
+    choirBronze: new MeshStandardMaterial({
+      color: 0xf1ead9,
+      map: textures.choirBronze,
+      normalMap: textures.choirBronzeNormal,
+      normalScale: new Vector2(0.46, 0.46),
+      roughnessMap: textures.choirBronzeRoughness,
+      roughness: 0.74,
+      metalness: 0.56,
+    }),
+    stormCeramic: new MeshStandardMaterial({
+      color: 0xdce0d5,
+      map: textures.stormCeramic,
+      normalMap: textures.stormCeramicNormal,
+      normalScale: new Vector2(0.42, 0.42),
+      roughnessMap: textures.stormCeramicRoughness,
+      roughness: 0.86,
+      metalness: 0.04,
     }),
     cropLeaf: new MeshStandardMaterial({
       color: 0xd6e2ce,

@@ -17,6 +17,7 @@ import {
   Grid3X3,
   Heart,
   Layers3,
+  Map as MapIcon,
   Mountain,
   MousePointer2,
   Navigation,
@@ -108,6 +109,7 @@ interface HudProps {
   onSelectBuildPiece: (piece: RaftBuildPiece) => void;
   onSelectBuildCategory: (category: RaftBuildCategory) => void;
   onOpenPack: () => void;
+  onOpenChart: () => void;
 }
 
 interface GaugeProps {
@@ -191,6 +193,7 @@ export function Hud({
   onSelectBuildPiece,
   onSelectBuildCategory,
   onOpenPack,
+  onOpenChart,
 }: HudProps) {
   const sharkAlert = shark.mode === 'approaching' || shark.mode === 'attacking';
   const sharkCarcass = shark.mode === 'carcass';
@@ -408,6 +411,11 @@ export function Hud({
 
       <div className="hud-actions">
         <span className="fps-readout" aria-label={`${fps} FPS`}>{fps || '--'}</span>
+        {navigation.discoveredSignals > 0 && (
+          <button className="hud-icon" type="button" onClick={onOpenChart} aria-label="打开潮痕航海图" title="航海图">
+            <MapIcon size={19} />
+          </button>
+        )}
         <button className="hud-icon" type="button" onClick={onToggleAudio} aria-label={audioEnabled ? '关闭声音' : '开启声音'} title={audioEnabled ? '关闭声音' : '开启声音'}>
           {audioEnabled ? <Volume2 size={19} /> : <VolumeX size={19} />}
         </button>
@@ -763,6 +771,11 @@ export function Hud({
                 <MousePointer2 size={20} />
                 <span>{!ready ? '等待恢复' : pointerLockDenied ? '重试继续' : '继续漂流'}</span>
               </button>
+              {navigation.discoveredSignals > 0 && (
+                <button className="focus-prompt__chart" type="button" onClick={onOpenChart} aria-label="打开潮痕航海图" title="航海图">
+                  <MapIcon size={20} />
+                </button>
+              )}
               <button className="focus-prompt__settings" type="button" onClick={onSettings} aria-label="设置" title="设置">
                 <Settings size={20} />
               </button>

@@ -26,10 +26,10 @@ import {
 import {
   createAntennaModel,
   createReceiverModel,
-  createSignalBeaconModel,
+  createSignalDestinationModel,
   type AntennaModelVisuals,
   type ReceiverModelVisuals,
-  type SignalBeaconVisuals,
+  type SignalDestinationVisuals,
   type SignalModelVisuals,
 } from '../art/SignalModels';
 import type { MaterialLibrary } from '../art/Materials';
@@ -39,6 +39,8 @@ import {
   RECEIVER_CELL_SECONDS,
   SIGNAL_ARRAY_MAX_TILES,
   SIGNAL_ARRAY_MIN_TILES,
+  SIGNAL_DESTINATION_VISIBILITY_METERS,
+  SIGNAL_TARGET_ORDER,
   SIGNAL_TARGETS,
   advanceNavigationState,
   bearingTo,
@@ -51,7 +53,9 @@ import {
   normalizeAngle,
   reinforceNavigationAnchor,
   reinforceNavigationSail,
+  selectSignalTarget,
   signalArrayStatus,
+  signalChartTelemetry,
   signalTelemetry,
   shortestAngle,
   toggleReceiverPower,
@@ -61,6 +65,7 @@ import {
   type SavedNavigationDevice,
   type SavedNavigationState,
   type SignalArrayStatus,
+  type SignalTargetId,
 } from '../domain/navigation';
 import { ITEM_DEFINITIONS, addItems, itemCount, type ItemBundle } from '../domain/items';
 import { useGameStore } from '../../state/gameStore';
@@ -75,6 +80,12 @@ interface NavigationRuntime {
   model: Group;
   visuals: NavigationModelVisuals | SignalModelVisuals;
   deployVisual: number;
+}
+
+interface SignalDestinationRuntime {
+  model: Group;
+  visuals: SignalDestinationVisuals;
+  meshCount: number;
 }
 
 const VALID_COLOR = new Color(0x72d4b3);
@@ -119,8 +130,7 @@ export class NavigationSystem {
   private lastRaftRevision = -1;
   private feedbackElapsed = 0;
   private noticeTimer: number | null = null;
-  private readonly signalBeacon: Group;
-  private readonly signalBeaconVisuals: SignalBeaconVisuals;
+  private readonly signalDestinations = new Map<SignalTargetId, SignalDestinationRuntime>();
   private signalPingElapsed = 1.2;
   private serial = 0;
 
@@ -153,9 +163,17 @@ export class NavigationSystem {
       antenna: this.createPreview('antenna'),
     };
     this.raft.group.add(...Object.values(this.previews));
-    this.signalBeacon = createSignalBeaconModel(this.materials);
-    this.signalBeaconVisuals = this.signalBeacon.userData.signalBeaconVisuals as SignalBeaconVisuals;
-    this.scene.add(this.signalBeacon);
+    for (const targetId of SIGNAL_TARGET_ORDER) {
+      const model = createSignalDestinationModel(this.materials, targetId);
+      model.visible = false;
+      const visuals = model.userData.signalDestinationVisuals as SignalDestinationVisuals;
+      let meshCount = 0;
+      model.traverse((object) => {
+        if (object instanceof Mesh) meshCount += 1;
+      });
+      this.signalDestinations.set(targetId, { model, visuals, meshCount });
+      this.scene.add(model);
+    }
     this.state.devices.forEach((device) => this.addRuntime(device));
     this.syncStateDevices();
     this.metrics = this.calculateMetrics();
@@ -233,7 +251,7 @@ export class NavigationSystem {
     this.metrics = this.calculateMetrics();
     this.raft.setHeading(this.state.heading);
     this.runtimes.forEach((runtime) => this.updateRuntime(runtime, time, delta));
-    this.updateSignalBeacon(time, delta);
+    this.updateSignalDestinations(time, delta);
     this.audio.setSailActivity(this.metrics.sailDeployed ? this.metrics.windCapture : 0);
     const telemetry = signalTelemetry(this.currentState());
     this.audio.setReceiverActivity(telemetry.online ? 1 : 0);
@@ -291,6 +309,57 @@ export class NavigationSystem {
       worldZ: Number(current.worldZ.toFixed(3)),
       receiverCharge: Number(current.receiverCharge.toFixed(3)),
       devices: current.devices.map((device) => ({ ...device })),
+    };
+  }
+
+  selectSignalTarget(targetId: SignalTargetId): boolean {
+    const current = this.currentState();
+    const next = selectSignalTarget(current, targetId);
+    if (next === current) return false;
+    this.state = next.routeMode === 'signal'
+      ? { ...next, courseAngle: this.targetBearing(next) }
+      : next;
+    this.metrics = this.calculateMetrics();
+    this.audio.playReceiverTune();
+    this.publishFeedback();
+    const target = SIGNAL_TARGETS[targetId];
+    this.showNotice(`海图标定 ${target.frequency} · ${target.name}`);
+    return true;
+  }
+
+  getDiagnostics(): {
+    destinationMaterialMaps: string;
+    destinationAudio: ReturnType<AudioSystem['getSignalDestinationAudioDiagnostics']>;
+    destinations: Array<{
+      id: SignalTargetId;
+      visible: boolean;
+      active: boolean;
+      visited: boolean;
+      distance: number | null;
+      meshCount: number;
+      modelName: string;
+      materialMaps: string;
+    }>;
+  } {
+    const chart = signalChartTelemetry(this.currentState());
+    return {
+      destinationMaterialMaps: [...this.signalDestinations.values()]
+        .map(({ visuals }) => `${visuals.targetId}:${visuals.materialMaps}`)
+        .join(';'),
+      destinationAudio: this.audio.getSignalDestinationAudioDiagnostics(),
+      destinations: chart.targets.map((target) => {
+        const runtime = this.signalDestinations.get(target.id)!;
+        return {
+          id: target.id,
+          visible: runtime.model.visible,
+          active: target.active,
+          visited: target.visited,
+          distance: target.distance === null ? null : Number(target.distance.toFixed(2)),
+          meshCount: runtime.meshCount,
+          modelName: runtime.model.name,
+          materialMaps: runtime.visuals.materialMaps,
+        };
+      }),
     };
   }
 
@@ -358,12 +427,16 @@ export class NavigationSystem {
     this.clearPrompt();
     this.audio.setSailActivity(0);
     this.audio.setReceiverActivity(0);
+    this.audio.setSignalDestinationActivity(null, 0, 0, false);
     for (const runtime of [...this.runtimes.values()]) this.removeRuntime(runtime);
     this.raft.group.remove(...Object.values(this.previews));
     Object.values(this.previews).forEach((preview) => this.disposeGroup(preview));
     Object.values(this.previewMaterials).forEach((material) => material.dispose());
-    this.scene.remove(this.signalBeacon);
-    this.disposeGroup(this.signalBeacon);
+    for (const { model } of this.signalDestinations.values()) {
+      this.scene.remove(model);
+      this.disposeGroup(model);
+    }
+    this.signalDestinations.clear();
   }
 
   private currentState(): SavedNavigationState {
@@ -634,30 +707,81 @@ export class NavigationSystem {
     });
   }
 
-  private updateSignalBeacon(time: number, delta: number): void {
-    const telemetry = signalTelemetry(this.currentState());
-    const visible = telemetry.online && telemetry.distance !== null && telemetry.distance <= 220 && telemetry.targetX !== null && telemetry.targetZ !== null;
-    this.signalBeacon.visible = visible;
-    if (!visible || telemetry.targetX === null || telemetry.targetZ === null) return;
-    const deltaX = telemetry.targetX - this.state.worldX;
-    const deltaZ = telemetry.targetZ - this.state.worldZ;
-    this.signalBeacon.position.set(
-      this.raft.group.position.x + deltaX,
-      0.12 + Math.sin(time * 0.84) * 0.1,
-      this.raft.group.position.z + deltaZ,
+  private updateSignalDestinations(time: number, delta: number): void {
+    const current = this.currentState();
+    const chart = signalChartTelemetry(current);
+    const receiverOnline = signalTelemetry(current).online;
+    for (const target of chart.targets) {
+      const runtime = this.signalDestinations.get(target.id)!;
+      const { model, visuals } = runtime;
+      const visible = target.discovered
+        && target.distance !== null
+        && target.distance <= SIGNAL_DESTINATION_VISIBILITY_METERS
+        && target.worldX !== null
+        && target.worldZ !== null;
+      model.visible = visible;
+      model.userData.destinationState = target.visited ? 'visited' : target.active ? 'active' : target.discovered ? 'discovered' : 'locked';
+      if (!visible || target.worldX === null || target.worldZ === null) continue;
+      const deltaX = target.worldX - current.worldX;
+      const deltaZ = target.worldZ - current.worldZ;
+      const phaseOffset = SIGNAL_TARGET_ORDER.indexOf(target.id) * 1.73;
+      model.position.set(
+        this.raft.group.position.x + deltaX,
+        0.08 + Math.sin(time * 0.74 + phaseOffset) * 0.075,
+        this.raft.group.position.z + deltaZ,
+      );
+      model.rotation.y = phaseOffset * 0.31 + Math.sin(time * 0.13 + phaseOffset) * 0.035;
+      visuals.floats.forEach((float, index) => {
+        float.rotation.z = Math.sin(time * 0.88 + phaseOffset + index * 2.1) * 0.035;
+        float.position.y = Math.sin(time * 1.02 + phaseOffset + index * 2.1) * 0.032;
+      });
+      visuals.rotors.forEach((rotor, index) => {
+        const speed = delta * (target.active && receiverOnline ? 0.72 : target.visited ? 0.38 : 0.18) * (index + 1);
+        if (target.id === 'ironChoir') rotor.rotation.z += speed;
+        else rotor.rotation.y += speed;
+      });
+      visuals.pendulums.forEach((pendulum, index) => {
+        pendulum.rotation.z = Math.sin(time * (0.62 + index * 0.035) + index * 1.27) * (target.active ? 0.19 : 0.08);
+        pendulum.rotation.x = Math.cos(time * 0.47 + index) * 0.035;
+      });
+      visuals.streamers.forEach((streamer, index) => {
+        streamer.rotation.y = index * Math.PI * 2 / Math.max(1, visuals.streamers.length)
+          + Math.sin(time * 0.42 + index) * 0.18;
+        streamer.rotation.z = Math.sin(time * 2.8 + index * 1.3) * (0.08 + this.metrics.stormIntensity * 0.12);
+      });
+      const pulsing = target.active && receiverOnline;
+      visuals.pulseRings.forEach((ring, index) => {
+        ring.visible = pulsing || target.visited;
+        const phase = (time * (pulsing ? 0.34 : 0.13) + index / visuals.pulseRings.length) % 1;
+        ring.scale.setScalar(0.62 + phase * (pulsing ? 2.5 : 1.1));
+        if (ring.material instanceof MeshBasicMaterial) {
+          ring.material.opacity = (1 - phase) ** 2 * (pulsing ? 0.34 : 0.1);
+        }
+      });
+      visuals.lightMaterials.forEach((material, index) => {
+        const activeIntensity = pulsing ? 1.05 + Math.sin(time * 5.1 + index) * 0.32 : target.visited ? 0.5 : 0.12;
+        material.emissiveIntensity = activeIntensity;
+        material.color.setHex(target.visited ? 0xefc35c : pulsing ? 0x79e1bd : 0x637a75);
+        material.emissive.copy(material.color);
+      });
+    }
+    const audibleTarget = chart.targets
+      .filter((target) => target.discovered && target.distance !== null && target.distance <= 145)
+      .sort((left, right) => left.distance! - right.distance!)[0];
+    if (!audibleTarget || audibleTarget.distance === null) {
+      this.audio.setSignalDestinationActivity(null, 0, 0, false);
+      return;
+    }
+    const proximity = MathUtils.clamp(1 - audibleTarget.distance / 145, 0, 1) ** 1.35;
+    this.camera.getWorldDirection(this.forward);
+    const listenerBearing = bearingTo(this.forward.x, this.forward.z);
+    const relativeBearing = shortestAngle(listenerBearing, audibleTarget.bearing ?? listenerBearing);
+    this.audio.setSignalDestinationActivity(
+      audibleTarget.id,
+      proximity,
+      Math.sin(relativeBearing),
+      audibleTarget.active && receiverOnline,
     );
-    this.signalBeacon.rotation.y = Math.sin(time * 0.17) * 0.08;
-    this.signalBeaconVisuals.rotor.rotation.y += delta * 0.48;
-    this.signalBeaconVisuals.floats.forEach((float, index) => {
-      float.rotation.z = Math.sin(time * 0.92 + index * 2.1) * 0.04;
-      float.position.y = Math.sin(time * 1.05 + index * 2.1) * 0.035;
-    });
-    this.signalBeaconVisuals.beaconMaterial.emissiveIntensity = 1.1 + Math.sin(time * 5.3) * 0.48;
-    this.signalBeaconVisuals.pulseRings.forEach((ring, index) => {
-      const phase = (time * 0.36 + index / this.signalBeaconVisuals.pulseRings.length) % 1;
-      ring.scale.setScalar(0.65 + phase * 2.25);
-      if (ring.material instanceof MeshBasicMaterial) ring.material.opacity = (1 - phase) ** 2 * 0.38;
-    });
   }
 
   private updatePlacementPreview(): void {
@@ -997,6 +1121,7 @@ export class NavigationSystem {
     const receiver = this.runtimes.get('receiver');
     const antenna = this.runtimes.get('antenna');
     const signal = signalTelemetry(this.currentState());
+    const chart = signalChartTelemetry(this.currentState());
     useGameStore.getState().setNavigation({
       windAngle: this.metrics.windAngle,
       courseAngle: this.metrics.effectiveCourse,
@@ -1024,11 +1149,16 @@ export class NavigationSystem {
       receiverOn: this.state.receiverOn,
       receiverCharge: this.state.receiverCharge,
       activeSignalName: signal.targetName,
+      activeSignalId: signal.targetId,
       activeSignalFrequency: signal.frequency,
       signalDistance: signal.distance,
       signalBearing: signal.bearing,
       discoveredSignals: signal.discovered,
       visitedSignals: signal.visited,
+      discoveredSignalIds: chart.targets.filter((target) => target.discovered).map((target) => target.id),
+      visitedSignalIds: chart.targets.filter((target) => target.visited).map((target) => target.id),
+      signalOriginX: chart.originX,
+      signalOriginZ: chart.originZ,
       worldX: this.state.worldX,
       worldZ: this.state.worldZ,
     });

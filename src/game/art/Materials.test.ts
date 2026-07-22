@@ -38,6 +38,8 @@ describe('asset texture loading', () => {
     expect(textures.saltsealedGlove.userData.sourcePath).toBe('/assets/textures/saltsealed-glove.webp');
     expect(textures.signalLaminate.userData.sourcePath).toBe('/assets/textures/signal-laminate.webp');
     expect(textures.phosphorGlass.userData.sourcePath).toBe('/assets/textures/phosphor-glass.webp');
+    expect(textures.choirBronze.userData.sourcePath).toBe('/assets/textures/iron-choir-resonant-bronze.webp');
+    expect(textures.stormCeramic.userData.sourcePath).toBe('/assets/textures/storm-needle-electret-ceramic.webp');
     expect(textures.stormClouds.userData.sourcePath).toBe('/assets/textures/storm-clouds.webp');
 
     const materials = createMaterialLibrary(textures);
@@ -52,6 +54,16 @@ describe('asset texture loading', () => {
     expect(materials.birdWing.map).toBe(textures.birdWing);
     expect(materials.birdBeak.map).toBe(textures.birdBeak);
     expect(materials.birdEye.map).toBe(textures.birdEye);
+    expect(materials.choirBronze).toMatchObject({
+      map: textures.choirBronze,
+      normalMap: textures.choirBronzeNormal,
+      roughnessMap: textures.choirBronzeRoughness,
+    });
+    expect(materials.stormCeramic).toMatchObject({
+      map: textures.stormCeramic,
+      normalMap: textures.stormCeramicNormal,
+      roughnessMap: textures.stormCeramicRoughness,
+    });
 
     const planter = createPlanterModel(materials);
     const bird = createSaltwingBirdModel(materials);

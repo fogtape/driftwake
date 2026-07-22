@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import { launchDriftwakeChromium, preparePlaywrightPlatform } from './browser-runtime.mjs';
 import { assertEncodedFrameContent, assertFrameContent } from './capture-utils.mjs';
 
@@ -804,6 +805,91 @@ const signalNetworkSave = {
   },
 };
 
+const signalDestinationOffsets = {
+  tideRelay: { x: 72, z: -138 },
+  ironChoir: { x: -236, z: -326 },
+  stormNeedle: { x: 382, z: -74 },
+};
+
+const signalDestinationOrder = ['tideRelay', 'ironChoir', 'stormNeedle'];
+
+function signalDestinationSave(targetId) {
+  const targetIndex = signalDestinationOrder.indexOf(targetId);
+  if (targetIndex < 0) throw new Error(`Unknown signal destination fixture: ${targetId}`);
+  const target = signalDestinationOffsets[targetId];
+  return {
+    ...signalNetworkSave,
+    version: 18,
+    player: {
+      ...signalNetworkSave.player,
+      inventory: { hook: 1 },
+      navigation: { surface: 'raft', x: 0, z: 1.28 },
+    },
+    raft: {
+      ...signalNetworkSave.raft,
+      navigation: {
+        ...signalNetworkSave.raft.navigation,
+        windClock: 28,
+        weatherClock: 28,
+        courseAngle: 0,
+        heading: 0,
+        routeMode: 'signal',
+        worldX: target.x,
+        worldZ: target.z + 22,
+        receiverOn: true,
+        receiverCharge: 310,
+        activeSignal: targetId,
+        signalOriginX: 0,
+        signalOriginZ: 0,
+        discoveredSignals: signalDestinationOrder.slice(0, targetIndex + 1),
+        visitedSignals: signalDestinationOrder.slice(0, targetIndex),
+        devices: signalNetworkSave.raft.navigation.devices.filter((device) => device.type === 'receiver' || device.type === 'antenna'),
+      },
+    },
+    world: {
+      ...signalNetworkSave.world,
+      island: { ...signalNetworkSave.world.island, phase: 'approaching', elapsed: 0 },
+    },
+  };
+}
+
+function signalDestinationInspectionSave(targetId) {
+  const targetIndex = signalDestinationOrder.indexOf(targetId);
+  const target = signalDestinationOffsets[targetId];
+  if (targetIndex < 0 || !target) throw new Error(`Unknown signal destination inspection fixture: ${targetId}`);
+  const base = signalDestinationSave(targetId);
+  return {
+    ...base,
+    raft: {
+      ...base.raft,
+      navigation: {
+        ...base.raft.navigation,
+        worldX: target.x,
+        worldZ: target.z + 10.5,
+        discoveredSignals: signalDestinationOrder.slice(0, Math.min(signalDestinationOrder.length, targetIndex + 2)),
+        visitedSignals: signalDestinationOrder.slice(0, targetIndex + 1),
+      },
+    },
+  };
+}
+
+function signalChartSave() {
+  const base = signalDestinationSave('ironChoir');
+  return {
+    ...base,
+    raft: {
+      ...base.raft,
+      navigation: {
+        ...base.raft.navigation,
+        routeMode: 'manual',
+        devices: signalNetworkSave.raft.navigation.devices.filter((device) => (
+          device.type === 'receiver' || device.type === 'antenna' || device.type === 'helm'
+        )),
+      },
+    },
+  };
+}
+
 const failureSave = {
   ...seededSave,
   version: 12,
@@ -1472,6 +1558,31 @@ async function enterGame(page) {
   await page.waitForTimeout(250);
 }
 
+async function exitPointerLockForOverlay(page, label) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const locked = await page.evaluate(() => Boolean(document.pointerLockElement));
+    if (!locked) return;
+    await page.bringToFront();
+    await page.keyboard.press('Escape').catch(() => undefined);
+    await page.evaluate(() => {
+      if (document.pointerLockElement) document.exitPointerLock();
+    });
+    const released = await page.waitForFunction(
+      () => document.pointerLockElement === null,
+      null,
+      { timeout: 4_000 },
+    ).then(() => true).catch(() => false);
+    if (released) return;
+  }
+  const diagnostic = await page.evaluate(() => ({
+    pointerLocked: Boolean(document.pointerLockElement),
+    focused: document.hasFocus(),
+    simulationActive: document.querySelector('.game-mount')?.dataset.simulationActive ?? 'missing',
+    pauseVisible: Boolean(document.querySelector('.focus-prompt')),
+  }));
+  throw new Error(`${label} failed to release Pointer Lock: ${JSON.stringify(diagnostic)}`);
+}
+
 async function ensurePointerLock(page) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const active = await page.evaluate(() => {
@@ -1488,7 +1599,39 @@ async function ensurePointerLock(page) {
       .then(() => true)
       .catch(() => false);
     if (resumeConnected) {
-      await resume.click({ force: true });
+      try {
+        const alreadyRestored = await page.evaluate(() => {
+          const canvas = document.querySelector('canvas');
+          return document.pointerLockElement === canvas
+            && document.querySelector('.game-mount')?.dataset.simulationActive === 'true';
+        });
+        if (alreadyRestored) return;
+        await resume.click({ force: true, timeout: 4_000 });
+      } catch (error) {
+        const restoredDuringClick = await page.evaluate(() => {
+          const canvas = document.querySelector('canvas');
+          return document.pointerLockElement === canvas
+            && document.querySelector('.game-mount')?.dataset.simulationActive === 'true';
+        }).catch(() => false);
+        if (restoredDuringClick) return;
+        const diagnostic = await page.evaluate(() => {
+          const button = document.querySelector('.focus-prompt__resume');
+          const mount = document.querySelector('.game-mount');
+          return {
+            visible: button ? getComputedStyle(button).visibility : 'missing',
+            display: button ? getComputedStyle(button).display : 'missing',
+            disabled: button instanceof HTMLButtonElement ? button.disabled : null,
+            rect: button?.getBoundingClientRect().toJSON?.() ?? null,
+            phase: mount?.dataset.phase ?? null,
+            simulationActive: mount?.dataset.simulationActive ?? null,
+            ready: mount?.dataset.ready ?? null,
+            contextHealthy: mount?.dataset.contextHealthy ?? null,
+            pointerLocked: Boolean(document.pointerLockElement),
+            overlay: Boolean(document.querySelector('.sea-chart-layer')),
+          };
+        }).catch(() => ({ evaluate: 'failed' }));
+        throw new Error(`Resume control was not actionable: ${error.message}; ${JSON.stringify(diagnostic)}`);
+      }
     } else {
       const exposedCanvasPoint = await page.evaluate(() => {
         const canvas = document.querySelector('canvas');
@@ -1919,16 +2062,153 @@ async function installNoticeHistory(page) {
   });
 }
 
-async function captureCompositedPage(page, path) {
-  const cdp = await page.context().newCDPSession(page);
-  const screenshot = await cdp.send('Page.captureScreenshot', {
-    format: 'png',
-    fromSurface: true,
-    captureBeyondViewport: false,
-    optimizeForSpeed: true,
+async function withCaptureTimeout(promise, label, timeout = 12_000) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeout}ms`)), timeout);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function captureVirtualDisplayPage(page, path, { refreshSurface = true } = {}) {
+  if (!process.env.DISPLAY) throw new Error('Virtual-display screenshot requested without DISPLAY');
+  await page.bringToFront();
+  const viewport = page.viewportSize();
+  if (refreshSurface && viewport && viewport.width > 2) {
+    // Chromium can retain the previous accelerated surface when only a DOM
+    // modal changes over a paused WebGL canvas. A one-pixel resize forces X11
+    // to composite the current overlay without changing the final viewport.
+    await page.setViewportSize({ width: viewport.width - 1, height: viewport.height });
+    await page.setViewportSize(viewport);
+  }
+  await page.evaluate(() => new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  }));
+  await page.waitForTimeout(180);
+  const metrics = await page.evaluate(() => ({
+    screenX: window.screenX,
+    screenY: window.screenY,
+    outerWidth: window.outerWidth,
+    outerHeight: window.outerHeight,
+    innerWidth: window.innerWidth,
+    innerHeight: window.innerHeight,
+  }));
+  const borderX = Math.max(0, Math.round((metrics.outerWidth - metrics.innerWidth) / 2));
+  const topInset = Math.max(0, metrics.outerHeight - metrics.innerHeight - borderX);
+  const x = Math.max(0, Math.round(metrics.screenX + borderX));
+  const y = Math.max(0, Math.round(metrics.screenY + topInset));
+  await new Promise((resolve, reject) => {
+    const child = spawn('scrot', [
+      '--display', process.env.DISPLAY,
+      '--autoselect', `${x},${y},${metrics.innerWidth},${metrics.innerHeight}`,
+      '--overwrite',
+      '--silent',
+      path,
+    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(new Error('scrot X11 screenshot timed out after 12000ms'));
+    }, 12_000);
+    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+    child.once('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once('exit', (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(`scrot exited ${code}: ${stderr.trim()}`));
+    });
   });
-  await cdp.detach();
-  await writeFile(path, Buffer.from(screenshot.data, 'base64'));
+  console.log(`X11 composited screenshot: ${JSON.stringify({ path, ...metrics, x, y })}`);
+}
+
+async function captureCompositedPage(page, path, { preferVirtualDisplay = false } = {}) {
+  if (preferVirtualDisplay && process.env.DISPLAY) {
+    await captureVirtualDisplayPage(page, path);
+    return;
+  }
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    const screenshot = await withCaptureTimeout(cdp.send('Page.captureScreenshot', {
+      format: 'png',
+      fromSurface: true,
+      captureBeyondViewport: false,
+      optimizeForSpeed: true,
+    }), 'CDP composited screenshot');
+    await writeFile(path, Buffer.from(screenshot.data, 'base64'));
+    return;
+  } catch (error) {
+    console.warn(`Composited screenshot fallback for ${path}: ${error.message}`);
+  } finally {
+    await withCaptureTimeout(cdp.detach(), 'CDP detach', 2_000).catch(() => undefined);
+  }
+  const previousVisibility = await page.evaluate(() => {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return null;
+    const previous = canvas.style.visibility;
+    canvas.style.visibility = 'hidden';
+    return previous;
+  });
+  try {
+    await page.screenshot({ path, timeout: 12_000, animations: 'disabled' });
+    return;
+  } catch (error) {
+    console.warn(`Playwright screenshot fallback for ${path}: ${error.message}`);
+  } finally {
+    await page.evaluate((previous) => {
+      const canvas = document.querySelector('canvas');
+      if (canvas && previous !== null) canvas.style.visibility = previous;
+    }, previousVisibility).catch(() => undefined);
+  }
+  await captureVirtualDisplayPage(page, path);
+}
+
+async function captureDomOverlayPage(page, path) {
+  const previous = await page.evaluate(() => {
+    const canvas = document.querySelector('canvas');
+    const mount = document.querySelector('.game-mount');
+    if (!canvas || !mount) return null;
+    const value = { mount: mount.style.background };
+    const parent = canvas.parentElement;
+    if (!parent) return null;
+    (globalThis).__driftwakeCaptureCanvas = { canvas, parent, nextSibling: canvas.nextSibling };
+    canvas.remove();
+    mount.style.background = '#07181c';
+    return value;
+  });
+  try {
+    if (process.env.DISPLAY) {
+      await page.evaluate(() => new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      }));
+      await page.waitForTimeout(240);
+      await captureVirtualDisplayPage(page, path, { refreshSurface: false });
+    } else {
+      await page.screenshot({ path, timeout: 15_000, animations: 'disabled' });
+    }
+  } finally {
+    if (previous) {
+      await page.evaluate((value) => {
+        const mount = document.querySelector('.game-mount');
+        if (mount) mount.style.background = value.mount;
+        const detached = (globalThis).__driftwakeCaptureCanvas;
+        if (detached?.canvas && detached.parent) {
+          detached.parent.insertBefore(detached.canvas, detached.nextSibling && detached.nextSibling.parentNode === detached.parent
+            ? detached.nextSibling
+            : null);
+        }
+        delete (globalThis).__driftwakeCaptureCanvas;
+      }, previous).catch(() => undefined);
+    }
+  }
 }
 
 async function inspectCanvasPixels(page, label) {
@@ -4903,6 +5183,370 @@ async function captureSignalNetwork() {
   if (process.env.CAPTURE_FAST !== '1') {
     await captureCompositedPage(page, new URL('signal-network-narrow.png', outputDir).pathname);
   }
+  await context.close();
+}
+
+const signalDestinationMeshMinimums = {
+  tideRelay: 45,
+  ironChoir: 90,
+  stormNeedle: 75,
+};
+
+const signalDestinationScreenshotNames = {
+  tideRelay: 'signal-destination-tide-relay-desktop.png',
+  ironChoir: 'signal-destination-iron-choir-desktop.png',
+  stormNeedle: 'signal-destination-storm-needle-desktop.png',
+};
+
+async function readSignalDestinationLayout(page) {
+  return page.evaluate(() => {
+    const box = (selector) => {
+      const rect = document.querySelector(selector)?.getBoundingClientRect();
+      return rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null;
+    };
+    return {
+      navigation: box('.navigation-readout'),
+      signal: box('.signal-readout.is-visible'),
+      actions: box('.hud-actions'),
+      hotbar: box('.hotbar'),
+      prompt: box('.interaction-prompt'),
+      viewport: { width: innerWidth, height: innerHeight },
+    };
+  });
+}
+
+function validateSignalDestinationLayout(layout, label) {
+  const overlaps = (first, second) => Boolean(
+    first
+    && second
+    && first.left < second.right
+    && first.right > second.left
+    && first.top < second.bottom
+    && first.bottom > second.top
+  );
+  const outsideViewport = (rect) => Boolean(
+    rect
+    && (rect.left < -1 || rect.top < -1 || rect.right > layout.viewport.width + 1 || rect.bottom > layout.viewport.height + 1)
+  );
+  if (
+    !layout.navigation
+    || !layout.signal
+    || !layout.actions
+    || !layout.hotbar
+    || [layout.navigation, layout.signal, layout.actions, layout.hotbar, layout.prompt].some(outsideViewport)
+    || overlaps(layout.navigation, layout.signal)
+    || overlaps(layout.navigation, layout.actions)
+    || overlaps(layout.signal, layout.actions)
+    || overlaps(layout.signal, layout.hotbar)
+    || overlaps(layout.prompt, layout.hotbar)
+  ) {
+    throw new Error(`${label} layout failed: ${JSON.stringify(layout)}`);
+  }
+}
+
+async function readSignalDestinationSnapshot(page) {
+  return page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    let destinations = [];
+    let destinationAudio = null;
+    try {
+      destinations = JSON.parse(data?.signalDestinations ?? '[]');
+    } catch {
+      destinations = [];
+    }
+    try {
+      destinationAudio = JSON.parse(data?.signalDestinationAudio ?? 'null');
+    } catch {
+      destinationAudio = null;
+    }
+    return {
+      destinations,
+      destinationAudio,
+      visible: data?.signalVisibleDestinations ?? 'missing',
+      materialMaps: data?.signalDestinationMaterialMaps ?? 'missing',
+      contextHealthy: data?.contextHealthy ?? 'missing',
+      simulationActive: data?.simulationActive ?? 'missing',
+      signalText: document.querySelector('.signal-readout')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    };
+  });
+}
+
+async function captureSignalDestination(targetId) {
+  const { context, page } = await openDesktopPage(`signal-destination-${targetId}`, {
+    seedSave: true,
+    customSave: signalDestinationSave(targetId),
+    simulationTimeScale: 0.2,
+    quality: 'high',
+    width: 1024,
+    height: 640,
+  });
+  await enterGame(page);
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    try {
+      const destinations = JSON.parse(data?.signalDestinations ?? '[]');
+      return destinations.some((destination) => destination.active && destination.visible);
+    } catch {
+      return false;
+    }
+  }, 16_000);
+  await setCaptureTimeScale(page, 0.0001);
+  await ensurePointerLock(page);
+  await assertHookVisualOwnership(page, `signal-destination-${targetId}`, 'held');
+  const pitch = targetId === 'stormNeedle' ? -52 : targetId === 'tideRelay' ? 18 : -12;
+  await page.evaluate((movementY) => {
+    const movement = new MouseEvent('mousemove');
+    Object.defineProperties(movement, {
+      movementX: { value: 0 },
+      movementY: { value: movementY },
+    });
+    document.dispatchEvent(movement);
+  }, pitch);
+  await page.waitForTimeout(500);
+  const snapshot = await readSignalDestinationSnapshot(page);
+  const target = snapshot.destinations.find((destination) => destination.id === targetId);
+  if (
+    !target
+    || !target.visible
+    || !target.active
+    || target.distance === null
+    || target.distance < 18
+    || target.distance > 30
+    || target.meshCount < signalDestinationMeshMinimums[targetId]
+    || target.modelName !== `signal-destination-${targetId === 'tideRelay' ? 'tide-relay' : targetId === 'ironChoir' ? 'iron-choir' : 'storm-needle'}`
+    || snapshot.contextHealthy !== 'true'
+    || snapshot.simulationActive !== 'true'
+    || target.materialMaps.includes('none')
+    || !target.materialMaps.includes('iron-choir-resonant-bronze-albedo')
+    || (targetId === 'stormNeedle' && !target.materialMaps.includes('storm-needle-electret-ceramic-albedo'))
+    || snapshot.destinationAudio?.targetId !== targetId
+    || snapshot.destinationAudio.layersReady !== true
+    || snapshot.destinationAudio.layerCount !== 3
+    || snapshot.destinationAudio.proximity < 0.6
+    || snapshot.destinationAudio.proximity > 1
+    || Math.abs(snapshot.destinationAudio.pan) > 1
+  ) {
+    throw new Error(`Signal destination contract failed for ${targetId}: ${JSON.stringify(snapshot)}`);
+  }
+  const layout = await readSignalDestinationLayout(page);
+  validateSignalDestinationLayout(layout, `signal-destination-${targetId}`);
+  const compositedFrame = await inspectCanvasPixels(page, `signal-destination-${targetId}`);
+  const screenshotPath = new URL(signalDestinationScreenshotNames[targetId], outputDir).pathname;
+  if (compositedFrame) await writeFile(screenshotPath, Buffer.from(compositedFrame, 'base64'));
+  else await captureCompositedPage(page, screenshotPath);
+  console.log(`Signal destination gate ${targetId}: ${JSON.stringify({ target, visible: snapshot.visible, layout })}`);
+  await context.close();
+}
+
+async function captureSignalDestinations() {
+  const requested = process.env.SIGNAL_DESTINATION_ID;
+  const targets = requested ? [requested] : signalDestinationOrder;
+  for (const targetId of targets) {
+    if (!signalDestinationOrder.includes(targetId)) throw new Error(`Unknown SIGNAL_DESTINATION_ID: ${targetId}`);
+    await captureSignalDestination(targetId);
+  }
+}
+
+async function captureSignalDestinationMaterial(targetId) {
+  const { context, page } = await openDesktopPage(`signal-destination-material-${targetId}`, {
+    seedSave: true,
+    customSave: signalDestinationInspectionSave(targetId),
+    simulationTimeScale: 0.15,
+    quality: 'high',
+    width: 1024,
+    height: 640,
+  });
+  await enterGame(page);
+  await waitForRuntime(page, () => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    try {
+      const destinations = JSON.parse(data?.signalDestinations ?? '[]');
+      return destinations.some((destination) => destination.active && destination.visible && destination.visited);
+    } catch {
+      return false;
+    }
+  }, 16_000);
+  await setCaptureTimeScale(page, 0.0001);
+  await ensurePointerLock(page);
+  await assertHookVisualOwnership(page, `signal-destination-material-${targetId}`, 'held');
+  await page.evaluate((movementY) => {
+    const movement = new MouseEvent('mousemove');
+    Object.defineProperties(movement, {
+      movementX: { value: 0 },
+      movementY: { value: movementY },
+    });
+    document.dispatchEvent(movement);
+  }, targetId === 'stormNeedle' ? -112 : -42);
+  await page.waitForTimeout(600);
+  const snapshot = await readSignalDestinationSnapshot(page);
+  const target = snapshot.destinations.find((destination) => destination.id === targetId);
+  if (
+    !target
+    || !target.visible
+    || !target.active
+    || !target.visited
+    || target.distance === null
+    || target.distance < 8
+    || target.distance > 13
+    || target.materialMaps.includes('none')
+    || !target.materialMaps.includes('iron-choir-resonant-bronze-albedo')
+    || (targetId === 'stormNeedle' && !target.materialMaps.includes('storm-needle-electret-ceramic-albedo'))
+    || snapshot.destinationAudio?.targetId !== targetId
+    || snapshot.destinationAudio.layersReady !== true
+    || snapshot.destinationAudio.layerCount !== 3
+    || snapshot.contextHealthy !== 'true'
+    || snapshot.simulationActive !== 'true'
+  ) {
+    throw new Error(`Signal destination material contract failed for ${targetId}: ${JSON.stringify(snapshot)}`);
+  }
+  const layout = await readSignalDestinationLayout(page);
+  validateSignalDestinationLayout(layout, `signal-destination-material-${targetId}`);
+  const compositedFrame = await inspectCanvasPixels(page, `signal-destination-material-${targetId}`);
+  const slug = targetId === 'ironChoir' ? 'iron-choir' : 'storm-needle';
+  const screenshotPath = new URL(`signal-destination-${slug}-materials-desktop.png`, outputDir).pathname;
+  if (compositedFrame) await writeFile(screenshotPath, Buffer.from(compositedFrame, 'base64'));
+  else await captureCompositedPage(page, screenshotPath);
+  console.log(`Signal destination material gate ${targetId}: ${JSON.stringify({ target, audio: snapshot.destinationAudio, layout })}`);
+  await context.close();
+}
+
+async function captureSignalDestinationMaterials() {
+  const requested = process.env.SIGNAL_DESTINATION_MATERIAL_ID;
+  const targets = requested ? [requested] : ['ironChoir', 'stormNeedle'];
+  for (const targetId of targets) {
+    if (targetId !== 'ironChoir' && targetId !== 'stormNeedle') {
+      throw new Error(`Unknown SIGNAL_DESTINATION_MATERIAL_ID: ${targetId}`);
+    }
+    await captureSignalDestinationMaterial(targetId);
+  }
+}
+
+async function captureSignalChart() {
+  const { context, page } = await openDesktopPage('signal-chart', {
+    seedSave: true,
+    customSave: signalChartSave(),
+    simulationTimeScale: 0.2,
+    quality: 'high',
+    width: 1024,
+    height: 640,
+  });
+  await enterGame(page);
+  await exitPointerLockForOverlay(page, 'signal-chart');
+  await page.getByRole('button', { name: '继续漂流' }).waitFor({ state: 'visible', timeout: 8_000 });
+  const chartButton = page.locator('.focus-prompt').getByRole('button', { name: '打开潮痕航海图' });
+  await chartButton.waitFor({ state: 'visible', timeout: 8_000 });
+  await chartButton.click({ force: true, timeout: 12_000 });
+  const chart = page.getByRole('dialog', { name: '潮痕航海图' });
+  await chart.waitFor({ state: 'visible', timeout: 12_000 });
+  const initial = await page.evaluate(() => {
+    const locked = document.querySelector('.sea-chart__ledger li.is-locked');
+    return {
+      markerCount: document.querySelectorAll('.sea-chart__marker').length,
+      ledgerCount: document.querySelectorAll('.sea-chart__ledger li').length,
+      lockedCount: document.querySelectorAll('.sea-chart__ledger li.is-locked').length,
+      lockedText: locked?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      activeText: document.querySelector('.sea-chart__ledger li.is-active')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      routeText: document.querySelector('.sea-chart__status span')?.textContent?.trim() ?? '',
+    };
+  });
+  if (
+    initial.markerCount !== 2
+    || initial.ledgerCount !== 3
+    || initial.lockedCount !== 1
+    || !initial.lockedText.includes('--.-- MHz')
+    || initial.lockedText.includes('89.06')
+    || initial.lockedText.includes('风针观测标')
+    || initial.activeText !== ''
+    || initial.routeText !== '自由航向'
+  ) {
+    throw new Error(`Signal chart discovery gate failed: ${JSON.stringify(initial)}`);
+  }
+  await chart.locator('.sea-chart__ledger').getByRole('button', { name: '标定潮痕中继站' }).click({ force: true });
+  await waitForRuntime(
+    page,
+    () => document.querySelector('.sea-chart__ledger li.is-active')?.textContent?.includes('潮痕中继站'),
+    8_000,
+  );
+  const layout = await page.evaluate(() => {
+    const box = (selector) => {
+      const rect = document.querySelector(selector)?.getBoundingClientRect();
+      return rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height } : null;
+    };
+    const clipped = [...document.querySelectorAll('.sea-chart button, .sea-chart h2, .sea-chart h3')]
+      .filter((element) => element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1)
+      .map((element) => element.getAttribute('aria-label') || element.textContent?.trim() || element.tagName);
+    return {
+      panel: box('.sea-chart'),
+      plot: box('.sea-chart__plot'),
+      ledger: box('.sea-chart__ledger'),
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      bodyWidth: document.body.scrollWidth,
+      clipped,
+      activeText: document.querySelector('.sea-chart__ledger li.is-active')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      signalText: document.querySelector('.signal-readout')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      routeText: document.querySelector('.sea-chart__status span')?.textContent?.trim() ?? '',
+    };
+  });
+  if (
+    !layout.panel
+    || !layout.plot
+    || !layout.ledger
+    || layout.panel.left < -1
+    || layout.panel.top < -1
+    || layout.panel.right > layout.viewport.width + 1
+    || layout.panel.bottom > layout.viewport.height + 1
+    || layout.plot.right > layout.ledger.left + 1
+    || layout.bodyWidth > layout.viewport.width + 2
+    || layout.clipped.length > 0
+    || !layout.activeText.includes('潮痕中继站')
+    || !layout.signalText.includes('73.14')
+    || layout.routeText !== '追踪信号'
+  ) {
+    throw new Error(`Signal chart layout/selection gate failed: ${JSON.stringify(layout)}`);
+  }
+  await captureDomOverlayPage(page, new URL('signal-chart-desktop.png', outputDir).pathname);
+  await page.setViewportSize({ width: 640, height: 720 });
+  await page.waitForTimeout(250);
+  const narrow = await page.evaluate(() => {
+    const box = (selector) => {
+      const rect = document.querySelector(selector)?.getBoundingClientRect();
+      return rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null;
+    };
+    return {
+      panel: box('.sea-chart'),
+      plot: box('.sea-chart__plot'),
+      ledger: box('.sea-chart__ledger'),
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      bodyWidth: document.body.scrollWidth,
+      clipped: [...document.querySelectorAll('.sea-chart button, .sea-chart h2, .sea-chart h3')]
+        .filter((element) => element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1)
+        .map((element) => element.getAttribute('aria-label') || element.textContent?.trim() || element.tagName),
+    };
+  });
+  if (
+    !narrow.panel
+    || !narrow.plot
+    || !narrow.ledger
+    || narrow.panel.left < -1
+    || narrow.panel.top < -1
+    || narrow.panel.right > narrow.viewport.width + 1
+    || narrow.panel.bottom > narrow.viewport.height + 1
+    || narrow.plot.bottom > narrow.ledger.top + 1
+    || narrow.bodyWidth > narrow.viewport.width + 2
+    || narrow.clipped.length > 0
+  ) {
+    throw new Error(`Signal chart narrow gate failed: ${JSON.stringify(narrow)}`);
+  }
+  if (process.env.CAPTURE_FAST !== '1') {
+    await captureDomOverlayPage(page, new URL('signal-chart-narrow.png', outputDir).pathname);
+  }
+  await page.getByRole('button', { name: '关闭航海图' }).click({ force: true });
+  const resumeButton = page.getByRole('button', { name: '继续漂流' });
+  await resumeButton.waitFor({ state: 'visible', timeout: 12_000 });
+  await resumeButton.click({ force: true });
+  await ensurePointerLock(page);
+  await assertHookVisualOwnership(page, 'signal-chart-resumed', 'held');
+  console.log(`Signal chart gate: ${JSON.stringify({ initial, layout, narrow })}`);
   await context.close();
 }
 
@@ -8133,6 +8777,9 @@ try {
   if (captureOnly === 'all' || captureOnly === 'cooking') await captureCooking();
   if (captureOnly === 'all' || captureOnly === 'advanced') await captureAdvancedDevices();
   if (captureOnly === 'all' || captureOnly === 'signal') await captureSignalNetwork();
+  if (captureOnly === 'all' || captureOnly === 'signal-m8' || captureOnly === 'signal-destinations') await captureSignalDestinations();
+  if (captureOnly === 'all' || captureOnly === 'signal-m8' || captureOnly === 'signal-destination-materials') await captureSignalDestinationMaterials();
+  if (captureOnly === 'all' || captureOnly === 'signal-m8' || captureOnly === 'signal-chart') await captureSignalChart();
   if (captureOnly === 'all' || captureOnly === 'planting' || captureOnly === 'planting-placement') await capturePlantingPlacement();
   if (captureOnly === 'all' || captureOnly === 'planting' || captureOnly === 'planting-interaction') await capturePlantingInteraction();
   if (captureOnly === 'all' || captureOnly === 'planting' || captureOnly === 'planting-weather') await capturePlantingWeather();

@@ -34,7 +34,7 @@ import type { DeviceType } from './domain/devices';
 import { SAVE_VERSION, createDefaultRaftTiles, loadSave, writeSave, type DriftwakeSave } from './domain/save';
 import { createDefaultIslandState } from './domain/island';
 import { createDefaultUnderwaterState } from './domain/underwater';
-import { createDefaultNavigationState } from './domain/navigation';
+import { createDefaultNavigationState, type SignalTargetId } from './domain/navigation';
 import { createDefaultPlantingState } from './domain/planting';
 import { createDefaultProgressionState, type ProgressionDeviceType } from './domain/progression';
 import { createDefaultSharkState } from './domain/shark';
@@ -774,6 +774,13 @@ export class DriftwakeGame {
     return this.build?.selectBuildCategory(category) ?? false;
   }
 
+  selectSignalTarget(targetId: SignalTargetId): boolean {
+    const selected = this.navigation?.selectSignalTarget(targetId) ?? false;
+    if (selected) this.saveNow();
+    else this.audio.playDenied();
+    return selected;
+  }
+
   notifyCraftQueued(count: number, success: boolean): void {
     if (!success) {
       this.audio.playDenied();
@@ -981,6 +988,16 @@ export class DriftwakeGame {
     }
     this.devices?.update(simulationSeconds, stepSeconds);
     this.navigation?.update(simulationSeconds, stepSeconds);
+    const navigationDiagnostics = this.navigation?.getDiagnostics();
+    if (navigationDiagnostics) {
+      this.mount.dataset.signalDestinationMaterialMaps = navigationDiagnostics.destinationMaterialMaps;
+      this.mount.dataset.signalDestinations = JSON.stringify(navigationDiagnostics.destinations);
+      this.mount.dataset.signalDestinationAudio = JSON.stringify(navigationDiagnostics.destinationAudio);
+      this.mount.dataset.signalVisibleDestinations = navigationDiagnostics.destinations
+        .filter((destination) => destination.visible)
+        .map((destination) => destination.id)
+        .join('|') || 'none';
+    }
     this.planting?.update(simulationSeconds, stepSeconds);
     const plantingDiagnostics = this.planting?.getDiagnostics();
     if (plantingDiagnostics) {

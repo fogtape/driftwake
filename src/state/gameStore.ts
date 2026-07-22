@@ -40,7 +40,7 @@ import {
 } from '../game/domain/failure';
 import type { DeviceType } from '../game/domain/devices';
 import type { IslandPhase } from '../game/domain/island';
-import type { NavigationDeviceType, NavigationRouteMode, NavigationWeatherPhase, SignalArrayStatus } from '../game/domain/navigation';
+import type { NavigationDeviceType, NavigationRouteMode, NavigationWeatherPhase, SignalArrayStatus, SignalTargetId } from '../game/domain/navigation';
 import type { PlayerSurface } from '../game/domain/save';
 import type { CameraMotionMode } from '../game/domain/settings';
 import type { SharkAttackPhase } from '../game/domain/shark';
@@ -71,7 +71,7 @@ import {
 
 export type GamePhase = 'title' | 'playing' | 'failed';
 export type QualityPreset = 'low' | 'high';
-export type OverlayPanel = 'pack' | 'crafting' | 'research' | 'storage' | null;
+export type OverlayPanel = 'pack' | 'crafting' | 'research' | 'storage' | 'chart' | null;
 export type FishingPhase = 'idle' | 'casting' | 'waiting' | 'nibble' | 'hooked' | 'caught' | 'lost';
 export type SharkMode = 'distant' | 'circling' | 'approaching' | 'attacking' | 'retreating' | 'carcass';
 export type PlacementType = DeviceType | NavigationDeviceType | ProgressionDeviceType | 'planter' | 'collectionNet';
@@ -225,12 +225,17 @@ export interface NavigationFeedback {
   signalArrayStatus: SignalArrayStatus;
   receiverOn: boolean;
   receiverCharge: number;
+  activeSignalId: SignalTargetId | null;
   activeSignalName: string | null;
   activeSignalFrequency: string | null;
   signalDistance: number | null;
   signalBearing: number | null;
   discoveredSignals: number;
   visitedSignals: number;
+  discoveredSignalIds: SignalTargetId[];
+  visitedSignalIds: SignalTargetId[];
+  signalOriginX: number | null;
+  signalOriginZ: number | null;
   worldX: number;
   worldZ: number;
 }
@@ -443,12 +448,17 @@ function defaultNavigation(): NavigationFeedback {
     signalArrayStatus: 'missing-receiver',
     receiverOn: false,
     receiverCharge: 0,
+    activeSignalId: null,
     activeSignalName: null,
     activeSignalFrequency: null,
     signalDistance: null,
     signalBearing: null,
     discoveredSignals: 0,
     visitedSignals: 0,
+    discoveredSignalIds: [],
+    visitedSignalIds: [],
+    signalOriginX: null,
+    signalOriginZ: null,
     worldX: 0,
     worldZ: 0,
   };

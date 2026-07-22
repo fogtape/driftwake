@@ -44,6 +44,26 @@ export function shouldShowHeldHook(state: HookState, equipped: boolean): boolean
   return equipped && (state === 'idle' || state === 'charging');
 }
 
+export interface HookPointerDownGate {
+  button: number;
+  enabled: boolean;
+  equipped: boolean;
+  state: HookState;
+  pointerLocked: boolean;
+  now: number;
+  armedAt: number;
+}
+
+/** Keeps a pointer-lock transition from turning the resume click into a cast. */
+export function shouldBeginHookCast(input: HookPointerDownGate): boolean {
+  return input.button === 0
+    && input.enabled
+    && input.equipped
+    && input.state === 'idle'
+    && input.pointerLocked
+    && input.now >= input.armedAt;
+}
+
 export class HookSystem {
   private readonly handsRig: SalvageHandsRig;
   private readonly projectile: Group;
@@ -65,6 +85,7 @@ export class HookSystem {
   private noticeTimer: number | null = null;
   private enabled = false;
   private equipped = false;
+  private inputArmedAt = Number.POSITIVE_INFINITY;
 
   constructor(
     private readonly renderer: WebGLRenderer,
@@ -97,8 +118,16 @@ export class HookSystem {
   }
 
   setEnabled(enabled: boolean): void {
+    if (enabled && !this.enabled) {
+      // Pointer Lock may dispatch a mouse event from the gesture that acquired it.
+      // Keep casting disarmed until the resume gesture has fully settled.
+      this.inputArmedAt = performance.now() + 140;
+    }
     this.enabled = enabled;
-    if (!enabled && this.state === 'charging') this.reset();
+    if (!enabled) {
+      this.inputArmedAt = Number.POSITIVE_INFINITY;
+      if (this.state !== 'idle') this.reset();
+    }
   }
 
   setEquipped(equipped: boolean): void {
@@ -269,7 +298,15 @@ export class HookSystem {
   }
 
   private readonly onPointerDown = (event: MouseEvent): void => {
-    if (event.button !== 0 || !this.enabled || !this.equipped || this.state !== 'idle') return;
+    if (!shouldBeginHookCast({
+      button: event.button,
+      enabled: this.enabled,
+      equipped: this.equipped,
+      state: this.state,
+      pointerLocked: document.pointerLockElement === this.renderer.domElement,
+      now: performance.now(),
+      armedAt: this.inputArmedAt,
+    })) return;
     this.state = 'charging';
     this.charge = 0;
     this.syncHeldVisibility();
@@ -277,7 +314,7 @@ export class HookSystem {
 
   private readonly onPointerUp = (event: MouseEvent): void => {
     if (event.button !== 0 || this.state !== 'charging') return;
-    if (!this.enabled) {
+    if (!this.enabled || document.pointerLockElement !== this.renderer.domElement) {
       this.reset();
       return;
     }

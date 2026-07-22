@@ -15,10 +15,13 @@ import {
   reinforceNavigationSail,
   reinforceNavigationAnchor,
   sanitizeNavigationState,
+  selectSignalTarget,
   signalArrayStatus,
+  signalChartTelemetry,
   signalTelemetry,
   shortestAngle,
   toggleReceiverPower,
+  type SignalTargetId,
 } from './navigation';
 
 describe('raft navigation', () => {
@@ -181,6 +184,39 @@ describe('raft navigation', () => {
     expect(cycleNavigationRoute('shelter', true)).toBe('signal');
   });
 
+  it('builds a chart from the saved signal origin without revealing locked coordinates', () => {
+    const state = {
+      ...createDefaultNavigationState(),
+      worldX: 80,
+      worldZ: -120,
+      signalOriginX: 8,
+      signalOriginZ: 18,
+      activeSignal: 'ironChoir' as const,
+      discoveredSignals: ['tideRelay', 'ironChoir'] as SignalTargetId[],
+      visitedSignals: ['tideRelay'] as SignalTargetId[],
+    };
+    const chart = signalChartTelemetry(state);
+    expect(chart).toMatchObject({ originX: 8, originZ: 18, raftX: 80, raftZ: -120, complete: false });
+    expect(chart.targets[0]).toMatchObject({ id: 'tideRelay', worldX: 80, worldZ: -120, visited: true });
+    expect(chart.targets[1]).toMatchObject({ id: 'ironChoir', worldX: -228, worldZ: -308, active: true });
+    expect(chart.targets[1].distance).toBeCloseTo(Math.hypot(308, 188));
+    expect(chart.targets[2]).toMatchObject({
+      id: 'stormNeedle',
+      discovered: false,
+      name: null,
+      frequency: null,
+      summary: null,
+      unlock: null,
+      worldX: null,
+      worldZ: null,
+      distance: null,
+      bearing: null,
+    });
+    expect(selectSignalTarget(state, 'tideRelay')).toMatchObject({ activeSignal: 'tideRelay', routeMode: 'signal' });
+    expect(selectSignalTarget({ ...state, routeMode: 'manual' }, 'ironChoir')).toMatchObject({ activeSignal: 'ironChoir', routeMode: 'signal' });
+    expect(selectSignalTarget(state, 'stormNeedle')).toBe(state);
+  });
+
   it('sanitizes forged signal state and drops signal steering when the array is invalid', () => {
     const state = sanitizeNavigationState({
       worldX: Infinity,
@@ -200,8 +236,20 @@ describe('raft navigation', () => {
       receiverCharge: 360,
       routeMode: 'manual',
       activeSignal: 'tideRelay',
-      discoveredSignals: ['tideRelay'],
-      visitedSignals: ['tideRelay'],
+      discoveredSignals: [],
+      visitedSignals: [],
     });
+
+    const skipped = sanitizeNavigationState({
+      signalOriginX: 4,
+      signalOriginZ: -6,
+      activeSignal: 'stormNeedle',
+      discoveredSignals: ['tideRelay', 'stormNeedle', 'ironChoir'],
+      visitedSignals: ['tideRelay', 'stormNeedle'],
+      devices: [],
+    });
+    expect(skipped.discoveredSignals).toEqual(['tideRelay', 'ironChoir']);
+    expect(skipped.visitedSignals).toEqual(['tideRelay']);
+    expect(skipped.activeSignal).toBe('tideRelay');
   });
 });

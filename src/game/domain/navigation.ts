@@ -12,19 +12,46 @@ export interface SignalTargetDefinition {
   frequency: string;
   offsetX: number;
   offsetZ: number;
+  summary: string;
+  unlock: string;
 }
 
 export const SIGNAL_TARGET_ORDER: readonly SignalTargetId[] = ['tideRelay', 'ironChoir', 'stormNeedle'];
 export const SIGNAL_TARGETS: Record<SignalTargetId, SignalTargetDefinition> = {
-  tideRelay: { id: 'tideRelay', name: '潮痕中继站', frequency: '73.14', offsetX: 72, offsetZ: -138 },
-  ironChoir: { id: 'ironChoir', name: '铁歌漂流阵', frequency: '41.82', offsetX: -236, offsetZ: -326 },
-  stormNeedle: { id: 'stormNeedle', name: '风针观测标', frequency: '89.06', offsetX: 382, offsetZ: -74 },
+  tideRelay: {
+    id: 'tideRelay',
+    name: '潮痕中继站',
+    frequency: '73.14',
+    offsetX: 72,
+    offsetZ: -138,
+    summary: '三联浮舱托起旧式转子，仍在向西南折射低频潮汐脉冲。',
+    unlock: '抵达后解码铁歌漂流阵',
+  },
+  ironChoir: {
+    id: 'ironChoir',
+    name: '铁歌漂流阵',
+    frequency: '41.82',
+    offsetX: -236,
+    offsetZ: -326,
+    summary: '海风驱动五组谐振铜腔，用长周期金属回声记录洋流偏移。',
+    unlock: '抵达后解码风针观测标',
+  },
+  stormNeedle: {
+    id: 'stormNeedle',
+    name: '风针观测标',
+    frequency: '89.06',
+    offsetX: 382,
+    offsetZ: -74,
+    summary: '高空风笼与电驻陶瓷沿塔身排列，持续记录飑线转折与雷暴电势。',
+    unlock: '抵达后完成远海信号链',
+  },
 };
 
 export const RECEIVER_CELL_SECONDS = 360;
 export const SIGNAL_ARRAY_MIN_TILES = 2;
 export const SIGNAL_ARRAY_MAX_TILES = 6;
 export const SIGNAL_REACH_METERS = 18;
+export const SIGNAL_DESTINATION_VISIBILITY_METERS = 360;
 
 export interface SavedNavigationDevice {
   id: string;
@@ -68,6 +95,30 @@ export interface SignalTelemetry {
   targetZ: number | null;
   discovered: number;
   visited: number;
+}
+
+export interface SignalChartTarget {
+  id: SignalTargetId;
+  name: string | null;
+  frequency: string | null;
+  summary: string | null;
+  unlock: string | null;
+  discovered: boolean;
+  visited: boolean;
+  active: boolean;
+  worldX: number | null;
+  worldZ: number | null;
+  distance: number | null;
+  bearing: number | null;
+}
+
+export interface SignalChartTelemetry {
+  originX: number | null;
+  originZ: number | null;
+  raftX: number;
+  raftZ: number;
+  targets: SignalChartTarget[];
+  complete: boolean;
 }
 
 export interface NavigationMetrics {
@@ -199,13 +250,44 @@ export function signalArrayStatus(state: Pick<SavedNavigationState, 'devices'>):
   return 'ready';
 }
 
-function signalWorldPosition(
+export function signalWorldPosition(
   state: Pick<SavedNavigationState, 'signalOriginX' | 'signalOriginZ'>,
   targetId: SignalTargetId,
 ): { x: number; z: number } | null {
   if (state.signalOriginX === null || state.signalOriginZ === null) return null;
   const target = SIGNAL_TARGETS[targetId];
   return { x: state.signalOriginX + target.offsetX, z: state.signalOriginZ + target.offsetZ };
+}
+
+export function signalChartTelemetry(state: SavedNavigationState): SignalChartTelemetry {
+  return {
+    originX: state.signalOriginX,
+    originZ: state.signalOriginZ,
+    raftX: state.worldX,
+    raftZ: state.worldZ,
+    targets: SIGNAL_TARGET_ORDER.map((id) => {
+      const definition = SIGNAL_TARGETS[id];
+      const discovered = state.discoveredSignals.includes(id);
+      const position = discovered ? signalWorldPosition(state, id) : null;
+      const deltaX = position ? position.x - state.worldX : 0;
+      const deltaZ = position ? position.z - state.worldZ : 0;
+      return {
+        id,
+        name: discovered ? definition.name : null,
+        frequency: discovered ? definition.frequency : null,
+        summary: discovered ? definition.summary : null,
+        unlock: discovered ? definition.unlock : null,
+        discovered,
+        visited: state.visitedSignals.includes(id),
+        active: discovered && state.activeSignal === id,
+        worldX: position?.x ?? null,
+        worldZ: position?.z ?? null,
+        distance: position ? Math.hypot(deltaX, deltaZ) : null,
+        bearing: position ? bearingTo(deltaX, deltaZ) : null,
+      };
+    }),
+    complete: SIGNAL_TARGET_ORDER.every((id) => state.visitedSignals.includes(id)),
+  };
 }
 
 export function signalTelemetry(state: SavedNavigationState): SignalTelemetry {
@@ -260,6 +342,12 @@ export function cycleSignalTarget(state: SavedNavigationState, reverse = false):
   const direction = reverse ? -1 : 1;
   const next = (index + direction + state.discoveredSignals.length) % state.discoveredSignals.length;
   return { ...state, activeSignal: state.discoveredSignals[next] };
+}
+
+export function selectSignalTarget(state: SavedNavigationState, targetId: SignalTargetId): SavedNavigationState {
+  if (!state.discoveredSignals.includes(targetId)) return state;
+  if (state.activeSignal === targetId && state.routeMode === 'signal') return state;
+  return { ...state, activeSignal: targetId, routeMode: 'signal' };
 }
 
 export function createDefaultNavigationState(): SavedNavigationState {
@@ -354,12 +442,27 @@ export function sanitizeNavigationState(value: unknown): SavedNavigationState {
     ? finiteWorld(candidate.signalOriginZ)
     : null;
   const hasOrigin = originX !== null && originZ !== null;
-  const discoveredSignals = Array.isArray(candidate.discoveredSignals)
-    ? [...new Set(candidate.discoveredSignals.filter(isSignalTargetId))]
-    : [];
-  const visitedSignals = Array.isArray(candidate.visitedSignals)
-    ? [...new Set(candidate.visitedSignals.filter(isSignalTargetId))].filter((id) => discoveredSignals.includes(id))
-    : [];
+  const rawDiscovered = new Set(
+    hasOrigin && Array.isArray(candidate.discoveredSignals)
+      ? candidate.discoveredSignals.filter(isSignalTargetId)
+      : [],
+  );
+  const discoveredPrefix: SignalTargetId[] = [];
+  for (const id of SIGNAL_TARGET_ORDER) {
+    if (!rawDiscovered.has(id)) break;
+    discoveredPrefix.push(id);
+  }
+  const rawVisited = new Set(
+    Array.isArray(candidate.visitedSignals)
+      ? candidate.visitedSignals.filter(isSignalTargetId)
+      : [],
+  );
+  const visitedSignals: SignalTargetId[] = [];
+  for (const id of discoveredPrefix) {
+    if (!rawVisited.has(id)) break;
+    visitedSignals.push(id);
+  }
+  const discoveredSignals = discoveredPrefix.slice(0, visitedSignals.length + 1);
   const activeSignal = isSignalTargetId(candidate.activeSignal) && discoveredSignals.includes(candidate.activeSignal)
     ? candidate.activeSignal
     : discoveredSignals[0] ?? 'tideRelay';
