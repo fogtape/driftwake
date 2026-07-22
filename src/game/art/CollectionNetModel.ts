@@ -110,9 +110,9 @@ export function createCollectionNetModel(materials: MaterialLibrary): Group {
   for (const side of [-1, 1]) {
     const arm = mesh(braceGeometry, materials.darkWood, [side * 0.56, -0.045, -1.02], [-0.105, 0, 0]);
     arm.scale.set(0.075, 0.075, 0.92);
-    const clamp = mesh(braceGeometry, materials.rustMetal, [side * 0.53, 0.02, -0.49]);
+    const clamp = mesh(braceGeometry, materials.structureFastener, [side * 0.53, 0.02, -0.49]);
     clamp.scale.set(0.13, 0.075, 0.16);
-    const peg = mesh(pegGeometry, materials.rustMetal, [side * 0.53, 0.095, -0.49]);
+    const peg = mesh(pegGeometry, materials.structureFastener, [side * 0.53, 0.095, -0.49]);
     peg.scale.set(0.04, 0.055, 0.04);
     const sideLash = mesh(new TorusGeometry(0.075, 0.014, 5, 10), materials.rope, [side * 0.55, -0.01, -0.6], [Math.PI / 2, 0, 0]);
     darkWoodParts.push(arm);
@@ -122,7 +122,7 @@ export function createCollectionNetModel(materials: MaterialLibrary): Group {
   root.add(
     mergeParts(darkWoodParts, materials.darkWood, 'collection-net-dark-wood-frame'),
     outerRail,
-    mergeParts(metalParts, materials.rustMetal, 'collection-net-edge-clamps'),
+    mergeParts(metalParts, materials.structureFastener, 'collection-net-edge-clamps'),
     mergeParts(fixedRopeParts, materials.rope, 'collection-net-fixed-lashings'),
   );
 
@@ -200,6 +200,20 @@ export function createCollectionNetModel(materials: MaterialLibrary): Group {
   root.add(fullMarker);
 
   root.userData.collectionNetVisuals = { netBed, cargoMarkers, wearRopes, fullMarker } satisfies CollectionNetModelVisuals;
+  root.userData.materialMaps = [
+    ['wood', materials.wood[1]],
+    ['darkWood', materials.darkWood],
+    ['fastener', materials.structureFastener],
+    ['rope', materials.rope],
+    ['polymer', materials.polymer],
+  ].flatMap(([role, material]) => {
+    const surface = material as MeshStandardMaterial;
+    return [
+      `${role}:albedo=${surface.map?.name ?? 'none'}`,
+      `${role}:normal=${surface.normalMap?.name ?? 'none'}`,
+      `${role}:roughness=${surface.roughnessMap?.name ?? 'none'}`,
+    ];
+  }).join('|');
   return root;
 }
 

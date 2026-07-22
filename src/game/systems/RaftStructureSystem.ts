@@ -109,17 +109,50 @@ function hashText(value: string): number {
   return hash >>> 0;
 }
 
+type CrosscutAxis = 0 | 1 | 2;
+
+interface CrosscutSelection {
+  index: number;
+  axis: CrosscutAxis;
+}
+
+function dominantAxis(scale: StructurePart['scale']): CrosscutAxis {
+  if (scale[0] >= scale[1] && scale[0] >= scale[2]) return 0;
+  return scale[1] >= scale[2] ? 1 : 2;
+}
+
+function selectCrosscutPart(parts: readonly StructurePart[], structureId: string): CrosscutSelection | null {
+  const candidates = parts
+    .map((part, index) => ({ part, index, axis: dominantAxis(part.scale) }))
+    .filter(({ part }) => (
+      part.geometry === 'box'
+      && (part.material === 'wood' || part.material === 'woodAlt' || part.material === 'darkWood')
+      && Math.max(...part.scale) >= 0.45
+    ));
+  if (candidates.length === 0) return null;
+  const plankCandidates = candidates.filter(({ part }) => part.material === 'wood' || part.material === 'woodAlt');
+  const selectedPool = plankCandidates.length > 0 ? plankCandidates : candidates;
+  const selected = selectedPool[hashText(`${structureId}:crosscut`) % selectedPool.length];
+  return { index: selected.index, axis: selected.axis };
+}
+
 export class RaftStructureSystem {
   readonly group = new Group();
   private readonly structures = new Map<string, SavedRaftStructure>();
   private readonly buckets = new Map<BucketKey, StructureBucket>();
+  private readonly materialMap: Record<StructurePartMaterial, MeshStandardMaterial>;
   private readonly boxGeometry = new BoxGeometry(1, 1, 1);
   private readonly cylinderGeometry = new CylinderGeometry(0.5, 0.5, 1, 8);
+  private readonly damageCaps: InstancedMesh;
   private readonly baseMatrix = new Matrix4();
   private readonly partMatrix = new Matrix4();
+  private readonly damageCapMatrix = new Matrix4();
   private readonly worldMatrix = new Matrix4();
   private readonly partPosition = new Vector3();
   private readonly partScale = new Vector3();
+  private readonly damageCapPosition = new Vector3();
+  private readonly damageCapScale = new Vector3();
+  private readonly damageCapOffset = new Vector3();
   private readonly partQuaternion = new Quaternion();
   private readonly partEuler = new Euler();
   private readonly up = new Vector3(0, 1, 0);
@@ -163,7 +196,21 @@ export class RaftStructureSystem {
     private readonly onDoorToggled: (open: boolean) => void = () => undefined,
   ) {
     this.group.name = 'raft-structures';
-    this.createBuckets(materials);
+    this.materialMap = {
+      wood: materials.wood[0],
+      woodAlt: materials.wood[1] ?? materials.wood[0],
+      darkWood: materials.darkWood,
+      rope: materials.rope,
+      metal: materials.structureFastener,
+      fiber: materials.wovenFiber,
+    };
+    this.damageCaps = new InstancedMesh(this.boxGeometry, materials.splinteredWood, MAX_RAFT_STRUCTURES);
+    this.damageCaps.name = 'raft-structure-exposed-crosscuts';
+    this.damageCaps.instanceMatrix.setUsage(DynamicDrawUsage);
+    this.damageCaps.castShadow = true;
+    this.damageCaps.receiveShadow = true;
+    this.group.add(this.damageCaps);
+    this.createBuckets();
     for (const structure of savedStructures.slice(0, MAX_RAFT_STRUCTURES)) {
       this.structures.set(structure.id, { ...structure });
       const suffix = Number.parseInt(structure.id.split('-').at(-1) ?? '', 36);
@@ -180,6 +227,31 @@ export class RaftStructureSystem {
 
   get currentRevision(): number {
     return this.revision;
+  }
+
+  get exposedCrosscutCount(): number {
+    return this.damageCaps.count;
+  }
+
+  getMaterialMapNames(): string[] {
+    const materials = [
+      ['wood', this.materialMap.wood],
+      ['darkWood', this.materialMap.darkWood],
+      ['rope', this.materialMap.rope],
+      ['fastener', this.materialMap.metal],
+      ['fiber', this.materialMap.fiber],
+      ['crosscut', this.damageCaps.material as MeshStandardMaterial],
+    ] as const;
+    return materials.flatMap(([role, material]) => {
+      const region = typeof material.userData.pbrAtlasRegion === 'string'
+        ? material.userData.pbrAtlasRegion
+        : 'direct';
+      return [
+        `${role}[${region}]:albedo=${material.map?.name ?? 'none'}`,
+        `${role}[${region}]:normal=${material.normalMap?.name ?? 'none'}`,
+        `${role}[${region}]:roughness=${material.roughnessMap?.name ?? 'none'}`,
+      ];
+    });
   }
 
   getSavedStructures(): SavedRaftStructure[] {
@@ -522,15 +594,7 @@ export class RaftStructureSystem {
     this.structures.clear();
   }
 
-  private createBuckets(materials: MaterialLibrary): void {
-    const materialMap: Record<StructurePartMaterial, MeshStandardMaterial> = {
-      wood: materials.wood[0],
-      woodAlt: materials.wood[1] ?? materials.wood[0],
-      darkWood: materials.darkWood,
-      rope: materials.rope,
-      metal: materials.rustMetal,
-      fiber: materials.wovenFiber,
-    };
+  private createBuckets(): void {
     const keys = new Set<BucketKey>();
     for (const type of Object.keys(RAFT_STRUCTURE_DEFINITIONS) as RaftStructureType[]) {
       for (const part of [...createRaftStructureParts(type, false), ...createRaftStructureParts(type, true)]) {
@@ -540,7 +604,7 @@ export class RaftStructureSystem {
     for (const key of keys) {
       const [geometryName, materialName] = key.split(':') as [StructurePartGeometry, StructurePartMaterial];
       const geometry = geometryName === 'box' ? this.boxGeometry : this.cylinderGeometry;
-      const mesh = new InstancedMesh(geometry, materialMap[materialName], MAX_PARTS_PER_BUCKET);
+      const mesh = new InstancedMesh(geometry, this.materialMap[materialName], MAX_PARTS_PER_BUCKET);
       mesh.name = `raft-structure-${key}`;
       mesh.instanceMatrix.setUsage(DynamicDrawUsage);
       mesh.castShadow = true;
@@ -553,6 +617,7 @@ export class RaftStructureSystem {
 
   private rebuildInstances(): void {
     for (const bucket of this.buckets.values()) bucket.count = 0;
+    let damageCapCount = 0;
     const structures = [...this.structures.values()].sort(
       (a, b) => a.level - b.level || a.z - b.z || a.x - b.x || a.id.localeCompare(b.id),
     );
@@ -563,8 +628,10 @@ export class RaftStructureSystem {
       const healthRatio = Math.max(0, Math.min(1, structure.health / definition.maxHealth));
       const damageStage = raftStructureDamageStage(structure);
       const variation = ((hashText(structure.id) % 9) - 4) * 0.008;
+      const parts = createRaftStructureParts(structure.type, structure.open === true);
+      const crosscut = damageStage === 'critical' ? selectCrosscutPart(parts, structure.id) : null;
       let partIndex = 0;
-      for (const part of createRaftStructureParts(structure.type, structure.open === true)) {
+      for (const part of parts) {
         const bucket = this.buckets.get(bucketKey(part));
         if (!bucket || bucket.count >= MAX_PARTS_PER_BUCKET) continue;
         this.partPosition.fromArray(part.position);
@@ -574,8 +641,27 @@ export class RaftStructureSystem {
           part.rotation?.[1] ?? 0,
           part.rotation?.[2] ?? 0,
         );
+        const crosscutAxis = partIndex === crosscut?.index ? crosscut.axis : null;
         this.applyDamagePresentation(structure, part, partIndex, healthRatio, damageStage, variation);
         this.partQuaternion.setFromEuler(this.partEuler);
+        if (crosscutAxis !== null && damageCapCount < MAX_RAFT_STRUCTURES) {
+          const originalLength = this.partScale.getComponent(crosscutAxis);
+          const shortenedLength = originalLength * 0.76;
+          const removedHalf = (originalLength - shortenedLength) * 0.5;
+          this.damageCapOffset.set(0, 0, 0).setComponent(crosscutAxis, -removedHalf)
+            .applyQuaternion(this.partQuaternion);
+          this.partPosition.add(this.damageCapOffset);
+          this.partScale.setComponent(crosscutAxis, shortenedLength);
+
+          this.damageCapOffset.set(0, 0, 0).setComponent(crosscutAxis, shortenedLength * 0.5 + 0.009)
+            .applyQuaternion(this.partQuaternion);
+          this.damageCapPosition.copy(this.partPosition).add(this.damageCapOffset);
+          this.damageCapScale.copy(this.partScale).multiplyScalar(1.035).setComponent(crosscutAxis, 0.045);
+          this.damageCapMatrix.compose(this.damageCapPosition, this.partQuaternion, this.damageCapScale);
+          this.worldMatrix.multiplyMatrices(this.baseMatrix, this.damageCapMatrix);
+          this.damageCaps.setMatrixAt(damageCapCount, this.worldMatrix);
+          damageCapCount += 1;
+        }
         this.partMatrix.compose(this.partPosition, this.partQuaternion, this.partScale);
         this.worldMatrix.multiplyMatrices(this.baseMatrix, this.partMatrix);
         bucket.mesh.setMatrixAt(bucket.count, this.worldMatrix);
@@ -590,6 +676,9 @@ export class RaftStructureSystem {
       if (bucket.mesh.instanceColor) bucket.mesh.instanceColor.needsUpdate = true;
       bucket.mesh.computeBoundingSphere();
     }
+    this.damageCaps.count = damageCapCount;
+    this.damageCaps.instanceMatrix.needsUpdate = true;
+    this.damageCaps.computeBoundingSphere();
     this.revision += 1;
   }
 
@@ -620,10 +709,6 @@ export class RaftStructureSystem {
     this.partPosition.y -= damage * (structure.type === 'floor' || structure.type === 'roof' ? 0.045 : 0.018);
     this.partEuler.z += lateral * 0.085;
     this.partEuler.x += depth * 0.045;
-    if (stage === 'critical' && seed % 13 === 0 && part.material !== 'metal') {
-      this.partScale.y *= 0.76;
-      this.partPosition.y -= 0.028;
-    }
   }
 
   private setBaseTransform(structure: Pick<SavedRaftStructure, 'type' | 'x' | 'z' | 'level' | 'rotation'>): void {

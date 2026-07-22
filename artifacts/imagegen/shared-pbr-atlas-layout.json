@@ -1,0 +1,168 @@
+{
+  "version": 2,
+  "atlasSize": [
+    4096,
+    3072
+  ],
+  "cellSize": 1024,
+  "gutter": 32,
+  "coreSize": 960,
+  "columns": 4,
+  "rows": 3,
+  "regions": {
+    "brine-reef-rock": {
+      "index": 0,
+      "column": 0,
+      "row": 0,
+      "sourceDirectory": "artifacts/imagegen/underwater-pbr",
+      "uvOffset": [
+        0.0078125,
+        0.6770833333333334
+      ],
+      "uvScale": [
+        0.234375,
+        0.3125
+      ]
+    },
+    "ember-branch-coral": {
+      "index": 1,
+      "column": 1,
+      "row": 0,
+      "sourceDirectory": "artifacts/imagegen/underwater-pbr",
+      "uvOffset": [
+        0.2578125,
+        0.6770833333333334
+      ],
+      "uvScale": [
+        0.234375,
+        0.3125
+      ]
+    },
+    "tidecrown-pale-coral": {
+      "index": 2,
+      "column": 2,
+      "row": 0,
+      "sourceDirectory": "artifacts/imagegen/underwater-pbr",
+      "uvOffset": [
+        0.5078125,
+        0.6770833333333334
+      ],
+      "uvScale": [
+        0.234375,
+        0.3125
+      ]
+    },
+    "long-ribbon-seaweed": {
+      "index": 3,
+      "column": 3,
+      "row": 0,
+      "sourceDirectory": "artifacts/imagegen/underwater-pbr",
+      "uvOffset": [
+        0.7578125,
+        0.6770833333333334
+      ],
+      "uvScale": [
+        0.234375,
+        0.3125
+      ]
+    },
+    "saltcrust-metal-ore": {
+      "index": 4,
+      "column": 0,
+      "row": 1,
+      "sourceDirectory": "artifacts/imagegen/underwater-pbr",
+      "uvOffset": [
+        0.0078125,
+        0.34375
+      ],
+      "uvScale": [
+        0.234375,
+        0.3125
+      ]
+    },
+    "tide-red-reef-clay": {
+      "index": 5,
+      "column": 1,
+      "row": 1,
+      "sourceDirectory": "artifacts/imagegen/underwater-pbr",
+      "uvOffset": [
+        0.2578125,
+        0.34375
+      ],
+      "uvScale": [
+        0.234375,
+        0.3125
+      ]
+    },
+    "saltcrown-reef-fish-skin": {
+      "index": 6,
+      "column": 2,
+      "row": 1,
+      "sourceDirectory": "artifacts/imagegen/underwater-pbr",
+      "uvOffset": [
+        0.5078125,
+        0.34375
+      ],
+      "uvScale": [
+        0.234375,
+        0.3125
+      ]
+    },
+    "stormbrace-fastener-alloy": {
+      "index": 7,
+      "column": 3,
+      "row": 1,
+      "sourceDirectory": "artifacts/imagegen/structure-pbr",
+      "uvOffset": [
+        0.7578125,
+        0.34375
+      ],
+      "uvScale": [
+        0.234375,
+        0.3125
+      ]
+    },
+    "stormscar-cedar-crosscut": {
+      "index": 8,
+      "column": 0,
+      "row": 2,
+      "sourceDirectory": "artifacts/imagegen/structure-pbr",
+      "uvOffset": [
+        0.0078125,
+        0.010416666666666666
+      ],
+      "uvScale": [
+        0.234375,
+        0.3125
+      ]
+    },
+    "brineworn-tool-steel": {
+      "index": 9,
+      "column": 1,
+      "row": 2,
+      "sourceDirectory": "artifacts/imagegen/shared-pbr-sources",
+      "uvOffset": [
+        0.2578125,
+        0.010416666666666666
+      ],
+      "uvScale": [
+        0.234375,
+        0.3125
+      ]
+    },
+    "navigation-alloy": {
+      "index": 10,
+      "column": 2,
+      "row": 2,
+      "sourceDirectory": "artifacts/imagegen/shared-pbr-sources",
+      "uvOffset": [
+        0.5078125,
+        0.010416666666666666
+      ],
+      "uvScale": [
+        0.234375,
+        0.3125
+      ]
+    }
+  }
+}

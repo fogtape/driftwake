@@ -71,7 +71,7 @@ export class RaftSystem {
   private revision = 0;
   private heading = 0;
 
-  constructor(materials: MaterialLibrary, savedTiles: readonly SavedRaftTile[]) {
+  constructor(private readonly materials: MaterialLibrary, savedTiles: readonly SavedRaftTile[]) {
     this.group.name = 'player-raft';
     const plankGeometry = new RoundedBoxGeometry(1.36, 0.16, 0.42, 3, 0.035);
     const beamGeometry = new BoxGeometry(1.45, 0.1, 0.085);
@@ -82,9 +82,9 @@ export class RaftSystem {
       (material) => new InstancedMesh(plankGeometry, material, MAX_TILES * 3),
     );
     this.beams = new InstancedMesh(beamGeometry, materials.darkWood, MAX_TILES * 2);
-    this.nails = new InstancedMesh(nailGeometry, materials.rustMetal, MAX_TILES * 4);
+    this.nails = new InstancedMesh(nailGeometry, materials.structureFastener, MAX_TILES * 4);
     this.reinforcementRails = new InstancedMesh(reinforcementRailGeometry, materials.navigationAlloy, MAX_TILES * 4);
-    this.reinforcementCorners = new InstancedMesh(reinforcementCornerGeometry, materials.rustMetal, MAX_TILES * 4);
+    this.reinforcementCorners = new InstancedMesh(reinforcementCornerGeometry, materials.structureFastener, MAX_TILES * 4);
     for (const mesh of [
       ...this.plankMeshes,
       this.beams,
@@ -208,6 +208,23 @@ export class RaftSystem {
       health: Math.round(health),
       reinforced,
     }));
+  }
+
+  getDefenseMaterialMapNames(): string[] {
+    const materials = [
+      ['rail', this.materials.navigationAlloy],
+      ['fastener', this.materials.structureFastener],
+    ] as const;
+    return materials.flatMap(([role, material]) => {
+      const region = typeof material.userData.pbrAtlasRegion === 'string'
+        ? material.userData.pbrAtlasRegion
+        : 'direct';
+      return [
+        `${role}[${region}]:albedo=${material.map?.name ?? 'none'}`,
+        `${role}[${region}]:normal=${material.normalMap?.name ?? 'none'}`,
+        `${role}[${region}]:roughness=${material.roughnessMap?.name ?? 'none'}`,
+      ];
+    });
   }
 
   canAddTile(coordinate: GridCoordinate): boolean {

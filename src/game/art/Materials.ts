@@ -53,9 +53,6 @@ export interface AssetTextures {
   tideboundRigging: Texture;
   tideboundRiggingNormal: Texture;
   tideboundRiggingRoughness: Texture;
-  brinewornToolSteel: Texture;
-  brinewornToolSteelNormal: Texture;
-  brinewornToolSteelRoughness: Texture;
   islandStone: Texture;
   islandStoneNormal: Texture;
   islandStoneRoughness: Texture;
@@ -70,8 +67,8 @@ export interface AssetTextures {
   tidefruitSkinRoughness: Texture;
   shoreGround: Texture;
   shoreGroundNormal: Texture;
-  underwaterPbrAtlas: Texture;
-  underwaterPbrNormalAtlas: Texture;
+  sharedPbrAtlas: Texture;
+  sharedPbrNormalAtlas: Texture;
   reefSeabed: Texture;
   reefSeabedNormal: Texture;
   reefSeabedRoughness: Texture;
@@ -105,9 +102,6 @@ export interface AssetTextures {
   refractoryClay: Texture;
   refractoryClayNormal: Texture;
   refractoryClayRoughness: Texture;
-  navigationAlloy: Texture;
-  navigationAlloyNormal: Texture;
-  navigationAlloyRoughness: Texture;
   saltglassCollector: Texture;
   saltglassCollectorNormal: Texture;
   saltglassCollectorRoughness: Texture;
@@ -166,6 +160,8 @@ export interface MaterialLibrary {
   ore: MeshStandardMaterial;
   clay: MeshStandardMaterial;
   reefFish: MeshStandardMaterial;
+  structureFastener: MeshStandardMaterial;
+  splinteredWood: MeshStandardMaterial;
   reefCaustic: MeshBasicMaterial;
   sailCloth: MeshStandardMaterial;
   planterSoil: MeshStandardMaterial;
@@ -230,9 +226,6 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     tideboundRigging,
     tideboundRiggingNormal,
     tideboundRiggingRoughness,
-    brinewornToolSteel,
-    brinewornToolSteelNormal,
-    brinewornToolSteelRoughness,
     islandStone,
     islandStoneNormal,
     islandStoneRoughness,
@@ -247,8 +240,8 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     tidefruitSkinRoughness,
     shoreGround,
     shoreGroundNormal,
-    underwaterPbrAtlas,
-    underwaterPbrNormalAtlas,
+    sharedPbrAtlas,
+    sharedPbrNormalAtlas,
     reefSeabed,
     reefSeabedNormal,
     reefSeabedRoughness,
@@ -282,9 +275,6 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     refractoryClay,
     refractoryClayNormal,
     refractoryClayRoughness,
-    navigationAlloy,
-    navigationAlloyNormal,
-    navigationAlloyRoughness,
     saltglassCollector,
     saltglassCollectorNormal,
     saltglassCollectorRoughness,
@@ -348,9 +338,6 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/tidebound-rigging.webp'),
     loader.loadAsync('/assets/textures/tidebound-rigging-normal.webp'),
     loader.loadAsync('/assets/textures/tidebound-rigging-roughness.webp'),
-    loader.loadAsync('/assets/textures/brineworn-tool-steel.webp'),
-    loader.loadAsync('/assets/textures/brineworn-tool-steel-normal.webp'),
-    loader.loadAsync('/assets/textures/brineworn-tool-steel-roughness.webp'),
     loader.loadAsync('/assets/textures/stormwashed-island-stone.webp'),
     loader.loadAsync('/assets/textures/stormwashed-island-stone-normal.webp'),
     loader.loadAsync('/assets/textures/stormwashed-island-stone-roughness.webp'),
@@ -365,8 +352,8 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/tidefruit-skin-roughness.webp'),
     loader.loadAsync('/assets/textures/saltcrown-shore-ground-packed.webp'),
     loader.loadAsync('/assets/textures/saltcrown-shore-ground-normal.webp'),
-    loader.loadAsync('/assets/textures/saltcrown-underwater-pbr-atlas.webp'),
-    loader.loadAsync('/assets/textures/saltcrown-underwater-pbr-normal-atlas.webp'),
+    loader.loadAsync('/assets/textures/saltcrown-shared-pbr-atlas.webp'),
+    loader.loadAsync('/assets/textures/saltcrown-shared-pbr-normal-atlas.webp'),
     loader.loadAsync('/assets/textures/reef-seabed.webp'),
     loader.loadAsync('/assets/textures/reef-seabed-normal.webp'),
     loader.loadAsync('/assets/textures/reef-seabed-roughness.webp'),
@@ -400,9 +387,6 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/refractory-clay.webp'),
     loader.loadAsync('/assets/textures/refractory-clay-normal.webp'),
     loader.loadAsync('/assets/textures/refractory-clay-roughness.webp'),
-    loader.loadAsync('/assets/textures/navigation-alloy.webp'),
-    loader.loadAsync('/assets/textures/navigation-alloy-normal.webp'),
-    loader.loadAsync('/assets/textures/navigation-alloy-roughness.webp'),
     loader.loadAsync('/assets/textures/saltglass-collector.webp'),
     loader.loadAsync('/assets/textures/saltglass-collector-normal.webp'),
     loader.loadAsync('/assets/textures/saltglass-collector-roughness.webp'),
@@ -462,9 +446,6 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     [tideboundRigging, 'tidebound-rigging-albedo'],
     [tideboundRiggingNormal, 'tidebound-rigging-normal'],
     [tideboundRiggingRoughness, 'tidebound-rigging-roughness'],
-    [brinewornToolSteel, 'brineworn-tool-steel-albedo'],
-    [brinewornToolSteelNormal, 'brineworn-tool-steel-normal'],
-    [brinewornToolSteelRoughness, 'brineworn-tool-steel-roughness'],
     [islandStone, 'stormwashed-island-stone-albedo'],
     [islandStoneNormal, 'stormwashed-island-stone-normal'],
     [islandStoneRoughness, 'stormwashed-island-stone-roughness'],
@@ -479,8 +460,8 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     [tidefruitSkinRoughness, 'tidefruit-skin-roughness'],
     [shoreGround, 'saltcrown-shore-ground-packed'],
     [shoreGroundNormal, 'saltcrown-shore-ground-normal'],
-    [underwaterPbrAtlas, 'saltcrown-underwater-pbr-atlas'],
-    [underwaterPbrNormalAtlas, 'saltcrown-underwater-pbr-normal-atlas'],
+    [sharedPbrAtlas, 'saltcrown-shared-pbr-atlas'],
+    [sharedPbrNormalAtlas, 'saltcrown-shared-pbr-normal-atlas'],
     [cropLeaf, 'salt-crown-leaf-albedo'],
     [cropLeafNormal, 'salt-crown-leaf-normal'],
     [cropLeafRoughness, 'salt-crown-leaf-roughness'],
@@ -555,16 +536,6 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   tideboundRiggingNormal.colorSpace = NoColorSpace;
   tideboundRiggingRoughness.colorSpace = NoColorSpace;
 
-  for (const texture of [brinewornToolSteel, brinewornToolSteelNormal, brinewornToolSteelRoughness]) {
-    texture.wrapS = RepeatWrapping;
-    texture.wrapT = RepeatWrapping;
-    texture.repeat.set(1.55, 1.45);
-    texture.anisotropy = anisotropy;
-  }
-  brinewornToolSteel.colorSpace = SRGBColorSpace;
-  brinewornToolSteelNormal.colorSpace = NoColorSpace;
-  brinewornToolSteelRoughness.colorSpace = NoColorSpace;
-
   const islandMaterialSets = [
     [islandStone, islandStoneNormal, islandStoneRoughness, 1.65, 1.55],
     [palmBark, palmBarkNormal, palmBarkRoughness, 1.05, 1.05],
@@ -591,10 +562,10 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   shoreGround.colorSpace = SRGBColorSpace;
   shoreGroundNormal.colorSpace = NoColorSpace;
 
-  underwaterPbrAtlas.colorSpace = SRGBColorSpace;
-  underwaterPbrNormalAtlas.colorSpace = NoColorSpace;
-  underwaterPbrAtlas.anisotropy = anisotropy;
-  underwaterPbrNormalAtlas.anisotropy = anisotropy;
+  sharedPbrAtlas.colorSpace = SRGBColorSpace;
+  sharedPbrNormalAtlas.colorSpace = NoColorSpace;
+  sharedPbrAtlas.anisotropy = anisotropy;
+  sharedPbrNormalAtlas.anisotropy = anisotropy;
 
   const fishSkinSets = [
     [silverSpineSkin, silverSpineSkinNormal, silverSpineSkinRoughness],
@@ -715,16 +686,6 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   refractoryClayNormal.colorSpace = NoColorSpace;
   refractoryClayRoughness.colorSpace = NoColorSpace;
 
-  for (const texture of [navigationAlloy, navigationAlloyNormal, navigationAlloyRoughness]) {
-    texture.wrapS = RepeatWrapping;
-    texture.wrapT = RepeatWrapping;
-    texture.repeat.set(1.7, 1.45);
-    texture.anisotropy = anisotropy;
-  }
-  navigationAlloy.colorSpace = SRGBColorSpace;
-  navigationAlloyNormal.colorSpace = NoColorSpace;
-  navigationAlloyRoughness.colorSpace = NoColorSpace;
-
   for (const texture of [saltglassCollector, saltglassCollectorNormal, saltglassCollectorRoughness]) {
     texture.wrapS = RepeatWrapping;
     texture.wrapT = RepeatWrapping;
@@ -842,9 +803,6 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     tideboundRigging,
     tideboundRiggingNormal,
     tideboundRiggingRoughness,
-    brinewornToolSteel,
-    brinewornToolSteelNormal,
-    brinewornToolSteelRoughness,
     islandStone,
     islandStoneNormal,
     islandStoneRoughness,
@@ -859,8 +817,8 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     tidefruitSkinRoughness,
     shoreGround,
     shoreGroundNormal,
-    underwaterPbrAtlas,
-    underwaterPbrNormalAtlas,
+    sharedPbrAtlas,
+    sharedPbrNormalAtlas,
     reefSeabed,
     reefSeabedNormal,
     reefSeabedRoughness,
@@ -894,9 +852,6 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     refractoryClay,
     refractoryClayNormal,
     refractoryClayRoughness,
-    navigationAlloy,
-    navigationAlloyNormal,
-    navigationAlloyRoughness,
     saltglassCollector,
     saltglassCollectorNormal,
     saltglassCollectorRoughness,
@@ -955,48 +910,72 @@ interface PbrAtlasRegion {
   repeat: readonly [number, number];
 }
 
-const UNDERWATER_ATLAS_REGIONS = {
+const SHARED_ATLAS_REGIONS = {
   reefRock: {
     name: 'brine-reef-rock',
-    offset: [0.0078125, 0.515625],
-    scale: [0.234375, 0.46875],
+    offset: [0.0078125, 0.6770833],
+    scale: [0.234375, 0.3125],
     repeat: [1.35, 1.35],
   },
   coralWarm: {
     name: 'ember-branch-coral',
-    offset: [0.2578125, 0.515625],
-    scale: [0.234375, 0.46875],
+    offset: [0.2578125, 0.6770833],
+    scale: [0.234375, 0.3125],
     repeat: [1, 1.35],
   },
   coralPale: {
     name: 'tidecrown-pale-coral',
-    offset: [0.5078125, 0.515625],
-    scale: [0.234375, 0.46875],
+    offset: [0.5078125, 0.6770833],
+    scale: [0.234375, 0.3125],
     repeat: [1, 1.35],
   },
   seaweed: {
     name: 'long-ribbon-seaweed',
-    offset: [0.7578125, 0.515625],
-    scale: [0.234375, 0.46875],
+    offset: [0.7578125, 0.6770833],
+    scale: [0.234375, 0.3125],
     repeat: [0.75, 1.15],
   },
   ore: {
     name: 'saltcrust-metal-ore',
-    offset: [0.0078125, 0.015625],
-    scale: [0.234375, 0.46875],
+    offset: [0.0078125, 0.34375],
+    scale: [0.234375, 0.3125],
     repeat: [1.25, 1.25],
   },
   clay: {
     name: 'tide-red-reef-clay',
-    offset: [0.2578125, 0.015625],
-    scale: [0.234375, 0.46875],
+    offset: [0.2578125, 0.34375],
+    scale: [0.234375, 0.3125],
     repeat: [1.15, 1.15],
   },
   reefFish: {
     name: 'saltcrown-reef-fish-skin',
-    offset: [0.5078125, 0.015625],
-    scale: [0.234375, 0.46875],
+    offset: [0.5078125, 0.34375],
+    scale: [0.234375, 0.3125],
     repeat: [1.35, 1],
+  },
+  structureFastener: {
+    name: 'stormbrace-fastener-alloy',
+    offset: [0.7578125, 0.34375],
+    scale: [0.234375, 0.3125],
+    repeat: [1.35, 1.35],
+  },
+  splinteredWood: {
+    name: 'stormscar-cedar-crosscut',
+    offset: [0.0078125, 0.0104167],
+    scale: [0.234375, 0.3125],
+    repeat: [1.1, 1.1],
+  },
+  toolSteel: {
+    name: 'brineworn-tool-steel',
+    offset: [0.2578125, 0.0104167],
+    scale: [0.234375, 0.3125],
+    repeat: [1.55, 1.45],
+  },
+  navigationAlloy: {
+    name: 'navigation-alloy',
+    offset: [0.5078125, 0.0104167],
+    scale: [0.234375, 0.3125],
+    repeat: [1.7, 1.45],
   },
 } as const satisfies Record<string, PbrAtlasRegion>;
 
@@ -1031,7 +1010,7 @@ function usePackedPbrAtlas(material: MeshStandardMaterial, region: PbrAtlasRegio
       'roughnessFactor *= texelRoughness.a;',
     );
   };
-  material.customProgramCacheKey = () => `driftwake-underwater-pbr-atlas-v1:${region.name}:${repeatX}:${repeatY}`;
+  material.customProgramCacheKey = () => `driftwake-shared-pbr-atlas-v2:${region.name}:${repeatX}:${repeatY}`;
   material.userData.pbrAtlasRegion = region.name;
   material.userData.pbrAtlasOffset = [...region.offset];
   material.userData.pbrAtlasScale = [...region.scale];
@@ -1064,24 +1043,24 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       roughnessMap: textures.tideboundRiggingRoughness,
       roughness: 0.98,
     }),
-    metal: new MeshStandardMaterial({
+    metal: usePackedPbrAtlas(new MeshStandardMaterial({
       color: 0xf0f5f0,
-      map: textures.brinewornToolSteel,
-      normalMap: textures.brinewornToolSteelNormal,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
       normalScale: new Vector2(0.5, 0.5),
-      roughnessMap: textures.brinewornToolSteelRoughness,
+      roughnessMap: textures.sharedPbrAtlas,
       roughness: 0.48,
       metalness: 0.72,
-    }),
-    rustMetal: new MeshStandardMaterial({
+    }), SHARED_ATLAS_REGIONS.toolSteel),
+    rustMetal: usePackedPbrAtlas(new MeshStandardMaterial({
       color: 0xefc2ae,
-      map: textures.brinewornToolSteel,
-      normalMap: textures.brinewornToolSteelNormal,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
       normalScale: new Vector2(0.58, 0.58),
-      roughnessMap: textures.brinewornToolSteelRoughness,
+      roughnessMap: textures.sharedPbrAtlas,
       roughness: 0.62,
       metalness: 0.54,
-    }),
+    }), SHARED_ATLAS_REGIONS.toolSteel),
     polymer: new MeshStandardMaterial({
       color: 0x8dbdc1,
       map: textures.saltEtchedPolymer,
@@ -1255,69 +1234,90 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
     }),
     reefRock: usePackedPbrAtlas(new MeshStandardMaterial({
       color: 0xc4d0ca,
-      map: textures.underwaterPbrAtlas,
-      normalMap: textures.underwaterPbrNormalAtlas,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
       normalScale: new Vector2(0.55, 0.55),
-      roughnessMap: textures.underwaterPbrAtlas,
+      roughnessMap: textures.sharedPbrAtlas,
       roughness: 0.94,
       flatShading: true,
-    }), UNDERWATER_ATLAS_REGIONS.reefRock),
+    }), SHARED_ATLAS_REGIONS.reefRock),
     coralWarm: usePackedPbrAtlas(new MeshStandardMaterial({
       color: 0xf6c8bd,
-      map: textures.underwaterPbrAtlas,
-      normalMap: textures.underwaterPbrNormalAtlas,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
       normalScale: new Vector2(0.42, 0.42),
-      roughnessMap: textures.underwaterPbrAtlas,
+      roughnessMap: textures.sharedPbrAtlas,
       roughness: 0.84,
       flatShading: true,
-    }), UNDERWATER_ATLAS_REGIONS.coralWarm),
+    }), SHARED_ATLAS_REGIONS.coralWarm),
     coralPale: usePackedPbrAtlas(new MeshStandardMaterial({
       color: 0xf4f0d9,
-      map: textures.underwaterPbrAtlas,
-      normalMap: textures.underwaterPbrNormalAtlas,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
       normalScale: new Vector2(0.44, 0.44),
-      roughnessMap: textures.underwaterPbrAtlas,
+      roughnessMap: textures.sharedPbrAtlas,
       roughness: 0.9,
       flatShading: true,
-    }), UNDERWATER_ATLAS_REGIONS.coralPale),
+    }), SHARED_ATLAS_REGIONS.coralPale),
     seaweed: usePackedPbrAtlas(new MeshStandardMaterial({
       color: 0xd2e1d2,
-      map: textures.underwaterPbrAtlas,
-      normalMap: textures.underwaterPbrNormalAtlas,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
       normalScale: new Vector2(0.38, 0.38),
-      roughnessMap: textures.underwaterPbrAtlas,
+      roughnessMap: textures.sharedPbrAtlas,
       roughness: 0.82,
       side: DoubleSide,
-    }), UNDERWATER_ATLAS_REGIONS.seaweed),
+    }), SHARED_ATLAS_REGIONS.seaweed),
     ore: usePackedPbrAtlas(new MeshStandardMaterial({
       color: 0xd4e7e4,
-      map: textures.underwaterPbrAtlas,
-      normalMap: textures.underwaterPbrNormalAtlas,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
       normalScale: new Vector2(0.58, 0.58),
-      roughnessMap: textures.underwaterPbrAtlas,
+      roughnessMap: textures.sharedPbrAtlas,
       roughness: 0.58,
       metalness: 0.54,
       flatShading: true,
-    }), UNDERWATER_ATLAS_REGIONS.ore),
+    }), SHARED_ATLAS_REGIONS.ore),
     clay: usePackedPbrAtlas(new MeshStandardMaterial({
       color: 0xe0b2a8,
-      map: textures.underwaterPbrAtlas,
-      normalMap: textures.underwaterPbrNormalAtlas,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
       normalScale: new Vector2(0.44, 0.44),
-      roughnessMap: textures.underwaterPbrAtlas,
+      roughnessMap: textures.sharedPbrAtlas,
       roughness: 0.98,
       flatShading: true,
-    }), UNDERWATER_ATLAS_REGIONS.clay),
+    }), SHARED_ATLAS_REGIONS.clay),
     reefFish: usePackedPbrAtlas(new MeshStandardMaterial({
       color: 0xdcebea,
-      map: textures.underwaterPbrAtlas,
-      normalMap: textures.underwaterPbrNormalAtlas,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
       normalScale: new Vector2(0.28, 0.28),
-      roughnessMap: textures.underwaterPbrAtlas,
+      roughnessMap: textures.sharedPbrAtlas,
       roughness: 0.68,
       metalness: 0.02,
       flatShading: true,
-    }), UNDERWATER_ATLAS_REGIONS.reefFish),
+    }), SHARED_ATLAS_REGIONS.reefFish),
+    structureFastener: usePackedPbrAtlas(new MeshStandardMaterial({
+      color: 0xdce3e0,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
+      normalScale: new Vector2(0.56, 0.56),
+      roughnessMap: textures.sharedPbrAtlas,
+      roughness: 0.64,
+      metalness: 0.68,
+      flatShading: true,
+    }), SHARED_ATLAS_REGIONS.structureFastener),
+    splinteredWood: usePackedPbrAtlas(new MeshStandardMaterial({
+      color: 0xffe6bc,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
+      normalScale: new Vector2(0.64, 0.64),
+      roughnessMap: textures.sharedPbrAtlas,
+      roughness: 0.96,
+      metalness: 0,
+      emissive: 0x100805,
+      emissiveIntensity: 0.08,
+    }), SHARED_ATLAS_REGIONS.splinteredWood),
     reefCaustic: new MeshBasicMaterial({
       color: 0x8be6d8,
       alphaMap: causticMap,
@@ -1355,15 +1355,15 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       roughness: 0.94,
       metalness: 0,
     }),
-    navigationAlloy: new MeshStandardMaterial({
+    navigationAlloy: usePackedPbrAtlas(new MeshStandardMaterial({
       color: 0xc5b486,
-      map: textures.navigationAlloy,
-      normalMap: textures.navigationAlloyNormal,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
       normalScale: new Vector2(0.46, 0.46),
-      roughnessMap: textures.navigationAlloyRoughness,
+      roughnessMap: textures.sharedPbrAtlas,
       roughness: 0.66,
       metalness: 0.76,
-    }),
+    }), SHARED_ATLAS_REGIONS.navigationAlloy),
     saltglassCollector: new MeshStandardMaterial({
       color: 0xd8f2e9,
       map: textures.saltglassCollector,

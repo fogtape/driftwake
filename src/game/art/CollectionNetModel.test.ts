@@ -10,13 +10,15 @@ function testMaterials(): MaterialLibrary {
     darkWood: material(),
     rope: material(),
     rustMetal: material(),
+    structureFastener: material(),
     polymer: material(),
   } as MaterialLibrary;
 }
 
 describe('collection-net original model', () => {
   it('keeps the woven silhouette dense while batching static material groups', () => {
-    const model = createCollectionNetModel(testMaterials());
+    const materials = testMaterials();
+    const model = createCollectionNetModel(materials);
     const meshes: Mesh[] = [];
     model.traverse((object) => {
       if (object instanceof Mesh) meshes.push(object);
@@ -28,6 +30,8 @@ describe('collection-net original model', () => {
     expect(woven.geometry.getAttribute('position').count).toBeGreaterThan(1_000);
     expect(woven.geometry.boundingBox?.min.y).toBeLessThan(-0.2);
     expect(woven.geometry.boundingBox?.max.x).toBeGreaterThan(0.5);
+    expect((model.getObjectByName('collection-net-edge-clamps') as Mesh).material).toBe(materials.structureFastener);
+    expect(model.userData.materialMaps.split('|')).toHaveLength(15);
   });
 
   it('reveals cargo, wear and the full marker from runtime state without changing layout', () => {

@@ -31,7 +31,8 @@
 | M8 远海目的地 | 铁歌漂流阵共鸣青铜、风针观测标电气陶瓷 | `APPROVED`：两套 Image 2 high 源图、六张独立 PBR、2x2/边界/地图相关性与铁歌/风针近景通过 |
 | M9 工具与打捞基础材质 | 风化雪松 PBR、潮缚索具、盐蚀工具钢、盐蚀聚合物 | `APPROVED`：两套新增 Image 2 high 源图、雪松 PBR 补齐、12 张运行图绑定、2x2 与 framebuffer 近景通过 |
 | M9 岛屿与岸上资源 | 风暴冲刷岛岩、盐冠棕榈树皮/叶面、野生潮果、岸滩地表 | `APPROVED`：五套 Image 2 high 源图、15 个 PBR 槽、2x2、alpha roughness 精确打包与 `32/32` framebuffer 岛屿场景通过 |
-| M9 水下礁区与资源 | 浸水礁岩、暖/浅两类珊瑚、长叶海草、盐壳金属矿、潮红礁泥、盐冠礁鱼皮 | `APPROVED`：七套 Image 2 high 源图、21 个 PBR 槽、2x2、双图集/alpha roughness 与 `32/32` framebuffer/收割场景通过 |
+| M9 水下礁区与资源 | 浸水礁岩、暖/浅两类珊瑚、长叶海草、盐壳金属矿、潮红礁泥、盐冠礁鱼皮 | `APPROVED`：七套 Image 2 high 源图、21 个 PBR 槽、2x2、共享双图集/alpha roughness 与当前 `29/32` framebuffer/收割场景通过 |
+| M9 结构与防御 | 风暴撑紧固合金、风暴伤雪松横截面，并复用雪松/索具/工具钢/导航合金 | `APPROVED`：两套 Image 2 high 源图、临界真实断面、11 区共享双图集、结构/周界 `30/32` 与水下 `29/32` framebuffer 通过 |
 
 ## 历史占位整改队列
 
@@ -44,7 +45,7 @@
 | P1 | 第一人称工具与漂流物 | 原通用 metal / rustMetal / polymer / rope / darkWood 为纯色或不完整 PBR | 盐蚀工具钢、潮缚索具、盐蚀聚合物与三图雪松统一覆盖；普通钢/锈蚀五金使用不同 PBR 参数 | M2/M3/M5 回溯 | `APPROVED` |
 | P1 | 岛屿与岸上资源 | 原 leaf / rock / foliage 及部分采集节点以纯色和顶点色为主 | 岛岩、树皮、叶面、果皮、纤维、矿物与岸滩微表面原创 PBR 组 | M7 回溯 | `APPROVED` |
 | P1 | 水下礁区与资源 | reefRock / coral / seaweed / ore / clay / reefFish 多为纯色材质 | 礁岩、两类珊瑚、海草、矿砂/黏土及鱼群贴图组 | M7 回溯 | `APPROVED` |
-| P1 | 结构与防御设备 | 结构件主要依赖雪松，但连接件、金属、绳和受损变化仍有纯色复用 | 连接件/紧固件/受损截面专用 PBR，并与雪松保持统一 | M4/M5 回溯 | `TODO` |
+| P1 | 结构与防御设备 | 结构件主要依赖雪松，但连接件、金属、绳和受损变化仍有纯色复用 | 连接件/紧固件/受损截面专用 PBR，并与雪松保持统一 | M4/M5 回溯 | `APPROVED` |
 | P2 | 生物口腔、眼与小型细节 | 三种钓获鱼与盐翼鸟已使用专用虹膜；sharkMouth / sharkEye 仍是简单纯色材质 | 只在实际屏幕覆盖可辨时增加专用微材质；仍须场景近景证明 | M5/M6/M9 | `DOING` |
 | P2 | UI 位图与图标 | 当前主要为代码图标和 CSS，不得引入低质位图占位 | 新增位图同样执行 Image 2 high、来源和目标分辨率检查 | M9 | `WATCH` |
 
@@ -104,7 +105,18 @@
 | 潮红礁泥 | 2048x2048 / high / CLI | 1024，seam 168，normal 0.52，roughness 184-242 | x=8.14/1.11x，y=8.54/0.93x | `APPROVED`：水浸黏土与熟陶、锈铁和肉质分离 |
 | 盐冠礁鱼皮 | 2048x2048 / high / CLI | 1024，seam 160，normal 0.42，roughness 112-188 | x=10.97/0.99x，y=9.10/0.88x | `APPROVED`：三组小型鱼群不再使用纯青灰材质 |
 
-七套独立审计 PBR 通过 2x2 人工复核后，以 960 核心 + 32 gutter 写入 4096x2048 双图集；albedo RGB 与 roughness alpha 共图，normal 独立，保存后 alpha 像素一致。`CAPTURE_ONLY=underwater CAPTURE_FAST=1` 验证 21 个带区域名的槽、`32 textures / 118 geometries / 256 calls / 140,650 triangles` 和健康 Context/模拟；首轮直接像素为 `variation=127/nonBlack=2880`，最终调色以 1.13 MB 合成帧和 WebGL framebuffer 双证据复核。`underwater-interaction` 继续真实完成“收割长叶海草”与 `+2 海草`。详见 `docs/M9_UNDERWATER_MATERIAL_ACCEPTANCE.md`。
+七套独立审计 PBR 通过 2x2 人工复核后，以 960 核心 + 32 gutter 写入共享双图集；albedo RGB 与 roughness alpha 共图，normal 独立，保存后 alpha 像素一致。`0.22.4` 图集扩为 4096x3072/11 区后，`CAPTURE_ONLY=underwater CAPTURE_FAST=1` 继续验证 21 个带区域名的槽、`29 textures / 118 geometries / 255 calls / 140,618 triangles` 和健康 Context/模拟；直接像素为 `variation=125/nonBlack=2880`。`underwater-interaction` 继续真实完成“收割长叶海草”与 `+2 海草`。详见 `docs/M9_UNDERWATER_MATERIAL_ACCEPTANCE.md`。
+
+## M9 结构与防御证据
+
+| 资产 | Image 2 请求 | 运行时处理 | 数值结果 | 视觉状态 |
+| --- | --- | --- | --- | --- |
+| 风暴撑紧固合金 | 2048x2048 / high / CLI | 1024，seam 168，normal 0.56，roughness 132-210 | x=8.58/1.13x，y=9.26/0.93x | `APPROVED`：拒绝深色板岩感和过度均匀候选；筏钉、结构连接件、网具夹具、缘甲角固件统一绑定 |
+| 风暴伤雪松横截面 | 2048x2048 / high / CLI | 1024，seam 168，normal 0.64，roughness 182-242 | x=6.45/1.11x，y=9.26/0.95x | `APPROVED`：拒绝 OSB/木屑拼堆候选；临界承梁出现浅色连续横切面，修复后实例归零 |
+| 盐蚀工具钢 atlas 迁移 | 沿用审定 TEX-035 Image 2 源图 | 960 核心 + 32 gutter，RGB/A roughness + normal | 重建前后 atlas SHA-256 一致 | `APPROVED`：移除三张独立运行加载，通用工具/五金语义和 PBR 参数保持 |
+| 盐蚀导航合金 atlas 迁移 | 沿用审定 TEX-009 Image 2 源图 | 960 核心 + 32 gutter，RGB/A roughness + normal | 重建前后 atlas SHA-256 一致 | `APPROVED`：缘甲长导轨与导航设备仍使用独立区域，不与紧固合金混色 |
+
+`building damage` 真实完成鲨鱼双咬、冷启动、横截面出现及三锤全修，renderer 为 `30 textures / 79 geometries / 110 calls / 113,924 triangles`；`perimeter-defense-visual` 验证六个护栏/紧固件槽与载货网具附着，renderer 为 `30 / 88 / 129 / 105,592`。两场 Context 与模拟健康，framebuffer 已人工复核。详见 `docs/M9_STRUCTURE_MATERIAL_ACCEPTANCE.md`。
 
 ## 完成条件
 

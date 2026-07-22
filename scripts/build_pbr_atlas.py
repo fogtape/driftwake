@@ -23,7 +23,7 @@ def wrapped_cell(image: Image.Image, cell_size: int, gutter: int) -> Image.Image
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build a guttered PBR atlas with roughness packed into albedo alpha.")
-    parser.add_argument("--input-dir", required=True, type=Path)
+    parser.add_argument("--input-dir", required=True, type=Path, action="append")
     parser.add_argument("--names", required=True, nargs="+")
     parser.add_argument("--albedo-output", required=True, type=Path)
     parser.add_argument("--normal-output", required=True, type=Path)
@@ -44,9 +44,18 @@ def main() -> None:
     core_size = args.cell_size - args.gutter * 2
 
     for index, name in enumerate(args.names):
-        albedo_path = args.input_dir / f"{name}.webp"
-        normal_path = args.input_dir / f"{name}-normal.webp"
-        roughness_path = args.input_dir / f"{name}-roughness.webp"
+        source_matches = []
+        for input_dir in args.input_dir:
+            paths = (
+                input_dir / f"{name}.webp",
+                input_dir / f"{name}-normal.webp",
+                input_dir / f"{name}-roughness.webp",
+            )
+            if all(path.is_file() for path in paths):
+                source_matches.append((input_dir, paths))
+        if len(source_matches) != 1:
+            raise SystemExit(f"expected one complete source set for {name}, found {len(source_matches)}")
+        source_dir, (albedo_path, normal_path, roughness_path) = source_matches[0]
         with Image.open(albedo_path) as source:
             albedo = source.convert("RGB")
         with Image.open(normal_path) as source:
@@ -70,6 +79,7 @@ def main() -> None:
             "index": index,
             "column": column,
             "row": row,
+            "sourceDirectory": source_dir.as_posix(),
             "uvOffset": [uv_offset_x, uv_offset_y],
             "uvScale": [core_size / atlas_size[0], core_size / atlas_size[1]],
         }
@@ -79,7 +89,7 @@ def main() -> None:
     packed_atlas.save(args.albedo_output, "WEBP", quality=args.quality, method=6, exact=True)
     normal_atlas.save(args.normal_output, "WEBP", quality=args.quality, method=6)
     manifest = {
-        "version": 1,
+        "version": 2,
         "atlasSize": list(atlas_size),
         "cellSize": args.cell_size,
         "gutter": args.gutter,

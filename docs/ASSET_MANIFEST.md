@@ -1,7 +1,7 @@
 # 原创资产清单
 
 > 更新日期：2026-07-22
-> 状态：第二十轮 M9 水下礁区与资源历史材质整改已通过来源、PBR、平铺、双图集预算与软件场景门禁，发布前仍需做最终授权、DCC 替换与相似性复核
+> 状态：第二十一轮 M9 结构与防御历史材质整改已通过来源、PBR、平铺、共享图集预算、临界断面与软件场景门禁，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -196,7 +196,7 @@ Use case: stylized-concept. Asset type: seamless tileable PBR base-color materia
 
 | 字段 | 内容 |
 | --- | --- |
-| 运行时文件 | `navigation-alloy.webp`、`navigation-alloy-normal.webp`、`navigation-alloy-roughness.webp` |
+| 运行时 / 审计 | 共享双图集 `navigation-alloy` 区域；独立审计图位于 `artifacts/imagegen/shared-pbr-sources/navigation-alloy*.webp` |
 | 模型 | `gpt-image-2` |
 | 请求质量 | `high` |
 | 请求尺寸 | `2048x2048` |
@@ -788,7 +788,7 @@ Avoid: rope coil, macrame wall hanging, basket weave, knitted wool, clean new ny
 
 | 字段 | 内容 |
 | --- | --- |
-| 运行时文件 | `public/assets/textures/brineworn-tool-steel.webp`、`brineworn-tool-steel-normal.webp`、`brineworn-tool-steel-roughness.webp` |
+| 运行时 / 审计 | 共享双图集 `brineworn-tool-steel` 区域；独立审计图位于 `artifacts/imagegen/shared-pbr-sources/brineworn-tool-steel*.webp` |
 | 采用源图 | `artifacts/imagegen/brineworn-tool-steel-raw.png` |
 | 模型 / 质量 | `gpt-image-2` / `high`，项目 `scripts/imagegen` CLI |
 | 请求 / 实际尺寸 | `2048x2048` / `2048x2048` |
@@ -910,7 +910,7 @@ Create an original square tileable base-color material texture for a premium sty
 
 | 字段 | 内容 |
 | --- | --- |
-| 运行时文件 | `public/assets/textures/saltcrown-underwater-pbr-atlas.webp`（礁岩区域 RGB albedo + A roughness）、`saltcrown-underwater-pbr-normal-atlas.webp`（对应 normal 区域） |
+| 运行时文件 | `public/assets/textures/saltcrown-shared-pbr-atlas.webp`（`brine-reef-rock` 区域 RGB albedo + A roughness）、`saltcrown-shared-pbr-normal-atlas.webp`（对应 normal 区域） |
 | 采用源图 | `artifacts/imagegen/brine-reef-rock-raw.png` |
 | 审计 PBR | `artifacts/imagegen/underwater-pbr/brine-reef-rock.webp`、`brine-reef-rock-normal.webp`、`brine-reef-rock-roughness.webp` |
 | 模型 / 质量 | `gpt-image-2` / `high`，项目 `scripts/imagegen` CLI |
@@ -1027,7 +1027,43 @@ Create an original square tileable base-color material texture for a premium sty
 Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: skin surface of a small schooling salt-crown reef fish. Orthographic macro material scan, continuous fish skin filling the entire frame, no whole fish silhouette and no perspective. Tight tiny overlapping scales with a muted sea-glass teal and silver-gray base, soft pale aqua lateral shimmer bands, sparse warm sand-gold scale tips, restrained charcoal speckles, and a few subtle coral-red flecks. The surface should look agile, alive, and underwater-readable while remaining distinct from the three catchable fish species and from metal or reptile skin. Hand-authored semi-realistic painterly PBR art direction with controlled scale rhythm suitable for very small low-poly bodies, no cartoon outlines and no photoreal camera noise. Flat neutral diffuse lighting, no baked specular streak, caustic, reflection, shadow, iridescent rainbow, vignette, or wet gloss. Uniform detail density to every edge, seamless in both axes, no border, eye, fin, gill, lateral-line focal stripe, or large unique mark. No whole animal, ocean scene, coral, plants, bubbles, props, text, symbols, logos, or watermark. Albedo source only: no normal map, roughness map, UV grid, texture atlas, material sphere, or mockup.
 ```
 
-七套审计 PBR 经 `scripts/build_pbr_atlas.py` 形成 4096x2048 双图集：每格 1024，核心 960，四周 32 像素周期 gutter；RGB albedo + A roughness 的 alpha 保存后逐像素一致，normal 独立。`underwater-materials-canvas.png` 与真实收割流程证明七个区域的 21 个 PBR 槽均绑定，运行时保持 `32/32` 纹理预算；海草首版因整叶轮廓和阴影拒绝，未进入归档或运行时。
+七套审计 PBR 经 `scripts/build_pbr_atlas.py` 进入当前 4096x3072 共享双图集：每格 1024，核心 960，四周 32 像素周期 gutter；RGB albedo + A roughness 的 alpha 保存后逐像素一致，normal 独立。`underwater-materials-canvas.png` 与真实收割流程证明七个水下区域的 21 个 PBR 槽均绑定；`0.22.4` 合并结构/合金区域并删除旧图集后实测 `29/32` 纹理。海草首版因整叶轮廓和阴影拒绝，未进入归档或运行时。
+
+### TEX-048：风暴撑结构紧固合金材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时 / 审计 | 共享双图集 `stormbrace-fastener-alloy` 区域；独立审计图位于 `artifacts/imagegen/structure-pbr/stormbrace-fastener-alloy*.webp` |
+| 采用源图 | `artifacts/imagegen/stormbrace-fastener-alloy-raw.png` |
+| 模型 / 质量 / 尺寸 | `gpt-image-2` / `high` / `2048x2048`，项目 `scripts/imagegen` CLI |
+| 用途 | 动态筏格钉件、六类结构连接件、坠落结构金属、潮兜夹具/固定栓与缘甲角固件 |
+| 处理方式 | 1024、seam 168、normal 0.56、roughness 132-210、boundary 优化；图集核心 960 + 32 gutter |
+| 检查 | seam x=`8.58/1.13x`、y=`9.26/0.93x`，boundary=`(1,1023)`；首版深色板岩感、第二版过度均匀均拒绝，采用版在小卡扣上保留浅锤击、旧镍磨耗和克制盐蚀 |
+
+采用提示词：
+
+```text
+Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: stormbrace structural fastener alloy used on raft brackets, clamps, hinge pins, corner plates, nail heads, and shark-resistant edge armor. Show exactly one coherent continuous forged-steel skin covering the complete square, viewed straight-on and orthographically; absolutely no separate plates, flakes, stone slabs, cracks, seams, silhouettes, depth, or perspective. Use a controlled material palette: about sixty-five percent medium cool marine gunmetal, twenty percent softly interleaved old-nickel abrasion, ten percent smoky charcoal compression, and five percent combined muted coral-brown oxide freckles plus mineral-teal salt traces. Add hundreds of shallow millimeter-scale rounded or oval hand-peen marks, soft overlapping planished patches, tiny compressed pores, short pale zinc scuffs, and sparse worn nickel edges distributed irregularly across the frame. These metalworking marks must remain low contrast but clearly readable after the texture is reduced onto small clamps. It must read immediately as dense load-bearing forged metal, smooth and mechanically tough, not homogeneous gray concrete, slate, granite, cracked rock, chipped paint, raw ore, or photographic galvanized sheet; it must remain distinct from long brushed navigation alloy, cooking iron, and polished tool steel. Premium hand-authored semi-realistic painterly PBR art direction with crisp controlled microdetail, no cartoon outlines and no photographic scan noise. Perfectly flat neutral diffuse albedo with medium luminance: no directional light, reflection, specular highlight, cast shadow, ambient occlusion, wet gloss, vignette, sparks, or glow. Uniform detail density on all four edges, seamless in both axes, no border, dark cavity, large facet, central dent, corrosion island, long band, repeated grid, or focal emblem. No bolt, screw, nail, rivet, hinge, bracket, plate edge, tool, weapon, machinery, ocean scene, text, runes, symbols, logos, or watermark. Albedo source only: no normal map, roughness map, metallic map, UV checker, atlas, material sphere, product mockup, or preview.
+```
+
+### TEX-049：风暴伤雪松横截面材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时 / 审计 | 共享双图集 `stormscar-cedar-crosscut` 区域；独立审计图位于 `artifacts/imagegen/structure-pbr/stormscar-cedar-crosscut*.webp` |
+| 采用源图 | `artifacts/imagegen/stormscar-cedar-crosscut-raw.png` |
+| 模型 / 质量 / 尺寸 | `gpt-image-2` / `high` / `2048x2048`，项目 `scripts/imagegen` CLI |
+| 用途 | 六类筏上结构进入临界生命时，被缩短承力木件的真实暴露端面 |
+| 处理方式 | 1024、seam 168、normal 0.64、roughness 182-242、boundary 优化；图集核心 960 + 32 gutter |
+| 检查 | seam x=`6.45/1.11x`、y=`9.26/0.95x`，boundary=`(1,1)`；首版 OSB/木屑拼堆被拒绝，采用版为连续浅蜂蜜色横切年轮与少量撕裂纤维 |
+
+采用提示词：
+
+```text
+Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: freshly exposed storm-scarred cedar crosscut and split end grain on damaged hand-built raft structures. Show exactly one coherent continuous wood-interior surface covering the complete square, viewed straight-on and orthographically; ninety percent must be an unbroken natural cedar end-grain field. Use warm pale honey sapwood, muted flax and weathered gray-tan growth layers, many fine short interrupted annual-ring arcs, tiny vessel dots, subtle radial ray fragments, sparse darker resin pinpoints, pale salt dust, and only a few shallow torn fiber tufts integrated into the surface. No separate wood pieces, chips, curls, overlaps, gaps, piles, collage, depth, or perspective. It must read as one newly exposed structural cedar cross-section after a shark tear, clearly different from the existing long longitudinal plank grain, and never resemble chipboard, OSB, particle board, mulch, sawdust, cork, bark, meat, bone, rope, or stone. Premium hand-authored semi-realistic painterly PBR art direction with controlled cross-grain readable on small broken-end caps, no cartoon outline and no photographic scan noise. Perfectly flat neutral diffuse albedo, no directional light, cast shadow, ambient occlusion, deep holes, glossy resin hotspot, wet reflection, vignette, or three-dimensional splinters. Uniform edge-to-edge detail, seamless in both axes, no border, central knot, complete concentric tree-ring target, large crack, long stripe, or focal mark. No whole plank, beam, branch, log, bark edge, nails, rope, tools, shark, water scene, props, text, symbols, logos, or watermark. Albedo source only: no normal map, roughness map, height map, UV grid, atlas, material sphere, product mockup, or presentation board.
+```
+
+TEX-041 至 TEX-049 与既有 TEX-035/TEX-009 当前共同写入 4096x3072、4x3 的共享双图集，保留一个中性空格。`artifacts/imagegen/shared-pbr-atlas-layout.json` 记录 11 个区域和各自源目录；roughness alpha 保存后逐像素一致。结构、周界和水下实景分别为 `30/32`、`30/32`、`29/32` 纹理，没有以降清、删 normal 或抬高预算换取接入。
 
 ## 代码原生模型与动画
 
@@ -1068,8 +1104,8 @@ Create an original square tileable base-color material texture for a premium sty
 | MOD-031 | 双桅定向阵列：相位箱、双桅、八组绝缘/横臂、六定向环、端帽、冠尖、四股拉索、馈线和传播环 | `src/game/art/SignalModels.ts` | 50+ 网格；桅杆风摆、相位灯和三层传播环按阵列/天气/接收台状态驱动 |
 | MOD-032 | 潮痕中继站：三密封浮筒、合金箍、六臂低框、三层冠环、中央桅杆、双环转子、磷光核心和四层脉冲环 | `src/game/art/SignalModels.ts` | 47 网格；位于持续世界坐标，浮筒错相升沉、转子、灯和距离脉冲实时驱动 |
 | MOD-033 | 盐封打捞手套：双前臂、编织袖口、掌垫、指节护条、金属扣具、八组双段手指与双拇指 | `src/game/art/FirstPersonModels.ts` | 双手与钩具合计 40+ 网格；主体使用独立 TEX-015，麻编/金属/绳边分层，腕、指、导绳点和投射起点独立驱动 |
-| MOD-034 | 木筏结构套件：交错承力墙、绳铰板门、盐封承重柱、双梁七级楼梯、上层拼板和编叶斜顶 | `src/game/art/RaftStructureParts.ts` | 六类结构使用木材/深木/绳/金属/纤维分件和一致尺度语法；门框/门扇分离，运行时合并为最多七个实例批次 |
-| MOD-035 | 潮兜收集网：盐蚀木框、铁卡扣、双侧承臂、悬垂绳格、绳结、三浮子、六档装载物、磨损绳与满载标记 | `src/game/art/CollectionNetModel.ts` | 原创程序模型；静态木框/铁件/绳床/浮子按材质合批，货物和健康阶段保持独立动画，筏缘局部坐标防止航行或靠岛时脱离 |
+| MOD-034 | 木筏结构套件：交错承力墙、绳铰板门、盐封承重柱、双梁七级楼梯、上层拼板和编叶斜顶 | `src/game/art/RaftStructureParts.ts` | 六类结构使用木材/深木/绳/专用紧固合金/纤维分件；七个基础批次外增加一个有界临界横截面批次，完整/修复态计数为零 |
+| MOD-035 | 潮兜收集网：盐蚀木框、合金卡扣、双侧承臂、悬垂绳格、绳结、三浮子、六档装载物、磨损绳与满载标记 | `src/game/art/CollectionNetModel.ts` | 原创程序模型；静态木框/专用紧固件/绳床/浮子按材质合批，货物和健康阶段保持独立动画，筏缘局部坐标防止航行或靠岛时脱离 |
 | MOD-036 | 鲨鱼战利品浮包：盐封浮托、交叉绑绳、分件鲨肉、折叠鲨皮与齿板 | `src/game/art/ProceduralModels.ts` | 只用于背包拒收的真实鲨鱼战利品；按内容显隐并复用八槽世界掉落池，不把普通漂流物换皮 |
 | MOD-037 | 铁歌漂流阵：五联浮舱、双侧轨道、九组栏柱、五座共鸣腔、摆锤、顶部转子、控制台与脉冲环 | `src/game/art/SignalModels.ts` | 90 网格；宽体远海实体使用 TEX-032，五个摆锤/共鸣腔按目标状态同步 |
 | MOD-038 | 风针观测标：三浮舱、三脚塔、四层传感平台、十二组陶瓷取样器、三轴电气笼、三组风向飘带与尖针 | `src/game/art/SignalModels.ts` | 83 网格；高 9m 级实体使用 TEX-033/TEX-032，平台、笼、飘带和脉冲随风/目标驱动 |
@@ -1092,9 +1128,9 @@ Create an original square tileable base-color material texture for a premium sty
 | ANI-017 | 五杯水位/完成标记、三份鱼段独立火候、共享燃料条、柜盖与内容标记 | `src/game/systems/DeviceSystem.ts` | 与高级设备领域队列、真实库存、HUD、音频和 v10 恢复同步；共享燃料、断火续燃、熟优先收取、停止空烧和三状态 PBR 门禁通过 |
 | ANI-018 | 锚机棘轮加装、锁链受力、风暴载荷累积与未强化锚滑脱 | `src/game/systems/NavigationSystem.ts` | 与锚泊后果、警报、音频、模型强化和 v10 恢复同步 |
 | ANI-019 | 接收台扫描/调谐/电量、双桅相位/传播、三座目标实体浮舱/转子/摆锤/飘带/脉冲与抵达解码 | `src/game/systems/NavigationSystem.ts` | 与电池、间距、活动信号、世界位置、距离、访问解锁、海图选择和 v18 恢复同步 |
-| ANI-020 | 结构分件幽灵预览、旋转/层高切换、板门开合、连续楼梯登层、上层落地/分层碰撞、楼板/斜顶撞顶、三档受损色泽/确定性松动和承重级联 | `src/game/systems/BuildSystem.ts`、`RaftStructureSystem.ts`、`PlayerController.ts` | 与材料、锤耐久、共享占位、四向楼梯入口、材质撞顶音尘、鲨鱼外沿择靶、修补 HUD、支撑拓扑和 v15 恢复同步；不增加结构实例批次 |
+| ANI-020 | 结构分件幽灵预览、旋转/层高切换、板门开合、连续楼梯登层、上层落地/分层碰撞、楼板/斜顶撞顶、三档受损色泽/确定性松动、临界横截面和承重级联 | `src/game/systems/BuildSystem.ts`、`RaftStructureSystem.ts`、`PlayerController.ts` | 与材料、锤耐久、共享占位、四向楼梯入口、材质撞顶音尘、鲨鱼外沿择靶、修补 HUD、支撑拓扑和 v15 恢复同步；只增加一个固定容量横截面实例批次 |
 | ANI-021 | 收集网边缘预览、四向固定、网床波动/装载下沉、六档货物显隐、两档磨损绳、满载脉冲、被动入网、鲨鱼撕咬、修补、收取、锤拆与失托落海 | `src/game/art/CollectionNetModel.ts`、`src/game/systems/CollectionNetSystem.ts` | 与动态筏缘、未钩漂流物、12 件容量、真实生命、背包接收、锤耐久、世界掉落和 v17 恢复同步 |
-| ANI-022 | 潮铸筏缘护甲预览、安装、盐蚀合金四边导轨、锈蚀角片、铆固件和拆卸返料 | `src/game/systems/BuildSystem.ts`、`src/game/systems/RaftSystem.ts` | 固定实例预算随动态筏格姿态和 v17 `reinforced` 真值同步，保护同格基础、暴露结构和边挂网具 |
+| ANI-022 | 潮铸筏缘护甲预览、安装、盐蚀合金四边导轨、风暴撑角片/铆固件和拆卸返料 | `src/game/systems/BuildSystem.ts`、`src/game/systems/RaftSystem.ts` | 导轨/紧固件使用两个独立共享图集区域；固定实例预算随动态筏格姿态和 v17 `reinforced` 真值同步，保护同格基础、暴露结构和边挂网具 |
 | ANI-023 | 鲨体四段按住割取、伤痕逐段显现、聚焦环呼吸、取尽下沉与健康重生 | `src/game/systems/SharkSystem.ts` | 与 0.86 秒分段进度、52 秒窗口、满包落海、48 秒冷却和 v18 恢复同步；起手精确瞄准，持续阶段允许有限水面晃动 |
 | VFX-001 | 入水粒子 | `src/game/systems/SplashSystem.ts` | 已实现 |
 | VFX-002 | 木屑、纤维屑、修补金屑、拆除、武器和咬击冲击粒子 | `src/game/systems/SplashSystem.ts` | 结构撕咬按生命/是否毁损分双层数量、色泽、尺寸和抛速；锤修按木材/纤维分层 |

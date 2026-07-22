@@ -15,6 +15,7 @@ function createTestMaterials(): MaterialLibrary {
     darkWood: material(),
     rope: material(),
     rustMetal: material(),
+    structureFastener: material(),
     navigationAlloy: material(),
     wovenFiber: material(),
   } as unknown as MaterialLibrary;

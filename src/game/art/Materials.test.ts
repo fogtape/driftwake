@@ -32,14 +32,13 @@ describe('asset texture loading', () => {
     expect(textures.saltEtchedPolymer.userData.sourcePath).toBe('/assets/textures/salt-etched-polymer.webp');
     expect(textures.fishEye.userData.sourcePath).toBe('/assets/textures/pelagic-fish-eye.webp');
     expect(textures.tideboundRigging.userData.sourcePath).toBe('/assets/textures/tidebound-rigging.webp');
-    expect(textures.brinewornToolSteel.userData.sourcePath).toBe('/assets/textures/brineworn-tool-steel.webp');
     expect(textures.islandStone.userData.sourcePath).toBe('/assets/textures/stormwashed-island-stone.webp');
     expect(textures.palmBark.userData.sourcePath).toBe('/assets/textures/saltcrown-palm-bark.webp');
     expect(textures.palmFrond.userData.sourcePath).toBe('/assets/textures/saltcrown-palm-frond.webp');
     expect(textures.tidefruitSkin.userData.sourcePath).toBe('/assets/textures/tidefruit-skin.webp');
     expect(textures.shoreGround.userData.sourcePath).toBe('/assets/textures/saltcrown-shore-ground-packed.webp');
-    expect(textures.underwaterPbrAtlas.userData.sourcePath).toBe('/assets/textures/saltcrown-underwater-pbr-atlas.webp');
-    expect(textures.underwaterPbrNormalAtlas.userData.sourcePath).toBe('/assets/textures/saltcrown-underwater-pbr-normal-atlas.webp');
+    expect(textures.sharedPbrAtlas.userData.sourcePath).toBe('/assets/textures/saltcrown-shared-pbr-atlas.webp');
+    expect(textures.sharedPbrNormalAtlas.userData.sourcePath).toBe('/assets/textures/saltcrown-shared-pbr-normal-atlas.webp');
     expect(textures.cropLeaf.userData.sourcePath).toBe('/assets/textures/salt-crown-leaf.webp');
     expect(textures.cropDry.userData.sourcePath).toBe('/assets/textures/salt-crown-dry-leaf.webp');
     expect(textures.cropFruit.userData.sourcePath).toBe('/assets/textures/salt-crown-fruit.webp');
@@ -61,11 +60,19 @@ describe('asset texture loading', () => {
       roughnessMap: textures.tideboundRiggingRoughness,
     });
     expect(materials.metal).toMatchObject({
-      map: textures.brinewornToolSteel,
-      normalMap: textures.brinewornToolSteelNormal,
-      roughnessMap: textures.brinewornToolSteelRoughness,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
+      roughnessMap: textures.sharedPbrAtlas,
     });
-    expect(materials.rustMetal.normalMap).toBe(textures.brinewornToolSteelNormal);
+    expect(materials.metal.userData.pbrAtlasRegion).toBe('brineworn-tool-steel');
+    expect(materials.rustMetal.normalMap).toBe(textures.sharedPbrNormalAtlas);
+    expect(materials.rustMetal.userData.pbrAtlasRegion).toBe('brineworn-tool-steel');
+    expect(materials.navigationAlloy).toMatchObject({
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
+      roughnessMap: textures.sharedPbrAtlas,
+    });
+    expect(materials.navigationAlloy.userData.pbrAtlasRegion).toBe('navigation-alloy');
     expect(materials.polymer).toMatchObject({
       map: textures.saltEtchedPolymer,
       normalMap: textures.saltEtchedPolymerNormal,
@@ -116,9 +123,9 @@ describe('asset texture loading', () => {
     ]);
     for (const material of underwaterMaterials) {
       expect(material).toMatchObject({
-        map: textures.underwaterPbrAtlas,
-        normalMap: textures.underwaterPbrNormalAtlas,
-        roughnessMap: textures.underwaterPbrAtlas,
+        map: textures.sharedPbrAtlas,
+        normalMap: textures.sharedPbrNormalAtlas,
+        roughnessMap: textures.sharedPbrAtlas,
       });
       expect(material.userData.alphaPackedRoughness).toBe(true);
     }
@@ -129,10 +136,29 @@ describe('asset texture loading', () => {
     } as Parameters<typeof materials.reefRock.onBeforeCompile>[0];
     materials.reefRock.onBeforeCompile(atlasShader, renderer);
     expect(atlasShader.vertexShader).toContain('fract(vMapUv * vec2(1.3500000, 1.3500000))');
-    expect(atlasShader.vertexShader).toContain('vec2(0.0078125, 0.5156250)');
+    expect(atlasShader.vertexShader).toContain('vec2(0.0078125, 0.6770833)');
     expect(atlasShader.vertexShader).toContain('fract(vNormalMapUv');
     expect(atlasShader.vertexShader).toContain('fract(vRoughnessMapUv');
     expect(atlasShader.fragmentShader).toContain('roughnessFactor *= texelRoughness.a;');
+    const structureMaterials = [materials.structureFastener, materials.splinteredWood];
+    expect(structureMaterials.map((material) => material.userData.pbrAtlasRegion)).toEqual([
+      'stormbrace-fastener-alloy',
+      'stormscar-cedar-crosscut',
+    ]);
+    for (const material of structureMaterials) {
+      expect(material).toMatchObject({
+        map: textures.sharedPbrAtlas,
+        normalMap: textures.sharedPbrNormalAtlas,
+        roughnessMap: textures.sharedPbrAtlas,
+      });
+    }
+    expect(new Set([
+      ...underwaterMaterials,
+      ...structureMaterials,
+      materials.metal,
+      materials.rustMetal,
+      materials.navigationAlloy,
+    ].map((material) => material.customProgramCacheKey())).size).toBe(11);
     expect(materials.cropLeaf).toMatchObject({
       map: textures.cropLeaf,
       normalMap: textures.cropLeafNormal,

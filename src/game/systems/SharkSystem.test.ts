@@ -43,6 +43,8 @@ function createTestMaterials(): MaterialLibrary {
     ore: material(),
     clay: material(),
     reefFish: material(),
+    structureFastener: material(),
+    splinteredWood: material(),
     reefCaustic: new MeshBasicMaterial(),
     sailCloth: material(),
     planterSoil: material(),

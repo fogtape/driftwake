@@ -1,4 +1,4 @@
-import { MeshBasicMaterial, MeshStandardMaterial, PerspectiveCamera, Vector3 } from 'three';
+import { InstancedMesh, MeshBasicMaterial, MeshStandardMaterial, PerspectiveCamera, Vector3 } from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MaterialLibrary } from '../art/Materials';
 import {
@@ -37,6 +37,8 @@ function createTestMaterials(): MaterialLibrary {
     ore: material(),
     clay: material(),
     reefFish: material(),
+    structureFastener: material(),
+    splinteredWood: material(),
     reefCaustic: new MeshBasicMaterial(),
     sailCloth: material(),
     planterSoil: material(),
@@ -105,7 +107,8 @@ describe('RaftStructureSystem runtime', () => {
     const structures = new RaftStructureSystem(raft, createTestMaterials());
     expect(structures.place({ type: 'wall', x: 0, z: 0, level: 0, rotation: 1 })).not.toBeNull();
     expect(structures.count).toBe(1);
-    expect(structures.group.children.length).toBeLessThanOrEqual(7);
+    expect(structures.group.children.length).toBeLessThanOrEqual(8);
+    expect(structures.exposedCrosscutCount).toBe(0);
     expect(structures.group.children.reduce((total, child) => total + ('count' in child ? Number(child.count) : 0), 0)).toBeGreaterThan(18);
     structures.dispose();
   });
@@ -222,6 +225,30 @@ describe('RaftStructureSystem runtime', () => {
     expect(structures.repair('wall', 999).changed).toBe(false);
     expect(structures.getDiagnostics()).toMatchObject({ damaged: 0, critical: 0, lowestHealthRatio: 1 });
     structures.dispose();
+  });
+
+  it('binds dedicated fasteners and exposes a dominant-axis PBR crosscut for every critical type', () => {
+    const types = ['wall', 'door', 'pillar', 'stairs', 'floor', 'roof'] as const;
+    for (const [index, type] of types.entries()) {
+      const materials = createTestMaterials();
+      const raft = new RaftSystem(materials, [{ x: 0, z: 0, health: 100 }]);
+      const id = `scarred-${type}`;
+      const structures = new RaftStructureSystem(raft, materials, [saved(id, type, 0, 0, index >= 4 ? 1 : 0)]);
+      if (index === 0) {
+        expect((structures.group.getObjectByName('raft-structure-cylinder:metal') as InstancedMesh).material)
+          .toBe(materials.structureFastener);
+        expect((structures.group.getObjectByName('raft-structure-exposed-crosscuts') as InstancedMesh).material)
+          .toBe(materials.splinteredWood);
+      }
+      expect(structures.exposedCrosscutCount).toBe(0);
+
+      structures.damage(id, RAFT_STRUCTURE_DEFINITIONS[type].maxHealth - 1);
+      expect(structures.getDiagnostics()).toMatchObject({ damaged: 1, critical: 1 });
+      expect(structures.exposedCrosscutCount).toBe(1);
+      structures.repair(id, 999);
+      expect(structures.exposedCrosscutCount).toBe(0);
+      structures.dispose();
+    }
   });
 
   it('replaces a compatible structure in place while preserving its stable id', () => {

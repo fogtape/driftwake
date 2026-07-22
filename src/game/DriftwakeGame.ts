@@ -1324,6 +1324,9 @@ export class DriftwakeGame {
     this.mount.dataset.islandRaftClearance = (this.island?.getRaftClearance() ?? 0).toFixed(3);
     this.mount.dataset.islandMaterialMaps = this.island?.getMaterialMapNames().join('|') ?? 'none';
     this.mount.dataset.underwaterMaterialMaps = this.underwater?.getMaterialMapNames().join('|') ?? 'none';
+    this.mount.dataset.structureMaterialMaps = this.structures?.getMaterialMapNames().join('|') ?? 'none';
+    this.mount.dataset.structureCrosscutCount = String(this.structures?.exposedCrosscutCount ?? 0);
+    this.mount.dataset.raftDefenseMaterialMaps = this.raft?.getDefenseMaterialMapNames().join('|') ?? 'none';
     this.frameTimingElapsed = 0;
     this.frameTimesMs.length = 0;
   }

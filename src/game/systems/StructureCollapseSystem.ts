@@ -148,7 +148,7 @@ export class StructureCollapseSystem {
       woodAlt: materials.wood[1] ?? materials.wood[0],
       darkWood: materials.darkWood,
       rope: materials.rope,
-      metal: materials.rustMetal,
+      metal: materials.structureFastener,
       fiber: materials.wovenFiber,
     };
   }

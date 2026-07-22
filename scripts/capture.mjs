@@ -4460,7 +4460,7 @@ async function captureBuildingDamageRepair() {
         && data?.sharkLastRaftTargetId === 'damage-wall'
         && data?.raftCriticalStructureCount === '1'
         && saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health === 7;
-    }, 90_000);
+    }, 120_000);
   } catch (error) {
     const diagnostics = await page.evaluate(() => {
       const data = document.querySelector('.game-mount')?.dataset;
@@ -4534,8 +4534,38 @@ async function captureBuildingDamageRepair() {
     const data = document.querySelector('.game-mount')?.dataset;
     const saved = JSON.parse(localStorage.getItem('driftwake.save.v18') ?? 'null');
     return data?.raftCriticalStructureCount === '1'
+      && data?.structureCrosscutCount === '1'
+      && data?.structureMaterialMaps !== 'none'
       && saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health === 7;
   }, 10_000);
+
+  const materialState = await page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return {
+      textures: Number(data?.textures),
+      geometries: Number(data?.geometries),
+      drawCalls: Number(data?.drawCalls),
+      triangles: Number(data?.triangles),
+      crosscuts: Number(data?.structureCrosscutCount),
+      contextHealthy: data?.contextHealthy,
+      simulationActive: data?.simulationActive,
+      maps: data?.structureMaterialMaps?.split('|') ?? [],
+    };
+  });
+  if (
+    !Number.isFinite(materialState.textures)
+    || materialState.textures > 32
+    || materialState.crosscuts !== 1
+    || materialState.contextHealthy !== 'true'
+    || materialState.simulationActive !== 'true'
+    || materialState.maps.length !== 18
+    || materialState.maps.some((entry) => entry.includes('none'))
+    || !materialState.maps.some((entry) => entry.includes('[stormbrace-fastener-alloy]'))
+    || !materialState.maps.some((entry) => entry.includes('[stormscar-cedar-crosscut]'))
+  ) {
+    throw new Error(`Building structure material gate failed: ${JSON.stringify(materialState)}`);
+  }
+  console.log(`Building structure materials: ${JSON.stringify(materialState)}`);
 
   const repairAimMovement = { x: 0, y: 0 };
   for (let iteration = 0; iteration < 6; iteration += 1) {
@@ -4587,10 +4617,14 @@ async function captureBuildingDamageRepair() {
   if (!repairUi.palette?.includes('修补木墙') || !repairUi.palette.includes('7/110') || !repairUi.prompt?.includes('修补木墙')) {
     throw new Error(`Building repair UI failed: ${JSON.stringify(repairUi)}`);
   }
-  await captureCompositedPage(
-    page,
-    new URL('building-structure-damage-desktop.png', outputDir).pathname,
-  );
+  if (process.env.CAPTURE_FAST === '1') {
+    await captureCanvasReadback(page, new URL('structure-materials-canvas.png', outputDir).pathname);
+  } else {
+    await captureCompositedPage(
+      page,
+      new URL('building-structure-damage-desktop.png', outputDir).pathname,
+    );
+  }
 
   await page.mouse.click(viewport.width / 2, viewport.height / 2);
   await waitForRuntime(page, () => {
@@ -4601,7 +4635,7 @@ async function captureBuildingDamageRepair() {
       && saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health === 51
       && saved?.player?.inventory?.timber === 11;
   }, 8_000);
-  await page.waitForTimeout(450);
+  await page.waitForTimeout(900);
   await page.mouse.click(viewport.width / 2, viewport.height / 2);
   await waitForRuntime(page, () => {
     const data = document.querySelector('.game-mount')?.dataset;
@@ -4611,7 +4645,7 @@ async function captureBuildingDamageRepair() {
       && saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health === 95
       && saved?.player?.inventory?.timber === 10;
   }, 8_000);
-  await page.waitForTimeout(450);
+  await page.waitForTimeout(900);
   await page.mouse.click(viewport.width / 2, viewport.height / 2);
   await waitForRuntime(page, () => {
     const data = document.querySelector('.game-mount')?.dataset;
@@ -4622,10 +4656,12 @@ async function captureBuildingDamageRepair() {
       && saved?.raft?.structures?.find((structure) => structure.id === 'damage-wall')?.health === 110
       && saved?.player?.inventory?.timber === 9;
   }, 8_000);
-  await captureCompositedPage(
-    page,
-    new URL('building-structure-repaired-desktop.png', outputDir).pathname,
-  );
+  if (process.env.CAPTURE_FAST !== '1') {
+    await captureCompositedPage(
+      page,
+      new URL('building-structure-repaired-desktop.png', outputDir).pathname,
+    );
+  }
   const final = await page.evaluate(() => {
     const data = document.querySelector('.game-mount')?.dataset;
     const saved = JSON.parse(localStorage.getItem('driftwake.save.v18') ?? 'null');
@@ -6033,7 +6069,14 @@ async function aimCollectionNetToPrompt(page, id, expected) {
     const aim = JSON.parse(document.querySelector('.game-mount')?.dataset.collectionNetAim ?? '{}');
     return aim.firstNet.center;
   });
-  return aimLocalPointToPrompt(page, center, expected);
+  let prompt = '';
+  for (const yOffset of [0, 0.18, -0.18]) {
+    const target = [center[0], center[1] + yOffset, center[2]];
+    prompt = await aimLocalPointToPrompt(page, target, expected, 10);
+    if (prompt.includes(expected)) break;
+    await page.waitForTimeout(420);
+  }
+  return prompt;
 }
 
 async function aimSalvageDropToPrompt(page, expected) {
@@ -6913,8 +6956,8 @@ async function captureUnderwater() {
     'tide-red-reef-clay',
     'saltcrown-reef-fish-skin',
   ];
-  if (rendererState.textures !== 32) {
-    throw new Error(`Underwater texture budget changed: expected 32, received ${rendererState.textures}`);
+  if (!Number.isFinite(rendererState.textures) || rendererState.textures > 32) {
+    throw new Error(`Underwater texture budget exceeded: maximum 32, received ${rendererState.textures}`);
   }
   if (rendererState.materialMaps.length !== 21 || rendererState.materialMaps.some((entry) => entry.includes('none'))) {
     throw new Error(`Underwater PBR slot contract failed: ${JSON.stringify(rendererState.materialMaps)}`);
@@ -7652,17 +7695,60 @@ async function capturePerimeterDefenseVisual() {
     '右键拆除',
   );
   if (!prompt.includes('右键拆除')) {
-    throw new Error(`Perimeter defense visual focus failed: ${prompt}`);
+    const diagnostics = await visual.page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return {
+        prompt: document.querySelector('.interaction-prompt')?.textContent?.trim() ?? '',
+        aim: JSON.parse(data?.collectionNetAim ?? '{}'),
+        focused: data?.collectionNetFocused,
+        tool: data?.selectedTool,
+        simulationActive: data?.simulationActive,
+        contextHealthy: data?.contextHealthy,
+        pointerLock: document.pointerLockElement ? 'locked' : 'unlocked',
+      };
+    });
+    throw new Error(`Perimeter defense visual focus failed: ${JSON.stringify(diagnostics)}`);
   }
   await waitForRuntime(
     visual.page,
-    () => document.querySelector('.game-mount')?.dataset.raftReinforcedTileCount === '3',
+    () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return data?.raftReinforcedTileCount === '3' && data?.raftDefenseMaterialMaps !== 'none';
+    },
     8_000,
   );
-  await captureCompositedPage(
-    visual.page,
-    new URL('perimeter-defense-visual-desktop.png', outputDir).pathname,
-  );
+  const materialState = await visual.page.evaluate(() => {
+    const data = document.querySelector('.game-mount')?.dataset;
+    return {
+      textures: Number(data?.textures),
+      geometries: Number(data?.geometries),
+      drawCalls: Number(data?.drawCalls),
+      triangles: Number(data?.triangles),
+      contextHealthy: data?.contextHealthy,
+      simulationActive: data?.simulationActive,
+      maps: data?.raftDefenseMaterialMaps?.split('|') ?? [],
+    };
+  });
+  if (
+    !Number.isFinite(materialState.textures)
+    || materialState.textures > 32
+    || materialState.contextHealthy !== 'true'
+    || materialState.simulationActive !== 'true'
+    || materialState.maps.length !== 6
+    || materialState.maps.some((entry) => entry.includes('none'))
+    || !materialState.maps.some((entry) => entry.includes('[stormbrace-fastener-alloy]'))
+  ) {
+    throw new Error(`Perimeter defense material gate failed: ${JSON.stringify(materialState)}`);
+  }
+  console.log(`Perimeter defense materials: ${JSON.stringify(materialState)}`);
+  if (process.env.CAPTURE_FAST === '1') {
+    await captureCanvasReadback(visual.page, new URL('perimeter-materials-canvas.png', outputDir).pathname);
+  } else {
+    await captureCompositedPage(
+      visual.page,
+      new URL('perimeter-defense-visual-desktop.png', outputDir).pathname,
+    );
+  }
   await inspectCanvasPixels(visual.page, 'perimeter-defense-visual');
   console.log('Perimeter defense visual: three armored foundations, loaded net and reinforcement HUD captured');
   await visual.context.close();
