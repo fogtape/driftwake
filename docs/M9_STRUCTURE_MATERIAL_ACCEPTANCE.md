@@ -47,15 +47,15 @@ scripts/imagegen generate --model gpt-image-2 --quality high --size 2048x2048 \
 
 ## 共享图集与预算
 
-`scripts/build_pbr_atlas.py` 支持多个输入目录，并要求每个名称只命中一套完整 albedo/normal/roughness 源。`0.22.5` 当前共享图集为 4096x4096、4x4 格：
+`scripts/build_pbr_atlas.py` 支持多个输入目录，并要求每个名称只命中一套完整 albedo/normal/roughness 源。原 `0.22.5` 验收使用 14 区；`0.22.7` 牙釉后续在不改变本切片结构绑定的前提下把当前共享图集更新为 4096x4096、4x4 格：
 
 - 七个水下材质区域；
 - 风暴撑紧固合金；
 - 风暴伤雪松横截面；
 - 已批准的盐蚀工具钢；
 - 已批准的盐蚀导航合金；
-- 深潮鲨口衬、鲨肉/伤痕与侧眼三个区域；
-- 两个保留空格。
+- 深潮鲨口衬、鲨肉/伤痕、侧眼与牙釉四个区域；
+- 一个保留空格。
 
 每格仍为 1024，包含 960 核心和四周 32 像素周期 gutter。RGB 保存 albedo、A 保存 roughness，normal 使用第二张图集；生成器会逐像素检查 roughness alpha。布局记录在 `artifacts/imagegen/shared-pbr-atlas-layout.json`。
 
@@ -64,10 +64,10 @@ scripts/imagegen generate --model gpt-image-2 --quality high --size 2048x2048 \
 - packed atlas：`14973b1084d6932ec2093a4c1d765b876e2978cb4686537d87a9f6fa9e6013bc`；
 - normal atlas：`f3fcd6bc6bf9e938139fdf0561422b7e7b841b4e8c36a0db8f4bf7ff4384a450`。
 
-`0.22.5` 增加三项鲨鱼区域后保留原 1024 cell / 960 core / 32 gutter，拒绝临时 3840/896 core 方案；当前 hash 为：
+`0.22.7` 增加牙釉区域后仍保留原 1024 cell / 960 core / 32 gutter，拒绝临时 3840/896 core 方案；当前 hash 为：
 
-- packed atlas：`19b1a7e0f243af9ecb0f261fe5bd440a7b92408a7585b77c7460d72ded70964e`；
-- normal atlas：`d07a373af0367ec6143fda16414fc45f4117464a4be4745a9c0111ed0a7982d0`。
+- packed atlas：`f75058e82c690e94c9fd91fba5e0d10cde5ac34c612a53de28f72218287a29bd`；
+- normal atlas：`f955650ede48ca16fc5602c803928fb654672f53e5e7de971693a661a4e4877b`。
 
 ## 运行时接线
 

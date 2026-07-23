@@ -35,6 +35,7 @@ function createTestMaterials(): MaterialLibrary {
     sharkSkin: material(),
     sharkMouth: material(),
     sharkEye: material(),
+    sharkTooth: material(),
     reefSeabed: material(),
     reefRock: material(),
     coralWarm: material(),
@@ -170,6 +171,7 @@ describe('SharkSystem structure attacks', () => {
       lastRaftTargetHealth: 7,
       structureDamageEvents: 2,
       foundationDamageEvents: 0,
+      toothCount: 9,
     });
     const target = new Vector3();
     structures.getLocalImpactPosition(structures.getStructure('exposed-wall')!, target);
@@ -180,9 +182,11 @@ describe('SharkSystem structure attacks', () => {
       diagnostics.worldPosition.z,
     );
     const face = new Vector3(...diagnostics.facialFocus);
+    const teeth = new Vector3(...diagnostics.toothFocus);
     const faceDirection = face.sub(center).setY(0).normalize();
     const targetDirection = target.sub(center).setY(0).normalize();
     expect(faceDirection.dot(targetDirection)).toBeGreaterThan(0.98);
+    expect(teeth.distanceTo(center)).toBeGreaterThan(1.2);
     expect(structures.getStructure('exposed-wall')?.health).toBe(7);
     expect(raft.getTile({ x: 1, z: 1 })?.health).toBe(100);
     expect(onMutation).toHaveBeenCalledTimes(2);

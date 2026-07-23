@@ -93,6 +93,13 @@ describe('asset texture loading', () => {
     });
     expect(materials.sharkEye.userData.pbrAtlasRegion).toBe('graywake-lateral-eye');
     expect(materials.sharkEye.userData.alphaPackedRoughness).toBe(true);
+    expect(materials.sharkTooth).toMatchObject({
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
+      roughnessMap: textures.sharedPbrAtlas,
+    });
+    expect(materials.sharkTooth.userData.pbrAtlasRegion).toBe('graywake-tooth-enamel');
+    expect(materials.sharkTooth.userData.alphaPackedRoughness).toBe(true);
     expect(materials.sharkFlesh).toMatchObject({
       map: textures.sharedPbrAtlas,
       normalMap: textures.sharedPbrNormalAtlas,

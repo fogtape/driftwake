@@ -125,6 +125,8 @@ export interface SharkDiagnostics {
   worldPosition: { x: number; y: number; z: number };
   facialFocus: [number, number, number];
   eyeFocus: [number, number, number];
+  toothFocus: [number, number, number];
+  toothCount: number;
 }
 
 export interface SharkHarvestSettlement extends InventoryMutation {
@@ -136,6 +138,8 @@ export class SharkSystem {
   private readonly tailPivot: Group;
   private readonly facialFocus: Object3D;
   private readonly eyeMeshes: Mesh[];
+  private readonly toothFocus: Object3D;
+  private readonly toothCount: number;
   private readonly materialMaps: string;
   private readonly random = createSeededRandom(0x5a4c19);
   private readonly targetWorld = new Vector3();
@@ -150,6 +154,7 @@ export class SharkSystem {
   private readonly carcassVector = new Vector3();
   private readonly cameraWorld = new Vector3();
   private readonly facialWorld = new Vector3();
+  private readonly toothWorld = new Vector3();
   private readonly portEyeWorld = new Vector3();
   private readonly starboardEyeWorld = new Vector3();
   private readonly carcassFocusRing = new Mesh(
@@ -237,6 +242,8 @@ export class SharkSystem {
     this.materialMaps = sharkMaterialMaps(this.model);
     this.facialFocus = this.model.userData.facialFocus as Object3D;
     this.eyeMeshes = this.model.userData.eyeMeshes as Mesh[];
+    this.toothFocus = this.model.userData.toothFocus as Object3D;
+    this.toothCount = this.model.userData.toothCount as number;
     this.model.position.set(12, -0.8, 8);
     const exposedWeakPoint = this.structures.findSharkTarget(
       this.raft.getEdgeTiles(),
@@ -370,6 +377,7 @@ export class SharkSystem {
 
   getDiagnostics(): SharkDiagnostics {
     this.facialFocus.getWorldPosition(this.facialWorld);
+    this.toothFocus.getWorldPosition(this.toothWorld);
     const [portEye, starboardEye] = this.eyeMeshes as [Mesh, Mesh];
     portEye.getWorldPosition(this.portEyeWorld);
     starboardEye.getWorldPosition(this.starboardEyeWorld);
@@ -433,6 +441,8 @@ export class SharkSystem {
       },
       facialFocus: [this.facialWorld.x, this.facialWorld.y, this.facialWorld.z],
       eyeFocus: [eyeFocus.x, eyeFocus.y, eyeFocus.z],
+      toothFocus: [this.toothWorld.x, this.toothWorld.y, this.toothWorld.z],
+      toothCount: this.toothCount,
     };
   }
 

@@ -784,6 +784,42 @@ function createSharkFins(materials: MaterialLibrary): Group {
   return fins;
 }
 
+function createSharkTeeth(materials: MaterialLibrary): { mesh: InstancedMesh; focus: Object3D } {
+  const definitions = [
+    { x: -0.23, y: -0.158, scale: 0.76, rotation: Math.PI - 0.24 },
+    { x: -0.125, y: -0.143, scale: 0.92, rotation: Math.PI - 0.11 },
+    { x: 0, y: -0.138, scale: 1, rotation: Math.PI },
+    { x: 0.125, y: -0.143, scale: 0.92, rotation: Math.PI + 0.11 },
+    { x: 0.23, y: -0.158, scale: 0.76, rotation: Math.PI + 0.24 },
+    { x: -0.165, y: -0.262, scale: 0.68, rotation: -0.16 },
+    { x: -0.055, y: -0.274, scale: 0.8, rotation: -0.06 },
+    { x: 0.055, y: -0.274, scale: 0.8, rotation: 0.06 },
+    { x: 0.165, y: -0.262, scale: 0.68, rotation: 0.16 },
+  ] as const;
+  const teeth = shadowed(new InstancedMesh(new ConeGeometry(0.034, 0.118, 6), materials.sharkTooth, definitions.length));
+  teeth.name = 'shark-teeth';
+  const matrix = new Matrix4();
+  const position = new Vector3();
+  const rotation = new Euler();
+  const scale = new Vector3();
+  const orientation = new Quaternion();
+  for (const [index, definition] of definitions.entries()) {
+    position.set(definition.x, definition.y, -2.146);
+    rotation.set(0, 0, definition.rotation);
+    orientation.setFromEuler(rotation);
+    scale.setScalar(definition.scale);
+    matrix.compose(position, orientation, scale);
+    teeth.setMatrixAt(index, matrix);
+  }
+  teeth.instanceMatrix.needsUpdate = true;
+  teeth.computeBoundingSphere();
+
+  const focus = new Object3D();
+  focus.name = 'shark-tooth-focus';
+  focus.position.set(0, -0.207, -2.152);
+  return { mesh: teeth, focus };
+}
+
 export function createSharkModel(materials: MaterialLibrary): Group {
   const shark = new Group();
   shark.name = 'graywake-shark';
@@ -856,6 +892,9 @@ export function createSharkModel(materials: MaterialLibrary): Group {
   mouth.scale.set(1.34, 0.44, 1);
   shark.add(mouth);
 
+  const teeth = createSharkTeeth(materials);
+  shark.add(teeth.mesh, teeth.focus);
+
   const gillGeometry = new BoxGeometry(0.018, 0.22, 0.025);
   for (const side of [-1, 1]) {
     for (let index = 0; index < 3; index += 1) {
@@ -891,6 +930,9 @@ export function createSharkModel(materials: MaterialLibrary): Group {
   shark.userData.body = body;
   shark.userData.facialFocus = facialFocus;
   shark.userData.eyeMeshes = eyeMeshes;
+  shark.userData.toothMesh = teeth.mesh;
+  shark.userData.toothFocus = teeth.focus;
+  shark.userData.toothCount = teeth.mesh.count;
   shark.userData.harvestMarks = harvestMarks;
   shark.scale.setScalar(0.88);
   return shark;
@@ -922,7 +964,7 @@ export function createSharkLootDropModel(materials: MaterialLibrary): Group {
   }
 
   for (const [index, x] of [-0.18, 0.18].entries()) {
-    const tooth = shadowed(new Mesh(new ConeGeometry(0.085, 0.28, 7), materials.sailCloth));
+    const tooth = shadowed(new Mesh(new ConeGeometry(0.085, 0.28, 7), materials.sharkTooth));
     tooth.name = `shark-tooth-plate-${index}`;
     tooth.position.set(x, 0.28, 0.27);
     tooth.rotation.x = Math.PI * 0.56;

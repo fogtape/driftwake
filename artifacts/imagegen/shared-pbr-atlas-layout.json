@@ -205,6 +205,20 @@
         0.234375,
         0.234375
       ]
+    },
+    "graywake-tooth-enamel": {
+      "index": 14,
+      "column": 2,
+      "row": 3,
+      "sourceDirectory": "artifacts/imagegen/creature-pbr",
+      "uvOffset": [
+        0.5078125,
+        0.0078125
+      ],
+      "uvScale": [
+        0.234375,
+        0.234375
+      ]
     }
   }
 }

@@ -22,7 +22,7 @@
 | 主视觉 | 标题主视觉 | `APPROVED` |
 | 木筏主体 | 风化雪松 | `APPROVED` |
 | 海洋/环境 | 海面泡沫、礁床、飑云 | `APPROVED` |
-| 生物/纤维 | 深潮鲨皮、编织纤维、盐封手套 | `APPROVED` |
+| 生物/纤维 | 深潮鲨皮、牙釉、编织纤维、盐封手套 | `APPROVED` |
 | 建筑/生活设备 | 帆布、培养土、耐火陶土、导航合金、盐玻璃、密舱帆布、耐热折铁、盐蚀聚合物 | `APPROVED` |
 | 信号设备 | 信号层压板、磷光玻璃 | `APPROVED` |
 | M6 钓鱼鱼体 | 银脊鱼皮、琥鳍鲷皮、旗尾梭皮、远洋鱼眼 | `APPROVED`：来源、PBR、三鱼种捕获近景与运行时绑定通过 |
@@ -32,8 +32,8 @@
 | M9 工具与打捞基础材质 | 风化雪松 PBR、潮缚索具、盐蚀工具钢、盐蚀聚合物 | `APPROVED`：两套新增 Image 2 high 源图、雪松 PBR 补齐、12 张运行图绑定、2x2 与 framebuffer 近景通过 |
 | M9 岛屿与岸上资源 | 风暴冲刷岛岩、盐冠棕榈树皮/叶面、野生潮果、岸滩地表 | `APPROVED`：五套 Image 2 high 源图、15 个 PBR 槽、2x2、alpha roughness 精确打包与 `32/32` framebuffer 岛屿场景通过 |
 | M9 水下礁区与资源 | 浸水礁岩、暖/浅两类珊瑚、长叶海草、盐壳金属矿、潮红礁泥、盐冠礁鱼皮 | `APPROVED`：七套 Image 2 high 源图、21 个 PBR 槽、2x2、共享双图集/alpha roughness 与当前 `29/32` framebuffer/收割场景通过 |
-| M9 结构与防御 | 风暴撑紧固合金、风暴伤雪松横截面，并复用雪松/索具/工具钢/导航合金 | `APPROVED`：两套 Image 2 high 源图、临界真实断面、当前 14 区共享双图集、结构/周界 `30/32` 与水下 `29/32` framebuffer 通过 |
-| M9 深潮鲨微材质 | 深潮鲨口缘/鳃衬、圆瞳侧眼、主体皮肤，并透明复用鲜鱼肉来源作为伤痕/鲨肉 | `APPROVED`：三套 Image 2 high 2048 源图、裂瞳/五个鲨皮候选拒绝记录、独立 PBR、14 区 4096 共享图集加 direct packed 鲨皮、真实 windup/正式 `32/32` 门禁通过 |
+| M9 结构与防御 | 风暴撑紧固合金、风暴伤雪松横截面，并复用雪松/索具/工具钢/导航合金 | `APPROVED`：两套 Image 2 high 源图、临界真实断面、当前 15 区共享双图集、结构/周界 `30/32` 与水下 `29/32` framebuffer 通过 |
+| M9 深潮鲨微材质 | 深潮鲨口缘/鳃衬、圆瞳侧眼、主体皮肤、牙釉，并透明复用鲜鱼肉来源作为伤痕/鲨肉 | `APPROVED`：四套 Image 2 high 2048 源图、裂瞳/五个鲨皮/一版牙釉候选拒绝记录、独立 PBR、15 区 4096 共享图集加 direct packed 鲨皮、9 实例牙列与真实 windup/正式 `32/32` 门禁通过 |
 
 ## 历史占位整改队列
 
@@ -49,7 +49,8 @@
 | P1 | 结构与防御设备 | 结构件主要依赖雪松，但连接件、金属、绳和受损变化仍有纯色复用 | 连接件/紧固件/受损截面专用 PBR，并与雪松保持统一 | M4/M5 回溯 | `APPROVED` |
 | P2 | 生物口腔、眼与小型细节 | 三种钓获鱼、盐翼鸟与深潮鲨均已使用专用眼部；深潮鲨口缘/鳃衬也已脱离纯色 | Image 2 来源、PBR、模型朝向、真实袭击近景和预算必须同时通过 | M5/M6/M9 | `APPROVED` |
 | P2 | 深潮鲨主体皮肤 | TEX-003 的历史程序源已退出运行时；采用 F 为 `gpt-image-2 high` 2048 真皮齿源图，保留 audit PBR 与 packed alpha 链路 | 细齿尺度、2x2、水下/正式咬筏近景、绑定与预算同时复验；运行时只用 packed + normal | M5/M9 | `APPROVED` |
-| P2 | 深潮鲨齿板/最终口腔层 | 当前牙齿仍为低屏幕覆盖的代码层，不把审定壳色材质冒充最终牙齿资产 | 先取得近景屏幕覆盖与材质需求，再交付可蒙皮 DCC 牙齿/口腔层并复验受击、浮尸和 mip | M9 发布 | `DOING` |
+| P2 | 深潮鲨牙釉与代码原生牙列 | TEX-052 已用 Image 2 high 牙釉 PBR 替换帆布误用；5 上排 + 4 下排固定实例在真实 windup 可见，战利品两齿板复用同材质 | 来源、1024 PBR、2x2、atlas 区域、9 实例、战利品与浏览器画面/预算必须同时通过 | M9 | `APPROVED` |
+| P2 | 最终可蒙皮 DCC 鲨齿/口腔层 | 代码原生层不冒充最终可蒙皮牙床、牙龈、口腔容积或动画变形资产 | 交付 DCC UV、牙床/牙龈/牙齿层、受击与浮尸动画，并在真实 GPU 复验近景 mip 和遮挡 | M9 发布 | `DOING` |
 | P2 | UI 位图与图标 | 当前主要为代码图标和 CSS，不得引入低质位图占位 | 新增位图同样执行 Image 2 high、来源和目标分辨率检查 | M9 | `WATCH` |
 
 ## M6 首批证据
@@ -108,7 +109,7 @@
 | 潮红礁泥 | 2048x2048 / high / CLI | 1024，seam 168，normal 0.52，roughness 184-242 | x=8.14/1.11x，y=8.54/0.93x | `APPROVED`：水浸黏土与熟陶、锈铁和肉质分离 |
 | 盐冠礁鱼皮 | 2048x2048 / high / CLI | 1024，seam 160，normal 0.42，roughness 112-188 | x=10.97/0.99x，y=9.10/0.88x | `APPROVED`：三组小型鱼群不再使用纯青灰材质 |
 
-七套独立审计 PBR 通过 2x2 人工复核后，以 960 核心 + 32 gutter 写入共享双图集；albedo RGB 与 roughness alpha 共图，normal 独立，保存后 alpha 像素一致。`0.22.4` 的 4096x3072/11 区回归验证了 21 个带区域名的槽；`0.22.5` 扩为 4096x4096/14 区时继续保留 960 核心，不采用临时 896 核心降采样方案，并复验 `29 textures / 118 geometries / 255 calls / 140,618 triangles`、健康 Context/模拟和 `variation=126` framebuffer。`underwater-interaction` 继续真实完成“收割长叶海草”与 `+2 海草`。详见 `docs/M9_UNDERWATER_MATERIAL_ACCEPTANCE.md`。
+七套独立审计 PBR 通过 2x2 人工复核后，以 960 核心 + 32 gutter 写入共享双图集；albedo RGB 与 roughness alpha 共图，normal 独立，保存后 alpha 像素一致。`0.22.4` 的 4096x3072/11 区回归验证了 21 个带区域名的槽；`0.22.7` 在不降采样的前提下扩为 4096x4096/15 区，保留一格空位，并复验 `29 textures / 118 geometries / 256 calls / 140,650 triangles`、健康 Context/模拟和 `variation=126` framebuffer。`underwater-interaction` 继续真实完成“收割长叶海草”与 `+2 海草`。详见 `docs/M9_UNDERWATER_MATERIAL_ACCEPTANCE.md`。
 
 ## M9 结构与防御证据
 
@@ -129,8 +130,9 @@
 | 深潮鲨圆瞳侧眼 | 2048x2048 / high / CLI | 1024 中心虹膜、normal 0.28、roughness 58-138，4096 共享图集 | pupil=5.1，iris=57.0，edge=0.1 | `APPROVED`：裂瞳首版拒绝；采用版无 catchlight，侧前向圆面可读 |
 | 鲨肉/伤痕语义副本 | 复用审定 TEX-019 Image 2 high 来源 | 1024 三图写入独立 `graywake-shark-flesh` 区域 | 不二次重采样 | `APPROVED`：不再把口腔衬层同时冒充肉和伤痕，来源复用透明记录 |
 | 深潮鲨主体皮肤（TEX-003 F） | 2048x2048 / high / CLI edit | 1024，seam 168、normal 0.18、roughness 160-216；direct packed RGB/A + normal | x=7.13/1.03x，y=13.00/0.98x，boundary=(1,1023)，alpha 精确 | `APPROVED`：拒绝皮革、织物、板岩、环形鳞流与过暗候选；采用蓝绿灰真皮齿在水下和正式咬筏均可读 |
+| 深潮鲨牙釉与 9 实例牙列（TEX-052） | 2048x2048 / high / CLI edit | 1024，seam 144、normal 0.22、roughness 116-176，4096 共享图集 | x=5.61/0.88x，y=4.77/1.00x，boundary=(1,1)；5 上排 + 4 下排 | `APPROVED`：拒绝宽水平带候选；采用连续冷象牙釉，真实水中 `toothDot=0.982`，正式咬筏 `toothDot=0.941` |
 
-模型同步封闭旧车削体鼻端、增加浅口腔面，把双眼嵌入钝吻侧前方，并统一普通对象正 Z `lookAt` 与负 Z 鼻端的朝向合同；木筏/水中中心停距调整为 3.6/3.85m。采用 F 的 `shark-facial-materials` 在真实水中 windup 活动帧得到 `34 / 114 / 42 / 96,246`、`variation=253 / nonBlack=232,404`；`shark-combat visual` 独立锁定正式咬筏 `32/32` 预算。牙齿的最终 DCC 层仍保留为唯一生物材质 `DOING` 项。详见 `docs/M9_CREATURE_MATERIAL_ACCEPTANCE.md`。
+模型同步封闭旧车削体鼻端、增加浅口腔面，把双眼嵌入钝吻侧前方，并统一普通对象正 Z `lookAt` 与负 Z 鼻端的朝向合同；木筏/水中中心停距调整为 3.6/3.85m。牙釉以一个固定 `InstancedMesh` 给出 5 上排 + 4 下排，`shark-facial-materials` 在真实水中 windup 活动帧得到 `34 / 115 / 43 / 96,354`、`variation=253 / nonBlack=232,772`、眼/牙点积 `0.965/0.982`；`shark-combat visual` 独立锁定正式咬筏 `32/32` 和牙点积 `0.941`。代码原生牙列已通过，最终 DCC 齿床/口腔层仍保留为唯一生物视觉 `DOING` 项。详见 `docs/M9_CREATURE_MATERIAL_ACCEPTANCE.md`。
 
 ## 完成条件
 

@@ -60,6 +60,7 @@ function createTestMaterials(): MaterialLibrary {
     fishEye: texturedMaterial(),
     sharkMouth: material(),
     sharkEye: material(),
+    sharkTooth: material(),
     reefSeabed: material(),
     reefRock: material(),
     coralWarm: material(),
@@ -152,6 +153,11 @@ describe('procedural model assets', () => {
     expect(mouth.material).toBe(materials.sharkMouth);
     expect(mouth.rotation.x).toBeCloseTo(0);
     expect((shark.getObjectByName('shark-mouth-lining') as Mesh).material).toBe(materials.sharkMouth);
+    const teeth = shark.userData.toothMesh as InstancedMesh;
+    expect(teeth.name).toBe('shark-teeth');
+    expect(teeth.material).toBe(materials.sharkTooth);
+    expect(teeth.count).toBe(9);
+    expect(shark.userData.toothFocus).toBeDefined();
     expect((shark.userData.harvestMarks as Mesh[]).every((mark) => mark.material === materials.sharkFlesh)).toBe(true);
   }, 15_000);
 
@@ -170,6 +176,12 @@ describe('procedural model assets', () => {
     });
     expect(meatCuts).toHaveLength(3);
     expect(meatCuts.every((cut) => cut.material === materials.sharkFlesh)).toBe(true);
+    const toothPlates: Mesh[] = [];
+    bundle.traverse((object) => {
+      if (object instanceof Mesh && object.name.startsWith('shark-tooth-plate-')) toothPlates.push(object);
+    });
+    expect(toothPlates).toHaveLength(2);
+    expect(toothPlates.every((tooth) => tooth.material === materials.sharkTooth)).toBe(true);
   });
 
   it('gives each first-person tool a distinct detailed mesh assembly', () => {

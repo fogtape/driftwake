@@ -152,6 +152,7 @@ export interface MaterialLibrary {
   fishEye: MeshStandardMaterial;
   sharkMouth: MeshStandardMaterial;
   sharkEye: MeshStandardMaterial;
+  sharkTooth: MeshStandardMaterial;
   reefSeabed: MeshStandardMaterial;
   reefRock: MeshStandardMaterial;
   coralWarm: MeshStandardMaterial;
@@ -992,6 +993,12 @@ const SHARED_ATLAS_REGIONS = {
     scale: [0.234375, 0.234375],
     repeat: [1, 1],
   },
+  graywakeTooth: {
+    name: 'graywake-tooth-enamel',
+    offset: [0.5078125, 0.0078125],
+    scale: [0.234375, 0.234375],
+    repeat: [1.1, 1.3],
+  },
 } as const satisfies Record<string, PbrAtlasRegion>;
 
 function useAlphaPackedRoughness(material: MeshStandardMaterial): MeshStandardMaterial {
@@ -1265,6 +1272,15 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       metalness: 0,
       side: DoubleSide,
     }), SHARED_ATLAS_REGIONS.graywakeEye),
+    sharkTooth: usePackedPbrAtlas(new MeshStandardMaterial({
+      color: 0xf1eee3,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
+      normalScale: new Vector2(0.22, 0.22),
+      roughnessMap: textures.sharedPbrAtlas,
+      roughness: 0.6,
+      metalness: 0,
+    }), SHARED_ATLAS_REGIONS.graywakeTooth),
     reefSeabed: new MeshStandardMaterial({
       color: 0xcbd0b5,
       map: textures.reefSeabed,

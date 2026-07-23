@@ -1,6 +1,6 @@
 # Driftwake
 
-原创桌面网页 3D 海上生存游戏。当前版本为 `0.22.6` 高质量纵向切片，不以基础 Demo 为完成标准。
+原创桌面网页 3D 海上生存游戏。当前版本为 `0.22.7` 高质量纵向切片，不以基础 Demo 为完成标准。
 
 ## 当前内容
 
@@ -32,7 +32,7 @@
 - 潮红湿砖可在同一通风架分批放置、独立计时与收取；回潮熔炉可在矿石炼锭与细砂熔制玻璃之间切换；
 - 金属锭研究会解锁潮铸穿浪矛和宽刃斧；升级消耗旧工具、自动替换快捷栏，并实际提升鲨鱼刺击与砍伐效率；
 - 信号板、潮铸合金与密封铰链可研究潮鸣震叉；按住左键 1.25 秒后在 7.4m 定向锁定内松开，以 1 枚盐差电池和 1 点耐久换取轻伤害与立即驱离；提前松开、缺电或失锁不消耗资源；
-- 原创程序深潮鲨拥有巡游、预兆、筏体/结构/网具择靶、水中扑咬、分级矛具命中与驱离；鼻端朝向已统一到真实运动目标，侧前向圆瞳眼片、正向口缘/鳃衬和主体真皮齿均使用 Image 2 high PBR，主体以 packed albedo/roughness + normal 两图运行；每轮攻击使用明确的蓄势/咬合/回摆阶段与最多两次结算，矛具在青色窗口起手可用完整前摇打断攻击，扑空、反击和普通命中具有独立声画反馈；致命刺击后会侧翻成 52 秒可采集鲨体，按住 `E` 依次割取 3 份鲨肉、1 张鲨皮和 2 枚鲨齿，浪面或镜头造成的瞬时失焦只暂停进度，重新对准后继续；
+- 原创程序深潮鲨拥有巡游、预兆、筏体/结构/网具择靶、水中扑咬、分级矛具命中与驱离；鼻端朝向已统一到真实运动目标，侧前向圆瞳眼片、正向口缘/鳃衬、主体真皮齿和 5 上排 + 4 下排的牙釉实例均使用 Image 2 high PBR，主体以 packed albedo/roughness + normal 两图运行；每轮攻击使用明确的蓄势/咬合/回摆阶段与最多两次结算，矛具在青色窗口起手可用完整前摇打断攻击，扑空、反击和普通命中具有独立声画反馈；致命刺击后会侧翻成 52 秒可采集鲨体，按住 `E` 依次割取 3 份鲨肉、1 张鲨皮和 2 枚鲨齿，浪面或镜头造成的瞬时失焦只暂停进度，重新对准后继续；
 - 鲨体取尽或超时后持续下沉并进入 48 秒重生冷却；满包拒收物资使用专用捆扎模型进入既有八槽海面掉落池，部分接收不会复制或吞物，水中连续鲨咬的击退速度有界；连续三轮真实击杀/采集门禁覆盖失焦冻结、落水等待、自然重生定位、渲染预算、资源池合并和冷启动恢复；
 - 岛屿远景接近、靠岸、无切场登岛、地形坡度与障碍碰撞、返筏后离流和下一岛重生；
 - 18 个确定性岛屿资源节点、石斧三击/金属斧两击砍伐、树木受击/倒伏/树桩、枝料/石料/潮果/纤维拾取和满包保护；
@@ -55,9 +55,9 @@
 - 设置提供 18 项可重映射物理键位、冲突拒绝与默认恢复；危险/天气/钓鱼/工具/失败恢复声音可选显示为字幕，支持标准、红弱、绿弱、蓝弱和高对比语义配色，以及减少镜头起伏、受击晃动和界面动态；
 - 六总线程序音频混音、随完整相机姿态更新的 HRTF 落水/打捞定位、近场绳索受力与断裂层，以及水下低通、鲨鱼失力/浮尸/分段割取/下沉、震叉分段蓄能/就绪/失调/脉冲、生活/信号设备、锚帆、风雨雷声、种植、研究、礁区和生物声音；
 - 标题、HUD、背包、制作、设置、能力提示和 Playwright 截图回归流程；
-- 原创标题美术、木材、泡沫、深潮鲨主体真皮齿、口缘/鳃衬与侧眼、编织纤维、AI 辅助海床、拼补帆布、培养土、耐火陶土、导航合金、信号层压板、磷光玻璃、共鸣青铜、电气陶瓷、潮缚索具、盐蚀工具钢、风暴撑紧固合金、风暴伤雪松横截面、岛岩、棕榈树皮/叶面、野生潮果、岸滩地表、盐蚀集热玻璃、蜡封帆布、盐封手套、三种鱼皮、生/熟/焦鱼肉、远洋鱼眼、耐热折铁、盐蚀聚合物、盐冠活/枯叶与潮果、盐翼体羽/飞羽/角质/虹膜 PBR 与飑云天空材质，以及对应的 normal/roughness 通道；风化雪松也已补齐 normal/roughness。
+- 原创标题美术、木材、泡沫、深潮鲨主体真皮齿、口缘/鳃衬、侧眼与牙釉、编织纤维、AI 辅助海床、拼补帆布、培养土、耐火陶土、导航合金、信号层压板、磷光玻璃、共鸣青铜、电气陶瓷、潮缚索具、盐蚀工具钢、风暴撑紧固合金、风暴伤雪松横截面、岛岩、棕榈树皮/叶面、野生潮果、岸滩地表、盐蚀集热玻璃、蜡封帆布、盐封手套、三种鱼皮、生/熟/焦鱼肉、远洋鱼眼、耐热折铁、盐蚀聚合物、盐冠活/枯叶与潮果、盐翼体羽/飞羽/角质/虹膜 PBR 与飑云天空材质，以及对应的 normal/roughness 通道；风化雪松也已补齐 normal/roughness。
 
-当前仍不是完整游戏。M6 钓鱼、烹饪/净水、天气农业、盐翼鸟害、M8 分阶段研究与远海目的地，以及 M9 三档存档/备份恢复、无障碍输入、工具/打捞、岛屿/岸上、水下礁区、结构/防御、鲨鱼口腔/眼部/主体皮肤六批历史材质整改的代码与自动视觉闭环已经完成；无说明玩家验收、目标真实 GPU 鼠标/双画质门禁、最终 DCC 鲨齿/蒙皮资产、更多深水生态资源、潜水装备与其余 M9 发布系统仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
+当前仍不是完整游戏。M6 钓鱼、烹饪/净水、天气农业、盐翼鸟害、M8 分阶段研究与远海目的地，以及 M9 三档存档/备份恢复、无障碍输入、工具/打捞、岛屿/岸上、水下礁区、结构/防御、鲨鱼口腔/眼部/主体皮肤与代码原生牙釉牙列七批历史材质整改的代码与自动视觉闭环已经完成；无说明玩家验收、目标真实 GPU 鼠标/双画质门禁、最终 DCC 鲨齿/蒙皮资产、更多深水生态资源、潜水装备与其余 M9 发布系统仍按 [项目追踪](PROJECT_TRACKER.md) 继续开发。
 
 ## 运行
 
@@ -104,7 +104,7 @@ M9 水下材质门禁复现：`CAPTURE_ONLY=underwater CAPTURE_FAST=1 npm run ca
 
 M9 结构/防御材质门禁复现：`CAPTURE_ONLY=building BUILDING_PART=damage CAPTURE_FAST=1 npm run capture` 验证真实双咬、临界横截面、冷启动与三锤修复；`CAPTURE_ONLY=perimeter-defense-visual CAPTURE_FAST=1 npm run capture` 验证缘甲护栏/紧固件、载货潮兜和 `30/32` 纹理预算。详见 [M9 结构与防御材质验收记录](docs/M9_STRUCTURE_MATERIAL_ACCEPTANCE.md)。
 
-M9 深潮鲨微材质门禁复现：`CAPTURE_ONLY=shark-facial-materials CAPTURE_FAST=1 npm run capture` 读取采用 F 主体皮肤的真实水中反击窗活动 framebuffer，`CAPTURE_ONLY=shark-combat SHARK_COMBAT_STAGE=visual CAPTURE_FAST=1 npm run capture` 锁定正式咬筏 `32/32` 预算；`CAPTURE_ONLY=shark-loot-water CAPTURE_FAST=1 npm run capture` 在低渲染负载档完成真实击杀、四段割取与存档结算。高画质素材和逻辑场景分档取证，不以降低 4096 图集通过软件 GLES。详见 [M9 生物微材质验收记录](docs/M9_CREATURE_MATERIAL_ACCEPTANCE.md)。
+M9 深潮鲨微材质门禁复现：`CAPTURE_ONLY=shark-facial-materials CAPTURE_FAST=1 npm run capture` 读取采用 F 主体皮肤与 9 颗牙釉实例的真实水中反击窗活动 framebuffer，`CAPTURE_ONLY=shark-combat SHARK_COMBAT_STAGE=visual CAPTURE_FAST=1 npm run capture` 锁定正式咬筏 `32/32` 预算与牙列焦点；`CAPTURE_ONLY=shark-loot-water CAPTURE_FAST=1 npm run capture` 在低渲染负载档完成真实击杀、四段割取与存档结算。高画质素材和逻辑场景分档取证，不以降低 4096 图集通过软件 GLES。详见 [M9 生物微材质验收记录](docs/M9_CREATURE_MATERIAL_ACCEPTANCE.md)。
 
 ## 资产管线
 
@@ -124,7 +124,7 @@ python scripts/prepare_imagegen_soil.py --input output/imagegen/soil.png --albed
 python scripts/prepare_imagegen_material.py --input output/imagegen/material.png --albedo material.webp --normal material-normal.webp --roughness material-roughness.webp
 python scripts/prepare_imagegen_eye.py --input artifacts/imagegen/pelagic-fish-eye-raw.png --albedo public/assets/textures/pelagic-fish-eye.webp --normal public/assets/textures/pelagic-fish-eye-normal.webp --roughness public/assets/textures/pelagic-fish-eye-roughness.webp
 python scripts/pack_roughness_alpha.py --albedo albedo.webp --roughness roughness.webp --output packed.webp
-python scripts/build_pbr_atlas.py --input-dir artifacts/imagegen/underwater-pbr --input-dir artifacts/imagegen/structure-pbr --input-dir artifacts/imagegen/shared-pbr-sources --input-dir artifacts/imagegen/creature-pbr --names brine-reef-rock ember-branch-coral tidecrown-pale-coral long-ribbon-seaweed saltcrust-metal-ore tide-red-reef-clay saltcrown-reef-fish-skin stormbrace-fastener-alloy stormscar-cedar-crosscut brineworn-tool-steel navigation-alloy graywake-mouth-lining graywake-shark-flesh graywake-lateral-eye --albedo-output public/assets/textures/saltcrown-shared-pbr-atlas.webp --normal-output public/assets/textures/saltcrown-shared-pbr-normal-atlas.webp --manifest-output artifacts/imagegen/shared-pbr-atlas-layout.json
+python scripts/build_pbr_atlas.py --input-dir artifacts/imagegen/underwater-pbr --input-dir artifacts/imagegen/structure-pbr --input-dir artifacts/imagegen/shared-pbr-sources --input-dir artifacts/imagegen/creature-pbr --names brine-reef-rock ember-branch-coral tidecrown-pale-coral long-ribbon-seaweed saltcrust-metal-ore tide-red-reef-clay saltcrown-reef-fish-skin stormbrace-fastener-alloy stormscar-cedar-crosscut brineworn-tool-steel navigation-alloy graywake-mouth-lining graywake-shark-flesh graywake-lateral-eye graywake-tooth-enamel --albedo-output public/assets/textures/saltcrown-shared-pbr-atlas.webp --normal-output public/assets/textures/saltcrown-shared-pbr-normal-atlas.webp --manifest-output artifacts/imagegen/shared-pbr-atlas-layout.json
 ```
 
 完整来源、最终提示词、采用/拒绝结论和模型清单见 [原创资产清单](docs/ASSET_MANIFEST.md)；历史低质、纯色与跨题材复用材质的整改优先级见 [运行时材质质量审计](docs/ASSET_QUALITY_AUDIT.md)。

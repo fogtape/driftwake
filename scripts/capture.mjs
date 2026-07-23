@@ -8209,6 +8209,7 @@ async function captureSharkCombat() {
         const aim = JSON.parse(mount?.dataset.sharkAim ?? '{}');
         const face = JSON.parse(mount?.dataset.sharkFacialFocus ?? '[]');
         const eye = JSON.parse(mount?.dataset.sharkEyeFocus ?? '[]');
+        const tooth = JSON.parse(mount?.dataset.sharkToothFocus ?? '[]');
         const faceVector = Array.isArray(aim.camera) && Array.isArray(face)
           ? face.map((value, index) => value - aim.camera[index])
           : [];
@@ -8217,6 +8218,10 @@ async function captureSharkCombat() {
           ? eye.map((value, index) => value - aim.camera[index])
           : [];
         const eyeDistance = eyeVector.length === 3 ? Math.hypot(...eyeVector) : 0;
+        const toothVector = Array.isArray(aim.camera) && Array.isArray(tooth)
+          ? tooth.map((value, index) => value - aim.camera[index])
+          : [];
+        const toothDistance = toothVector.length === 3 ? Math.hypot(...toothVector) : 0;
         return {
           phase: mount?.dataset.sharkAttackPhase,
           progress: Number(mount?.dataset.sharkAttackProgress),
@@ -8232,6 +8237,7 @@ async function captureSharkCombat() {
           viewport: { width: innerWidth, height: innerHeight },
           textures: Number(mount?.dataset.textures),
           materialMaps: mount?.dataset.sharkMaterialMaps?.split('|') ?? [],
+          teeth: Number(mount?.dataset.sharkToothCount),
           face,
           faceDot: faceDistance > 0 && Array.isArray(aim.forward)
             ? faceVector.reduce((total, value, index) => total + value * aim.forward[index], 0) / faceDistance
@@ -8239,6 +8245,10 @@ async function captureSharkCombat() {
           eye,
           eyeDot: eyeDistance > 0 && Array.isArray(aim.forward)
             ? eyeVector.reduce((total, value, index) => total + value * aim.forward[index], 0) / eyeDistance
+            : -1,
+          tooth,
+          toothDot: toothDistance > 0 && Array.isArray(aim.forward)
+            ? toothVector.reduce((total, value, index) => total + value * aim.forward[index], 0) / toothDistance
             : -1,
         };
       });
@@ -8260,9 +8270,12 @@ async function captureSharkCombat() {
         || visualState.card.bottom > visualState.viewport.height
         || !Number.isFinite(visualState.textures)
         || visualState.textures > 32
+        || visualState.teeth !== 9
+        || visualState.toothDot < 0.75
         || !visualState.materialMaps.includes('[graywake-mouth-lining]')
         || !visualState.materialMaps.includes('[graywake-shark-flesh]')
         || !visualState.materialMaps.includes('[graywake-lateral-eye]')
+        || !visualState.materialMaps.includes('[graywake-tooth-enamel]')
       ) {
         throw new Error(`Shark combat windup visual gate failed: ${JSON.stringify(visualState)}`);
       }
@@ -8808,10 +8821,15 @@ async function captureSharkFacialMaterials() {
       const mount = document.querySelector('.game-mount');
       const aim = JSON.parse(mount?.dataset.sharkAim ?? '{}');
       const eye = JSON.parse(mount?.dataset.sharkEyeFocus ?? '[]');
+      const tooth = JSON.parse(mount?.dataset.sharkToothFocus ?? '[]');
       const eyeVector = Array.isArray(aim.camera) && Array.isArray(eye)
         ? eye.map((value, index) => value - aim.camera[index])
         : [];
       const eyeDistance = eyeVector.length === 3 ? Math.hypot(...eyeVector) : 0;
+      const toothVector = Array.isArray(aim.camera) && Array.isArray(tooth)
+        ? tooth.map((value, index) => value - aim.camera[index])
+        : [];
+      const toothDistance = toothVector.length === 3 ? Math.hypot(...toothVector) : 0;
       return {
         phase: mount?.dataset.sharkAttackPhase,
         counterWindow: mount?.dataset.sharkCounterWindow,
@@ -8821,8 +8839,12 @@ async function captureSharkFacialMaterials() {
         drawCalls: Number(mount?.dataset.drawCalls),
         triangles: Number(mount?.dataset.triangles),
         materialMaps: mount?.dataset.sharkMaterialMaps?.split('|') ?? [],
+        teeth: Number(mount?.dataset.sharkToothCount),
         eyeDot: eyeDistance > 0 && Array.isArray(aim.forward)
           ? eyeVector.reduce((total, value, index) => total + value * aim.forward[index], 0) / eyeDistance
+          : -1,
+        toothDot: toothDistance > 0 && Array.isArray(aim.forward)
+          ? toothVector.reduce((total, value, index) => total + value * aim.forward[index], 0) / toothDistance
           : -1,
       };
     });
@@ -8838,9 +8860,12 @@ async function captureSharkFacialMaterials() {
       || state.geometries <= 0
       || state.drawCalls <= 0
       || state.triangles <= 0
+      || state.teeth !== 9
+      || state.toothDot < 0.75
       || !state.materialMaps.includes('[graywake-mouth-lining]')
       || !state.materialMaps.includes('[graywake-shark-flesh]')
       || !state.materialMaps.includes('[graywake-lateral-eye]')
+      || !state.materialMaps.includes('[graywake-tooth-enamel]')
     ) {
       throw new Error(`Shark facial material scene failed: ${JSON.stringify(state)}`);
     }
