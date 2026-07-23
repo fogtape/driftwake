@@ -52,6 +52,7 @@ function createTestMaterials(): MaterialLibrary {
     amberFinSkin: texturedMaterial(),
     sailtailRunnerSkin: texturedMaterial(),
     fishFlesh: texturedMaterial(),
+    sharkFlesh: texturedMaterial(),
     cookedFishFlesh: texturedMaterial(),
     burntFishFlesh: texturedMaterial(),
     saltfireIron: texturedMaterial(),
@@ -129,7 +130,8 @@ describe('procedural model assets', () => {
   });
 
   it('builds a non-degenerate articulated shark silhouette', () => {
-    const shark = createSharkModel(createTestMaterials());
+    const materials = createTestMaterials();
+    const shark = createSharkModel(materials);
     const stats = meshStats(shark);
     const size = new Box3().setFromObject(shark).getSize(new Vector3());
     expect(stats.meshes).toBeGreaterThanOrEqual(12);
@@ -137,17 +139,37 @@ describe('procedural model assets', () => {
     expect(size.z).toBeGreaterThan(3.5);
     expect(size.x).toBeGreaterThan(2);
     expect(shark.userData.tailPivot).toBeDefined();
+    expect(shark.userData.facialFocus).toBeDefined();
     expect(shark.userData.harvestMarks).toHaveLength(3);
+    const eyes: Mesh[] = [];
+    shark.traverse((object) => {
+      if (object instanceof Mesh && object.name.startsWith('shark-eye-')) eyes.push(object);
+    });
+    expect(eyes).toHaveLength(2);
+    expect(eyes.every((eye) => eye.material === materials.sharkEye)).toBe(true);
+    expect(eyes.every((eye) => new Vector3(0, 0, 1).applyEuler(eye.rotation).z < -0.4)).toBe(true);
+    const mouth = shark.getObjectByName('shark-mouth-rim') as Mesh;
+    expect(mouth.material).toBe(materials.sharkMouth);
+    expect(mouth.rotation.x).toBeCloseTo(0);
+    expect((shark.getObjectByName('shark-mouth-lining') as Mesh).material).toBe(materials.sharkMouth);
+    expect((shark.userData.harvestMarks as Mesh[]).every((mark) => mark.material === materials.sharkFlesh)).toBe(true);
   }, 15_000);
 
   it('builds a distinct bound shark-harvest bundle for rejected loot', () => {
-    const bundle = createSharkLootDropModel(createTestMaterials());
+    const materials = createTestMaterials();
+    const bundle = createSharkLootDropModel(materials);
     const stats = meshStats(bundle);
     const size = new Box3().setFromObject(bundle).getSize(new Vector3());
     expect(stats.meshes).toBeGreaterThanOrEqual(8);
     expect(size.x).toBeGreaterThan(0.8);
     expect(size.y).toBeGreaterThan(0.3);
     expect(bundle.userData.kind).toBe('sharkLoot');
+    const meatCuts: Mesh[] = [];
+    bundle.traverse((object) => {
+      if (object instanceof Mesh && object.name.startsWith('shark-meat-cut-')) meatCuts.push(object);
+    });
+    expect(meatCuts).toHaveLength(3);
+    expect(meatCuts.every((cut) => cut.material === materials.sharkFlesh)).toBe(true);
   });
 
   it('gives each first-person tool a distinct detailed mesh assembly', () => {

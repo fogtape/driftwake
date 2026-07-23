@@ -26,6 +26,7 @@ describe('asset texture loading', () => {
     expect(textures.wood.userData.sourcePath).toBe('/assets/textures/weathered-cedar.webp');
     expect(textures.woodNormal.userData.sourcePath).toBe('/assets/textures/weathered-cedar-normal.webp');
     expect(textures.woodRoughness.userData.sourcePath).toBe('/assets/textures/weathered-cedar-roughness.webp');
+    expect(textures.sharkSkinPacked.userData.sourcePath).toBe('/assets/textures/shark-skin-packed.webp');
     expect(textures.cookedFishFlesh.userData.sourcePath).toBe('/assets/textures/cooked-fish-flesh.webp');
     expect(textures.burntFishFlesh.userData.sourcePath).toBe('/assets/textures/burnt-fish-flesh.webp');
     expect(textures.saltfireIron.userData.sourcePath).toBe('/assets/textures/saltfire-folded-iron.webp');
@@ -73,6 +74,25 @@ describe('asset texture loading', () => {
       roughnessMap: textures.sharedPbrAtlas,
     });
     expect(materials.navigationAlloy.userData.pbrAtlasRegion).toBe('navigation-alloy');
+    expect(materials.sharkMouth).toMatchObject({
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
+      roughnessMap: textures.sharedPbrAtlas,
+    });
+    expect(materials.sharkMouth.userData.pbrAtlasRegion).toBe('graywake-mouth-lining');
+    expect(materials.sharkEye).toMatchObject({
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
+      roughnessMap: textures.sharedPbrAtlas,
+    });
+    expect(materials.sharkEye.userData.pbrAtlasRegion).toBe('graywake-lateral-eye');
+    expect(materials.sharkEye.userData.alphaPackedRoughness).toBe(true);
+    expect(materials.sharkFlesh).toMatchObject({
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
+      roughnessMap: textures.sharedPbrAtlas,
+    });
+    expect(materials.sharkFlesh.userData.pbrAtlasRegion).toBe('graywake-shark-flesh');
     expect(materials.polymer).toMatchObject({
       map: textures.saltEtchedPolymer,
       normalMap: textures.saltEtchedPolymerNormal,
@@ -136,7 +156,7 @@ describe('asset texture loading', () => {
     } as Parameters<typeof materials.reefRock.onBeforeCompile>[0];
     materials.reefRock.onBeforeCompile(atlasShader, renderer);
     expect(atlasShader.vertexShader).toContain('fract(vMapUv * vec2(1.3500000, 1.3500000))');
-    expect(atlasShader.vertexShader).toContain('vec2(0.0078125, 0.6770833)');
+    expect(atlasShader.vertexShader).toContain('vec2(0.0078125, 0.7578125)');
     expect(atlasShader.vertexShader).toContain('fract(vNormalMapUv');
     expect(atlasShader.vertexShader).toContain('fract(vRoughnessMapUv');
     expect(atlasShader.fragmentShader).toContain('roughnessFactor *= texelRoughness.a;');
@@ -158,7 +178,9 @@ describe('asset texture loading', () => {
       materials.metal,
       materials.rustMetal,
       materials.navigationAlloy,
-    ].map((material) => material.customProgramCacheKey())).size).toBe(11);
+      materials.sharkMouth,
+      materials.sharkFlesh,
+    ].map((material) => material.customProgramCacheKey())).size).toBe(13);
     expect(materials.cropLeaf).toMatchObject({
       map: textures.cropLeaf,
       normalMap: textures.cropLeafNormal,

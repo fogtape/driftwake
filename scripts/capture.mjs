@@ -1468,6 +1468,14 @@ const sharkCombatWaterSave = {
   },
 };
 
+const sharkFacialWaterSave = {
+  ...sharkCombatWaterSave,
+  player: {
+    ...sharkCombatWaterSave.player,
+    navigation: { surface: 'water', x: -3.117, y: -0.55, z: 4.7 },
+  },
+};
+
 const sharkResonanceSave = {
   ...sharkCombatRaftSave,
   player: {
@@ -2109,6 +2117,64 @@ async function aimAtShark(page, iterations = 7, settleMs = 180) {
     await page.waitForTimeout(settleMs);
   }
   return total;
+}
+
+async function installSharkFaceCaptureFreeze(page, { captureFrame = false } = {}) {
+  await page.evaluate((shouldCaptureFrame) => {
+    const mount = document.querySelector('.game-mount');
+    if (!mount) throw new Error('Shark facial capture mount is missing');
+    globalThis.__driftwakeSharkFaceCaptureFrozen = false;
+    globalThis.__driftwakeSharkFaceCaptureFrame = null;
+    const freeze = () => {
+      const data = mount.dataset;
+      if (data.sharkAttackPhase !== 'windup' || data.sharkCounterWindow !== 'true') return;
+      if (shouldCaptureFrame) {
+        const canvas = document.querySelector('canvas');
+        const gl = canvas?.getContext('webgl2');
+        if (canvas && gl && !gl.isContextLost()) {
+          const source = new Uint8Array(canvas.width * canvas.height * 4);
+          gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, source);
+          const flipped = new Uint8ClampedArray(source.length);
+          const stride = canvas.width * 4;
+          let minimum = 255;
+          let maximum = 0;
+          let nonBlack = 0;
+          for (let y = 0; y < canvas.height; y += 1) {
+            flipped.set(source.subarray(y * stride, (y + 1) * stride), (canvas.height - y - 1) * stride);
+          }
+          for (let index = 0; index < source.length; index += 4) {
+            const luminance = source[index] * 0.2126 + source[index + 1] * 0.7152 + source[index + 2] * 0.0722;
+            minimum = Math.min(minimum, luminance);
+            maximum = Math.max(maximum, luminance);
+            if (luminance > 4) nonBlack += 1;
+          }
+          const output = document.createElement('canvas');
+          output.width = canvas.width;
+          output.height = canvas.height;
+          const context = output.getContext('2d');
+          if (context) {
+            context.putImageData(new ImageData(flipped, canvas.width, canvas.height), 0, 0);
+            globalThis.__driftwakeSharkFaceCaptureFrame = {
+              width: canvas.width,
+              height: canvas.height,
+              variation: Math.round(maximum - minimum),
+              nonBlack,
+              data: output.toDataURL('image/png').split(',', 2)[1],
+            };
+          }
+        }
+      }
+      globalThis.__driftwakeSharkFaceCaptureFrozen = true;
+      observer.disconnect();
+      window.dispatchEvent(new Event('blur'));
+    };
+    const observer = new MutationObserver(freeze);
+    observer.observe(mount, {
+      attributes: true,
+      attributeFilter: ['data-shark-attack-phase', 'data-shark-counter-window'],
+    });
+    freeze();
+  }, captureFrame);
 }
 
 async function installNoticeHistory(page) {
@@ -8123,24 +8189,34 @@ async function captureSharkCombat() {
         const data = document.querySelector('.game-mount')?.dataset;
         return data?.sharkMode === 'approaching';
       }, 20_000);
+      await installSharkFaceCaptureFreeze(visual.page);
       await aimAtShark(visual.page, 6, 35);
       await visual.page.waitForFunction(() => {
-        const data = document.querySelector('.game-mount')?.dataset;
-        return data?.sharkAttackPhase === 'windup'
-          && data?.sharkCounterWindow === 'true';
+        return globalThis.__driftwakeSharkFaceCaptureFrozen === true;
       }, undefined, { polling: 'raf', timeout: 120_000 });
-      await visual.page.evaluate(() => window.dispatchEvent(new Event('blur')));
       await waitForRuntime(
         visual.page,
         () => document.querySelector('.game-mount')?.dataset.simulationActive === 'false',
         5_000,
       );
+      await visual.page.waitForTimeout(360);
       visualState = await visual.page.evaluate(() => {
         const mount = document.querySelector('.game-mount');
         const card = document.querySelector('.shark-warning.is-counter');
         const crosshair = document.querySelector('.crosshair.is-counter');
         const fill = card?.querySelector('i b');
         const rect = card?.getBoundingClientRect();
+        const aim = JSON.parse(mount?.dataset.sharkAim ?? '{}');
+        const face = JSON.parse(mount?.dataset.sharkFacialFocus ?? '[]');
+        const eye = JSON.parse(mount?.dataset.sharkEyeFocus ?? '[]');
+        const faceVector = Array.isArray(aim.camera) && Array.isArray(face)
+          ? face.map((value, index) => value - aim.camera[index])
+          : [];
+        const faceDistance = faceVector.length === 3 ? Math.hypot(...faceVector) : 0;
+        const eyeVector = Array.isArray(aim.camera) && Array.isArray(eye)
+          ? eye.map((value, index) => value - aim.camera[index])
+          : [];
+        const eyeDistance = eyeVector.length === 3 ? Math.hypot(...eyeVector) : 0;
         return {
           phase: mount?.dataset.sharkAttackPhase,
           progress: Number(mount?.dataset.sharkAttackProgress),
@@ -8154,6 +8230,16 @@ async function captureSharkCombat() {
           fillWidth: fill?.getBoundingClientRect().width ?? 0,
           card: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null,
           viewport: { width: innerWidth, height: innerHeight },
+          textures: Number(mount?.dataset.textures),
+          materialMaps: mount?.dataset.sharkMaterialMaps?.split('|') ?? [],
+          face,
+          faceDot: faceDistance > 0 && Array.isArray(aim.forward)
+            ? faceVector.reduce((total, value, index) => total + value * aim.forward[index], 0) / faceDistance
+            : -1,
+          eye,
+          eyeDot: eyeDistance > 0 && Array.isArray(aim.forward)
+            ? eyeVector.reduce((total, value, index) => total + value * aim.forward[index], 0) / eyeDistance
+            : -1,
         };
       });
       if (
@@ -8172,10 +8258,20 @@ async function captureSharkCombat() {
         || visualState.card.top < 0
         || visualState.card.right > visualState.viewport.width
         || visualState.card.bottom > visualState.viewport.height
+        || !Number.isFinite(visualState.textures)
+        || visualState.textures > 32
+        || !visualState.materialMaps.includes('[graywake-mouth-lining]')
+        || !visualState.materialMaps.includes('[graywake-shark-flesh]')
+        || !visualState.materialMaps.includes('[graywake-lateral-eye]')
       ) {
         throw new Error(`Shark combat windup visual gate failed: ${JSON.stringify(visualState)}`);
       }
       const compositedFrame = await inspectCanvasPixels(visual.page, 'shark-combat-windup');
+      if (process.env.CAPTURE_FAST === '1') {
+        const screenshotPath = new URL('shark-combat-windup-canvas.png', outputDir).pathname;
+        if (compositedFrame) await writeFile(screenshotPath, Buffer.from(compositedFrame, 'base64'));
+        else await captureCompositedPage(visual.page, screenshotPath);
+      }
       if (process.env.CAPTURE_FAST !== '1') {
         const screenshotPath = new URL('shark-counter-window-desktop.png', outputDir).pathname;
         if (compositedFrame) await writeFile(screenshotPath, Buffer.from(compositedFrame, 'base64'));
@@ -8683,6 +8779,98 @@ async function captureSharkCombat() {
   console.log(`Shark combat rhythm: ${JSON.stringify({ visual: visualState, counter: counterState, resonance: resonanceState, water: waterState })}`);
 }
 
+async function captureSharkFacialMaterials() {
+  const viewport = { width: 1024, height: 640 };
+  const visual = await openDesktopPage('shark-facial-materials', {
+    seedSave: true,
+    customSave: sharkFacialWaterSave,
+    ...viewport,
+  });
+  try {
+    await enterGame(visual.page);
+    await waitForRuntime(visual.page, () => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return data?.sharkMode === 'approaching' && data?.playerSurface === 'water';
+    }, 20_000);
+    await installSharkFaceCaptureFreeze(visual.page, { captureFrame: true });
+    await aimAtShark(visual.page, 5, 35);
+    await visual.page.waitForFunction(() => globalThis.__driftwakeSharkFaceCaptureFrozen === true, undefined, {
+      polling: 'raf',
+      timeout: 120_000,
+    });
+    await waitForRuntime(
+      visual.page,
+      () => document.querySelector('.game-mount')?.dataset.simulationActive === 'false',
+      5_000,
+    );
+    await visual.page.waitForTimeout(360);
+    const state = await visual.page.evaluate(() => {
+      const mount = document.querySelector('.game-mount');
+      const aim = JSON.parse(mount?.dataset.sharkAim ?? '{}');
+      const eye = JSON.parse(mount?.dataset.sharkEyeFocus ?? '[]');
+      const eyeVector = Array.isArray(aim.camera) && Array.isArray(eye)
+        ? eye.map((value, index) => value - aim.camera[index])
+        : [];
+      const eyeDistance = eyeVector.length === 3 ? Math.hypot(...eyeVector) : 0;
+      return {
+        phase: mount?.dataset.sharkAttackPhase,
+        counterWindow: mount?.dataset.sharkCounterWindow,
+        playerSurface: mount?.dataset.playerSurface,
+        textures: Number(mount?.dataset.textures),
+        geometries: Number(mount?.dataset.geometries),
+        drawCalls: Number(mount?.dataset.drawCalls),
+        triangles: Number(mount?.dataset.triangles),
+        materialMaps: mount?.dataset.sharkMaterialMaps?.split('|') ?? [],
+        eyeDot: eyeDistance > 0 && Array.isArray(aim.forward)
+          ? eyeVector.reduce((total, value, index) => total + value * aim.forward[index], 0) / eyeDistance
+          : -1,
+      };
+    });
+    if (
+      state.phase !== 'windup'
+      || state.counterWindow !== 'true'
+      || state.playerSurface !== 'water'
+      || !Number.isFinite(state.textures)
+      || state.textures > 36
+      || !Number.isFinite(state.geometries)
+      || !Number.isFinite(state.drawCalls)
+      || !Number.isFinite(state.triangles)
+      || state.geometries <= 0
+      || state.drawCalls <= 0
+      || state.triangles <= 0
+      || !state.materialMaps.includes('[graywake-mouth-lining]')
+      || !state.materialMaps.includes('[graywake-shark-flesh]')
+      || !state.materialMaps.includes('[graywake-lateral-eye]')
+    ) {
+      throw new Error(`Shark facial material scene failed: ${JSON.stringify(state)}`);
+    }
+    const framebuffer = await visual.page.evaluate(() => globalThis.__driftwakeSharkFaceCaptureFrame);
+    if (!framebuffer?.data) throw new Error('Shark facial material active framebuffer was not returned');
+    assertFrameContent({
+      contextLost: false,
+      variation: framebuffer.variation,
+      nonBlack: framebuffer.nonBlack,
+      width: framebuffer.width,
+      height: framebuffer.height,
+    }, 'shark-facial-materials active framebuffer');
+    await writeFile(
+      new URL('shark-facial-materials-canvas.png', outputDir).pathname,
+      Buffer.from(framebuffer.data, 'base64'),
+    );
+    console.log(`Shark facial material gate: ${JSON.stringify({
+      ...state,
+      framebuffer: {
+        width: framebuffer.width,
+        height: framebuffer.height,
+        variation: framebuffer.variation,
+        nonBlack: framebuffer.nonBlack,
+      },
+    })}`);
+  } finally {
+    await visual.context.close();
+  }
+}
+
 async function killSharkAndFocusCarcass(page, label, options = {}) {
   const startingHealth = options.startingHealth ?? 52;
   const startingDurability = options.startingDurability ?? 90;
@@ -9024,6 +9212,19 @@ async function holdToHarvestShark(page, label, options = {}) {
           harvestedCarcasses: data?.sharkHarvestedCarcassCount,
           expiredCarcasses: data?.sharkExpiredCarcassCount,
           respawns: data?.sharkRespawnCount,
+          inputEnabled: data?.sharkInputEnabled,
+          harvestHeld: data?.sharkHarvestHeld,
+          harvestInputDown: data?.sharkHarvestInputDown,
+          simulationActive: data?.simulationActive,
+          simulationTicks: data?.simulationTickCount,
+          pointerLocked: document.pointerLockElement === document.querySelector('canvas'),
+          documentFocused: document.hasFocus(),
+          visibility: document.visibilityState,
+          contextHealthy: data?.contextHealthy,
+          playerSurface: data?.playerSurface,
+          phaseState: document.querySelector('.game-shell')?.getAttribute('data-phase') ?? null,
+          pauseVisible: Boolean(document.querySelector('.focus-prompt')),
+          failureVisible: Boolean(document.querySelector('.failure-screen.is-visible')),
           interaction: document.querySelector('.interaction-prompt.is-visible')?.textContent?.trim(),
           worldDrops: data?.worldDropCount,
           distance,
@@ -9100,12 +9301,14 @@ async function holdToHarvestShark(page, label, options = {}) {
 
 async function captureSharkLootWater() {
   const inputMode = process.env.SHARK_LOOT_INPUT ?? 'observer';
+  const fastLogicProfile = process.env.CAPTURE_FAST === '1' && captureQuality !== 'high';
   const waterRun = await openDesktopPage('shark-loot-water', {
     seedSave: true,
     customSave: sharkLootWaterSave,
     simulationTimeScale: 3,
-    width: 1024,
-    height: 640,
+    quality: fastLogicProfile ? 'low' : captureQuality,
+    width: fastLogicProfile ? 320 : 1024,
+    height: fastLogicProfile ? 200 : 640,
   });
   await enterGame(waterRun.page);
   await installNoticeHistory(waterRun.page);
@@ -9662,6 +9865,7 @@ try {
   if (captureOnly === 'perimeter-destruction') await capturePerimeterDestructionProbe();
   if (captureOnly === 'perimeter-defense-visual') await capturePerimeterDefenseVisual();
   if (captureOnly === 'all' || captureOnly === 'failure') await captureFailureRecovery();
+  if (captureOnly === 'shark-facial-materials') await captureSharkFacialMaterials();
   if (captureOnly === 'all' || captureOnly === 'shark-combat') await captureSharkCombat();
   if (captureOnly === 'all' || captureOnly === 'shark-loot') await captureSharkLoot();
   if (captureOnly === 'shark-loot-loop') {

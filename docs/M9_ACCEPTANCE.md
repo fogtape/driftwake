@@ -1,7 +1,7 @@
 # M9 完整性、存档与发布质量验收记录
 
-> 当前状态：`DOING`（三档存档、备份恢复、生命周期保存、无障碍输入，以及工具/打捞、岛屿/岸上、水下礁区、结构/防御四批历史材质已闭环；其余最终资产、真实 GPU 与发布证据仍在后续切片）
-> 当前版本：`0.22.4`
+> 当前状态：`DOING`（三档存档、备份恢复、生命周期保存、无障碍输入，以及工具/打捞、岛屿/岸上、水下礁区、结构/防御、鲨鱼口腔/眼部五批历史材质已闭环；其余最终资产、真实 GPU 与发布证据仍在后续切片）
+> 当前版本：`0.22.5`
 > 日期：2026-07-23
 
 ## 存档仓库合同
@@ -18,8 +18,16 @@
 
 - 新增风暴撑紧固合金和风暴伤雪松横截面两套 `gpt-image-2 high 2048x2048` 原创源图；采用源、完整提示词、拒绝候选和 PBR 参数均已归档；
 - 临界结构会缩短真实木质分件并露出横截面；冷启动保持断面，三锤修复后断面批次归零，结构生命、材料、耐久和 v18 保存保持同一事务；
-- 工具钢、导航合金、结构新材质与七套水下材质共用 4096x3072 双图集；结构/周界场景均为 `30/32` 纹理，水下回归为 `29/32`，没有抬高硬预算；
+- 工具钢、导航合金、结构新材质、七套水下材质与鲨鱼微材质共用 4096x4096 双图集；每区仍保留 960 核心，结构/周界历史场景均为 `30/32`、水下历史回归为 `29/32`，正式鲨鱼咬筏为 `32/32`，没有抬高硬预算；
 - 详细来源、运行时槽位、三场 framebuffer 和复现命令见 [M9 结构与防御材质验收记录](M9_STRUCTURE_MATERIAL_ACCEPTANCE.md)。
+
+## 深潮鲨微材质闭环
+
+- 新增深潮鲨口缘/鳃衬和圆瞳侧眼两套 `gpt-image-2 high 2048x2048` 原创源图；裂瞳候选明确拒绝，完整提示词、采用/拒绝源与 PBR 参数均归档；
+- 眼、口、伤痕/鲨肉使用三个独立 atlas 区域；共享图集扩为 4096x4096/14 区时仍保留 960 核心，鲨皮 roughness 通过 alpha 精确打包抵消运行纹理；
+- 修复鲨体根节点正 Z `lookAt` 与负 Z 鼻端相反造成的尾朝目标问题；巡游、追击、扑咬、退场和浮尸共用正确朝向，眼口在真实袭击中不再被整段躯体遮挡；
+- 攻击中心停距按 1.85m 吻部调整为木筏 3.6m、水中 3.85m，反击窗不再贴近裁剪面；水中微材质场景在真实活动帧原子读取玩家 framebuffer 后才冻结，正式咬筏继续锁定 `32/32`。详细证据见 [M9 生物微材质验收记录](M9_CREATURE_MATERIAL_ACCEPTANCE.md)。
+- 水面割取在仍按住交互键时允许几何焦点或输入门禁短暂抖动：进度暂停并在重新对准后续接，只有松键、窗口失焦、拒收或下沉才清零；320x200 软件逻辑档真实结算四段战利品，1024x640 软件 GLES Context Lost 则明确保留为目标 GPU 门禁，不以降低素材质量换取通过。
 
 ## 自动证据
 
@@ -27,6 +35,12 @@
 npx vitest run src/game/domain/save.test.ts src/game/domain/saveRepository.test.ts src/state/gameStore.test.ts --maxWorkers=1
 CAPTURE_ONLY=save-slots DRIFTWAKE_URL=http://127.0.0.1:4173 npm run capture
 CAPTURE_ONLY=save-recovery CAPTURE_FAST=1 DRIFTWAKE_URL=http://127.0.0.1:4173 npm run capture
+CAPTURE_ONLY=shark-facial-materials CAPTURE_FAST=1 npm run capture
+CAPTURE_ONLY=shark-combat SHARK_COMBAT_STAGE=visual CAPTURE_FAST=1 npm run capture
+CAPTURE_ONLY=shark-loot-water CAPTURE_FAST=1 npm run capture
+CAPTURE_ONLY=underwater CAPTURE_FAST=1 npm run capture
+CAPTURE_ONLY=building BUILDING_PART=damage CAPTURE_FAST=1 npm run capture
+CAPTURE_ONLY=perimeter-defense-visual CAPTURE_FAST=1 npm run capture
 ```
 
 - `saveRepository.test.ts` 覆盖旧单档物化、三档隔离、备份轮换、主档与工作副本同时损坏后的恢复、浏览器工作副本兼容、写失败保留可恢复副本、未标记旧别名的跨档隔离、主档损坏时的较新备份优先、活动二号档不误复制到一号档，以及逐档删除。
@@ -34,11 +48,11 @@ CAPTURE_ONLY=save-recovery CAPTURE_FAST=1 DRIFTWAKE_URL=http://127.0.0.1:4173 np
 - `save-slots` 预置一号正常、二号主档损坏/备份有效、三号不可恢复损坏。桌面 `1440x900` 与窄屏 `640x720` 均验证三种状态、档位选择、按钮语义、无横向溢出和无 Canvas/世界 chunk。
 - `save-recovery` 实际进入二号备份航次，确认 `slot-2` 被锁定、恢复标记为真、二号主档重写为 v18、一号仍为 `4260s`、备份为 `1560s`，并验证 synthetic `pagehide` 将上一个主档轮换为备份且钩具为唯一手持状态。
 
-当前全量 Vitest：50 个测试文件、323 项通过。Termux/Xvfb 仅用于逻辑、行为和构图证据；真实 GPU 的双 profile、长期运行、音频输出和无说明玩家流程不以此通过。
+当前全量 Vitest：50 个测试文件、323 项通过；生产构建、捕获脚本和 Image 2 PBR 派生脚本均通过。Termux/Xvfb 仅用于逻辑、行为和构图证据；真实 GPU 的双 profile、长期运行、音频输出和无说明玩家流程不以此通过。
 
 ## 后续发布门禁
 
 - 多语言文案与剩余辅助技术验收；无障碍输入、字幕、色觉与减少动态详见 [M9 无障碍验收记录](M9_ACCESSIBILITY_ACCEPTANCE.md)；
-- 全流程混音、灯光、其余历史材质回溯和最终 DCC 替换；工具/打捞整改详见 [M9 材质整改验收记录](M9_MATERIAL_ACCEPTANCE.md)，岛屿/岸上整改详见 [M9 岛屿材质验收记录](M9_ISLAND_MATERIAL_ACCEPTANCE.md)，水下礁区整改详见 [M9 水下材质验收记录](M9_UNDERWATER_MATERIAL_ACCEPTANCE.md)，结构/防御整改详见 [M9 结构与防御材质验收记录](M9_STRUCTURE_MATERIAL_ACCEPTANCE.md)；
+- 全流程混音、灯光、其余历史材质回溯和最终 DCC 替换；工具/打捞整改详见 [M9 材质整改验收记录](M9_MATERIAL_ACCEPTANCE.md)，岛屿/岸上整改详见 [M9 岛屿材质验收记录](M9_ISLAND_MATERIAL_ACCEPTANCE.md)，水下礁区整改详见 [M9 水下材质验收记录](M9_UNDERWATER_MATERIAL_ACCEPTANCE.md)，结构/防御整改详见 [M9 结构与防御材质验收记录](M9_STRUCTURE_MATERIAL_ACCEPTANCE.md)，鲨鱼微材质详见 [M9 生物微材质验收记录](M9_CREATURE_MATERIAL_ACCEPTANCE.md)；
 - 真 WebGL Context Lost/Restore、真实 GPU 1280x720/30 与 1920x1080/60、20 分钟长稳；
 - 新玩家 30-60 分钟无说明流程、存档选择理解、删除确认理解和恢复信任度。

@@ -96,8 +96,8 @@ CAPTURE_ONLY=structure-collapse CAPTURE_QUALITY=high \
 
 - 结构金属、坠落金属、潮兜卡扣、筏钉和缘甲角固件统一改用 Image 2 high 风暴撑紧固合金；缘甲长导轨保留独立导航合金语义；
 - 临界结构确定性缩短一个足够大的木质箱形分件，并在缺损端显示 Image 2 high 雪松横截面；冷启动保持一处断面，三锤全修后断面实例归零；
-- 七个基础批次加一个横截面批次仍是固定上限，没有逐帧创建资源；结构损坏场景实测 `30 textures / 79 geometries / 110 calls / 113,924 triangles`；
-- 周界场景六个合金槽全部绑定 11 区共享双图集，实测 `30 textures / 88 geometries / 129 calls / 105,592 triangles`；完整记录见 `docs/M9_STRUCTURE_MATERIAL_ACCEPTANCE.md`。
+- 七个基础批次加一个横截面批次仍是固定上限，没有逐帧创建资源；`0.22.5` 结构损坏场景实测 `30 textures / 78 geometries / 110 calls / 113,924 triangles`；
+- 周界场景六个合金槽全部绑定当前 14 区共享双图集，`0.22.5` 实测 `30 textures / 89 geometries / 129 calls / 105,592 triangles`；完整记录见 `docs/M9_STRUCTURE_MATERIAL_ACCEPTANCE.md`。
 
 ## 目标真实 GPU 门禁
 

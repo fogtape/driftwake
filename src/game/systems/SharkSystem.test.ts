@@ -68,6 +68,7 @@ function createTestMaterials(): MaterialLibrary {
     amberFinSkin: material(),
     sailtailRunnerSkin: material(),
     fishFlesh: material(),
+    sharkFlesh: material(),
     cookedFishFlesh: material(),
     burntFishFlesh: material(),
     saltfireIron: material(),
@@ -162,13 +163,26 @@ describe('SharkSystem structure attacks', () => {
       shark.update(tick / 60, 1 / 60);
     }
 
-    expect(shark.getDiagnostics()).toMatchObject({
+    const diagnostics = shark.getDiagnostics();
+    expect(diagnostics).toMatchObject({
       lastRaftTargetKind: 'structure',
       lastRaftTargetId: 'exposed-wall',
       lastRaftTargetHealth: 7,
       structureDamageEvents: 2,
       foundationDamageEvents: 0,
     });
+    const target = new Vector3();
+    structures.getLocalImpactPosition(structures.getStructure('exposed-wall')!, target);
+    raft.localPointToWorld(target, target);
+    const center = new Vector3(
+      diagnostics.worldPosition.x,
+      diagnostics.worldPosition.y,
+      diagnostics.worldPosition.z,
+    );
+    const face = new Vector3(...diagnostics.facialFocus);
+    const faceDirection = face.sub(center).setY(0).normalize();
+    const targetDirection = target.sub(center).setY(0).normalize();
+    expect(faceDirection.dot(targetDirection)).toBeGreaterThan(0.98);
     expect(structures.getStructure('exposed-wall')?.health).toBe(7);
     expect(raft.getTile({ x: 1, z: 1 })?.health).toBe(100);
     expect(onMutation).toHaveBeenCalledTimes(2);
@@ -472,7 +486,34 @@ describe('SharkSystem structure attacks', () => {
     pressHarvest();
     camera.position.x = 1.7;
     camera.updateMatrixWorld(true);
-    for (let tick = 0; tick < 235; tick += 1) shark.update((tick + 61) / 60, 1 / 60);
+    for (let tick = 0; tick < 20; tick += 1) shark.update((tick + 61) / 60, 1 / 60);
+    const partialHarvest = shark.getDiagnostics().harvestProgress;
+    expect(partialHarvest).toBeGreaterThan(0);
+    shark.setInputEnabled(false);
+    expect(shark.getDiagnostics()).toMatchObject({
+      inputEnabled: false,
+      harvestHeld: false,
+      harvestInputDown: true,
+    });
+    expect(shark.getDiagnostics().harvestProgress).toBe(partialHarvest);
+    shark.setInputEnabled(true);
+    camera.position.x = 20;
+    camera.updateMatrixWorld(true);
+    shark.update(82 / 60, 1 / 60);
+    expect(shark.getDiagnostics()).toMatchObject({
+      carcassFocused: false,
+    });
+    expect(shark.getDiagnostics().harvestProgress).toBe(partialHarvest);
+    camera.position.x = 1.7;
+    camera.updateMatrixWorld(true);
+    shark.update(83 / 60, 1 / 60);
+    expect(shark.getDiagnostics()).toMatchObject({
+      inputEnabled: true,
+      carcassFocused: true,
+      harvestHeld: true,
+      harvestInputDown: true,
+    });
+    for (let tick = 0; tick < 235; tick += 1) shark.update((tick + 84) / 60, 1 / 60);
     expect(onHarvest).toHaveBeenCalledTimes(5);
     expect(onHarvest.mock.calls.slice(1).map(([loot]) => loot)).toEqual([
       { sharkMeat: 1 },

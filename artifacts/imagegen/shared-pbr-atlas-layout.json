@@ -2,13 +2,13 @@
   "version": 2,
   "atlasSize": [
     4096,
-    3072
+    4096
   ],
   "cellSize": 1024,
   "gutter": 32,
   "coreSize": 960,
   "columns": 4,
-  "rows": 3,
+  "rows": 4,
   "regions": {
     "brine-reef-rock": {
       "index": 0,
@@ -17,11 +17,11 @@
       "sourceDirectory": "artifacts/imagegen/underwater-pbr",
       "uvOffset": [
         0.0078125,
-        0.6770833333333334
+        0.7578125
       ],
       "uvScale": [
         0.234375,
-        0.3125
+        0.234375
       ]
     },
     "ember-branch-coral": {
@@ -31,11 +31,11 @@
       "sourceDirectory": "artifacts/imagegen/underwater-pbr",
       "uvOffset": [
         0.2578125,
-        0.6770833333333334
+        0.7578125
       ],
       "uvScale": [
         0.234375,
-        0.3125
+        0.234375
       ]
     },
     "tidecrown-pale-coral": {
@@ -45,11 +45,11 @@
       "sourceDirectory": "artifacts/imagegen/underwater-pbr",
       "uvOffset": [
         0.5078125,
-        0.6770833333333334
+        0.7578125
       ],
       "uvScale": [
         0.234375,
-        0.3125
+        0.234375
       ]
     },
     "long-ribbon-seaweed": {
@@ -59,11 +59,11 @@
       "sourceDirectory": "artifacts/imagegen/underwater-pbr",
       "uvOffset": [
         0.7578125,
-        0.6770833333333334
+        0.7578125
       ],
       "uvScale": [
         0.234375,
-        0.3125
+        0.234375
       ]
     },
     "saltcrust-metal-ore": {
@@ -73,11 +73,11 @@
       "sourceDirectory": "artifacts/imagegen/underwater-pbr",
       "uvOffset": [
         0.0078125,
-        0.34375
+        0.5078125
       ],
       "uvScale": [
         0.234375,
-        0.3125
+        0.234375
       ]
     },
     "tide-red-reef-clay": {
@@ -87,11 +87,11 @@
       "sourceDirectory": "artifacts/imagegen/underwater-pbr",
       "uvOffset": [
         0.2578125,
-        0.34375
+        0.5078125
       ],
       "uvScale": [
         0.234375,
-        0.3125
+        0.234375
       ]
     },
     "saltcrown-reef-fish-skin": {
@@ -101,11 +101,11 @@
       "sourceDirectory": "artifacts/imagegen/underwater-pbr",
       "uvOffset": [
         0.5078125,
-        0.34375
+        0.5078125
       ],
       "uvScale": [
         0.234375,
-        0.3125
+        0.234375
       ]
     },
     "stormbrace-fastener-alloy": {
@@ -115,11 +115,11 @@
       "sourceDirectory": "artifacts/imagegen/structure-pbr",
       "uvOffset": [
         0.7578125,
-        0.34375
+        0.5078125
       ],
       "uvScale": [
         0.234375,
-        0.3125
+        0.234375
       ]
     },
     "stormscar-cedar-crosscut": {
@@ -129,11 +129,11 @@
       "sourceDirectory": "artifacts/imagegen/structure-pbr",
       "uvOffset": [
         0.0078125,
-        0.010416666666666666
+        0.2578125
       ],
       "uvScale": [
         0.234375,
-        0.3125
+        0.234375
       ]
     },
     "brineworn-tool-steel": {
@@ -143,11 +143,11 @@
       "sourceDirectory": "artifacts/imagegen/shared-pbr-sources",
       "uvOffset": [
         0.2578125,
-        0.010416666666666666
+        0.2578125
       ],
       "uvScale": [
         0.234375,
-        0.3125
+        0.234375
       ]
     },
     "navigation-alloy": {
@@ -157,11 +157,53 @@
       "sourceDirectory": "artifacts/imagegen/shared-pbr-sources",
       "uvOffset": [
         0.5078125,
-        0.010416666666666666
+        0.2578125
       ],
       "uvScale": [
         0.234375,
-        0.3125
+        0.234375
+      ]
+    },
+    "graywake-mouth-lining": {
+      "index": 11,
+      "column": 3,
+      "row": 2,
+      "sourceDirectory": "artifacts/imagegen/creature-pbr",
+      "uvOffset": [
+        0.7578125,
+        0.2578125
+      ],
+      "uvScale": [
+        0.234375,
+        0.234375
+      ]
+    },
+    "graywake-shark-flesh": {
+      "index": 12,
+      "column": 0,
+      "row": 3,
+      "sourceDirectory": "artifacts/imagegen/creature-pbr",
+      "uvOffset": [
+        0.0078125,
+        0.0078125
+      ],
+      "uvScale": [
+        0.234375,
+        0.234375
+      ]
+    },
+    "graywake-lateral-eye": {
+      "index": 13,
+      "column": 1,
+      "row": 3,
+      "sourceDirectory": "artifacts/imagegen/creature-pbr",
+      "uvOffset": [
+        0.2578125,
+        0.0078125
+      ],
+      "uvScale": [
+        0.234375,
+        0.234375
       ]
     }
   }

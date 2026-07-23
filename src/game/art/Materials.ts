@@ -17,9 +17,8 @@ export interface AssetTextures {
   woodNormal: Texture;
   woodRoughness: Texture;
   foam: Texture;
-  sharkSkin: Texture;
+  sharkSkinPacked: Texture;
   sharkSkinNormal: Texture;
-  sharkSkinRoughness: Texture;
   silverSpineSkin: Texture;
   silverSpineSkinNormal: Texture;
   silverSpineSkinRoughness: Texture;
@@ -145,6 +144,7 @@ export interface MaterialLibrary {
   amberFinSkin: MeshStandardMaterial;
   sailtailRunnerSkin: MeshStandardMaterial;
   fishFlesh: MeshStandardMaterial;
+  sharkFlesh: MeshStandardMaterial;
   cookedFishFlesh: MeshStandardMaterial;
   burntFishFlesh: MeshStandardMaterial;
   saltfireIron: MeshStandardMaterial;
@@ -190,9 +190,8 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     woodNormal,
     woodRoughness,
     foam,
-    sharkSkin,
+    sharkSkinPacked,
     sharkSkinNormal,
-    sharkSkinRoughness,
     silverSpineSkin,
     silverSpineSkinNormal,
     silverSpineSkinRoughness,
@@ -302,9 +301,8 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     loader.loadAsync('/assets/textures/weathered-cedar-normal.webp'),
     loader.loadAsync('/assets/textures/weathered-cedar-roughness.webp'),
     loader.loadAsync('/assets/textures/ocean-foam-mask.png'),
-    loader.loadAsync('/assets/textures/shark-skin.webp'),
+    loader.loadAsync('/assets/textures/shark-skin-packed.webp'),
     loader.loadAsync('/assets/textures/shark-skin-normal.webp'),
-    loader.loadAsync('/assets/textures/shark-skin-roughness.webp'),
     loader.loadAsync('/assets/textures/silver-spine-skin.webp'),
     loader.loadAsync('/assets/textures/silver-spine-skin-normal.webp'),
     loader.loadAsync('/assets/textures/silver-spine-skin-roughness.webp'),
@@ -416,6 +414,8 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     [wood, 'weathered-cedar-albedo'],
     [woodNormal, 'weathered-cedar-normal'],
     [woodRoughness, 'weathered-cedar-roughness'],
+    [sharkSkinPacked, 'shark-skin-packed'],
+    [sharkSkinNormal, 'shark-skin-normal'],
     [silverSpineSkin, 'silver-spine-skin-albedo'],
     [silverSpineSkinNormal, 'silver-spine-skin-normal'],
     [silverSpineSkinRoughness, 'silver-spine-skin-roughness'],
@@ -508,20 +508,18 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
   foam.wrapT = RepeatWrapping;
   foam.anisotropy = anisotropy;
 
-  for (const texture of [sharkSkin, sharkSkinNormal, sharkSkinRoughness, wovenFiber, wovenFiberNormal, wovenFiberRoughness]) {
+  for (const texture of [sharkSkinPacked, sharkSkinNormal, wovenFiber, wovenFiberNormal, wovenFiberRoughness]) {
     texture.wrapS = RepeatWrapping;
     texture.wrapT = RepeatWrapping;
     texture.anisotropy = anisotropy;
   }
-  sharkSkin.colorSpace = SRGBColorSpace;
+  sharkSkinPacked.colorSpace = SRGBColorSpace;
   wovenFiber.colorSpace = SRGBColorSpace;
   sharkSkinNormal.colorSpace = NoColorSpace;
-  sharkSkinRoughness.colorSpace = NoColorSpace;
   wovenFiberNormal.colorSpace = NoColorSpace;
   wovenFiberRoughness.colorSpace = NoColorSpace;
-  sharkSkin.repeat.set(1.15, 1.85);
-  sharkSkinNormal.repeat.copy(sharkSkin.repeat);
-  sharkSkinRoughness.repeat.copy(sharkSkin.repeat);
+  sharkSkinPacked.repeat.set(1.15, 1.85);
+  sharkSkinNormal.repeat.copy(sharkSkinPacked.repeat);
   wovenFiber.repeat.set(1.8, 1.8);
   wovenFiberNormal.repeat.copy(wovenFiber.repeat);
   wovenFiberRoughness.repeat.copy(wovenFiber.repeat);
@@ -767,9 +765,8 @@ export async function loadAssetTextures(renderer: WebGLRenderer): Promise<AssetT
     woodNormal,
     woodRoughness,
     foam,
-    sharkSkin,
+    sharkSkinPacked,
     sharkSkinNormal,
-    sharkSkinRoughness,
     silverSpineSkin,
     silverSpineSkinNormal,
     silverSpineSkinRoughness,
@@ -913,69 +910,87 @@ interface PbrAtlasRegion {
 const SHARED_ATLAS_REGIONS = {
   reefRock: {
     name: 'brine-reef-rock',
-    offset: [0.0078125, 0.6770833],
-    scale: [0.234375, 0.3125],
+    offset: [0.0078125, 0.7578125],
+    scale: [0.234375, 0.234375],
     repeat: [1.35, 1.35],
   },
   coralWarm: {
     name: 'ember-branch-coral',
-    offset: [0.2578125, 0.6770833],
-    scale: [0.234375, 0.3125],
+    offset: [0.2578125, 0.7578125],
+    scale: [0.234375, 0.234375],
     repeat: [1, 1.35],
   },
   coralPale: {
     name: 'tidecrown-pale-coral',
-    offset: [0.5078125, 0.6770833],
-    scale: [0.234375, 0.3125],
+    offset: [0.5078125, 0.7578125],
+    scale: [0.234375, 0.234375],
     repeat: [1, 1.35],
   },
   seaweed: {
     name: 'long-ribbon-seaweed',
-    offset: [0.7578125, 0.6770833],
-    scale: [0.234375, 0.3125],
+    offset: [0.7578125, 0.7578125],
+    scale: [0.234375, 0.234375],
     repeat: [0.75, 1.15],
   },
   ore: {
     name: 'saltcrust-metal-ore',
-    offset: [0.0078125, 0.34375],
-    scale: [0.234375, 0.3125],
+    offset: [0.0078125, 0.5078125],
+    scale: [0.234375, 0.234375],
     repeat: [1.25, 1.25],
   },
   clay: {
     name: 'tide-red-reef-clay',
-    offset: [0.2578125, 0.34375],
-    scale: [0.234375, 0.3125],
+    offset: [0.2578125, 0.5078125],
+    scale: [0.234375, 0.234375],
     repeat: [1.15, 1.15],
   },
   reefFish: {
     name: 'saltcrown-reef-fish-skin',
-    offset: [0.5078125, 0.34375],
-    scale: [0.234375, 0.3125],
+    offset: [0.5078125, 0.5078125],
+    scale: [0.234375, 0.234375],
     repeat: [1.35, 1],
   },
   structureFastener: {
     name: 'stormbrace-fastener-alloy',
-    offset: [0.7578125, 0.34375],
-    scale: [0.234375, 0.3125],
+    offset: [0.7578125, 0.5078125],
+    scale: [0.234375, 0.234375],
     repeat: [1.35, 1.35],
   },
   splinteredWood: {
     name: 'stormscar-cedar-crosscut',
-    offset: [0.0078125, 0.0104167],
-    scale: [0.234375, 0.3125],
+    offset: [0.0078125, 0.2578125],
+    scale: [0.234375, 0.234375],
     repeat: [1.1, 1.1],
   },
   toolSteel: {
     name: 'brineworn-tool-steel',
-    offset: [0.2578125, 0.0104167],
-    scale: [0.234375, 0.3125],
+    offset: [0.2578125, 0.2578125],
+    scale: [0.234375, 0.234375],
     repeat: [1.55, 1.45],
   },
   navigationAlloy: {
     name: 'navigation-alloy',
-    offset: [0.5078125, 0.0104167],
-    scale: [0.234375, 0.3125],
+    offset: [0.5078125, 0.2578125],
+    scale: [0.234375, 0.234375],
     repeat: [1.7, 1.45],
+  },
+  graywakeMouth: {
+    name: 'graywake-mouth-lining',
+    offset: [0.7578125, 0.2578125],
+    scale: [0.234375, 0.234375],
+    repeat: [1.15, 1.35],
+  },
+  graywakeSharkFlesh: {
+    name: 'graywake-shark-flesh',
+    offset: [0.0078125, 0.0078125],
+    scale: [0.234375, 0.234375],
+    repeat: [1.08, 1.08],
+  },
+  graywakeEye: {
+    name: 'graywake-lateral-eye',
+    offset: [0.2578125, 0.0078125],
+    scale: [0.234375, 0.234375],
+    repeat: [1, 1],
   },
 } as const satisfies Record<string, PbrAtlasRegion>;
 
@@ -1130,15 +1145,15 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       roughnessMap: textures.wovenFiberRoughness,
       roughness: 1,
     }),
-    sharkSkin: new MeshStandardMaterial({
+    sharkSkin: useAlphaPackedRoughness(new MeshStandardMaterial({
       color: 0xc0d0ce,
-      map: textures.sharkSkin,
+      map: textures.sharkSkinPacked,
       normalMap: textures.sharkSkinNormal,
       normalScale: new Vector2(0.48, 0.48),
-      roughnessMap: textures.sharkSkinRoughness,
+      roughnessMap: textures.sharkSkinPacked,
       roughness: 0.78,
       metalness: 0.0,
-    }),
+    })),
     silverSpineSkin: new MeshStandardMaterial({
       color: 0xf2f5eb,
       map: textures.silverSpineSkin,
@@ -1175,6 +1190,15 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       roughness: 0.82,
       metalness: 0,
     }),
+    sharkFlesh: usePackedPbrAtlas(new MeshStandardMaterial({
+      color: 0xffdfd1,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
+      normalScale: new Vector2(0.38, 0.38),
+      roughnessMap: textures.sharedPbrAtlas,
+      roughness: 0.8,
+      metalness: 0,
+    }), SHARED_ATLAS_REGIONS.graywakeSharkFlesh),
     cookedFishFlesh: new MeshStandardMaterial({
       color: 0xffead7,
       map: textures.cookedFishFlesh,
@@ -1221,8 +1245,26 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       metalness: 0,
       side: DoubleSide,
     }),
-    sharkMouth: new MeshStandardMaterial({ color: 0x341f24, roughness: 0.84 }),
-    sharkEye: new MeshStandardMaterial({ color: 0x090d0d, roughness: 0.22, metalness: 0.08 }),
+    sharkMouth: usePackedPbrAtlas(new MeshStandardMaterial({
+      color: 0xe8ebef,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
+      normalScale: new Vector2(0.36, 0.36),
+      roughnessMap: textures.sharedPbrAtlas,
+      roughness: 0.68,
+      metalness: 0,
+      side: DoubleSide,
+    }), SHARED_ATLAS_REGIONS.graywakeMouth),
+    sharkEye: usePackedPbrAtlas(new MeshStandardMaterial({
+      color: 0xffffff,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
+      normalScale: new Vector2(0.24, 0.24),
+      roughnessMap: textures.sharedPbrAtlas,
+      roughness: 0.54,
+      metalness: 0,
+      side: DoubleSide,
+    }), SHARED_ATLAS_REGIONS.graywakeEye),
     reefSeabed: new MeshStandardMaterial({
       color: 0xcbd0b5,
       map: textures.reefSeabed,

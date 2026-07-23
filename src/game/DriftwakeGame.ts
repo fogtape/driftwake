@@ -309,6 +309,9 @@ export class DriftwakeGame {
     this.mount.dataset.fishingModelName = 'none';
     this.mount.dataset.fishingModelScale = '0';
     this.mount.dataset.fishingMaterialMaps = 'none';
+    this.mount.dataset.sharkMaterialMaps = 'none';
+    this.mount.dataset.sharkFacialFocus = '[]';
+    this.mount.dataset.sharkEyeFocus = '[]';
     this.mount.dataset.fishingPhaseTime = '0';
     this.mount.dataset.cookingBasePhase = 'none';
     this.mount.dataset.cookingBaseFoodStage = 'none';
@@ -1154,7 +1157,13 @@ export class DriftwakeGame {
       this.mount.dataset.sharkTimedCounterCount = String(sharkDiagnostics.timedCounterEvents);
       this.mount.dataset.sharkResonancePulseCount = String(sharkDiagnostics.resonancePulseEvents);
       this.mount.dataset.sharkRecoverySeconds = sharkDiagnostics.recoverySeconds.toFixed(2);
+      this.mount.dataset.sharkInputEnabled = String(sharkDiagnostics.inputEnabled);
+      this.mount.dataset.sharkHarvestHeld = String(sharkDiagnostics.harvestHeld);
+      this.mount.dataset.sharkHarvestInputDown = String(sharkDiagnostics.harvestInputDown);
+      this.mount.dataset.sharkMaterialMaps = sharkDiagnostics.materialMaps;
       this.mount.dataset.sharkWorldPosition = JSON.stringify(sharkDiagnostics.worldPosition);
+      this.mount.dataset.sharkFacialFocus = JSON.stringify(sharkDiagnostics.facialFocus);
+      this.mount.dataset.sharkEyeFocus = JSON.stringify(sharkDiagnostics.eyeFocus);
       this.mount.dataset.sharkAim = JSON.stringify(this.shark?.getAimDiagnostics());
       this.mount.dataset.raftReinforcedTileCount = String(this.raft?.reinforcedTileCount ?? 0);
     }

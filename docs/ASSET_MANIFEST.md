@@ -1,7 +1,7 @@
 # 原创资产清单
 
-> 更新日期：2026-07-22
-> 状态：第二十一轮 M9 结构与防御历史材质整改已通过来源、PBR、平铺、共享图集预算、临界断面与软件场景门禁，发布前仍需做最终授权、DCC 替换与相似性复核
+> 更新日期：2026-07-23
+> 状态：第二十二轮 M9 生物口腔/眼部微材质整改已通过来源、PBR、无降采样共享图集、模型朝向、正式预算与软件场景门禁，发布前仍需做最终授权、DCC 替换与相似性复核
 
 ## 管线原则
 
@@ -1027,7 +1027,7 @@ Create an original square tileable base-color material texture for a premium sty
 Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: skin surface of a small schooling salt-crown reef fish. Orthographic macro material scan, continuous fish skin filling the entire frame, no whole fish silhouette and no perspective. Tight tiny overlapping scales with a muted sea-glass teal and silver-gray base, soft pale aqua lateral shimmer bands, sparse warm sand-gold scale tips, restrained charcoal speckles, and a few subtle coral-red flecks. The surface should look agile, alive, and underwater-readable while remaining distinct from the three catchable fish species and from metal or reptile skin. Hand-authored semi-realistic painterly PBR art direction with controlled scale rhythm suitable for very small low-poly bodies, no cartoon outlines and no photoreal camera noise. Flat neutral diffuse lighting, no baked specular streak, caustic, reflection, shadow, iridescent rainbow, vignette, or wet gloss. Uniform detail density to every edge, seamless in both axes, no border, eye, fin, gill, lateral-line focal stripe, or large unique mark. No whole animal, ocean scene, coral, plants, bubbles, props, text, symbols, logos, or watermark. Albedo source only: no normal map, roughness map, UV grid, texture atlas, material sphere, or mockup.
 ```
 
-七套审计 PBR 经 `scripts/build_pbr_atlas.py` 进入当前 4096x3072 共享双图集：每格 1024，核心 960，四周 32 像素周期 gutter；RGB albedo + A roughness 的 alpha 保存后逐像素一致，normal 独立。`underwater-materials-canvas.png` 与真实收割流程证明七个水下区域的 21 个 PBR 槽均绑定；`0.22.4` 合并结构/合金区域并删除旧图集后实测 `29/32` 纹理。海草首版因整叶轮廓和阴影拒绝，未进入归档或运行时。
+七套审计 PBR 经 `scripts/build_pbr_atlas.py` 进入当前 4096x4096 共享双图集：每格 1024，核心 960，四周 32 像素周期 gutter；RGB albedo + A roughness 的 alpha 保存后逐像素一致，normal 独立。`underwater-materials-canvas.png` 与真实收割流程证明七个水下区域的 21 个 PBR 槽均绑定；`0.22.4` 合并结构/合金区域并删除旧图集后实测 `29/32` 纹理，`0.22.5` 扩展鲨鱼微材质时仍保留 960 核心。海草首版因整叶轮廓和阴影拒绝，未进入归档或运行时。
 
 ### TEX-048：风暴撑结构紧固合金材质组
 
@@ -1063,11 +1063,65 @@ Create an original square tileable base-color material texture for a premium sty
 Create an original square tileable base-color material texture for a premium stylized 3D ocean-survival game: freshly exposed storm-scarred cedar crosscut and split end grain on damaged hand-built raft structures. Show exactly one coherent continuous wood-interior surface covering the complete square, viewed straight-on and orthographically; ninety percent must be an unbroken natural cedar end-grain field. Use warm pale honey sapwood, muted flax and weathered gray-tan growth layers, many fine short interrupted annual-ring arcs, tiny vessel dots, subtle radial ray fragments, sparse darker resin pinpoints, pale salt dust, and only a few shallow torn fiber tufts integrated into the surface. No separate wood pieces, chips, curls, overlaps, gaps, piles, collage, depth, or perspective. It must read as one newly exposed structural cedar cross-section after a shark tear, clearly different from the existing long longitudinal plank grain, and never resemble chipboard, OSB, particle board, mulch, sawdust, cork, bark, meat, bone, rope, or stone. Premium hand-authored semi-realistic painterly PBR art direction with controlled cross-grain readable on small broken-end caps, no cartoon outline and no photographic scan noise. Perfectly flat neutral diffuse albedo, no directional light, cast shadow, ambient occlusion, deep holes, glossy resin hotspot, wet reflection, vignette, or three-dimensional splinters. Uniform edge-to-edge detail, seamless in both axes, no border, central knot, complete concentric tree-ring target, large crack, long stripe, or focal mark. No whole plank, beam, branch, log, bark edge, nails, rope, tools, shark, water scene, props, text, symbols, logos, or watermark. Albedo source only: no normal map, roughness map, height map, UV grid, atlas, material sphere, product mockup, or presentation board.
 ```
 
-TEX-041 至 TEX-049 与既有 TEX-035/TEX-009 当前共同写入 4096x3072、4x3 的共享双图集，保留一个中性空格。`artifacts/imagegen/shared-pbr-atlas-layout.json` 记录 11 个区域和各自源目录；roughness alpha 保存后逐像素一致。结构、周界和水下实景分别为 `30/32`、`30/32`、`29/32` 纹理，没有以降清、删 normal 或抬高预算换取接入。
+### TEX-050：深潮鲨口缘与鳃衬材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时 / 审计 | 共享双图集 `graywake-mouth-lining` 区域；独立审计图位于 `artifacts/imagegen/creature-pbr/graywake-mouth-lining*.webp` |
+| 采用源图 | `artifacts/imagegen/graywake-mouth-lining-raw.png` |
+| 模型 / 质量 / 请求与实际尺寸 | `gpt-image-2` / `high` / `2048x2048` / `2048x2048`，项目 `scripts/imagegen` CLI |
+| 用途 | 深潮鲨口缘与六处鳃衬；不再使用纯色 `sharkMouth` |
+| 处理方式 | 1024、seam 96、normal 0.52、roughness 72-162、boundary 优化；图集核心 960 + 32 gutter |
+| 检查 | seam x=`4.73/0.83x`、y=`8.32/0.96x`，boundary=`(38,546)`；蓝黑/克制梅红活体组织，无伤口、血液、牙齿或完整动物轮廓 |
+
+最终提示词：
+
+```text
+Use case: stylized-concept
+Asset type: seamless tileable PBR base-color material for the mouth rim and gill lining of an original stylized ocean predator in a survival game.
+Primary request: create an original deep-water shark mouth and gill lining surface: dense blue-black charcoal and restrained oxblood-plum membrane, with extremely fine pale gray-blue mucosal grain, subtle radial striation, sparse salt-water sheen variation, and no injury or gore. The surface should read as wet living tissue at close range while remaining quiet and believable from normal gameplay distance.
+Scene/backdrop: material sheet only, edge-to-edge texture coverage.
+Style/medium: premium stylized-realistic hand-authored game PBR albedo, tactile organic micro-detail with calm broad value variation.
+Composition/framing: exact orthographic top-down square, uniform texel density, seamless wrapping on all four edges, no centered focal object, no mouth opening, no teeth, no gums in perspective, no animal silhouette.
+Lighting/mood: flat neutral albedo only. Absolutely no baked directional light, highlight, reflections, cast shadow, ambient occlusion, depth cue, or photographic lens effect.
+Color palette: deep charcoal navy, muted plum-maroon, faint cold gray-blue membrane striations; dark but with enough midtone separation to remain legible against gray shark skin.
+Materials/textures: fine damp membrane grain, understated lengthwise and branching tissue detail, physically plausible rather than glossy plastic.
+Constraints: fully original; clean seamless game material; no blood, wounds, teeth, tongue, eye, scales, fish, text, symbols, logo, watermark, border, frame, material ball, UV grid, or recognizable copyrighted design.
+Avoid: flat single-color fill, bright red gore, pink cartoon flesh, repetitive checker pattern, large veins, pores, central vortex, perspective macro photograph, dramatic lighting, black crush, purple neon, and baked specular highlights.
+```
+
+### TEX-051：深潮鲨侧眼材质组
+
+| 字段 | 内容 |
+| --- | --- |
+| 运行时 / 审计 | 共享双图集 `graywake-lateral-eye` 区域；独立审计图位于 `artifacts/imagegen/creature-pbr/graywake-lateral-eye*.webp` |
+| 采用 / 拒绝源图 | `artifacts/imagegen/graywake-lateral-eye-raw.png`；裂瞳拒绝版 `graywake-lateral-eye-rejected-slit-raw.png` |
+| 模型 / 质量 / 请求与实际尺寸 | `gpt-image-2` / `high` / `2048x2048` / `2048x2048`，项目 `scripts/imagegen` CLI |
+| 用途 | 深潮鲨左右侧眼圆面；不再使用纯色 `sharkEye` |
+| 处理方式 | `prepare_imagegen_eye.py`，1024 非平铺中心虹膜、normal 0.28、roughness 58-138；图集核心 960 + 32 gutter |
+| 检查 | pupil=`5.1`、iris=`57.0`、edge=`0.1`；首版猫科/爬行类纵裂瞳拒绝，采用版为圆瞳、烟琥珀/蓝灰虹膜、无 catchlight |
+
+最终提示词：
+
+```text
+Use case: stylized-concept
+Asset type: centered PBR albedo decal for the lateral eye of an original stylized ocean predator in a survival game.
+Primary request: create one original shark eye seen exactly front-on as a clean circular iris-and-pupil decal: a compact near-black ROUND pupil with a softly irregular natural edge, restrained smoked amber and blue-gray radial iris fibers, a charcoal outer limbal ring, and a narrow pale sea-glass outer edge. It should feel alert and predatory but natural, readable at small in-game size, and compatible with a flat circular mesh.
+Scene/backdrop: texture sheet only, pure matte black surrounding field outside the centered circular eye.
+Style/medium: premium stylized-realistic hand-authored game PBR albedo, crisp controlled radial micro-detail without photo collage artifacts.
+Composition/framing: exact orthographic square, the circular eye centered precisely in the image, evenly padded on all sides, no eyelids, skin, face, head, body, water, or perspective.
+Lighting/mood: flat neutral albedo only. No catchlight, no white reflection, no baked directional light, no shadow, no ambient occlusion, no lens blur.
+Color palette: graphite black pupil and ring, muted smoke-amber, mineral blue-gray, a subtle pale cool edge; avoid bright green, turquoise, yellow, or saturated orange.
+Materials/textures: fine radial iris fibers and a soft wet organic depth cue that will be expressed by runtime normal and roughness maps rather than painted highlights.
+Constraints: fully original; one centered anatomical-looking eye decal; no text, symbols, logo, watermark, frame, UV grid, decorative pattern, or recognizable copyrighted design.
+Avoid: whole shark, multiple eyes, human eye anatomy, cat/reptile slit pupil, eyelashes, eyelids, glossy catchlight, fantasy glow, neon colors, photographic studio reflection, off-center pupil, cropped circle, or busy background.
+```
+
+TEX-041 至 TEX-051 与既有 TEX-035/TEX-009、TEX-019 鲨肉审计副本当前共同写入 4096x4096、4x4 的共享双图集，保留两个中性空格。每格 1024、核心 960、四周 32 周期 gutter；`artifacts/imagegen/shared-pbr-atlas-layout.json` 记录 14 个区域和各自源目录，roughness alpha 保存后逐像素一致。临时 3840/896 核心方案因降低历史区域分辨率被拒绝。正式咬筏场景保持 `32/32` 纹理，没有以降清、删 normal 或抬高预算换取接入。
 
 ## 代码原生模型与动画
 
-本轮新增鲨体分段伤痕、海面聚焦环和鲨鱼战利品捆扎浮包，继续由代码原生形体驱动；鲨皮沿用独立 TEX-003 PBR，肉、皮、齿、绳结和浮托按材质与轮廓分层。采集段、对象池、耐久与 v18 存档均不依赖视觉对象作为玩法真值；没有因本机软件 WebGL 复验失败而降低运行时贴图质量。
+鲨体分段伤痕、海面聚焦环和鲨鱼战利品捆扎浮包继续由代码原生形体驱动；本轮双眼改为侧前向圆面，口缘改为正向轮廓，口腔/虹膜使用 TEX-050/TEX-051，伤痕/鲨肉使用 TEX-019 审定来源副本。鲨皮沿用 TEX-003，并仅完成 albedo RGB + roughness A 精确打包；该操作不冒充 Image 2 创意替换。采集段、对象池、耐久与 v18 存档均不依赖视觉对象作为玩法真值。
 
 | ID | 资产 | 位置 | 当前状态 |
 | --- | --- | --- | --- |
@@ -1078,7 +1132,7 @@ TEX-041 至 TEX-049 与既有 TEX-035/TEX-009 当前共同写入 4096x3072、4x3
 | MOD-005 | 建造锤：木柄、金属锤头、撞面、拔钉爪、六圈绑带 | `src/game/art/ProceduralModels.ts` | 已进入第一视角建造与修补 |
 | MOD-006 | 木矛：长杆、金属尖端与五圈扎结 | `src/game/art/ProceduralModels.ts` | 已进入第一视角刺击 |
 | MOD-007 | 钓竿、卷线轮、浮标，以及银脊鱼、旗尾梭、琥鳍鲷三种鱼体 | `src/game/art/ProceduralModels.ts` | 三种鱼使用平滑躯体、独立背/胸/尾鳍轮廓、Image 2 鱼皮与虹膜 PBR；体型缩放、挣扎、捕获展示和单实例显隐进入完整循环 |
-| MOD-008 | 深潮鲨：车削躯干、背鳍、胸鳍、尾柄、双叶尾、眼、口、鳃与三段采集伤痕 | `src/game/art/ProceduralModels.ts` | 15+ 独立网格，已接巡游、袭击、受击、侧翻浮尸与采集阶段 |
+| MOD-008 | 深潮鲨：车削躯干、背鳍、胸鳍、尾柄、双叶尾、侧前向眼、正向口缘、鳃与三段采集伤痕 | `src/game/art/ProceduralModels.ts` | 15+ 独立网格；眼/口/伤痕材质语义分离，朝向测试、真实袭击、受击、侧翻浮尸与采集阶段已接通 |
 | MOD-009 | 潮汐净水器：绑扎木架、火盆、海水槽、编织蒸馏罩、冷凝沟、滴管与透明杯具 | `src/game/art/ProceduralModels.ts` | 35+ 独立网格，运行阶段驱动海水/净水水位和滴水 |
 | MOD-010 | 折铁烤架：绑扎木架、折铁火盆、九根炉条、横撑、把手与鱼段 | `src/game/art/ProceduralModels.ts` | 40+ 独立网格；折铁/雪松/编织纤维与生/熟/焦鱼肉均使用审定 PBR，平放姿态、真实收取和基础设备近景通过 |
 | MOD-011 | 盐冠浅滩：2115 顶点高度场、PBR 微表面/顶点色分层、5 个岩石地标、22 个灌木和 30 条岸浪 | `src/game/art/ProceduralModels.ts` | TEX-036/TEX-038/TEX-040 已接入接近、靠岸、登岛、离流和重生周期；实例化与 32 纹理预算保持 |

@@ -1,7 +1,7 @@
 # M9 水下礁区与资源材质整改验收
 
 > 状态：`APPROVED`（软件来源、PBR、图集、绑定、交互与 framebuffer 闭环）
-> 首次验收版本：`0.22.3`；当前共享图集：`0.22.4`
+> 首次验收版本：`0.22.3`；当前共享图集：`0.22.5`
 > 日期：2026-07-22
 
 ## 整改范围
@@ -36,13 +36,13 @@
 
 - 审计层继续保留七套独立 1024 albedo/normal/roughness；
 - `scripts/build_pbr_atlas.py` 将每套 1024 图缩放到 960 核心，四周各加 32 像素周期 gutter；
-- `0.22.4` 运行时 albedo atlas 扩为 4096x3072 RGBA，RGB 保存 albedo、A 精确保存 roughness；
-- normal atlas 为独立 4096x3072 RGB；4x3 中除七个水下区域外还容纳结构紧固件、雪松横截面、工具钢和导航合金，并保留一个中性格；
+- `0.22.5` 运行时 albedo atlas 为 4096x4096 RGBA，RGB 保存 albedo、A 精确保存 roughness；
+- normal atlas 为独立 4096x4096 RGB；4x4 中除七个水下区域外还容纳结构紧固件、雪松横截面、工具钢、导航合金、鲨鱼口衬/肉/侧眼，并保留两个中性格；
 - shader 在 map/normal/roughness 三套 UV 上使用相同 `fract -> scale -> offset`，roughness 明确读取 alpha；
 - 七个材质拥有不同 program cache key 和 `pbrAtlasRegion` 诊断，避免程序复用到错误格；
 - atlas 生成后逐像素验证保存 alpha 与源 roughness atlas 完全一致；水下仍只消费两张 atlas，`0.22.4` 进一步移除工具钢/导航合金六张独立加载后实测为 `29/32`。
 
-布局、gutter、核心尺寸和 11 组 UV offset/scale 记录在 `artifacts/imagegen/shared-pbr-atlas-layout.json`；七套独立水下审计图仍位于 `artifacts/imagegen/underwater-pbr/`。
+布局、gutter、960 核心尺寸和 14 组 UV offset/scale 记录在 `artifacts/imagegen/shared-pbr-atlas-layout.json`；七套独立水下审计图仍位于 `artifacts/imagegen/underwater-pbr/`。临时 3840/896 核心方案因降低既有区域分辨率被拒绝。
 
 ## 运行时绑定
 
@@ -68,7 +68,7 @@ CAPTURE_ONLY=underwater-interaction CAPTURE_FAST=1 npm run capture
 - 21 个 map/normal/roughness 语义槽全部存在且无 `none`，七个区域名逐项匹配；
 - `0.22.3` 初始证据为 `32 textures / 118 geometries / 256 calls / 140,650 triangles`；`0.22.4` 删除旧图集与独立合金加载后的复验为 `29 textures / 118 geometries / 255 calls / 140,618 triangles`；
 - `contextHealthy=true`、`simulationActive=true`；
-- 首轮绑定帧直接画布采样 `variation=127/nonBlack=2880`；共享 4x3 图集复验为 `variation=125/nonBlack=2880`，并继续导出 864x540 WebGL framebuffer；本机 GLES 偶发零帧时仍保留浏览器合成帧回退；
+- 首轮绑定帧直接画布采样 `variation=127/nonBlack=2880`；`0.22.4` 共享 4x3 图集复验为 `variation=125/nonBlack=2880`；`0.22.5` 4x4 图集复验为 `variation=126/nonBlack=2880`，继续导出 864x540 WebGL framebuffer，本机 GLES 偶发零帧时仍保留浏览器合成帧回退；
 - `underwater-materials-canvas.png` 已人工复核海床、浸水礁岩、两类珊瑚、海草、木筏底面和手持钩具同帧；图集方向正确，无跨格污染、硬缝或纯色回退；
 - 交互场景真实识别“收割长叶海草”，按 `E` 后出现 `+2 海草`；合成帧为 `1,146,661` 字节，Context 未丢失；
 - 海草首轮场景偏黑后只调整材质乘色并重新取证，Image 2 源图、图集规格和 PBR 通道没有降质。

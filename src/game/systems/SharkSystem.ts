@@ -3,6 +3,8 @@ import {
   MathUtils,
   Mesh,
   MeshBasicMaterial,
+  MeshStandardMaterial,
+  Object3D,
   PerspectiveCamera,
   Scene,
   TorusGeometry,
@@ -52,6 +54,26 @@ import { RESONANCE_DAMAGE, isResonanceTarget } from '../domain/resonanceFork';
 const SHARK_CARCASS_FOCUS_RADIUS = 1.38;
 const SHARK_CARCASS_HOLD_REACH = SHARK_CARCASS_HARVEST_REACH + 0.9;
 const SHARK_CARCASS_HOLD_RADIUS = 2.35;
+const RAFT_ATTACK_STANDOFF = 3.6;
+const WATER_ATTACK_STANDOFF = 3.85;
+
+function sharkMaterialMaps(model: Group): string {
+  const maps = new Set<string>();
+  model.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of materials) {
+      if (!(material instanceof MeshStandardMaterial)) continue;
+      if (typeof material.userData.pbrAtlasRegion === 'string') {
+        maps.add(`[${material.userData.pbrAtlasRegion}]`);
+      }
+      for (const texture of [material.map, material.normalMap, material.roughnessMap]) {
+        if (texture?.name) maps.add(texture.name);
+      }
+    }
+  });
+  return [...maps].sort().join('|') || 'none';
+}
 
 export interface SharkRaftMutation {
   kind: 'foundation' | 'structure' | 'collectionNet';
@@ -96,7 +118,13 @@ export interface SharkDiagnostics {
   timedCounterEvents: number;
   resonancePulseEvents: number;
   recoverySeconds: number;
+  inputEnabled: boolean;
+  harvestHeld: boolean;
+  harvestInputDown: boolean;
+  materialMaps: string;
   worldPosition: { x: number; y: number; z: number };
+  facialFocus: [number, number, number];
+  eyeFocus: [number, number, number];
 }
 
 export interface SharkHarvestSettlement extends InventoryMutation {
@@ -106,6 +134,9 @@ export interface SharkHarvestSettlement extends InventoryMutation {
 export class SharkSystem {
   readonly model: Group;
   private readonly tailPivot: Group;
+  private readonly facialFocus: Object3D;
+  private readonly eyeMeshes: Mesh[];
+  private readonly materialMaps: string;
   private readonly random = createSeededRandom(0x5a4c19);
   private readonly targetWorld = new Vector3();
   private readonly approachWorld = new Vector3();
@@ -118,6 +149,9 @@ export class SharkSystem {
   private readonly cascadeWorld = new Vector3();
   private readonly carcassVector = new Vector3();
   private readonly cameraWorld = new Vector3();
+  private readonly facialWorld = new Vector3();
+  private readonly portEyeWorld = new Vector3();
+  private readonly starboardEyeWorld = new Vector3();
   private readonly carcassFocusRing = new Mesh(
     new TorusGeometry(1.02, 0.035, 7, 42),
     new MeshBasicMaterial({
@@ -154,6 +188,7 @@ export class SharkSystem {
   private respawnEvents = 0;
   private carcassFocused = false;
   private harvestHeld = false;
+  private harvestInputDown = false;
   private inputEnabled = false;
   private lastCarcassPrompt: string | null = null;
   private targetingPlayer = false;
@@ -199,6 +234,9 @@ export class SharkSystem {
     private readonly onStateChange: () => void = () => undefined,
   ) {
     this.model = createSharkModel(materials);
+    this.materialMaps = sharkMaterialMaps(this.model);
+    this.facialFocus = this.model.userData.facialFocus as Object3D;
+    this.eyeMeshes = this.model.userData.eyeMeshes as Mesh[];
     this.model.position.set(12, -0.8, 8);
     const exposedWeakPoint = this.structures.findSharkTarget(
       this.raft.getEdgeTiles(),
@@ -223,6 +261,7 @@ export class SharkSystem {
     this.scene.add(this.model, this.carcassFocusRing);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('blur', this.onWindowBlur);
   }
 
   update(time: number, delta: number): void {
@@ -330,6 +369,14 @@ export class SharkSystem {
   }
 
   getDiagnostics(): SharkDiagnostics {
+    this.facialFocus.getWorldPosition(this.facialWorld);
+    const [portEye, starboardEye] = this.eyeMeshes as [Mesh, Mesh];
+    portEye.getWorldPosition(this.portEyeWorld);
+    starboardEye.getWorldPosition(this.starboardEyeWorld);
+    this.camera.getWorldPosition(this.cameraWorld);
+    const eyeFocus = this.cameraWorld.distanceToSquared(this.portEyeWorld) <= this.cameraWorld.distanceToSquared(this.starboardEyeWorld)
+      ? this.portEyeWorld
+      : this.starboardEyeWorld;
     return {
       targetKind: this.targetingPlayer
         ? 'player'
@@ -375,11 +422,17 @@ export class SharkSystem {
       recoverySeconds: this.lifecycle === 'active' && this.mode === 'retreating'
         ? Math.max(0, 6.2 - this.phaseTime)
         : 0,
+      inputEnabled: this.inputEnabled,
+      harvestHeld: this.harvestHeld,
+      harvestInputDown: this.harvestInputDown,
+      materialMaps: this.materialMaps,
       worldPosition: {
         x: this.model.position.x,
         y: this.model.position.y,
         z: this.model.position.z,
       },
+      facialFocus: [this.facialWorld.x, this.facialWorld.y, this.facialWorld.z],
+      eyeFocus: [eyeFocus.x, eyeFocus.y, eyeFocus.z],
     };
   }
 
@@ -423,7 +476,7 @@ export class SharkSystem {
     this.inputEnabled = enabled;
     if (enabled) return;
     this.harvestHeld = false;
-    this.harvestProgress = 0;
+    if (!this.harvestInputDown) this.harvestProgress = 0;
     this.carcassFocused = false;
     this.carcassFocusRing.visible = false;
     this.clearCarcassPrompt();
@@ -433,6 +486,7 @@ export class SharkSystem {
     if (this.noticeTimer !== null) window.clearTimeout(this.noticeTimer);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('blur', this.onWindowBlur);
     this.clearCarcassPrompt();
     this.scene.remove(this.model, this.carcassFocusRing);
     this.carcassFocusRing.geometry.dispose();
@@ -479,6 +533,7 @@ export class SharkSystem {
     this.harvestIndex = 0;
     this.harvestProgress = 0;
     this.harvestEvents = 0;
+    this.harvestInputDown = false;
     this.harvestHeld = false;
     this.targetTile = null;
     this.targetStructureId = null;
@@ -506,7 +561,7 @@ export class SharkSystem {
       this.model.position.y = surface - 0.5 - Math.sin(Math.min(1, this.phaseTime / 1.55) * Math.PI) * 0.22;
       this.lookTarget.copy(this.model.position).add(this.outward);
       this.lookTarget.y = this.model.position.y;
-      this.model.lookAt(this.lookTarget);
+      this.orientModelToward(this.lookTarget);
       const settle = MathUtils.smoothstep(this.phaseTime, 0, 1.55);
       this.model.rotation.z = MathUtils.lerp(0, Math.PI * 0.48, settle);
       if (this.phaseTime >= 1.55) {
@@ -525,7 +580,7 @@ export class SharkSystem {
       this.model.position.y = sampleWaveHeight(this.model.position.x, this.model.position.z, time) - 0.24;
       this.lookTarget.copy(this.model.position).add(this.outward);
       this.lookTarget.y = this.model.position.y;
-      this.model.lookAt(this.lookTarget);
+      this.orientModelToward(this.lookTarget);
       this.model.rotation.z = Math.PI * 0.48 + Math.sin(time * 1.15) * 0.045;
       this.updateCarcassInteraction(time, delta);
       if (this.carcassPhase === 'available' && this.carcassRemaining <= 0) this.beginCarcassSinking(false);
@@ -579,7 +634,9 @@ export class SharkSystem {
     const heldFocusRetained = along > 0.05
       && distanceSquared <= SHARK_CARCASS_HOLD_REACH * SHARK_CARCASS_HOLD_REACH
       && perpendicularSquared <= SHARK_CARCASS_HOLD_RADIUS * SHARK_CARCASS_HOLD_RADIUS;
-    this.carcassFocused = this.harvestHeld ? heldFocusRetained : focusAcquired;
+    const retainingInput = this.harvestHeld || this.harvestInputDown;
+    this.carcassFocused = retainingInput ? heldFocusRetained : focusAcquired;
+    if (this.carcassFocused && !this.harvestHeld && this.harvestInputDown) this.harvestHeld = true;
     if (!this.carcassFocused) {
       this.cancelCarcassInteraction();
       return;
@@ -616,6 +673,7 @@ export class SharkSystem {
     if (rejected && !settlement.worldDropped) {
       this.audio.playDenied();
       this.showNotice('战利品暂时无法系成漂浮包');
+      this.harvestInputDown = false;
       this.harvestHeld = false;
       this.harvestProgress = 0;
       return;
@@ -643,6 +701,7 @@ export class SharkSystem {
     this.lifecycle = 'cooldown';
     this.carcassPhase = 'sinking';
     this.cooldownRemaining = SHARK_RESPAWN_SECONDS;
+    this.harvestInputDown = false;
     this.harvestHeld = false;
     this.harvestProgress = 0;
     this.carcassFocused = false;
@@ -662,8 +721,7 @@ export class SharkSystem {
 
   private cancelCarcassInteraction(): void {
     this.carcassFocused = false;
-    this.harvestHeld = false;
-    this.harvestProgress = 0;
+    if (!this.harvestInputDown) this.harvestProgress = 0;
     this.carcassFocusRing.visible = false;
     this.clearCarcassPrompt();
   }
@@ -722,7 +780,7 @@ export class SharkSystem {
     const tangentX = -Math.sin(this.circleAngle);
     const tangentZ = Math.cos(this.circleAngle);
     this.lookTarget.set(x + tangentX, y, z + tangentZ);
-    this.model.lookAt(this.lookTarget);
+    this.orientModelToward(this.lookTarget);
   }
 
   private beginApproach(): void {
@@ -776,7 +834,7 @@ export class SharkSystem {
       this.outward.set(fromRaftX, 0, fromRaftZ);
     }
     this.outward.normalize();
-    this.approachWorld.copy(this.targetWorld).addScaledVector(this.outward, 2.5);
+    this.approachWorld.copy(this.targetWorld).addScaledVector(this.outward, RAFT_ATTACK_STANDOFF);
     this.approachWorld.y = this.model.position.y;
     this.biteIndex = 0;
     this.telegraphIndex = -1;
@@ -799,7 +857,7 @@ export class SharkSystem {
       this.beginRetreat();
       return;
     }
-    this.approachWorld.copy(this.targetWorld).addScaledVector(this.outward, 2.5);
+    this.approachWorld.copy(this.targetWorld).addScaledVector(this.outward, RAFT_ATTACK_STANDOFF);
     this.approachWorld.y = this.model.position.y;
     const blend = 1 - Math.exp(-delta * 0.9);
     this.model.position.x = MathUtils.lerp(this.model.position.x, this.approachWorld.x, blend);
@@ -807,7 +865,7 @@ export class SharkSystem {
     this.model.position.y = sampleWaveHeight(this.model.position.x, this.model.position.z, time) - 0.68;
     this.lookTarget.copy(this.targetWorld);
     this.lookTarget.y = this.model.position.y;
-    this.model.lookAt(this.lookTarget);
+    this.orientModelToward(this.lookTarget);
     if (this.model.position.distanceTo(this.approachWorld) < 0.42 || this.phaseTime > 5.2) {
       this.setMode('attacking');
     }
@@ -832,7 +890,7 @@ export class SharkSystem {
     this.model.position.y = MathUtils.lerp(surfaceY - 0.58, strikeY, lunge);
     this.lookTarget.copy(this.targetWorld);
     this.lookTarget.y = Math.min(this.targetWorld.y, surfaceY + 0.64);
-    this.model.lookAt(this.lookTarget);
+    this.orientModelToward(this.lookTarget);
     if (sample.phase === 'windup') {
       this.model.rotateZ(Math.sin(this.phaseTime * 10.5) * 0.1 * (1 - sample.progress * 0.42));
     }
@@ -1019,8 +1077,8 @@ export class SharkSystem {
       const speed = MathUtils.clamp(2.45 + distance * 0.11, 2.7, 4.15);
       this.model.position.addScaledVector(this.pursuitDirection, Math.min(distance, speed * delta));
       this.model.position.y += Math.sin(time * 3.1) * delta * 0.05;
-      this.model.lookAt(this.playerWorld);
-      if (distance < 2.65) {
+      this.orientModelToward(this.playerWorld);
+      if (distance < WATER_ATTACK_STANDOFF) {
         this.biteIndex = 0;
         this.telegraphIndex = -1;
         this.clearAttackWindow();
@@ -1043,7 +1101,7 @@ export class SharkSystem {
         : 1.8 + sample.lunge * 2.2;
     this.model.position.addScaledVector(this.pursuitDirection, Math.min(distance, speed * delta));
     this.model.position.y += Math.sin(time * 4.2) * delta * 0.08;
-    this.model.lookAt(this.playerWorld);
+    this.orientModelToward(this.playerWorld);
     if (sample.phase === 'windup') {
       this.model.rotateZ(Math.sin(this.phaseTime * 11.8) * 0.12 * (1 - sample.progress * 0.38));
     }
@@ -1101,7 +1159,7 @@ export class SharkSystem {
     const surface = sampleWaveHeight(this.model.position.x, this.model.position.z, time);
     this.model.position.y = surface - 0.75;
     this.lookTarget.copy(this.model.position).add(this.outward);
-    this.model.lookAt(this.lookTarget);
+    this.orientModelToward(this.lookTarget);
     if (this.phaseTime > 6.2) {
       this.nextAttackAt = this.totalTime + randomRange(this.random, 48, 70);
       this.clearAttackWindow();
@@ -1113,6 +1171,11 @@ export class SharkSystem {
     this.mode = mode;
     this.phaseTime = 0;
     this.publishFeedback();
+  }
+
+  private orientModelToward(target: Vector3): void {
+    this.model.lookAt(target);
+    this.model.rotateY(Math.PI);
   }
 
   private publishFeedback(): void {
@@ -1175,12 +1238,20 @@ export class SharkSystem {
       || !this.carcassFocused
       || useGameStore.getState().interactionOwner !== 'shark'
     ) return;
+    this.harvestInputDown = true;
     event.preventDefault();
     this.harvestHeld = true;
   };
 
   private readonly onKeyUp = (event: KeyboardEvent): void => {
     if (!matchesInputAction('interact', event.code)) return;
+    this.harvestInputDown = false;
+    this.harvestHeld = false;
+    this.harvestProgress = 0;
+  };
+
+  private readonly onWindowBlur = (): void => {
+    this.harvestInputDown = false;
     this.harvestHeld = false;
     this.harvestProgress = 0;
   };
