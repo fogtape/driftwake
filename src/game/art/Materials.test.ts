@@ -60,6 +60,12 @@ describe('asset texture loading', () => {
       normalMap: textures.tideboundRiggingNormal,
       roughnessMap: textures.tideboundRiggingRoughness,
     });
+    expect(materials.sharkSkin).toMatchObject({
+      map: textures.sharkSkinPacked,
+      normalMap: textures.sharkSkinNormal,
+      roughnessMap: textures.sharkSkinPacked,
+    });
+    expect(materials.sharkSkin.userData.alphaPackedRoughness).toBe(true);
     expect(materials.metal).toMatchObject({
       map: textures.sharedPbrAtlas,
       normalMap: textures.sharedPbrNormalAtlas,

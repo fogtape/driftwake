@@ -85,13 +85,31 @@ Avoid: closed cellular webs, honeycomb networks, marble veins, evenly filled lac
 
 | 字段 | 内容 |
 | --- | --- |
-| 运行时文件 | `shark-skin.webp`、`shark-skin-normal.webp`、`shark-skin-roughness.webp` |
-| 生成方式 | `scripts/generate_procedural_materials.py` 确定性原创生成；`scripts/derive_material_maps.py` 派生 |
-| 实际尺寸 | 1024x1024，各三张 |
+| 运行时文件 | `shark-skin-packed.webp`、`shark-skin-normal.webp` |
+| Image 2 来源 | `artifacts/imagegen/graywake-shark-skin-raw.png`；项目 `scripts/imagegen edit`，`gpt-image-2` / `high` / 2048x2048 |
+| 审计 PBR | `artifacts/imagegen/creature-pbr/graywake-shark-skin.webp`、`-normal.webp`、`-roughness.webp` |
+| 实际尺寸 | 源图 2048x2048 PNG；审计与运行时均为 1024x1024 WebP |
 | 用途 | 深潮鲨主体、鳍与尾柄材质 |
-| 检查 | 横/纵边缝平均差 0.43/0.49；无动物轮廓、鱼鳞、文字或独特重复焦点 |
+| 处理 | `prepare_imagegen_material.py --size 1024 --seam-width 168 --normal-strength 0.18 --roughness-min 160 --roughness-max 216 --optimize-boundary`；RGB 与 roughness A 写入 packed runtime 图 |
+| 检查 | x=`7.13/1.03x`，y=`13.00/0.98x`，boundary=`(1,1023)`；2x2 无硬缝，packed alpha 与审计 roughness 逐像素一致 |
 
-实现包含三尺度周期噪声、两组整数频率细齿方向、微划痕、独立 normal 和 132-216 范围 roughness。AI 候选未成功返回，因此当前采用可复现程序版本，不把临时木纹复制品纳入仓库。
+最终采用 F 是对 E 的精确颜色编辑，保留低对比细密真皮齿微结构，只把过暗的炭灰提升为水下可读的蓝绿灰。候选 A 因压纹皮革感过强拒绝，B 因织物/毡感拒绝，C 因大块板岩状鳞片拒绝，D 因环形鱼鳞流向拒绝，E 在真实水下过暗；所有拒绝源仅保留在本地审计目录，不进入仓库或运行时。历史 `shark-skin.webp` 与 `shark-skin-roughness.webp` 保留为审计对照，不再由运行时加载。
+
+最终提示词：
+
+```text
+Use case: precise-object-edit
+Asset type: seamless tileable PBR base-color albedo for an original shark skin in a premium survival game.
+Primary request: change only the color grading of this exact shark dermal material. Preserve the existing fine denticle density, plate placement, scale, edge continuity, and calm even coverage unchanged. Shift the material from charcoal gray toward a readable underwater blue-teal gray: lift the green and blue midtones noticeably while retaining muted graphite shadows, keeping the surface medium-value rather than black. It must remain natural shark skin, not bright cyan or tropical turquoise.
+Input image: the provided image is the edit target. Keep its geometry, composition, seamless coverage, microstructure, and lack of focal features exactly intact; recolor only.
+Scene/backdrop: exact edge-to-edge material sheet only.
+Style/medium: premium stylized-realistic neutral game albedo.
+Composition/framing: exact orthographic square, seamless on all four edges, no new bands, marks, or objects.
+Lighting/mood: retain flat neutral albedo; do not introduce highlights, shadows, relief, reflections, ambient occlusion, gloss, directional light, or photographic lighting.
+Color palette: sea-weathered blue-teal gray, muted mineral cyan-green undertone, pale cool gray denticle tips, restrained graphite shadows; generous readable midtones.
+Constraints: change color only; fully original; no text, symbols, logos, watermark, border, frame, material ball, UV grid, animal parts, water, foam, or new recognizable content.
+Avoid: changing denticle size or pattern, black crush, bright aqua, saturated turquoise, purple, green algae, leather, fabric, glossy plastic, baked specular, and seams.
+```
 
 ### TEX-004：编织棕榈纤维材质组
 
@@ -1121,7 +1139,7 @@ TEX-041 至 TEX-051 与既有 TEX-035/TEX-009、TEX-019 鲨肉审计副本当前
 
 ## 代码原生模型与动画
 
-鲨体分段伤痕、海面聚焦环和鲨鱼战利品捆扎浮包继续由代码原生形体驱动；本轮双眼改为侧前向圆面，口缘改为正向轮廓，口腔/虹膜使用 TEX-050/TEX-051，伤痕/鲨肉使用 TEX-019 审定来源副本。鲨皮沿用 TEX-003，并仅完成 albedo RGB + roughness A 精确打包；该操作不冒充 Image 2 创意替换。采集段、对象池、耐久与 v18 存档均不依赖视觉对象作为玩法真值。
+鲨体分段伤痕、海面聚焦环和鲨鱼战利品捆扎浮包继续由代码原生形体驱动；本轮双眼改为侧前向圆面，口缘改为正向轮廓，口腔/虹膜使用 TEX-050/TEX-051，伤痕/鲨肉使用 TEX-019 审定来源副本。鲨皮使用 TEX-003 采用 F 的 Image 2 high 审计 PBR，albedo RGB 与其派生 roughness A 精确打包；运行时并不加载历史程序鲨皮。采集段、对象池、耐久与 v18 存档均不依赖视觉对象作为玩法真值。
 
 | ID | 资产 | 位置 | 当前状态 |
 | --- | --- | --- | --- |
@@ -1236,7 +1254,7 @@ TEX-041 至 TEX-051 与既有 TEX-035/TEX-009、TEX-019 鲨肉审计副本当前
 
 - 用 Blender 或等效 DCC 建立可蒙皮的最终双手、工具、鲨鱼和生活设备资产，当前代码模型是原创近最终形体基线而非最终蒙皮资产；
 - 为木材补充经过人工修整的 normal、roughness 与 AO；鲨皮和编织纤维已使用独立派生图；
-- 在图像服务稳定时重试 TEX-003/TEX-004 候选，并只在人工平铺和材质球对比优于程序版时替换；TEX-005 至 TEX-033 已采用高质量输出；
+- TEX-003 已采用经人工平铺和真实水下/咬筏对比通过的 Image 2 high 版本；TEX-004 与其余最终资产仍只在候选优于现版时替换，TEX-005 至 TEX-033 已采用高质量输出；
 - 建立同一角色比例与材质语言下的模型规范；
 - 为岛屿补充手绘沙地/草地/岩面材质组、草丛层级和更丰富的岸线小物，保持现有确定性地形与碰撞接口；
 - 为漂流箱桶、最终双手/钩具、木筏结构套件、潮兜收集网、珊瑚、海草、鱼群、水下钩具、拾风帆、强化索具/锚具、定潮舵台、接收台/阵列/中继标、高级生活设备、作物、盐翼盗鸟、研究台、通风架、熔炉和金属工具建立最终 DCC 模型、蒙皮与顶点动画，保留当前布局和领域接口；
