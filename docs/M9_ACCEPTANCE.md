@@ -1,8 +1,8 @@
 # M9 完整性、存档与发布质量验收记录
 
-> 当前状态：`DOING`（三档存档、备份恢复、生命周期保存、无障碍输入，以及工具/打捞、岛屿/岸上、水下礁区、结构/防御、鲨鱼口腔/眼部/主体皮肤和代码原生牙釉牙列七批历史材质已闭环；最终可蒙皮 DCC 口腔/牙齿、真实 GPU 与发布证据仍在后续切片）
-> 当前版本：`0.22.7`
-> 日期：2026-07-23
+> 当前状态：`DOING`（三档存档、备份恢复、生命周期保存、无障碍输入、情境化早期引导，以及工具/打捞、岛屿/岸上、水下礁区、结构/防御、鲨鱼口腔/眼部/主体皮肤和代码原生牙釉牙列七批历史材质已闭环；最终可蒙皮 DCC 口腔/牙齿、真实 GPU 与发布证据仍在后续切片）
+> 当前版本：`0.22.8`
+> 日期：2026-07-24
 
 ## 存档仓库合同
 
@@ -29,12 +29,20 @@
 - 攻击中心停距按 1.85m 吻部调整为木筏 3.6m、水中 3.85m，反击窗不再贴近裁剪面；采用 F 与 TEX-052 的水中微材质场景在真实活动帧得到 `34 / 115 / 43 / 96,354`、`variation=253 / nonBlack=232,772`、`teeth=9` 与牙焦点 `0.982` 后才冻结，正式咬筏继续锁定 `32/32` 与牙焦点 `0.941`。最终可蒙皮 DCC 鲨齿/口腔层仍为单独发布门禁。详细证据见 [M9 生物微材质验收记录](M9_CREATURE_MATERIAL_ACCEPTANCE.md)。
 - 水面割取在仍按住交互键时允许几何焦点或输入门禁短暂抖动：进度暂停并在重新对准后续接，只有松键、窗口失焦、拒收或下沉才清零；320x200 软件逻辑档真实结算四段战利品，1024x640 软件 GLES Context Lost 则明确保留为目标 GPU 门禁，不以降低素材质量换取通过。
 
+## 情境化早期引导闭环
+
+- 新航次目标由当前背包、饥渴、净水器状态和筏格数实时推导，不新增教程标记或存档迁移；
+- 目标序列覆盖净水器材料、部署、容器/燃料、冷凝、收取、建造锤和首块扩筏；资源数量直接复用物品短名，已有淡水不会重复卡在容器阶段；
+- 口渴/饥饿且有补给时临时优先提示供给；鲨鱼、风暴、入水、上岛和首块扩筏完成后目标卡让位或退出；
+- `onboarding` 浏览器门禁验证 1024x640 新航次/冷凝态和 640x720 窄视口，目标卡与岛屿栏、航向栏、右上控制均无交叠；完整证据见 [M9 情境化早期航程引导验收](M9_ONBOARDING_ACCEPTANCE.md)。
+
 ## 自动证据
 
 ```sh
 npx vitest run src/game/domain/save.test.ts src/game/domain/saveRepository.test.ts src/state/gameStore.test.ts --maxWorkers=1
 CAPTURE_ONLY=save-slots DRIFTWAKE_URL=http://127.0.0.1:4173 npm run capture
 CAPTURE_ONLY=save-recovery CAPTURE_FAST=1 DRIFTWAKE_URL=http://127.0.0.1:4173 npm run capture
+CAPTURE_ONLY=onboarding CAPTURE_FAST=1 npm run capture
 CAPTURE_ONLY=shark-facial-materials CAPTURE_FAST=1 npm run capture
 CAPTURE_ONLY=shark-combat SHARK_COMBAT_STAGE=visual CAPTURE_FAST=1 npm run capture
 CAPTURE_ONLY=shark-loot-water CAPTURE_FAST=1 npm run capture
@@ -48,7 +56,7 @@ CAPTURE_ONLY=perimeter-defense-visual CAPTURE_FAST=1 npm run capture
 - `save-slots` 预置一号正常、二号主档损坏/备份有效、三号不可恢复损坏。桌面 `1440x900` 与窄屏 `640x720` 均验证三种状态、档位选择、按钮语义、无横向溢出和无 Canvas/世界 chunk。
 - `save-recovery` 实际进入二号备份航次，确认 `slot-2` 被锁定、恢复标记为真、二号主档重写为 v18、一号仍为 `4260s`、备份为 `1560s`，并验证 synthetic `pagehide` 将上一个主档轮换为备份且钩具为唯一手持状态。
 
-当前全量 Vitest：50 个测试文件、323 项通过；生产构建、捕获脚本和 Image 2 PBR 派生脚本均通过。Termux/Xvfb 仅用于逻辑、行为和构图证据；真实 GPU 的双 profile、长期运行、音频输出和无说明玩家流程不以此通过。
+当前全量 Vitest：51 个测试文件、326 项通过；生产构建、捕获脚本和 Image 2 PBR 派生脚本均通过。Termux/Xvfb 仅用于逻辑、行为和构图证据；真实 GPU 的双 profile、长期运行、音频输出和无说明玩家流程不以此通过。
 
 ## 后续发布门禁
 

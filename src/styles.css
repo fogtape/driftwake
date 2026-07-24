@@ -547,6 +547,55 @@ button:focus-visible {
 .island-readout.is-drift-risk em { color: #ff9a80; }
 .island-readout.is-drift-risk i b { background: var(--coral); }
 
+.voyage-objective {
+  position: absolute;
+  top: max(164px, calc(env(safe-area-inset-top) + 144px));
+  left: max(20px, env(safe-area-inset-left));
+  display: grid;
+  width: 224px;
+  min-height: 58px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: start;
+  gap: 4px 9px;
+  padding: 8px 10px;
+  color: #dceae6;
+  border-left: 2px solid #7ab8ac;
+  border-radius: 3px;
+  background: rgba(5, 22, 27, 0.74);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.voyage-objective.has-signal { top: max(226px, calc(env(safe-area-inset-top) + 206px)); }
+.voyage-objective > svg { margin-top: 2px; color: #80c5ba; }
+.voyage-objective > div { display: grid; min-width: 0; gap: 2px; }
+.voyage-objective span { color: #90aaa4; font-family: 'Barlow Condensed', sans-serif; font-size: 10px; }
+.voyage-objective strong { color: #edf5f1; font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 600; line-height: 1.05; }
+.voyage-objective i { display: block; height: 3px; overflow: hidden; background: rgba(0, 0, 0, 0.42); }
+.voyage-objective i b { display: block; height: 100%; background: #79bfb3; transition: width 180ms ease; }
+.voyage-objective em {
+  grid-column: 1 / -1;
+  color: #cbd9d4;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.voyage-objective--salvage { border-left-color: #c5a96c; }
+.voyage-objective--salvage > svg { color: #dfbf78; }
+.voyage-objective--salvage i b { background: #d1af69; }
+.voyage-objective--water { border-left-color: #69c2c4; }
+.voyage-objective--water > svg { color: #7fd8d5; }
+.voyage-objective--water i b { background: #72c7c4; }
+.voyage-objective--food { border-left-color: #dc9367; }
+.voyage-objective--food > svg { color: #e7a675; }
+.voyage-objective--food i b { background: #db9568; }
+.voyage-objective--build { border-left-color: #9abb7b; }
+.voyage-objective--build > svg { color: #add08a; }
+.voyage-objective--build i b { background: #94ba77; }
+
 .navigation-readout {
   position: absolute;
   top: max(20px, env(safe-area-inset-top));
@@ -3066,6 +3115,8 @@ button:focus-visible {
   .resource-pack-button { width: 40px; }
   .raft-readout { top: 60px; left: 12px; }
   .island-readout { top: 94px; left: 12px; width: 210px; }
+  .voyage-objective { top: 154px; left: 12px; width: 210px; }
+  .voyage-objective.has-signal { top: 214px; }
   .dive-readout { top: 150px; left: 12px; }
   .signal-readout { top: 150px; left: 12px; width: 210px; }
   .navigation-readout {

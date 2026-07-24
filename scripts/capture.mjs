@@ -2619,6 +2619,114 @@ async function captureGame() {
   await context.close();
 }
 
+async function captureOnboarding() {
+  const viewport = { width: 1024, height: 640 };
+  const readLayout = (page) => page.evaluate(() => {
+    const readBox = (selector) => {
+      const box = document.querySelector(selector)?.getBoundingClientRect();
+      return box ? { left: box.left, top: box.top, right: box.right, bottom: box.bottom } : null;
+    };
+    return {
+      objective: readBox('.voyage-objective'),
+      island: readBox('.island-readout'),
+      navigation: readBox('.navigation-readout'),
+      actions: readBox('.hud-actions'),
+      viewport: { width: innerWidth, height: innerHeight },
+      text: document.querySelector('.voyage-objective')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    };
+  });
+  const assertObjective = (label, layout, expectedText) => {
+    const overlaps = (first, second) => Boolean(
+      first && second
+      && first.left < second.right
+      && first.right > second.left
+      && first.top < second.bottom
+      && first.bottom > second.top,
+    );
+    if (
+      !layout.objective
+      || !layout.text.includes(expectedText)
+      || layout.objective.left < 0
+      || layout.objective.top < 0
+      || layout.objective.right > layout.viewport.width
+      || layout.objective.bottom > layout.viewport.height
+      || overlaps(layout.objective, layout.island)
+      || overlaps(layout.objective, layout.navigation)
+      || overlaps(layout.objective, layout.actions)
+    ) {
+      throw new Error(`Onboarding ${label} layout gate failed: ${JSON.stringify(layout)}`);
+    }
+  };
+
+  const initial = await openDesktopPage('onboarding-initial', viewport);
+  try {
+    await enterGame(initial.page);
+    await waitForRuntime(initial.page, () => (
+      document.querySelector('.voyage-objective')?.textContent?.includes('凑齐潮汐净水器') ?? false
+    ), 30_000);
+    const layout = await readLayout(initial.page);
+    assertObjective('initial', layout, '凑齐潮汐净水器');
+    await inspectCanvasPixels(initial.page, 'onboarding-initial');
+    await captureCanvasReadback(initial.page, new URL('onboarding-initial-canvas.png', outputDir).pathname);
+    await captureCompositedPage(initial.page, new URL('onboarding-initial-desktop.png', outputDir).pathname);
+    console.log(`Onboarding initial: ${JSON.stringify(layout)}`);
+  } finally {
+    await initial.context.close();
+  }
+
+  const waterSave = {
+    ...seededSave,
+    version: 18,
+    player: {
+      ...seededSave.player,
+      inventory: { hook: 1, emptyCup: 1, timber: 1, emergencyWater: 1 },
+      selectedTool: 'hook',
+    },
+    raft: {
+      ...seededSave.raft,
+      devices: [{
+        id: 'onboarding-purifier',
+        type: 'purifier',
+        x: -1,
+        z: 0,
+        rotation: 0,
+        phase: 'working',
+        elapsed: 8,
+        waterQueue: [],
+        freshWater: 0,
+        grillSlots: [],
+        fuelSeconds: 0,
+        storage: {},
+      }],
+    },
+  };
+  const water = await openDesktopPage('onboarding-water', { seedSave: true, customSave: waterSave, ...viewport });
+  try {
+    await enterGame(water.page);
+    await waitForRuntime(water.page, () => (
+      document.querySelector('.voyage-objective')?.textContent?.includes('淡水正在穿过冷凝沟') ?? false
+    ), 30_000);
+    const layout = await readLayout(water.page);
+    assertObjective('water', layout, '淡水正在穿过冷凝沟');
+    console.log(`Onboarding water: ${JSON.stringify(layout)}`);
+  } finally {
+    await water.context.close();
+  }
+
+  const narrow = await openDesktopPage('onboarding-narrow', { width: 640, height: 720 });
+  try {
+    await enterGame(narrow.page);
+    await waitForRuntime(narrow.page, () => (
+      document.querySelector('.voyage-objective')?.textContent?.includes('凑齐潮汐净水器') ?? false
+    ), 30_000);
+    const layout = await readLayout(narrow.page);
+    assertObjective('narrow', layout, '凑齐潮汐净水器');
+    console.log(`Onboarding narrow: ${JSON.stringify(layout)}`);
+  } finally {
+    await narrow.context.close();
+  }
+}
+
 async function capturePause() {
   const context = await browser.newContext({
     viewport: { width: desktopWidth, height: desktopHeight },
@@ -9882,6 +9990,7 @@ try {
   if (captureOnly === 'all' || captureOnly === 'save-slots') await captureSaveSlots();
   if (captureOnly === 'save-recovery') await captureSaveRecovery();
   if (captureOnly === 'all' || captureOnly === 'game') await captureGame();
+  if (captureOnly === 'onboarding') await captureOnboarding();
   if (captureOnly === 'all' || captureOnly === 'pause') await capturePause();
   if (captureOnly === 'all' || captureOnly === 'hook') await captureHook();
   if (captureOnly === 'all' || captureOnly === 'salvage') await captureSalvage();

@@ -46,6 +46,7 @@ import { TOOL_MAX_DURABILITY, toolDurabilityRatio, type ToolDurability } from '.
 import { survivalBand } from '../game/domain/survival';
 import { ISLAND_APPROACH_SECONDS, ISLAND_DEPART_SECONDS, ISLAND_DOCK_SECONDS } from '../game/domain/island';
 import { cardinalLabel } from '../game/domain/navigation';
+import { getVoyageObjective } from '../game/domain/onboarding';
 import { FISH_SIZE_DEFINITIONS, FISH_SPECIES_DEFINITIONS } from '../game/domain/fishing';
 import {
   RAFT_BUILD_CATEGORY_DEFINITIONS,
@@ -156,6 +157,13 @@ function Gauge({ icon, value, tone, label }: GaugeProps) {
       <strong aria-hidden="true">{rounded}</strong>
     </div>
   );
+}
+
+function VoyageObjectiveIcon({ tone }: { tone: 'salvage' | 'water' | 'food' | 'build' }) {
+  if (tone === 'water') return <Droplet size={18} />;
+  if (tone === 'food') return <Utensils size={18} />;
+  if (tone === 'build') return <Grid3X3 size={18} />;
+  return <PackageOpen size={18} />;
 }
 
 export function Hud({
@@ -323,6 +331,14 @@ export function Hud({
             ? '木筏离流'
             : '短暂靠近'
         : '正在远离';
+  const voyageObjective = sharkAlert || sharkCarcass || stormAlert || player.surface === 'water' || island.ashore
+    ? null
+    : getVoyageObjective({
+      inventory,
+      survival,
+      raftTiles: raft.tiles,
+      purifier: devices.purifier,
+    });
   return (
     <section className={`hud ${visible ? 'is-visible' : ''}`} aria-hidden={!visible}>
       <div className="resource-strip">
@@ -355,6 +371,21 @@ export function Hud({
         </div>
         <em>{islandMetric}</em>
       </div>
+
+      {voyageObjective && (
+        <div
+          className={`voyage-objective voyage-objective--${voyageObjective.tone} ${signalVisible ? 'has-signal' : ''}`}
+          aria-label={`${voyageObjective.chapter}：${voyageObjective.title}。${voyageObjective.detail}`}
+        >
+          <VoyageObjectiveIcon tone={voyageObjective.tone} />
+          <div>
+            <span>{voyageObjective.chapter}</span>
+            <strong>{voyageObjective.title}</strong>
+            <i><b style={{ width: `${clampPercent(voyageObjective.progress * 100)}%` }} /></i>
+          </div>
+          <em>{voyageObjective.detail}</em>
+        </div>
+      )}
 
       <div
         className={`navigation-readout ${navigation.sailDeployed ? 'is-sailing' : ''} ${navigation.sailReinforced ? 'is-reinforced' : ''} ${navigation.anchorReinforced ? 'is-anchor-reinforced' : ''} ${navigation.anchored ? 'is-anchored' : ''} ${navigation.stormIntensity > 0.3 ? 'is-storm' : ''} ${navigation.driftRisk ? 'is-drift-risk' : ''}`}
