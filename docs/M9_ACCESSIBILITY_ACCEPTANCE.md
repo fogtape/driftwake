@@ -42,5 +42,5 @@ CAPTURE_ONLY=accessibility-bindings CAPTURE_FAST=1 DRIFTWAKE_URL=http://127.0.0.
 
 - 真实 GPU 上的屏幕阅读器、键盘流与色觉模式人工审阅；
 - 多语言文案、完整音频混音、灯光统一与历史材质整改；
-- 真 WebGL Context Lost/Restore、双画质 profile、20 分钟长稳；
+- 目标 GPU 重复 WebGL Context Lost/Restore、双画质 profile、20 分钟长稳（候选生产包的软件扩展丢失/恢复已由 `0.22.9` 闭环）；
 - 新玩家 30-60 分钟无说明流程与发布/许可证证据包。

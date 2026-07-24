@@ -1,17 +1,19 @@
 {
   "name": "driftwake",
-  "version": "0.22.8",
+  "version": "0.22.9",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
+    "build:release": "tsc -b && vite build --mode release",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:stability": "node scripts/stability.mjs",
     "test:m1-runtime": "node scripts/m1-regression.mjs",
-    "capture": "node scripts/capture.mjs"
+    "capture": "node scripts/capture.mjs",
+    "release:check": "node scripts/release-check.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",

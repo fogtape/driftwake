@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "packages": [
+    {
+      "name": "@dimforge/rapier3d-compat",
+      "license": "Apache-2.0",
+      "source": "https://github.com/dimforge/rapier.js",
+      "noticeFile": "release/licenses/Apache-2.0.txt",
+      "purpose": "3D physics and collision runtime"
+    },
+    {
+      "name": "@fontsource/barlow-condensed",
+      "license": "OFL-1.1",
+      "source": "https://github.com/fontsource/font-files",
+      "noticeFile": "node_modules/@fontsource/barlow-condensed/LICENSE",
+      "purpose": "Condensed display typeface files"
+    },
+    {
+      "name": "@fontsource/manrope",
+      "license": "OFL-1.1",
+      "source": "https://github.com/fontsource/font-files",
+      "noticeFile": "node_modules/@fontsource/manrope/LICENSE",
+      "purpose": "Interface typeface files"
+    },
+    {
+      "name": "lucide-react",
+      "license": "ISC",
+      "source": "https://github.com/lucide-icons/lucide",
+      "noticeFile": "node_modules/lucide-react/LICENSE",
+      "purpose": "Interface icon components"
+    },
+    {
+      "name": "react",
+      "license": "MIT",
+      "source": "https://github.com/facebook/react",
+      "noticeFile": "node_modules/react/LICENSE",
+      "purpose": "Interface runtime"
+    },
+    {
+      "name": "react-dom",
+      "license": "MIT",
+      "source": "https://github.com/facebook/react",
+      "noticeFile": "node_modules/react-dom/LICENSE",
+      "purpose": "Browser interface renderer"
+    },
+    {
+      "name": "scheduler",
+      "license": "MIT",
+      "source": "https://github.com/facebook/react",
+      "noticeFile": "node_modules/scheduler/LICENSE",
+      "purpose": "React scheduling runtime"
+    },
+    {
+      "name": "three",
+      "license": "MIT",
+      "source": "https://github.com/mrdoob/three.js",
+      "noticeFile": "node_modules/three/LICENSE",
+      "purpose": "WebGL scene and rendering runtime"
+    },
+    {
+      "name": "zustand",
+      "license": "MIT",
+      "source": "https://github.com/pmndrs/zustand",
+      "noticeFile": "node_modules/zustand/LICENSE",
+      "purpose": "Application state runtime"
+    }
+  ]
+}

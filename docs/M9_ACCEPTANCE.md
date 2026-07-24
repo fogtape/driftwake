@@ -1,7 +1,7 @@
 # M9 完整性、存档与发布质量验收记录
 
-> 当前状态：`DOING`（三档存档、备份恢复、生命周期保存、无障碍输入、情境化早期引导，以及工具/打捞、岛屿/岸上、水下礁区、结构/防御、鲨鱼口腔/眼部/主体皮肤和代码原生牙釉牙列七批历史材质已闭环；最终可蒙皮 DCC 口腔/牙齿、真实 GPU 与发布证据仍在后续切片）
-> 当前版本：`0.22.8`
+> 当前状态：`DOING`（三档存档、备份恢复、生命周期保存、无障碍输入、情境化早期引导、候选发布构建与真实 Context 生命周期，以及七批历史材质已闭环；最终可蒙皮 DCC 口腔/牙齿、目标 GPU、长稳与外部玩家证据仍在后续切片）
+> 当前版本：`0.22.9`
 > 日期：2026-07-24
 
 ## 存档仓库合同
@@ -36,6 +36,15 @@
 - 口渴/饥饿且有补给时临时优先提示供给；鲨鱼、风暴、入水、上岛和首块扩筏完成后目标卡让位或退出；
 - `onboarding` 浏览器门禁验证 1024x640 新航次/冷凝态和 640x720 窄视口，目标卡与岛屿栏、航向栏、右上控制均无交叠；完整证据见 [M9 情境化早期航程引导验收](M9_ONBOARDING_ACCEPTANCE.md)。
 
+## 候选发布与异常恢复闭环
+
+- `release` 模式不携带 sourcemap；Barlow Condensed 与 Manrope 只打包实际需要的 Latin 子集，主 CSS 从约 106 KB 降至 83,243 bytes；
+- 发布检查递归读取 `package-lock.json`，九个生产依赖必须与结构化 SPDX/来源/许可文本清单完全一致；候选包生成完整 `THIRD_PARTY_NOTICES.txt`；
+- 113 个运行时资产、45 个采用 `-raw.png` 源图和 28 条显式运行时路径均通过来源门禁，无缺失或未登记文件；
+- 候选包 130 个文件、51,950,072 bytes，每个文件写入 SHA-256 清单；入口、世界、Rapier 与 CSS 分别为 `408,506 / 1,074,990 / 2,237,380 / 83,243` bytes；
+- 从 `dist` 静态服务验证标题页无 Canvas/世界 chunk，进入世界后使用真实 `WEBGL_lose_context` 扩展丢失并恢复同一上下文；恢复后模拟、九块筏格碰撞和有效画面全部回归，外域资源请求为零；
+- 本机 renderer 为 llvmpipe，真实恢复耗时与 91.095 秒模拟积压丢弃只记录为软件正确性证据，不用于宣称目标 GPU 性能。完整合同见 [M9 候选发布与异常恢复验收](M9_RELEASE_ACCEPTANCE.md)。
+
 ## 自动证据
 
 ```sh
@@ -49,6 +58,7 @@ CAPTURE_ONLY=shark-loot-water CAPTURE_FAST=1 npm run capture
 CAPTURE_ONLY=underwater CAPTURE_FAST=1 npm run capture
 CAPTURE_ONLY=building BUILDING_PART=damage CAPTURE_FAST=1 npm run capture
 CAPTURE_ONLY=perimeter-defense-visual CAPTURE_FAST=1 npm run capture
+RELEASE_REQUIRE_CLEAN=1 npm run release:check
 ```
 
 - `saveRepository.test.ts` 覆盖旧单档物化、三档隔离、备份轮换、主档与工作副本同时损坏后的恢复、浏览器工作副本兼容、写失败保留可恢复副本、未标记旧别名的跨档隔离、主档损坏时的较新备份优先、活动二号档不误复制到一号档，以及逐档删除。
@@ -56,11 +66,12 @@ CAPTURE_ONLY=perimeter-defense-visual CAPTURE_FAST=1 npm run capture
 - `save-slots` 预置一号正常、二号主档损坏/备份有效、三号不可恢复损坏。桌面 `1440x900` 与窄屏 `640x720` 均验证三种状态、档位选择、按钮语义、无横向溢出和无 Canvas/世界 chunk。
 - `save-recovery` 实际进入二号备份航次，确认 `slot-2` 被锁定、恢复标记为真、二号主档重写为 v18、一号仍为 `4260s`、备份为 `1560s`，并验证 synthetic `pagehide` 将上一个主档轮换为备份且钩具为唯一手持状态。
 
-当前全量 Vitest：51 个测试文件、326 项通过；生产构建、捕获脚本和 Image 2 PBR 派生脚本均通过。Termux/Xvfb 仅用于逻辑、行为和构图证据；真实 GPU 的双 profile、长期运行、音频输出和无说明玩家流程不以此通过。
+当前全量 Vitest：52 个测试文件、329 项通过；生产构建、捕获脚本、Image 2 PBR 派生脚本和候选发布链均通过。Termux/Xvfb 仅用于逻辑、行为、构图和异常恢复正确性证据；真实 GPU 的双 profile、20 分钟长稳、音频输出和无说明玩家流程不以此通过。
 
 ## 后续发布门禁
 
 - 多语言文案与剩余辅助技术验收；无障碍输入、字幕、色觉与减少动态详见 [M9 无障碍验收记录](M9_ACCESSIBILITY_ACCEPTANCE.md)；
 - 全流程混音、灯光、其余历史材质回溯和最终 DCC 替换；工具/打捞整改详见 [M9 材质整改验收记录](M9_MATERIAL_ACCEPTANCE.md)，岛屿/岸上整改详见 [M9 岛屿材质验收记录](M9_ISLAND_MATERIAL_ACCEPTANCE.md)，水下礁区整改详见 [M9 水下材质验收记录](M9_UNDERWATER_MATERIAL_ACCEPTANCE.md)，结构/防御整改详见 [M9 结构与防御材质验收记录](M9_STRUCTURE_MATERIAL_ACCEPTANCE.md)，鲨鱼微材质详见 [M9 生物微材质验收记录](M9_CREATURE_MATERIAL_ACCEPTANCE.md)；
-- 真 WebGL Context Lost/Restore、真实 GPU 1280x720/30 与 1920x1080/60、20 分钟长稳；
+- 目标真实 GPU 重复 Context Lost/Restore、1280x720/30 与 1920x1080/60 双 profile、20 分钟长稳；
+- 项目所有者明确 Driftwake 原创代码/资产的发布许可，并在实际托管目标复跑静态路由、缓存与 HTTPS 部署检查；
 - 新玩家 30-60 分钟无说明流程、存档选择理解、删除确认理解和恢复信任度。

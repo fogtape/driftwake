@@ -6,7 +6,7 @@
 
 M1 的功能、逻辑回归、浏览器运行时回归、手机电脑模式暂停入口和软件 GLES 稳定性已形成可复现闭环。M1 donor 没有整分支合并；只吸收了运行时、镜头、动态分辨率、稳定性证据和碰撞验收思想，main 的 M2-M8 内容、v10 存档、动态筏格、六总线音频、海况/水下 shader 与大型 capture 流程均保留。
 
-本记录不把本设备 Debian rootfs/Xvfb 的 Mesa llvmpipe 软件渲染结果视为发布性能结论。真实桌面 GPU 双 profile、原生 rAF、真 Context Lost/Restore 和完整手感验收仍属于 M9 发布门禁。
+本记录不把本设备 Debian rootfs/Xvfb 的 Mesa llvmpipe 软件渲染结果视为发布性能结论。M9 `0.22.9` 已在候选生产包上通过真实 `WEBGL_lose_context` 丢失/恢复的软件正确性门禁；真实桌面 GPU 双 profile、原生 rAF、目标驱动复验和完整手感仍属于发布门禁。
 
 ## 已完成范围
 

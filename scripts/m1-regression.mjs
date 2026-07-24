@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { launchDriftwakeChromium, preparePlaywrightPlatform } from './browser-runtime.mjs';
 import { assertFrameContent } from './capture-utils.mjs';
 
@@ -214,8 +216,44 @@ try {
   if (finalState.raftColliderCount !== finalState.raftTileCount || finalState.raftTileCount <= 0) {
     throw new Error('dynamic raft colliders do not match tiles');
   }
+  const networkGate = await page.evaluate(() => {
+    const origin = location.origin;
+    const externalResources = performance.getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .filter((name) => {
+        try {
+          return new URL(name, location.href).origin !== origin;
+        } catch {
+          return true;
+        }
+      });
+    const gl = document.querySelector('canvas')?.getContext('webgl2');
+    const debug = gl?.getExtension('WEBGL_debug_renderer_info');
+    return {
+      externalResources,
+      renderer: gl && debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : null,
+    };
+  });
+  if (networkGate.externalResources.length > 0) {
+    throw new Error(`runtime loaded external resources: ${networkGate.externalResources.join(', ')}`);
+  }
   if (errors.length > 0) throw new Error(errors.join(' | '));
-  console.log(JSON.stringify({ titleGate, contextMode: realContextLoss ? 'extension' : 'synthetic', finalState, errors }, null, 2));
+  const evidence = {
+    url: baseUrl,
+    titleGate,
+    contextMode: realContextLoss ? 'extension' : 'synthetic',
+    rendererMode: runtime.rendererMode,
+    renderer: networkGate.renderer,
+    finalState,
+    externalResources: networkGate.externalResources,
+    errors,
+  };
+  console.log(JSON.stringify(evidence, null, 2));
+  if (process.env.M1_EVIDENCE_PATH) {
+    const evidencePath = resolve(process.env.M1_EVIDENCE_PATH);
+    await mkdir(dirname(evidencePath), { recursive: true });
+    await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
+  }
   await context.close();
 } finally {
   await runtime.browser.close();
