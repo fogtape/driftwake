@@ -1,0 +1,11 @@
+Use case: stylized-concept
+Asset type: seamless tileable PBR base-color albedo for the gingiva and periodontal ridges of an original deep-water shark in a premium ocean survival game.
+Primary request: create an original continuous shark gingiva material with compact resilient gum tissue, fine shallow periodontal fiber ridges, tiny irregular salt-softened pores, restrained pale keratinized ridge wear, and subtle damp organic mottling. It must read clearly as healthy predatory fish gum tissue at close range, distinct from generic mouth lining, raw meat, skin, leather, or stone.
+Scene/backdrop: exact edge-to-edge material sheet only; the surface fills the complete square with no object silhouette or anatomy illustration.
+Style/medium: premium stylized-realistic hand-authored game PBR albedo, controlled microscopic detail with calm broad values and believable underwater anatomy.
+Composition/framing: exact orthographic square, uniform texel density, seamless wrapping on all four edges, evenly distributed detail, no central focal feature, no large fold, no directional band, no edge darkening.
+Lighting/mood: flat neutral albedo only. Absolutely no baked directional light, specular highlight, reflection, ambient occlusion, shadow, depth cue, wet glare, or photographic lens effect.
+Color palette: desaturated cool plum-gray and muted oxblood-brown midtones, pale smoke-blue keratinized ridge tips, very sparse charcoal pin wear; medium-value and readable underwater, never bright pink or vivid red.
+Materials/textures: dense living gingiva with fine low-relief fibers and compact gum grain, physically plausible but restrained, no slime or glossy plastic appearance.
+Constraints: fully original; clean seamless game material; no teeth, tooth sockets, jaw, mouth opening, tongue, lips, blood, wound, gore, fish, shark, whole animal, scales, fur, text, symbols, logo, watermark, border, frame, material ball, UV grid, presentation board, or recognizable copyrighted design.
+Avoid: flat single-color fill, raw steak, exposed muscle bundles, intestines, brain tissue, coral, rock, leather, rubber, fabric, large veins, branching vessels, repeated cellular honeycomb, horizontal brightness bands, vertical stripes, black crush, saturated magenta, bright red, and baked highlights.

@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "id": "driftwake.graywake-shark.dcc",
+  "format": "glb",
+  "rootNode": "graywake-shark-root",
+  "file": {
+    "maxBytes": 1600000,
+    "requireBinaryChunk": true,
+    "forbidExternalUris": true,
+    "forbidEmbeddedImages": true,
+    "allowedRequiredExtensions": ["KHR_mesh_quantization"]
+  },
+  "metadata": {
+    "contractVersion": 1,
+    "upAxis": "+Y",
+    "forwardAxis": "-Z",
+    "unitMeters": 1,
+    "originalAsset": true,
+    "runtimeMaterialRemap": true
+  },
+  "boundsMeters": {
+    "minimum": [1.8, 0.9, 4.0],
+    "maximum": [2.8, 2.2, 6.0],
+    "metadataToleranceMeters": 0.05
+  },
+  "requiredNodes": [
+    "graywake-shark-root",
+    "shark-body",
+    "shark-eye-port",
+    "shark-eye-starboard",
+    "shark-mouth-lining",
+    "shark-gingiva-upper",
+    "shark-gingiva-lower",
+    "shark-teeth-upper",
+    "shark-teeth-lower",
+    "shark-flesh-overlay"
+  ],
+  "materialBindings": {
+    "shark-body": "graywake-shark-skin",
+    "shark-eye-port": "graywake-lateral-eye",
+    "shark-eye-starboard": "graywake-lateral-eye",
+    "shark-mouth-lining": "graywake-mouth-lining",
+    "shark-gingiva-upper": "graywake-gingiva",
+    "shark-gingiva-lower": "graywake-gingiva",
+    "shark-teeth-upper": "graywake-tooth-enamel",
+    "shark-teeth-lower": "graywake-tooth-enamel",
+    "shark-flesh-overlay": "graywake-shark-flesh"
+  },
+  "skinning": {
+    "rootJoint": "shark-rig-root",
+    "minimumJoints": 13,
+    "maximumJoints": 48,
+    "requiredJoints": [
+      "shark-rig-root",
+      "shark-spine-front",
+      "shark-spine-mid",
+      "shark-tail-base",
+      "shark-tail-mid",
+      "shark-tail-tip",
+      "shark-jaw-lower",
+      "shark-gill-port",
+      "shark-gill-starboard",
+      "shark-pectoral-port",
+      "shark-pectoral-starboard",
+      "shark-dorsal-fin",
+      "shark-corpse-roll"
+    ],
+    "jointHierarchy": {
+      "shark-corpse-roll": "shark-rig-root",
+      "shark-spine-front": "shark-corpse-roll",
+      "shark-spine-mid": "shark-spine-front",
+      "shark-tail-base": "shark-spine-mid",
+      "shark-tail-mid": "shark-tail-base",
+      "shark-tail-tip": "shark-tail-mid",
+      "shark-jaw-lower": "shark-spine-front",
+      "shark-gill-port": "shark-spine-front",
+      "shark-gill-starboard": "shark-spine-front",
+      "shark-pectoral-port": "shark-spine-mid",
+      "shark-pectoral-starboard": "shark-spine-mid",
+      "shark-dorsal-fin": "shark-spine-mid"
+    },
+    "requiredSkinnedNodes": [
+      "shark-body",
+      "shark-gingiva-upper",
+      "shark-gingiva-lower",
+      "shark-flesh-overlay"
+    ],
+    "requiredAttributes": ["POSITION", "NORMAL", "TEXCOORD_0", "JOINTS_0", "WEIGHTS_0"],
+    "maximumInfluences": 4
+  },
+  "geometry": {
+    "primitiveMode": 4,
+    "minimumTriangles": 12000,
+    "maximumTriangles": 36000,
+    "maximumVertices": 50000
+  },
+  "animations": [
+    {
+      "name": "swim_loop",
+      "minimumSeconds": 0.8,
+      "maximumSeconds": 4.0,
+      "requiredTargets": ["shark-tail-base", "shark-tail-mid", "shark-tail-tip"]
+    },
+    {
+      "name": "attack_windup",
+      "minimumSeconds": 0.35,
+      "maximumSeconds": 1.2,
+      "requiredTargets": ["shark-spine-front", "shark-jaw-lower"]
+    },
+    {
+      "name": "attack_bite",
+      "minimumSeconds": 0.1,
+      "maximumSeconds": 0.6,
+      "requiredTargets": ["shark-jaw-lower", "shark-spine-front"]
+    },
+    {
+      "name": "attack_recover",
+      "minimumSeconds": 0.35,
+      "maximumSeconds": 1.5,
+      "requiredTargets": ["shark-jaw-lower", "shark-tail-base"]
+    },
+    {
+      "name": "hit_react",
+      "minimumSeconds": 0.2,
+      "maximumSeconds": 0.8,
+      "requiredTargets": ["shark-spine-front", "shark-spine-mid"]
+    },
+    {
+      "name": "death_roll",
+      "minimumSeconds": 1.0,
+      "maximumSeconds": 4.0,
+      "requiredTargets": ["shark-rig-root", "shark-corpse-roll"]
+    },
+    {
+      "name": "corpse_float",
+      "minimumSeconds": 2.0,
+      "maximumSeconds": 8.0,
+      "requiredTargets": ["shark-rig-root", "shark-tail-base"]
+    }
+  ]
+}

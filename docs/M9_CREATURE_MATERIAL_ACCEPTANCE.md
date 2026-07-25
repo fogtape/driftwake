@@ -1,7 +1,7 @@
 # M9 生物微材质整改验收
 
 > 日期：2026-07-25
-> 版本：`0.22.12`
+> 版本：`0.22.15`
 > 状态：`APPROVED`（Image 2 来源、PBR、模型朝向、共享图集、代码原生 24 齿口腔 rig v1、正式玩法预算与软件 framebuffer 闭环；专用牙龈源图、目标真实 GPU 与最终可蒙皮 DCC 口腔/牙齿仍属发布门禁）
 
 ## 本轮范围
@@ -46,6 +46,8 @@ scripts/imagegen generate --model gpt-image-2 --quality high --size 2048x2048 \
 `0.22.11` 只改进项目包装器的失败恢复：单次 `generate` / `edit` 对 `RemoteProtocolError`、断连、超时、临时服务错误和限流最多执行三次 2/4 秒退避，批量任务沿用上游逻辑，参数、提示词和文件错误立即失败。纯 Python 单元测试、shell 语法、非法配置拒绝和同一 `gpt-image-2 high 2048x2048` dry-run 已通过；本轮没有重发 provider 请求，因此四次零输出仍不构成资产进展。
 
 `0.22.12` 用同一专用牙龈 `generate` 规格得到 OpenAI SDK `InternalServerError: Error code: 502`；包装器此前未识别该实际错误格式。补齐 502/503/504 SDK 文案后，回归测试锁定该格式，随后同一候选请求按 2/4 秒退避完成三次调用，三次均为 upstream 502，仍无文件输出。没有创建 `graywake-gingiva-raw.png`、PBR、图集区域或运行时绑定，专用牙龈继续是 provider/DCC 交接项。
+
+`0.22.15` 将牙龈最终提示词固化为 `docs/prompts/graywake-gingiva-image2.txt`。同一 `gpt-image-2 / high / 2048x2048 / PNG / no-augment` dry-run 通过，正式请求三次均返回 `503 No available compatible accounts`，仍未创建源图或运行时资产；没有使用其他模型、低质量或程序占位。与此同时，[深潮鲨 DCC v1 合同](M9_DCC_SHARK_CONTRACT.md) 将 GLB/BIN/accessor 容器、变换后实际米制包围盒、节点、六材质映射、单 skin、13-48 关节拓扑、inverse bind matrices、精确七段玩法动画集和 1.6 MB/36k triangles/50k vertices 预算变成 CLI/发布自动门禁。本机无 Blender、最终 GLB 尚未交付，因此合同状态为 `READY`，资产状态继续 `BLOCKED`。
 
 ## 最终提示词
 
@@ -135,5 +137,5 @@ CAPTURE_ONLY=perimeter-defense-visual CAPTURE_FAST=1 npm run capture
 - 目标真实 GPU 的 1280x720/30、1920x1080/60 双画质、夜间/风暴/水下眼口和采用 F 鲨皮的 mip/各向异性响应与 20 分钟长稳；
 - 木矛和潮鸣震叉近景中的眼片、口缘、鳃衬、胸鳍遮挡、伤痕与鲨皮微结构；
 - 鲨鱼预兆、扑空、反击、受击、浮尸和采集声音在真实音频设备上的混音；
-- 最终 DCC 鲨体 UV、眼球体积、专用牙龈贴图、口腔/牙床/牙齿层、鳃盖变形、受击和浮尸动画；本轮通过的是代码原生 24 齿 oral rig v1，不替代可蒙皮 DCC 的口腔容积、牙龈、屏幕覆盖和变形验证；
+- 最终 DCC 鲨体 UV、眼球体积、专用牙龈贴图、口腔/牙床/牙齿层、鳃盖变形、受击和浮尸动画；机器合同与验证器已经就绪，但本轮通过的仍是代码原生 24 齿 oral rig v1，不替代可蒙皮 DCC 的口腔容积、牙龈、屏幕覆盖和变形验证；
 - 采用 F 的源图授权、C2PA、商标和商业作品相似性复核。

@@ -1,7 +1,7 @@
 # M9 候选发布与异常恢复验收
 
 > 日期：2026-07-25
-> 版本：`0.22.14`
+> 版本：`0.22.15`
 > 状态：`APPROVED`（候选构建、资产来源、第三方许可、包体预算、生产包 Context 与音频图生命周期闭环；目标 GPU、真实设备混音、20 分钟长稳、外部玩家与项目自身许可仍是外部门禁）
 
 ## 发布合同
@@ -12,6 +12,8 @@ RELEASE_REQUIRE_CLEAN=1 npm run release:check
 ```
 
 命令按顺序执行全量 Vitest、TypeScript 与 Vite `release` 构建、资产来源核对、生产依赖许可核对、包体预算、生产包 Context 生命周期和音频图/母带生命周期门禁。任一阶段失败都会令命令非零退出，同时把失败阶段写入 `artifacts/release/latest.json`。
+
+`0.22.15` 实测为 54 个测试文件、339 项通过；候选资产、依赖和包体分别为 113 个运行时资产、45 个采用源、9 个生产依赖、130 个文件和 51,956,509 bytes。技术候选通过不改变下述内容与外部门禁状态。
 
 `release` 模式不生成或引用 sourcemap；普通 `npm run build` 继续保留映射供本地诊断。字体入口收窄为 Barlow Condensed 与 Manrope 的 Latin 子集，中文继续使用现有系统字体回退，不改变字重或界面布局。
 
@@ -34,7 +36,11 @@ RELEASE_REQUIRE_CLEAN=1 npm run release:check
 - 显式 `public/assets` 路径 `28`；
 - 未登记 `0`，缺失 `0`。
 
-本切片没有新增或降级任何位图，因此没有触发新的 Image 2 采用；既有高质量运行时资产原样进入候选包。`0.22.13` 只将钓鱼浮漂和聚合漂流物瓶盖的局部纯色绑定改为既有 TEX-024 聚合物 PBR，未重采样、未扩图集；`0.22.14` 只改造 Web Audio 混音底盘。项目 `scripts/imagegen` 现将 SDK `Error code: 502/503/504` 识别为单次请求的可重试上游失败，纯 Python 回归与 `gpt-image-2 high 2048x2048` dry-run 通过；专用牙龈的一次有界请求三次均返回 upstream 502，未产生输出，不记作采用源图或资产进展。候选发布保留完整顶点有限值扫描并聚合为一次失败断言，`0.22.14` 的单线程基线为 53/334，不以放宽 timeout 掩盖问题。
+本切片没有新增或降级任何位图，因此没有触发新的 Image 2 采用；既有高质量运行时资产原样进入候选包。`0.22.13` 只将钓鱼浮漂和聚合漂流物瓶盖的局部纯色绑定改为既有 TEX-024 聚合物 PBR，未重采样、未扩图集；`0.22.14` 只改造 Web Audio 混音底盘；`0.22.15` 固化牙龈最终提示词并增加 DCC 合同/验证器，不把合同冒充成品资产。项目 `scripts/imagegen` 对 SDK 502/503/504 使用有界退避；本轮 `gpt-image-2 high 2048x2048` dry-run 通过，正式牙龈请求三次均返回 `503 No available compatible accounts`，未产生输出，不记作采用源图或资产进展。
+
+## 内容交付门禁
+
+`release:check` 每次校验 `docs/contracts/graywake-shark-dcc-v1.json`。当前没有 `public/assets/models/graywake-shark.glb`，因此报告 `contentGates.sharkDcc=pending-dcc-delivery`；专用牙龈源图不存在，报告 `contentGates.sharkGingivaImage2=pending-image-2-source`。这两个 pending 不使仍使用已验收代码原生鲨体的技术候选失败，但 M9 不得据此转为完成。GLB 一旦出现，将自动检查 GLB 2.0 容器与 BIN/accessor 边界、1.6 MB/几何预算、变换后实际米制包围盒、节点/材质映射、单 skin、关节拓扑、inverse bind matrices 和精确七段动画集；失败会阻断候选。
 
 ## 包体证据
 
@@ -59,7 +65,7 @@ RELEASE_REQUIRE_CLEAN=1 npm run release:check
 3. 完成真实跳跃、镜头设置切换和失焦/恢复；
 4. 调用 WebGL `WEBGL_lose_context.loseContext()`，确认 Context 不健康、模拟停止、单 Canvas 保留且继续按钮禁用；
 5. 调用同一扩展 `restoreContext()`，再次由玩家手势继续；
-6. `0.22.14` 最终九个动态筏格对应九个 collider，模拟活动且 framebuffer 有效非空，外域资源请求与浏览器错误均为零。
+6. `0.22.15` 最终九个动态筏格对应九个 collider，模拟活动且 framebuffer 有效非空，外域资源请求与浏览器错误均为零。
 
 本机为 `ANGLE / Mesa llvmpipe / OpenGL ES 3.2`。恢复测试会如实记录软件环境的固定步积压丢弃；这证明生产包能在真实浏览器扩展事件后恢复一致状态，不证明软件渲染达到实时性能。
 

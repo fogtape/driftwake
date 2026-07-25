@@ -1,6 +1,6 @@
 # Driftwake
 
-原创桌面网页 3D 海上生存游戏。当前版本为 `0.22.14` 高质量纵向切片，不以基础 Demo 为完成标准。
+原创桌面网页 3D 海上生存游戏。当前版本为 `0.22.15` 高质量纵向切片，不以基础 Demo 为完成标准。
 
 ## 当前内容
 
@@ -34,6 +34,7 @@
 - 金属锭研究会解锁潮铸穿浪矛和宽刃斧；升级消耗旧工具、自动替换快捷栏，并实际提升鲨鱼刺击与砍伐效率；
 - 信号板、潮铸合金与密封铰链可研究潮鸣震叉；按住左键 1.25 秒后在 7.4m 定向锁定内松开，以 1 枚盐差电池和 1 点耐久换取轻伤害与立即驱离；提前松开、缺电或失锁不消耗资源；
 - 原创程序深潮鲨拥有巡游、预兆、筏体/结构/网具择靶、水中扑咬、分级矛具命中与驱离；鼻端朝向已统一到真实运动目标，侧前向圆瞳眼片、正向口缘/鳃衬、主体真皮齿和 24 颗牙釉齿（上颌 13、下颌 11 的主/次两层）均使用 Image 2 high PBR，代码原生口腔还具有两条牙龈带、可动下颌和有深度的内腔，主体以 packed albedo/roughness + normal 两图运行；每轮攻击使用明确的蓄势/咬合/回摆阶段与最多两次结算，矛具在青色窗口起手可用完整前摇打断攻击，扑空、反击和普通命中具有独立声画反馈；致命刺击后会侧翻成 52 秒可采集鲨体，按住 `E` 依次割取 3 份鲨肉、1 张鲨皮和 2 枚鲨齿，浪面或镜头造成的瞬时失焦只暂停进度，重新对准后继续；
+- 最终 DCC 深潮鲨现有机器可读 GLB v1 合同与 CLI 验证器，锁定 BIN/accessor 边界、变换后实际坐标尺度、六类 PBR 材质映射、单 skin、13-48 关节拓扑、精确七段玩法动画集、1.6 MB/36k triangles/50k vertices 上限和无内嵌贴图策略；合同已就绪，最终模型与专用牙龈仍明确保持未完成；
 - 鲨体取尽或超时后持续下沉并进入 48 秒重生冷却；满包拒收物资使用专用捆扎模型进入既有八槽海面掉落池，部分接收不会复制或吞物，水中连续鲨咬的击退速度有界；连续三轮真实击杀/采集门禁覆盖失焦冻结、落水等待、自然重生定位、渲染预算、资源池合并和冷启动恢复；
 - 岛屿远景接近、靠岸、无切场登岛、地形坡度与障碍碰撞、返筏后离流和下一岛重生；
 - 18 个确定性岛屿资源节点、石斧三击/金属斧两击砍伐、树木受击/倒伏/树桩、枝料/石料/潮果/纤维拾取和满包保护；
@@ -78,11 +79,12 @@ npm run build
 npm run release:check
 npm run test:m1-runtime
 npm run test:audio-mix
+npm run validate:shark-dcc -- public/assets/models/graywake-shark.glb
 npm run test:stability
 npm run capture
 ```
 
-`npm run release:check` 会运行全量测试、`release` 模式构建、资产来源/依赖许可/包体预算门禁，并从临时本地静态服务对生产包注入真实 `WEBGL_lose_context`，同时验证六总线音频图、母带压缩器和失焦静音/恢复。通过后，`dist/` 含 `THIRD_PARTY_NOTICES.txt` 与 `release-manifest.json`，完整证据写入忽略版本控制的 `artifacts/release/latest.json`。发布前应在干净提交上使用 `RELEASE_REQUIRE_CLEAN=1 npm run release:check`；软件渲染和浏览器音频图通过不代表目标 GPU profile、20 分钟长稳或真实扬声器混音通过。
+`npm run release:check` 会运行全量测试、`release` 模式构建、资产来源/依赖许可/包体预算门禁，并从临时本地静态服务对生产包注入真实 `WEBGL_lose_context`，同时验证六总线音频图、母带压缩器和失焦静音/恢复。它还会校验 DCC 合同定义；最终 GLB 缺失时在 `contentGates` 明确报告 pending，文件出现后立即执行硬验证。通过后，`dist/` 含 `THIRD_PARTY_NOTICES.txt` 与 `release-manifest.json`，完整证据写入忽略版本控制的 `artifacts/release/latest.json`。发布前应在干净提交上使用 `RELEASE_REQUIRE_CLEAN=1 npm run release:check`；软件渲染和浏览器音频图通过不代表目标 GPU profile、20 分钟长稳、真实扬声器混音或待交付 DCC 资产通过。
 
 截图脚本默认连接 `http://127.0.0.1:4173`，支持 `DRIFTWAKE_URL`、`CHROMIUM_PATH`、`CAPTURE_WIDTH`、`CAPTURE_HEIGHT`、`CAPTURE_QUALITY` 和 `CAPTURE_ONLY`。目标包括 `title`、`save-slots`、`save-recovery`、`accessibility`、`accessibility-caption`、`accessibility-bindings`、`pause`、`game`、`onboarding`、`hook`、`salvage`、`fishing`、`cooking`、`collection-net`、`perimeter-defense`、`perimeter-defense-visual`、`structure-collapse`、`failure`、`shark-combat`、`shark-facial-materials`、`shark-loot`、`shark-loot-water`、`pack`、`crafting`、`survival`、`durability`、`building`、`devices`、`advanced`、`signal`、种植/研究/岛屿/水下/导航各主流程、`underwater-narrow`、`narrow`、`settings` 和 `mobile`。`onboarding` 验证新航次和冷凝中两阶段的动态目标、1024x640/640x720 布局与合成帧；`save-slots` 预置正常、备份可恢复与不可恢复损坏三档，验证标题页无 Canvas、桌面/窄屏布局和档位选择；`save-recovery` 真实进入备份航次，确认同槽主档修复、其它档位隔离、`pagehide` 备份轮换和钩具唯一所有权；`accessibility` 验证字幕/色觉/减少动态持久化、键位冲突与恢复默认，`accessibility-caption` 验证失败恢复声音字幕与布局，`accessibility-bindings` 验证重映射后的真实移动。`fishing` 的 `variety / capacity / all` 分段验证连续三鱼种真实捕获、拉力差异、材质预热/绑定、单实例鱼体、实际入包后磨损、部分容量返海、满包零磨损与 512x320 HUD；`FISHING_VISUAL_IDS` 可隔离指定物种的 1024x640 高画质捕获近景。`cooking` 的 `base / burnt / visual / all` 分段验证真实投料/收取、自然焦黑、生/熟/焦 PBR 和基础生活设备近景；`COOKING_VISUAL_TARGET=base|triple|all` 可隔离视觉场景。`shark-combat` 的 `visual`、`counter`、`resonance`、`water` 分段验证蓄势 HUD、限时矛击、震叉取消/锁定/原子消耗/驱离，以及水中两次结算上限；`shark-facial-materials` 在真实水中反击窗活动帧原子读取玩家 framebuffer 后再冻结，正式 32 纹理预算仍由咬筏 `visual` 门禁锁定。默认用页面内边沿事件保证软件 GLES 确定性，目标真实 GPU 使用 `SHARK_COMBAT_INPUT=mouse` 复验 Playwright 鼠标时序。`shark-loot` 验证木筏边真实刺击、四段按住采集、满包四份池化落海、v18 冷启动和水中全部入包；`shark-loot-water` 在 `CAPTURE_FAST=1` 时使用 320x200 低渲染负载但不替换运行素材，独立验证水中完整固定步事务。`building` 的 `behavior`、`visual`、`traversal`、`ceiling`、`damage` 分段分别验证分类/件型选择隔离、建造/替换事务、512×320 HUD、多层移动、楼板/斜顶撞顶速度截断，以及鲨鱼撕咬、v18 受损恢复和真实锤修；`collection-net` 验证背包安置、被动截获、E 收取、v18 冷重载与锤拆返还；`perimeter-defense` 验证缘甲安装/返料、同侧网具择靶、55% 减伤、E 修补、冷重载和毁网落物；`structure-collapse` 验证真实鲨鱼咬断承重柱、四件结构级联、双块坠落、逐件入水回收和只保存最终结构真值。3D 截图使用分布式 WebGL 像素门禁，拒绝黑屏、白屏、HUD 相交和丢失的上下文。
 

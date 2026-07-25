@@ -11,16 +11,25 @@ import {
   validateReleaseFiles,
   validateRuntimeRegistry,
 } from './release-utils.mjs';
+import {
+  parseGlb,
+  validateSharkDccContractDefinition,
+  validateSharkDccDocument,
+} from './shark-dcc-contract.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const distDirectory = resolve(root, 'dist');
 const artifactDirectory = resolve(root, 'artifacts/release');
 const contextEvidencePath = resolve(artifactDirectory, 'context-lifecycle.json');
 const audioMixEvidencePath = resolve(artifactDirectory, 'audio-mix-lifecycle.json');
+const sharkDccContractPath = resolve(root, 'docs/contracts/graywake-shark-dcc-v1.json');
+const sharkDccModelPath = resolve(root, 'public/assets/models/graywake-shark.glb');
+const sharkGingivaSourcePath = resolve(root, 'artifacts/imagegen/graywake-gingiva-raw.png');
 const packageJson = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
 const packageLock = JSON.parse(await readFile(resolve(root, 'package-lock.json'), 'utf8'));
 const registry = JSON.parse(await readFile(resolve(root, 'release/runtime-dependencies.json'), 'utf8'));
 const assetManifest = await readFile(resolve(root, 'docs/ASSET_MANIFEST.md'), 'utf8');
+const sharkDccContract = JSON.parse(await readFile(sharkDccContractPath, 'utf8'));
 const gitCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 const gitStatus = execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim();
 const runId = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-');
@@ -31,6 +40,7 @@ let dependencySummary = null;
 let bundleSummary = null;
 let contextLifecycle = null;
 let audioMixLifecycle = null;
+let sharkDccSummary = null;
 
 async function walkFiles(directory, base = directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -227,6 +237,28 @@ await runStep('asset-provenance', async () => {
   return assetSummary;
 });
 
+await runStep('shark-dcc-readiness', async () => {
+  requireNoFailures('shark DCC contract definition', validateSharkDccContractDefinition(sharkDccContract));
+  const modelStat = await stat(sharkDccModelPath).catch(() => null);
+  if (!modelStat?.isFile()) {
+    sharkDccSummary = {
+      status: 'pending-dcc-delivery',
+      contractVersion: sharkDccContract.schemaVersion,
+      modelPath: relative(root, sharkDccModelPath).split(sep).join('/'),
+    };
+    return sharkDccSummary;
+  }
+  const bytes = await readFile(sharkDccModelPath);
+  const { document, binaryChunkBytes } = parseGlb(bytes);
+  const result = validateSharkDccDocument(document, sharkDccContract, {
+    fileSize: modelStat.size,
+    binaryChunkBytes,
+  });
+  requireNoFailures('shark DCC asset', result.failures);
+  sharkDccSummary = { status: 'validated', ...result.summary };
+  return sharkDccSummary;
+});
+
 await runStep('runtime-license-inventory', async () => {
   const runtimePackages = collectRuntimePackages(packageLock);
   requireNoFailures('runtime license registry', validateRuntimeRegistry(runtimePackages, registry));
@@ -343,6 +375,13 @@ if (process.env.RELEASE_REQUIRE_CLEAN === '1' && gitStatus) {
 const renderer = contextLifecycle?.renderer ?? '';
 const softwareRenderer = /swiftshader|llvmpipe|lavapipe|software/i.test(renderer)
   || contextLifecycle?.rendererMode === 'swiftshader';
+const sharkGingivaSourceExists = Boolean(await stat(sharkGingivaSourcePath).catch(() => null));
+const contentGates = {
+  sharkDcc: sharkDccSummary?.status ?? 'contract-check-failed',
+  sharkGingivaImage2: sharkGingivaSourceExists
+    ? 'source-present-requires-adoption-validation'
+    : 'pending-image-2-source',
+};
 const report = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
@@ -357,6 +396,7 @@ const report = {
   } : null,
   contextLifecycle,
   audioMixLifecycle,
+  contentGates,
   externalGates: {
     targetGpuProfiles: softwareRenderer ? 'pending-real-gpu' : 'requires-profile-review',
     twentyMinuteStability: 'pending-target-gpu',
@@ -379,6 +419,7 @@ console.log(JSON.stringify({
   bundleBytes: bundleSummary?.totalBytes ?? null,
   contextMode: contextLifecycle?.contextMode ?? null,
   renderer: contextLifecycle?.renderer ?? null,
+  contentGates,
   externalGates: report.externalGates,
   failures,
 }, null, 2));

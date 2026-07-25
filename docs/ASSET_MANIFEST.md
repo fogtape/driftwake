@@ -1090,7 +1090,7 @@ Create an original square tileable base-color material texture for a premium sty
 | 运行时 / 审计 | 共享双图集 `graywake-mouth-lining` 区域；独立审计图位于 `artifacts/imagegen/creature-pbr/graywake-mouth-lining*.webp` |
 | 采用源图 | `artifacts/imagegen/graywake-mouth-lining-raw.png` |
 | 模型 / 质量 / 请求与实际尺寸 | `gpt-image-2` / `high` / `2048x2048` / `2048x2048`，项目 `scripts/imagegen` CLI |
-| 用途 | 深潮鲨口缘与六处鳃衬；代码原生 `sharkGum` 牙龈带暂时透明复用同一区域，不再使用纯色 `sharkMouth`；专用牙龈源图仍未采用 |
+| 用途 | 深潮鲨口缘与六处鳃衬；代码原生 `sharkGum` 牙龈带暂时透明复用同一区域，不再使用纯色 `sharkMouth`；专用牙龈最终提示词已固化，但源图仍未采用 |
 | 处理方式 | 1024、seam 96、normal 0.52、roughness 72-162、boundary 优化；图集核心 960 + 32 gutter |
 | 检查 | seam x=`4.73/0.83x`、y=`8.32/0.96x`，boundary=`(38,546)`；蓝黑/克制梅红活体组织，无伤口、血液、牙齿或完整动物轮廓 |
 
@@ -1168,7 +1168,7 @@ TEX-041 至 TEX-052 与既有 TEX-035/TEX-009、TEX-019 鲨肉审计副本当前
 
 ## 代码原生模型与动画
 
-鲨体分段伤痕、海面聚焦环和鲨鱼战利品捆扎浮包继续由代码原生形体驱动；本轮双眼改为侧前向圆面，口缘改为正向轮廓，新增开口内腔、可动下颌和两条牙龈带，口腔/虹膜使用 TEX-050/TEX-051，伤痕/鲨肉使用 TEX-019 审定来源副本。TEX-052 由两个共享 `LatheGeometry` 的 `InstancedMesh` 形成上颌 13 / 下颌 11 的主/次两层牙列，战利品的两块鲨齿板复用同一牙釉材质；牙龈用独立 `sharkGum` 材质复用审定 TEX-050，四次专用 `gpt-image-2 high` 请求无输出，不把该复用冒充新源图。鲨皮使用 TEX-003 采用 F 的 Image 2 high 审计 PBR，albedo RGB 与其派生 roughness A 精确打包；运行时并不加载历史程序鲨皮。采集段、对象池、耐久与 v18 存档均不依赖视觉对象作为玩法真值。
+鲨体分段伤痕、海面聚焦环和鲨鱼战利品捆扎浮包继续由代码原生形体驱动；本轮双眼改为侧前向圆面，口缘改为正向轮廓，新增开口内腔、可动下颌和两条牙龈带，口腔/虹膜使用 TEX-050/TEX-051，伤痕/鲨肉使用 TEX-019 审定来源副本。TEX-052 由两个共享 `LatheGeometry` 的 `InstancedMesh` 形成上颌 13 / 下颌 11 的主/次两层牙列，战利品的两块鲨齿板复用同一牙釉材质；牙龈用独立 `sharkGum` 材质复用审定 TEX-050，历史四次请求、`0.22.12` 三次 502 与 `0.22.15` 三次 503 均无输出，不把该复用冒充新源图。最终提示词位于 `docs/prompts/graywake-gingiva-image2.txt`；最终 DCC 的 GLB v1 合同、验证器和验收边界见 `docs/M9_DCC_SHARK_CONTRACT.md`，合同就绪不代表资产采用。鲨皮使用 TEX-003 采用 F 的 Image 2 high 审计 PBR，albedo RGB 与其派生 roughness A 精确打包；运行时并不加载历史程序鲨皮。采集段、对象池、耐久与 v18 存档均不依赖视觉对象作为玩法真值。
 
 | ID | 资产 | 位置 | 当前状态 |
 | --- | --- | --- | --- |

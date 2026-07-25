@@ -50,7 +50,7 @@
 | P2 | 生物口腔、眼与小型细节 | 三种钓获鱼、盐翼鸟与深潮鲨均已使用专用眼部；深潮鲨口缘/鳃衬也已脱离纯色 | Image 2 来源、PBR、模型朝向、真实袭击近景和预算必须同时通过 | M5/M6/M9 | `APPROVED` |
 | P2 | 深潮鲨主体皮肤 | TEX-003 的历史程序源已退出运行时；采用 F 为 `gpt-image-2 high` 2048 真皮齿源图，保留 audit PBR 与 packed alpha 链路 | 细齿尺度、2x2、水下/正式咬筏近景、绑定与预算同时复验；运行时只用 packed + normal | M5/M9 | `APPROVED` |
 | P2 | 深潮鲨牙釉与代码原生 oral rig v1 | TEX-052 已用 Image 2 high 牙釉 PBR 替换帆布误用；上颌 13 / 下颌 11 颗双层实例、下颌 pivot、牙龈带和内腔在真实 windup 可见，战利品两齿板复用同材质 | 来源、1024 PBR、2x2、atlas 区域、24 实例、下颌阶段动画、战利品与浏览器画面/预算必须同时通过 | M9 | `APPROVED` |
-| P2 | 专用牙龈与最终可蒙皮 DCC 鲨齿/口腔层 | 代码原生层不冒充最终可蒙皮牙床、专用牙龈贴图、口腔容积或动画变形资产；四次历史 high 请求和 `0.22.12` 的一次三次有界请求均零输出，后者验证 SDK `Error code: 502` 退避识别；尚无新位图 | 交付专用牙龈 Image 2 high 源图或 DCC 审定贴图、DCC UV、牙床/牙龈/牙齿层、受击与浮尸动画，并在真实 GPU 复验近景 mip 和遮挡 | M9 发布 | `DOING` |
+| P2 | 专用牙龈与最终可蒙皮 DCC 鲨齿/口腔层 | 代码原生层不冒充最终可蒙皮牙床、专用牙龈贴图、口腔容积或动画变形资产；四次历史 high 请求、`0.22.12` 三次 502 与 `0.22.15` 三次 503 均零输出；牙龈提示词和 DCC v1 机器合同已固化，但尚无新位图或最终 GLB | 交付专用牙龈 Image 2 high 源图、DCC UV/牙床/牙龈/牙齿层与七段状态动画，通过 GLB 合同、运行时场景和真实 GPU 近景 mip/遮挡 | M9 发布 | `DOING` |
 | P2 | UI 位图与图标 | 当前主要为代码图标和 CSS，不得引入低质位图占位 | 新增位图同样执行 Image 2 high、来源和目标分辨率检查 | M9 | `WATCH` |
 
 ## M9 0.22.13 聚合物复用补遗
@@ -59,6 +59,13 @@
 - `ProceduralModels.test.ts` 锁定三件表面均指向同一 PBR 三通道，且不能直接复用可变的源材质实例；
 - `FishingSystem` 将浮漂六槽签名公开给运行时，`CAPTURE_ONLY=fishing FISHING_STAGE=variety CAPTURE_FAST=1 FISHING_ROUND_LIMIT=1 FISHING_CAPTURE_BOBBER=1 npm run capture` 验证抛投、鱼讯、咬钩、拉力和结算全程，同时输出 `artifacts/screenshots/fishing-bobber-nibble-desktop.png`；
 - 本轮没有新位图、没有重采样或图集扩容，因此不记作新的 Image 2 采用源；provider 仍不可用时保持原有专用牙龈 `DOING` 门禁。
+
+## M9 0.22.15 DCC 与牙龈交付门禁
+
+- 专用牙龈最终提示词已从被忽略的 `tmp/` 固化为 `docs/prompts/graywake-gingiva-image2.txt`；项目 CLI dry-run 精确锁定 `gpt-image-2 / high / 2048x2048 / PNG / no-augment`；
+- 同一规格正式请求按 2/4 秒有界退避执行三次，均返回 `503 No available compatible accounts`。没有源图、TEX-053、PBR、图集或运行时绑定，不降级模型与质量；
+- `docs/contracts/graywake-shark-dcc-v1.json` 和 `scripts/shark-dcc-contract.mjs` 将最终资产要求变为可执行门禁：GLB 2.0 与 BIN/accessor 边界、1.6 MB、12k-36k triangles、50k vertices、变换后实际米制包围盒、六类材质映射、单 skin、13-48 joints、明确骨骼拓扑、inverse bind matrices 和精确七段玩法动画集；
+- 合同的合格与反例测试通过，发布报告会明确区分 `pending-dcc-delivery` / `pending-image-2-source`。本机无 Blender 且没有成品 GLB，合同就绪不计作视觉资产完成，详见 `docs/M9_DCC_SHARK_CONTRACT.md`。
 
 ## M6 首批证据
 

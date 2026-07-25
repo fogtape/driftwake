@@ -1,6 +1,6 @@
 {
   "name": "driftwake",
-  "version": "0.22.14",
+  "version": "0.22.15",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,7 @@
     "test:stability": "node scripts/stability.mjs",
     "test:m1-runtime": "node scripts/m1-regression.mjs",
     "test:audio-mix": "node scripts/audio-mix-regression.mjs",
+    "validate:shark-dcc": "node scripts/validate-shark-dcc.mjs",
     "capture": "node scripts/capture.mjs",
     "release:check": "node scripts/release-check.mjs"
   },
