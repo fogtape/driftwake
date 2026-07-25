@@ -1,7 +1,7 @@
 # M9 生物微材质整改验收
 
 > 日期：2026-07-25
-> 版本：`0.22.10`
+> 版本：`0.22.12`
 > 状态：`APPROVED`（Image 2 来源、PBR、模型朝向、共享图集、代码原生 24 齿口腔 rig v1、正式玩法预算与软件 framebuffer 闭环；专用牙龈源图、目标真实 GPU 与最终可蒙皮 DCC 口腔/牙齿仍属发布门禁）
 
 ## 本轮范围
@@ -44,6 +44,8 @@ scripts/imagegen generate --model gpt-image-2 --quality high --size 2048x2048 \
 `0.22.10` 没有将未验证位图带入运行时。为专用牙龈 PBR 依次执行四次项目 CLI 请求（`gpt-image-2`、`high`、2048x2048，包含 generate 重试与既有口腔衬层的 edit 变体），provider 均以 `RemoteProtocolError: Server disconnected without sending a response` 失败，未产生可审计输出。未降低模型/质量、未采用程序贴图，也没有占用图集空格；当前 `sharkGum` 是独立材质对象，但透明复用已批准 TEX-050 `graywake-mouth-lining` PBR 的同一 atlas 区域。专用牙龈源图仍为 provider/DCC 交接项。
 
 `0.22.11` 只改进项目包装器的失败恢复：单次 `generate` / `edit` 对 `RemoteProtocolError`、断连、超时、临时服务错误和限流最多执行三次 2/4 秒退避，批量任务沿用上游逻辑，参数、提示词和文件错误立即失败。纯 Python 单元测试、shell 语法、非法配置拒绝和同一 `gpt-image-2 high 2048x2048` dry-run 已通过；本轮没有重发 provider 请求，因此四次零输出仍不构成资产进展。
+
+`0.22.12` 用同一专用牙龈 `generate` 规格得到 OpenAI SDK `InternalServerError: Error code: 502`；包装器此前未识别该实际错误格式。补齐 502/503/504 SDK 文案后，回归测试锁定该格式，随后同一候选请求按 2/4 秒退避完成三次调用，三次均为 upstream 502，仍无文件输出。没有创建 `graywake-gingiva-raw.png`、PBR、图集区域或运行时绑定，专用牙龈继续是 provider/DCC 交接项。
 
 ## 最终提示词
 

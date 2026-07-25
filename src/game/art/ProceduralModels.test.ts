@@ -97,17 +97,25 @@ function createTestMaterials(): MaterialLibrary {
 function meshStats(root: Group): { meshes: number; vertices: number } {
   let meshes = 0;
   let vertices = 0;
+  let invalidPosition: string | undefined;
   root.traverse((object) => {
     if (!(object instanceof Mesh)) return;
     meshes += 1;
     const position = object.geometry.getAttribute('position');
     vertices += position?.count ?? 0;
+    if (invalidPosition || !position) return;
     for (let index = 0; position && index < position.count; index += 1) {
-      expect(Number.isFinite(position.getX(index))).toBe(true);
-      expect(Number.isFinite(position.getY(index))).toBe(true);
-      expect(Number.isFinite(position.getZ(index))).toBe(true);
+      if (
+        !Number.isFinite(position.getX(index))
+        || !Number.isFinite(position.getY(index))
+        || !Number.isFinite(position.getZ(index))
+      ) {
+        invalidPosition = `${object.name || object.type} vertex ${index}`;
+        return;
+      }
     }
   });
+  expect(invalidPosition).toBeUndefined();
   return { meshes, vertices };
 }
 

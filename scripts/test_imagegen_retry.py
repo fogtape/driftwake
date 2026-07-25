@@ -52,6 +52,18 @@ class ImagegenRetryTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
         self.assertEqual(waits, [0.25])
 
+    def test_retries_openai_upstream_status_error_then_succeeds(self):
+        code, calls, waits = self.run_script(
+            ["generate", "--prompt", "gum"],
+            [
+                result(1, "openai.InternalServerError: Error code: 502 - {'error': {'type': 'upstream_error'}}"),
+                result(0),
+            ],
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(waits, [0.25])
+
     def test_does_not_retry_permanent_request_errors(self):
         code, calls, waits = self.run_script(
             ["edit", "--image", "missing.png"],

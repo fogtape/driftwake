@@ -1,7 +1,7 @@
 # M9 候选发布与异常恢复验收
 
 > 日期：2026-07-25
-> 版本：`0.22.11`
+> 版本：`0.22.12`
 > 状态：`APPROVED`（候选构建、资产来源、第三方许可、包体预算和生产包 Context 生命周期闭环；目标 GPU、20 分钟长稳、外部玩家与项目自身许可仍是外部门禁）
 
 ## 发布合同
@@ -34,7 +34,7 @@ RELEASE_REQUIRE_CLEAN=1 npm run release:check
 - 显式 `public/assets` 路径 `28`；
 - 未登记 `0`，缺失 `0`。
 
-本切片没有新增或降级任何位图，因此没有触发新的 Image 2 生成；既有高质量运行时资产原样进入候选包。项目 `scripts/imagegen` 仅增加单次请求的有界传输退避，纯 Python 测试与 `gpt-image-2 high 2048x2048` dry-run 通过；它不把四次 provider 零输出或任何失败重试记作采用源图。
+本切片没有新增或降级任何位图，因此没有触发新的 Image 2 采用；既有高质量运行时资产原样进入候选包。项目 `scripts/imagegen` 现将 SDK `Error code: 502/503/504` 识别为单次请求的可重试上游失败，纯 Python 回归与 `gpt-image-2 high 2048x2048` dry-run 通过；专用牙龈的一次有界请求三次均返回 upstream 502，未产生输出，不记作采用源图或资产进展。候选发布首次单线程运行暴露 `ProceduralModels` 的逐坐标 matcher 开销；测试仍扫描全部顶点，但聚合为一次失败断言，52/329 单线程基线恢复通过，不以放宽 timeout 掩盖问题。
 
 ## 包体证据
 
@@ -59,9 +59,9 @@ RELEASE_REQUIRE_CLEAN=1 npm run release:check
 3. 完成真实跳跃、镜头设置切换和失焦/恢复；
 4. 调用 WebGL `WEBGL_lose_context.loseContext()`，确认 Context 不健康、模拟停止、单 Canvas 保留且继续按钮禁用；
 5. 调用同一扩展 `restoreContext()`，再次由玩家手势继续；
-6. 最终九个动态筏格对应九个 collider，模拟活动，画面 `variation=179 / nonBlack=576`，外域资源请求与浏览器错误均为零。
+6. `0.22.12` 最终九个动态筏格对应九个 collider，模拟活动且 framebuffer 有效非空，外域资源请求与浏览器错误均为零。
 
-本机为 `ANGLE / Mesa llvmpipe / OpenGL ES 3.2`。真实恢复阶段耗时约 229.6 秒，固定步如实记录 `51.853s` 积压丢弃；这证明生产包能在真实浏览器扩展事件后恢复一致状态，不证明软件渲染达到实时性能。
+本机为 `ANGLE / Mesa llvmpipe / OpenGL ES 3.2`。恢复测试会如实记录软件环境的固定步积压丢弃；这证明生产包能在真实浏览器扩展事件后恢复一致状态，不证明软件渲染达到实时性能。
 
 ## 外部门禁
 

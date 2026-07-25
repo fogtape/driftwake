@@ -26,6 +26,9 @@ TRANSIENT_MARKERS = (
     "status code 502",
     "status code 503",
     "status code 504",
+    "error code: 502",
+    "error code: 503",
+    "error code: 504",
     "rate limit",
     "too many requests",
 )
