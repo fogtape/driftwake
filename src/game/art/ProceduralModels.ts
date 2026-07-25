@@ -784,40 +784,172 @@ function createSharkFins(materials: MaterialLibrary): Group {
   return fins;
 }
 
-function createSharkTeeth(materials: MaterialLibrary): { mesh: InstancedMesh; focus: Object3D } {
-  const definitions = [
-    { x: -0.23, y: -0.158, scale: 0.76, rotation: Math.PI - 0.24 },
-    { x: -0.125, y: -0.143, scale: 0.92, rotation: Math.PI - 0.11 },
-    { x: 0, y: -0.138, scale: 1, rotation: Math.PI },
-    { x: 0.125, y: -0.143, scale: 0.92, rotation: Math.PI + 0.11 },
-    { x: 0.23, y: -0.158, scale: 0.76, rotation: Math.PI + 0.24 },
-    { x: -0.165, y: -0.262, scale: 0.68, rotation: -0.16 },
-    { x: -0.055, y: -0.274, scale: 0.8, rotation: -0.06 },
-    { x: 0.055, y: -0.274, scale: 0.8, rotation: 0.06 },
-    { x: 0.165, y: -0.262, scale: 0.68, rotation: 0.16 },
-  ] as const;
-  const teeth = shadowed(new InstancedMesh(new ConeGeometry(0.034, 0.118, 6), materials.sharkTooth, definitions.length));
-  teeth.name = 'shark-teeth';
+interface SharkToothDefinition {
+  x: number;
+  y: number;
+  z: number;
+  scale: number;
+  rotation: number;
+  jaw: 'upper' | 'lower';
+}
+
+function createSharkToothGeometry(): LatheGeometry {
+  const profile = [
+    new Vector2(0.034, -0.062),
+    new Vector2(0.037, -0.048),
+    new Vector2(0.033, -0.018),
+    new Vector2(0.027, 0.018),
+    new Vector2(0.017, 0.047),
+    new Vector2(0.006, 0.064),
+    new Vector2(0, 0.069),
+  ];
+  return new LatheGeometry(profile, 9);
+}
+
+function createSharkToothRow(
+  geometry: LatheGeometry,
+  material: MeshStandardMaterial,
+  definitions: readonly SharkToothDefinition[],
+  name: string,
+  origin: Vector3,
+): InstancedMesh {
+  const teeth = shadowed(new InstancedMesh(geometry, material, definitions.length));
+  teeth.name = name;
   const matrix = new Matrix4();
   const position = new Vector3();
   const rotation = new Euler();
   const scale = new Vector3();
   const orientation = new Quaternion();
   for (const [index, definition] of definitions.entries()) {
-    position.set(definition.x, definition.y, -2.146);
+    position.set(definition.x - origin.x, definition.y - origin.y, definition.z - origin.z);
     rotation.set(0, 0, definition.rotation);
     orientation.setFromEuler(rotation);
-    scale.setScalar(definition.scale);
+    scale.set(definition.scale * 0.9, definition.scale, definition.scale * 0.58);
     matrix.compose(position, orientation, scale);
     teeth.setMatrixAt(index, matrix);
   }
   teeth.instanceMatrix.needsUpdate = true;
   teeth.computeBoundingSphere();
+  return teeth;
+}
+
+function createSharkGumBand(
+  points: readonly [number, number, number][],
+  origin: Vector3,
+  material: MeshStandardMaterial,
+  name: string,
+): Mesh {
+  const curve = new CatmullRomCurve3(points.map(([x, y, z]) => new Vector3(
+    x - origin.x,
+    y - origin.y,
+    z - origin.z,
+  )));
+  const gum = shadowed(new Mesh(new TubeGeometry(curve, 28, 0.026, 8, false), material));
+  gum.name = name;
+  return gum;
+}
+
+function createSharkOralRig(materials: MaterialLibrary): {
+  group: Group;
+  lowerJaw: Group;
+  toothMeshes: InstancedMesh[];
+  gumMeshes: Mesh[];
+  focus: Object3D;
+  toothCount: number;
+} {
+  const primaryUpper = [-0.255, -0.17, -0.085, 0, 0.085, 0.17, 0.255].map((x) => ({
+    x,
+    y: -0.142 - Math.abs(x) * 0.085,
+    z: -2.158,
+    scale: 0.92 - Math.abs(x) * 0.72,
+    rotation: Math.PI + x * 0.9,
+    jaw: 'upper' as const,
+  }));
+  const primaryLower = [-0.225, -0.135, -0.045, 0.045, 0.135, 0.225].map((x) => ({
+    x,
+    y: -0.275 + Math.abs(x) * 0.075,
+    z: -2.162,
+    scale: 0.8 - Math.abs(x) * 0.58,
+    rotation: x * 0.82,
+    jaw: 'lower' as const,
+  }));
+  const secondaryUpper = [-0.215, -0.13, -0.043, 0.043, 0.13, 0.215].map((x) => ({
+    x,
+    y: -0.17 - Math.abs(x) * 0.06,
+    z: -2.137,
+    scale: 0.58 - Math.abs(x) * 0.42,
+    rotation: Math.PI + x * 0.72,
+    jaw: 'upper' as const,
+  }));
+  const secondaryLower = [-0.175, -0.088, 0, 0.088, 0.175].map((x) => ({
+    x,
+    y: -0.245 + Math.abs(x) * 0.05,
+    z: -2.14,
+    scale: 0.52 - Math.abs(x) * 0.36,
+    rotation: x * 0.68,
+    jaw: 'lower' as const,
+  }));
+  const definitions: SharkToothDefinition[] = [
+    ...primaryUpper,
+    ...secondaryUpper,
+    ...primaryLower,
+    ...secondaryLower,
+  ];
+  const upperDefinitions = definitions.filter((definition) => definition.jaw === 'upper');
+  const lowerDefinitions = definitions.filter((definition) => definition.jaw === 'lower');
+  const group = new Group();
+  group.name = 'shark-oral-rig';
+  const upperJaw = new Group();
+  upperJaw.name = 'shark-upper-jaw';
+  const lowerJaw = new Group();
+  lowerJaw.name = 'shark-lower-jaw-pivot';
+  lowerJaw.position.set(0, -0.18, -1.92);
+  const upperOrigin = new Vector3();
+  const lowerOrigin = lowerJaw.position.clone();
+  const toothGeometry = createSharkToothGeometry();
+  const upperTeeth = createSharkToothRow(
+    toothGeometry,
+    materials.sharkTooth,
+    upperDefinitions,
+    'shark-teeth-upper',
+    upperOrigin,
+  );
+  const lowerTeeth = createSharkToothRow(
+    toothGeometry,
+    materials.sharkTooth,
+    lowerDefinitions,
+    'shark-teeth-lower',
+    lowerOrigin,
+  );
+  const upperGum = createSharkGumBand([
+    [-0.285, -0.168, -2.135],
+    [-0.19, -0.143, -2.145],
+    [0, -0.126, -2.15],
+    [0.19, -0.143, -2.145],
+    [0.285, -0.168, -2.135],
+  ], upperOrigin, materials.sharkGum, 'shark-gingiva-upper');
+  const lowerGum = createSharkGumBand([
+    [-0.255, -0.255, -2.138],
+    [-0.16, -0.282, -2.15],
+    [0, -0.293, -2.155],
+    [0.16, -0.282, -2.15],
+    [0.255, -0.255, -2.138],
+  ], lowerOrigin, materials.sharkGum, 'shark-gingiva-lower');
+  upperJaw.add(upperGum, upperTeeth);
+  lowerJaw.add(lowerGum, lowerTeeth);
+  group.add(upperJaw, lowerJaw);
 
   const focus = new Object3D();
   focus.name = 'shark-tooth-focus';
-  focus.position.set(0, -0.207, -2.152);
-  return { mesh: teeth, focus };
+  focus.position.set(0, -0.21, -2.17);
+  return {
+    group,
+    lowerJaw,
+    toothMeshes: [upperTeeth, lowerTeeth],
+    gumMeshes: [upperGum, lowerGum],
+    focus,
+    toothCount: definitions.length,
+  };
 }
 
 export function createSharkModel(materials: MaterialLibrary): Group {
@@ -879,10 +1011,20 @@ export function createSharkModel(materials: MaterialLibrary): Group {
   facialFocus.position.set(0, 0, -2.12);
   shark.add(facialFocus);
 
-  const mouthLining = shadowed(new Mesh(new CircleGeometry(0.24, 24), materials.sharkMouth));
+  const mouthCavity = shadowed(new Mesh(
+    new CylinderGeometry(0.18, 0.255, 0.25, 24, 2, true),
+    materials.sharkMouth,
+  ));
+  mouthCavity.name = 'shark-mouth-cavity';
+  mouthCavity.position.set(0, -0.2, -2.02);
+  mouthCavity.rotation.x = Math.PI / 2;
+  mouthCavity.scale.set(1.34, 0.48, 1);
+  shark.add(mouthCavity);
+
+  const mouthLining = shadowed(new Mesh(new CircleGeometry(0.19, 24), materials.sharkMouth));
   mouthLining.name = 'shark-mouth-lining';
-  mouthLining.position.set(0, -0.2, -2.112);
-  mouthLining.scale.set(1.32, 0.42, 1);
+  mouthLining.position.set(0, -0.2, -1.89);
+  mouthLining.scale.set(1.28, 0.46, 1);
   shark.add(mouthLining);
 
   const mouth = shadowed(new Mesh(new TorusGeometry(0.24, 0.018, 6, 24), materials.sharkMouth));
@@ -892,8 +1034,8 @@ export function createSharkModel(materials: MaterialLibrary): Group {
   mouth.scale.set(1.34, 0.44, 1);
   shark.add(mouth);
 
-  const teeth = createSharkTeeth(materials);
-  shark.add(teeth.mesh, teeth.focus);
+  const oralRig = createSharkOralRig(materials);
+  shark.add(oralRig.group, oralRig.focus);
 
   const gillGeometry = new BoxGeometry(0.018, 0.22, 0.025);
   for (const side of [-1, 1]) {
@@ -930,9 +1072,12 @@ export function createSharkModel(materials: MaterialLibrary): Group {
   shark.userData.body = body;
   shark.userData.facialFocus = facialFocus;
   shark.userData.eyeMeshes = eyeMeshes;
-  shark.userData.toothMesh = teeth.mesh;
-  shark.userData.toothFocus = teeth.focus;
-  shark.userData.toothCount = teeth.mesh.count;
+  shark.userData.lowerJaw = oralRig.lowerJaw;
+  shark.userData.toothMeshes = oralRig.toothMeshes;
+  shark.userData.gumMeshes = oralRig.gumMeshes;
+  shark.userData.toothFocus = oralRig.focus;
+  shark.userData.toothCount = oralRig.toothCount;
+  shark.userData.oralRigVersion = 1;
   shark.userData.harvestMarks = harvestMarks;
   shark.scale.setScalar(0.88);
   return shark;

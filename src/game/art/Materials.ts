@@ -151,6 +151,7 @@ export interface MaterialLibrary {
   saltEtchedPolymer: MeshStandardMaterial;
   fishEye: MeshStandardMaterial;
   sharkMouth: MeshStandardMaterial;
+  sharkGum: MeshStandardMaterial;
   sharkEye: MeshStandardMaterial;
   sharkTooth: MeshStandardMaterial;
   reefSeabed: MeshStandardMaterial;
@@ -1260,6 +1261,18 @@ export function createMaterialLibrary(textures: AssetTextures): MaterialLibrary 
       roughnessMap: textures.sharedPbrAtlas,
       roughness: 0.68,
       metalness: 0,
+      side: DoubleSide,
+    }), SHARED_ATLAS_REGIONS.graywakeMouth),
+    sharkGum: usePackedPbrAtlas(new MeshStandardMaterial({
+      color: 0xffd6dc,
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
+      normalScale: new Vector2(0.32, 0.32),
+      roughnessMap: textures.sharedPbrAtlas,
+      roughness: 0.72,
+      metalness: 0,
+      emissive: 0x130507,
+      emissiveIntensity: 0.18,
       side: DoubleSide,
     }), SHARED_ATLAS_REGIONS.graywakeMouth),
     sharkEye: usePackedPbrAtlas(new MeshStandardMaterial({

@@ -1,4 +1,4 @@
-import { Box3, Group, InstancedMesh, Mesh, MeshBasicMaterial, MeshStandardMaterial, Texture, Vector3 } from 'three';
+import { Box3, CylinderGeometry, Group, InstancedMesh, Mesh, MeshBasicMaterial, MeshStandardMaterial, Texture, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { MaterialLibrary } from './Materials';
 import {
@@ -59,6 +59,7 @@ function createTestMaterials(): MaterialLibrary {
     saltEtchedPolymer: texturedMaterial(),
     fishEye: texturedMaterial(),
     sharkMouth: material(),
+    sharkGum: material(),
     sharkEye: material(),
     sharkTooth: material(),
     reefSeabed: material(),
@@ -152,11 +153,25 @@ describe('procedural model assets', () => {
     const mouth = shark.getObjectByName('shark-mouth-rim') as Mesh;
     expect(mouth.material).toBe(materials.sharkMouth);
     expect(mouth.rotation.x).toBeCloseTo(0);
+    const mouthCavity = shark.getObjectByName('shark-mouth-cavity') as Mesh;
+    expect(mouthCavity.material).toBe(materials.sharkMouth);
+    expect(mouthCavity.geometry).toBeInstanceOf(CylinderGeometry);
+    const cavityParameters = (mouthCavity.geometry as CylinderGeometry).parameters;
+    expect(cavityParameters.openEnded).toBe(true);
+    expect(cavityParameters.radialSegments).toBe(24);
+    expect(cavityParameters.height).toBeCloseTo(0.25);
     expect((shark.getObjectByName('shark-mouth-lining') as Mesh).material).toBe(materials.sharkMouth);
-    const teeth = shark.userData.toothMesh as InstancedMesh;
-    expect(teeth.name).toBe('shark-teeth');
-    expect(teeth.material).toBe(materials.sharkTooth);
-    expect(teeth.count).toBe(9);
+    const toothRows = shark.userData.toothMeshes as InstancedMesh[];
+    expect(toothRows.map((row) => row.name)).toEqual(['shark-teeth-upper', 'shark-teeth-lower']);
+    expect(toothRows.every((row) => row.material === materials.sharkTooth)).toBe(true);
+    expect(toothRows.map((row) => row.count)).toEqual([13, 11]);
+    expect(toothRows[0].geometry).toBe(toothRows[1].geometry);
+    expect(toothRows.reduce((count, row) => count + row.count, 0)).toBe(24);
+    const gums = shark.userData.gumMeshes as Mesh[];
+    expect(gums.map((gum) => gum.name)).toEqual(['shark-gingiva-upper', 'shark-gingiva-lower']);
+    expect(gums.every((gum) => gum.material === materials.sharkGum)).toBe(true);
+    expect(shark.userData.lowerJaw).toBeDefined();
+    expect(shark.userData.oralRigVersion).toBe(1);
     expect(shark.userData.toothFocus).toBeDefined();
     expect((shark.userData.harvestMarks as Mesh[]).every((mark) => mark.material === materials.sharkFlesh)).toBe(true);
   }, 15_000);

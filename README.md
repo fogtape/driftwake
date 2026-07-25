@@ -1,6 +1,6 @@
 # Driftwake
 
-原创桌面网页 3D 海上生存游戏。当前版本为 `0.22.9` 高质量纵向切片，不以基础 Demo 为完成标准。
+原创桌面网页 3D 海上生存游戏。当前版本为 `0.22.10` 高质量纵向切片，不以基础 Demo 为完成标准。
 
 ## 当前内容
 
@@ -33,7 +33,7 @@
 - 潮红湿砖可在同一通风架分批放置、独立计时与收取；回潮熔炉可在矿石炼锭与细砂熔制玻璃之间切换；
 - 金属锭研究会解锁潮铸穿浪矛和宽刃斧；升级消耗旧工具、自动替换快捷栏，并实际提升鲨鱼刺击与砍伐效率；
 - 信号板、潮铸合金与密封铰链可研究潮鸣震叉；按住左键 1.25 秒后在 7.4m 定向锁定内松开，以 1 枚盐差电池和 1 点耐久换取轻伤害与立即驱离；提前松开、缺电或失锁不消耗资源；
-- 原创程序深潮鲨拥有巡游、预兆、筏体/结构/网具择靶、水中扑咬、分级矛具命中与驱离；鼻端朝向已统一到真实运动目标，侧前向圆瞳眼片、正向口缘/鳃衬、主体真皮齿和 5 上排 + 4 下排的牙釉实例均使用 Image 2 high PBR，主体以 packed albedo/roughness + normal 两图运行；每轮攻击使用明确的蓄势/咬合/回摆阶段与最多两次结算，矛具在青色窗口起手可用完整前摇打断攻击，扑空、反击和普通命中具有独立声画反馈；致命刺击后会侧翻成 52 秒可采集鲨体，按住 `E` 依次割取 3 份鲨肉、1 张鲨皮和 2 枚鲨齿，浪面或镜头造成的瞬时失焦只暂停进度，重新对准后继续；
+- 原创程序深潮鲨拥有巡游、预兆、筏体/结构/网具择靶、水中扑咬、分级矛具命中与驱离；鼻端朝向已统一到真实运动目标，侧前向圆瞳眼片、正向口缘/鳃衬、主体真皮齿和 24 颗牙釉齿（上颌 13、下颌 11 的主/次两层）均使用 Image 2 high PBR，代码原生口腔还具有两条牙龈带、可动下颌和有深度的内腔，主体以 packed albedo/roughness + normal 两图运行；每轮攻击使用明确的蓄势/咬合/回摆阶段与最多两次结算，矛具在青色窗口起手可用完整前摇打断攻击，扑空、反击和普通命中具有独立声画反馈；致命刺击后会侧翻成 52 秒可采集鲨体，按住 `E` 依次割取 3 份鲨肉、1 张鲨皮和 2 枚鲨齿，浪面或镜头造成的瞬时失焦只暂停进度，重新对准后继续；
 - 鲨体取尽或超时后持续下沉并进入 48 秒重生冷却；满包拒收物资使用专用捆扎模型进入既有八槽海面掉落池，部分接收不会复制或吞物，水中连续鲨咬的击退速度有界；连续三轮真实击杀/采集门禁覆盖失焦冻结、落水等待、自然重生定位、渲染预算、资源池合并和冷启动恢复；
 - 岛屿远景接近、靠岸、无切场登岛、地形坡度与障碍碰撞、返筏后离流和下一岛重生；
 - 18 个确定性岛屿资源节点、石斧三击/金属斧两击砍伐、树木受击/倒伏/树桩、枝料/石料/潮果/纤维拾取和满包保护；
@@ -109,7 +109,7 @@ M9 水下材质门禁复现：`CAPTURE_ONLY=underwater CAPTURE_FAST=1 npm run ca
 
 M9 结构/防御材质门禁复现：`CAPTURE_ONLY=building BUILDING_PART=damage CAPTURE_FAST=1 npm run capture` 验证真实双咬、临界横截面、冷启动与三锤修复；`CAPTURE_ONLY=perimeter-defense-visual CAPTURE_FAST=1 npm run capture` 验证缘甲护栏/紧固件、载货潮兜和 `30/32` 纹理预算。详见 [M9 结构与防御材质验收记录](docs/M9_STRUCTURE_MATERIAL_ACCEPTANCE.md)。
 
-M9 深潮鲨微材质门禁复现：`CAPTURE_ONLY=shark-facial-materials CAPTURE_FAST=1 npm run capture` 读取采用 F 主体皮肤与 9 颗牙釉实例的真实水中反击窗活动 framebuffer，`CAPTURE_ONLY=shark-combat SHARK_COMBAT_STAGE=visual CAPTURE_FAST=1 npm run capture` 锁定正式咬筏 `32/32` 预算与牙列焦点；`CAPTURE_ONLY=shark-loot-water CAPTURE_FAST=1 npm run capture` 在低渲染负载档完成真实击杀、四段割取与存档结算。高画质素材和逻辑场景分档取证，不以降低 4096 图集通过软件 GLES。详见 [M9 生物微材质验收记录](docs/M9_CREATURE_MATERIAL_ACCEPTANCE.md)。
+M9 深潮鲨微材质门禁复现：`CAPTURE_ONLY=shark-facial-materials CAPTURE_FAST=1 npm run capture` 读取采用 F 主体皮肤、24 齿双层口腔和动态下颌的真实水中反击窗活动 framebuffer，`CAPTURE_ONLY=shark-combat SHARK_COMBAT_STAGE=visual CAPTURE_FAST=1 npm run capture` 锁定正式咬筏 `32/32` 预算、牙列焦点与下颌开度；`CAPTURE_ONLY=shark-loot-water CAPTURE_FAST=1 npm run capture` 在低渲染负载档完成真实击杀、四段割取与存档结算。高画质素材和逻辑场景分档取证，不以降低 4096 图集通过软件 GLES。详见 [M9 生物微材质验收记录](docs/M9_CREATURE_MATERIAL_ACCEPTANCE.md)。
 
 ## 资产管线
 

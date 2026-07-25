@@ -2345,52 +2345,94 @@ async function captureDomOverlayPage(page, path) {
   }
 }
 
-async function captureCanvasReadback(page, path) {
-  const frame = await page.evaluate(() => new Promise((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      const canvas = document.querySelector('canvas');
-      const gl = canvas?.getContext('webgl2');
-      if (!canvas || !gl || gl.isContextLost()) {
-        resolve(null);
-        return;
-      }
-      const width = canvas.width;
-      const height = canvas.height;
-      const source = new Uint8Array(width * height * 4);
-      gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, source);
-      const flipped = new Uint8ClampedArray(source.length);
-      const stride = width * 4;
-      for (let y = 0; y < height; y += 1) {
-        flipped.set(source.subarray(y * stride, (y + 1) * stride), (height - y - 1) * stride);
-      }
-      const output = document.createElement('canvas');
-      output.width = width;
-      output.height = height;
-      const context = output.getContext('2d');
-      if (!context) {
-        resolve(null);
-        return;
-      }
-      context.putImageData(new ImageData(flipped, width, height), 0, 0);
-      resolve({
-        width,
-        height,
-        data: output.toDataURL('image/png').split(',', 2)[1],
-      });
-    }));
-  }));
-  if (!frame?.data) throw new Error(`Canvas framebuffer readback failed for ${path}`);
+async function captureCanvasReadback(page, path, compositedFallback = null) {
+  let frame;
+  let readbackError;
+  try {
+    frame = await withCaptureTimeout(page.evaluate(() => new Promise((resolve) => {
+      let settled = false;
+      let fallbackTimer;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        resolve(value);
+      };
+      const readCurrentFramebuffer = () => {
+        const canvas = document.querySelector('canvas');
+        const gl = canvas?.getContext('webgl2');
+        if (!canvas || !gl || gl.isContextLost()) {
+          finish({ error: !canvas ? 'canvas-missing' : !gl ? 'webgl2-missing' : 'context-lost' });
+          return;
+        }
+        const width = canvas.width;
+        const height = canvas.height;
+        const source = new Uint8Array(width * height * 4);
+        gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, source);
+        const flipped = new Uint8ClampedArray(source.length);
+        const stride = width * 4;
+        for (let y = 0; y < height; y += 1) {
+          flipped.set(source.subarray(y * stride, (y + 1) * stride), (height - y - 1) * stride);
+        }
+        const output = document.createElement('canvas');
+        output.width = width;
+        output.height = height;
+        const context = output.getContext('2d');
+        if (!context) {
+          finish({ error: '2d-context-missing' });
+          return;
+        }
+        context.putImageData(new ImageData(flipped, width, height), 0, 0);
+        finish({
+          width,
+          height,
+          data: output.toDataURL('image/png').split(',', 2)[1],
+        });
+      };
+      fallbackTimer = setTimeout(() => finish({ error: 'animation-frame-timeout' }), 6_000);
+      requestAnimationFrame(() => requestAnimationFrame(readCurrentFramebuffer));
+    })), `Canvas framebuffer readback for ${path}`, 12_000);
+  } catch (error) {
+    readbackError = error;
+  }
+  if (!frame?.data) {
+    if (compositedFallback) {
+      await writeFile(path, Buffer.from(compositedFallback, 'base64'));
+      console.warn(`Canvas framebuffer capture fell back to validated composited pixels: ${JSON.stringify({
+        path,
+        reason: readbackError?.message ?? frame?.error ?? 'no image data',
+      })}`);
+      return { source: 'composited-fallback' };
+    }
+    if (readbackError) throw readbackError;
+    throw new Error(`Canvas framebuffer readback failed for ${path}: ${frame?.error ?? 'no image data'}`);
+  }
   await writeFile(path, Buffer.from(frame.data, 'base64'));
   console.log(`Canvas framebuffer capture: ${JSON.stringify({ path, width: frame.width, height: frame.height })}`);
+  return { source: 'framebuffer' };
 }
 
-async function inspectCanvasPixels(page, label) {
+async function inspectCanvasPixels(page, label, { captureRawFrame = false } = {}) {
   let compositedData = null;
-  const result = await page.evaluate(() => {
+  const result = await page.evaluate((includeRawFrame) => {
     const canvas = document.querySelector('canvas');
-    if (!canvas) return { contextLost: true, variation: 0, nonBlack: 0, width: 0, height: 0 };
+    if (!canvas) return {
+      contextLost: true,
+      variation: 0,
+      nonBlack: 0,
+      width: 0,
+      height: 0,
+      rawFrame: null,
+    };
     const gl = canvas.getContext('webgl2');
-    if (!gl || gl.isContextLost()) return { contextLost: true, variation: 0, nonBlack: 0, width: canvas.width, height: canvas.height };
+    if (!gl || gl.isContextLost()) return {
+      contextLost: true,
+      variation: 0,
+      nonBlack: 0,
+      width: canvas.width,
+      height: canvas.height,
+      rawFrame: null,
+    };
     const width = Math.min(24, canvas.width);
     const height = Math.min(24, canvas.height);
     const pixels = new Uint8Array(width * height * 4);
@@ -2414,13 +2456,39 @@ async function inspectCanvasPixels(page, label) {
         if (luminance > 4) nonBlack += 1;
       }
     }
-    return { contextLost: false, variation: Math.round(max - min), nonBlack, width: canvas.width, height: canvas.height };
-  });
-  console.log(`${label} canvas pixels: ${JSON.stringify(result)}`);
+    let rawFrame = null;
+    if (includeRawFrame) {
+      const source = new Uint8Array(canvas.width * canvas.height * 4);
+      gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, source);
+      const flipped = new Uint8ClampedArray(source.length);
+      const stride = canvas.width * 4;
+      for (let y = 0; y < canvas.height; y += 1) {
+        flipped.set(source.subarray(y * stride, (y + 1) * stride), (canvas.height - y - 1) * stride);
+      }
+      const output = document.createElement('canvas');
+      output.width = canvas.width;
+      output.height = canvas.height;
+      const context = output.getContext('2d');
+      if (context) {
+        context.putImageData(new ImageData(flipped, canvas.width, canvas.height), 0, 0);
+        rawFrame = output.toDataURL('image/png').split(',', 2)[1];
+      }
+    }
+    return {
+      contextLost: false,
+      variation: Math.round(max - min),
+      nonBlack,
+      width: canvas.width,
+      height: canvas.height,
+      rawFrame,
+    };
+  }, captureRawFrame);
+  const { rawFrame, ...metrics } = result;
+  console.log(`${label} canvas pixels: ${JSON.stringify(metrics)}`);
   try {
-    assertFrameContent(result, label);
+    assertFrameContent(metrics, label);
   } catch (error) {
-    if (result.contextLost) throw error;
+    if (metrics.contextLost) throw error;
     const cdp = await page.context().newCDPSession(page);
     const screenshot = await cdp.send('Page.captureScreenshot', {
       format: 'png',
@@ -2432,13 +2500,14 @@ async function inspectCanvasPixels(page, label) {
     compositedData = screenshot.data;
     const encoded = {
       contextLost: false,
-      width: result.width,
-      height: result.height,
+      width: metrics.width,
+      height: metrics.height,
       encodedBytes: Math.floor(Buffer.byteLength(screenshot.data, 'base64') * 0.75),
     };
     assertEncodedFrameContent(encoded, label);
     console.log(`${label} composited frame fallback: ${JSON.stringify(encoded)}`);
   }
+  if (captureRawFrame) return { compositedData, rawFrame };
   return compositedData;
 }
 
@@ -7144,9 +7213,13 @@ async function captureUnderwater() {
   if (rendererState.contextHealthy !== 'true' || rendererState.simulationActive !== 'true') {
     throw new Error(`Underwater runtime unhealthy: ${JSON.stringify(rendererState)}`);
   }
-  await inspectCanvasPixels(page, 'underwater');
+  const compositedFrame = await inspectCanvasPixels(page, 'underwater');
   if (process.env.CAPTURE_FAST === '1') {
-    await captureCanvasReadback(page, new URL('underwater-materials-canvas.png', outputDir).pathname);
+    await captureCanvasReadback(
+      page,
+      new URL('underwater-materials-canvas.png', outputDir).pathname,
+      compositedFrame,
+    );
   } else {
     await page.screenshot({ path: new URL('underwater-desktop.png', outputDir).pathname, timeout: 90_000 });
   }
@@ -7915,15 +7988,27 @@ async function capturePerimeterDefenseVisual() {
     throw new Error(`Perimeter defense material gate failed: ${JSON.stringify(materialState)}`);
   }
   console.log(`Perimeter defense materials: ${JSON.stringify(materialState)}`);
+  const frameEvidence = await inspectCanvasPixels(
+    visual.page,
+    'perimeter-defense-visual',
+    { captureRawFrame: true },
+  );
   if (process.env.CAPTURE_FAST === '1') {
-    await captureCanvasReadback(visual.page, new URL('perimeter-materials-canvas.png', outputDir).pathname);
+    const path = new URL('perimeter-materials-canvas.png', outputDir).pathname;
+    if (frameEvidence.compositedData) {
+      await captureCanvasReadback(visual.page, path, frameEvidence.compositedData);
+    } else if (frameEvidence.rawFrame) {
+      await writeFile(path, Buffer.from(frameEvidence.rawFrame, 'base64'));
+      console.log(`Canvas framebuffer capture: ${JSON.stringify({ path, source: 'same-evaluation' })}`);
+    } else {
+      throw new Error('Perimeter defense visual had no validated framebuffer or composited capture data');
+    }
   } else {
     await captureCompositedPage(
       visual.page,
       new URL('perimeter-defense-visual-desktop.png', outputDir).pathname,
     );
   }
-  await inspectCanvasPixels(visual.page, 'perimeter-defense-visual');
   console.log('Perimeter defense visual: three armored foundations, loaded net and reinforcement HUD captured');
   await visual.context.close();
 }
@@ -8346,6 +8431,7 @@ async function captureSharkCombat() {
           textures: Number(mount?.dataset.textures),
           materialMaps: mount?.dataset.sharkMaterialMaps?.split('|') ?? [],
           teeth: Number(mount?.dataset.sharkToothCount),
+          jawOpen: Number(mount?.dataset.sharkJawOpen),
           face,
           faceDot: faceDistance > 0 && Array.isArray(aim.forward)
             ? faceVector.reduce((total, value, index) => total + value * aim.forward[index], 0) / faceDistance
@@ -8378,7 +8464,8 @@ async function captureSharkCombat() {
         || visualState.card.bottom > visualState.viewport.height
         || !Number.isFinite(visualState.textures)
         || visualState.textures > 32
-        || visualState.teeth !== 9
+        || visualState.teeth !== 24
+        || visualState.jawOpen < 0.22
         || visualState.toothDot < 0.75
         || !visualState.materialMaps.includes('[graywake-mouth-lining]')
         || !visualState.materialMaps.includes('[graywake-shark-flesh]')
@@ -8948,6 +9035,7 @@ async function captureSharkFacialMaterials() {
         triangles: Number(mount?.dataset.triangles),
         materialMaps: mount?.dataset.sharkMaterialMaps?.split('|') ?? [],
         teeth: Number(mount?.dataset.sharkToothCount),
+        jawOpen: Number(mount?.dataset.sharkJawOpen),
         eyeDot: eyeDistance > 0 && Array.isArray(aim.forward)
           ? eyeVector.reduce((total, value, index) => total + value * aim.forward[index], 0) / eyeDistance
           : -1,
@@ -8968,7 +9056,8 @@ async function captureSharkFacialMaterials() {
       || state.geometries <= 0
       || state.drawCalls <= 0
       || state.triangles <= 0
-      || state.teeth !== 9
+      || state.teeth !== 24
+      || state.jawOpen < 0.22
       || state.toothDot < 0.75
       || !state.materialMaps.includes('[graywake-mouth-lining]')
       || !state.materialMaps.includes('[graywake-shark-flesh]')

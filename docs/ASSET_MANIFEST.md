@@ -1089,7 +1089,7 @@ Create an original square tileable base-color material texture for a premium sty
 | 运行时 / 审计 | 共享双图集 `graywake-mouth-lining` 区域；独立审计图位于 `artifacts/imagegen/creature-pbr/graywake-mouth-lining*.webp` |
 | 采用源图 | `artifacts/imagegen/graywake-mouth-lining-raw.png` |
 | 模型 / 质量 / 请求与实际尺寸 | `gpt-image-2` / `high` / `2048x2048` / `2048x2048`，项目 `scripts/imagegen` CLI |
-| 用途 | 深潮鲨口缘与六处鳃衬；不再使用纯色 `sharkMouth` |
+| 用途 | 深潮鲨口缘与六处鳃衬；代码原生 `sharkGum` 牙龈带暂时透明复用同一区域，不再使用纯色 `sharkMouth`；专用牙龈源图仍未采用 |
 | 处理方式 | 1024、seam 96、normal 0.52、roughness 72-162、boundary 优化；图集核心 960 + 32 gutter |
 | 检查 | seam x=`4.73/0.83x`、y=`8.32/0.96x`，boundary=`(38,546)`；蓝黑/克制梅红活体组织，无伤口、血液、牙齿或完整动物轮廓 |
 
@@ -1143,7 +1143,7 @@ Avoid: whole shark, multiple eyes, human eye anatomy, cat/reptile slit pupil, ey
 | 运行时 / 审计 | 共享双图集 `graywake-tooth-enamel` 区域；独立审计图位于 `artifacts/imagegen/creature-pbr/graywake-tooth-enamel*.webp` |
 | 采用源图 | `artifacts/imagegen/graywake-tooth-enamel-raw.png`，由候选 B 归档；候选 A 只留在忽略的临时审查目录 |
 | 模型 / 质量 / 请求与实际尺寸 | `gpt-image-2` / `high` / `2048x2048` / `2048x2048`，项目 `scripts/imagegen` CLI 的 edit 链路 |
-| 用途 | 深潮鲨 5 上排 + 4 下排代码原生牙列，以及两块鲨齿战利品板；取代错误复用的帆布材质 |
+| 用途 | 深潮鲨上颌 13 / 下颌 11 的主/次两层代码原生牙列，以及两块鲨齿战利品板；取代错误复用的帆布材质 |
 | 处理方式 | 1024、seam 144、normal 0.22、roughness 116-176、boundary 优化；图集核心 960 + 32 gutter |
 | 检查 | x=`5.61/0.88x`、y=`4.77/1.00x`，boundary=`(1,1)`；候选 A 的宽水平明度带在 2x2 审查中拒绝，候选 B 为连续冷象牙釉质，无牙列、骨骼或烘焙高光轮廓 |
 
@@ -1167,7 +1167,7 @@ TEX-041 至 TEX-052 与既有 TEX-035/TEX-009、TEX-019 鲨肉审计副本当前
 
 ## 代码原生模型与动画
 
-鲨体分段伤痕、海面聚焦环和鲨鱼战利品捆扎浮包继续由代码原生形体驱动；本轮双眼改为侧前向圆面，口缘改为正向轮廓，口腔/虹膜使用 TEX-050/TEX-051，伤痕/鲨肉使用 TEX-019 审定来源副本。TEX-052 绑定一个 9 实例 `InstancedMesh`，以 5 上排 + 4 下排形成可读牙列，战利品的两块鲨齿板复用同一牙釉材质。鲨皮使用 TEX-003 采用 F 的 Image 2 high 审计 PBR，albedo RGB 与其派生 roughness A 精确打包；运行时并不加载历史程序鲨皮。采集段、对象池、耐久与 v18 存档均不依赖视觉对象作为玩法真值。
+鲨体分段伤痕、海面聚焦环和鲨鱼战利品捆扎浮包继续由代码原生形体驱动；本轮双眼改为侧前向圆面，口缘改为正向轮廓，新增开口内腔、可动下颌和两条牙龈带，口腔/虹膜使用 TEX-050/TEX-051，伤痕/鲨肉使用 TEX-019 审定来源副本。TEX-052 由两个共享 `LatheGeometry` 的 `InstancedMesh` 形成上颌 13 / 下颌 11 的主/次两层牙列，战利品的两块鲨齿板复用同一牙釉材质；牙龈用独立 `sharkGum` 材质复用审定 TEX-050，四次专用 `gpt-image-2 high` 请求无输出，不把该复用冒充新源图。鲨皮使用 TEX-003 采用 F 的 Image 2 high 审计 PBR，albedo RGB 与其派生 roughness A 精确打包；运行时并不加载历史程序鲨皮。采集段、对象池、耐久与 v18 存档均不依赖视觉对象作为玩法真值。
 
 | ID | 资产 | 位置 | 当前状态 |
 | --- | --- | --- | --- |
@@ -1178,7 +1178,7 @@ TEX-041 至 TEX-052 与既有 TEX-035/TEX-009、TEX-019 鲨肉审计副本当前
 | MOD-005 | 建造锤：木柄、金属锤头、撞面、拔钉爪、六圈绑带 | `src/game/art/ProceduralModels.ts` | 已进入第一视角建造与修补 |
 | MOD-006 | 木矛：长杆、金属尖端与五圈扎结 | `src/game/art/ProceduralModels.ts` | 已进入第一视角刺击 |
 | MOD-007 | 钓竿、卷线轮、浮标，以及银脊鱼、旗尾梭、琥鳍鲷三种鱼体 | `src/game/art/ProceduralModels.ts` | 三种鱼使用平滑躯体、独立背/胸/尾鳍轮廓、Image 2 鱼皮与虹膜 PBR；体型缩放、挣扎、捕获展示和单实例显隐进入完整循环 |
-| MOD-008 | 深潮鲨：车削躯干、背鳍、胸鳍、尾柄、双叶尾、侧前向眼、正向口缘、鳃、9 实例牙列与三段采集伤痕 | `src/game/art/ProceduralModels.ts` | 15+ 独立网格加一个固定 9 实例牙列批次；眼/口/牙/伤痕材质语义分离，朝向测试、真实袭击、受击、侧翻浮尸与采集阶段已接通；最终蒙皮 DCC 仍未替代 |
+| MOD-008 | 深潮鲨：车削躯干、背鳍、胸鳍、尾柄、双叶尾、侧前向眼、正向口缘、鳃、24 齿 oral rig、牙龈带、内腔与三段采集伤痕 | `src/game/art/ProceduralModels.ts` | 15+ 独立网格、两个共享几何的牙列实例批次、两条牙龈带和下颌 pivot；眼/口/牙/伤痕材质语义分离，朝向/下颌测试、真实袭击、受击、侧翻浮尸与采集阶段已接通；最终蒙皮 DCC 仍未替代 |
 | MOD-009 | 潮汐净水器：绑扎木架、火盆、海水槽、编织蒸馏罩、冷凝沟、滴管与透明杯具 | `src/game/art/ProceduralModels.ts` | 35+ 独立网格，运行阶段驱动海水/净水水位和滴水 |
 | MOD-010 | 折铁烤架：绑扎木架、折铁火盆、九根炉条、横撑、把手与鱼段 | `src/game/art/ProceduralModels.ts` | 40+ 独立网格；折铁/雪松/编织纤维与生/熟/焦鱼肉均使用审定 PBR，平放姿态、真实收取和基础设备近景通过 |
 | MOD-011 | 盐冠浅滩：2115 顶点高度场、PBR 微表面/顶点色分层、5 个岩石地标、22 个灌木和 30 条岸浪 | `src/game/art/ProceduralModels.ts` | TEX-036/TEX-038/TEX-040 已接入接近、靠岸、登岛、离流和重生周期；实例化与 32 纹理预算保持 |

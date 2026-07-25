@@ -28,6 +28,7 @@ function createTestMaterials(): MaterialLibrary {
     wovenFiber: material(),
     sharkSkin: material(),
     sharkMouth: material(),
+    sharkGum: material(),
     sharkEye: material(),
     sharkTooth: material(),
     reefSeabed: material(),

@@ -86,6 +86,13 @@ describe('asset texture loading', () => {
       roughnessMap: textures.sharedPbrAtlas,
     });
     expect(materials.sharkMouth.userData.pbrAtlasRegion).toBe('graywake-mouth-lining');
+    expect(materials.sharkGum).toMatchObject({
+      map: textures.sharedPbrAtlas,
+      normalMap: textures.sharedPbrNormalAtlas,
+      roughnessMap: textures.sharedPbrAtlas,
+    });
+    expect(materials.sharkGum.userData.pbrAtlasRegion).toBe('graywake-mouth-lining');
+    expect(materials.sharkGum.userData.alphaPackedRoughness).toBe(true);
     expect(materials.sharkEye).toMatchObject({
       map: textures.sharedPbrAtlas,
       normalMap: textures.sharedPbrNormalAtlas,

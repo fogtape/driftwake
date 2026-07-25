@@ -34,6 +34,7 @@ function createTestMaterials(): MaterialLibrary {
     wovenFiber: material(),
     sharkSkin: material(),
     sharkMouth: material(),
+    sharkGum: material(),
     sharkEye: material(),
     sharkTooth: material(),
     reefSeabed: material(),
@@ -160,8 +161,10 @@ describe('SharkSystem structure attacks', () => {
       onMutation,
     );
 
+    let maximumJawOpen = 0;
     for (let tick = 0; tick < 2_700 && shark.getDiagnostics().structureDamageEvents < 2; tick += 1) {
       shark.update(tick / 60, 1 / 60);
+      maximumJawOpen = Math.max(maximumJawOpen, shark.getDiagnostics().jawOpen);
     }
 
     const diagnostics = shark.getDiagnostics();
@@ -171,7 +174,7 @@ describe('SharkSystem structure attacks', () => {
       lastRaftTargetHealth: 7,
       structureDamageEvents: 2,
       foundationDamageEvents: 0,
-      toothCount: 9,
+      toothCount: 24,
     });
     const target = new Vector3();
     structures.getLocalImpactPosition(structures.getStructure('exposed-wall')!, target);
@@ -187,6 +190,9 @@ describe('SharkSystem structure attacks', () => {
     const targetDirection = target.sub(center).setY(0).normalize();
     expect(faceDirection.dot(targetDirection)).toBeGreaterThan(0.98);
     expect(teeth.distanceTo(center)).toBeGreaterThan(1.2);
+    expect(diagnostics.jawOpen).toBeGreaterThanOrEqual(0);
+    expect(diagnostics.jawOpen).toBeLessThanOrEqual(1);
+    expect(maximumJawOpen).toBeGreaterThan(0.72);
     expect(structures.getStructure('exposed-wall')?.health).toBe(7);
     expect(raft.getTile({ x: 1, z: 1 })?.health).toBe(100);
     expect(onMutation).toHaveBeenCalledTimes(2);

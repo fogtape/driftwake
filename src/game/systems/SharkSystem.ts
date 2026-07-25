@@ -127,6 +127,7 @@ export interface SharkDiagnostics {
   eyeFocus: [number, number, number];
   toothFocus: [number, number, number];
   toothCount: number;
+  jawOpen: number;
 }
 
 export interface SharkHarvestSettlement extends InventoryMutation {
@@ -136,6 +137,7 @@ export interface SharkHarvestSettlement extends InventoryMutation {
 export class SharkSystem {
   readonly model: Group;
   private readonly tailPivot: Group;
+  private readonly lowerJaw: Group;
   private readonly facialFocus: Object3D;
   private readonly eyeMeshes: Mesh[];
   private readonly toothFocus: Object3D;
@@ -216,6 +218,7 @@ export class SharkSystem {
   private structureDamageEvents = 0;
   private foundationDamageEvents = 0;
   private collectionNetDamageEvents = 0;
+  private jawOpen = 0;
 
   constructor(
     private readonly scene: Scene,
@@ -259,6 +262,7 @@ export class SharkSystem {
       || (exposedWeakNet && exposedWeakNet.health < COLLECTION_NET_MAX_HEALTH * 0.72)
     ) this.nextAttackAt = 6.5;
     this.tailPivot = this.model.userData.tailPivot as Group;
+    this.lowerJaw = this.model.userData.lowerJaw as Group;
     this.harvestMarks = this.model.userData.harvestMarks as Mesh[];
     this.carcassFocusRing.name = 'shark-carcass-focus-ring';
     this.carcassFocusRing.rotation.x = Math.PI / 2;
@@ -277,6 +281,7 @@ export class SharkSystem {
     this.feedbackTimer -= delta;
     if (this.lifecycle !== 'active') {
       this.updateDefeated(time, delta);
+      this.updateJaw(delta);
       if (this.feedbackTimer <= 0) {
         this.feedbackTimer = 0.08;
         this.publishFeedback();
@@ -300,6 +305,7 @@ export class SharkSystem {
       else if (this.mode === 'attacking') this.updateAttack(time);
       else this.updateRetreat(time, delta);
     }
+    this.updateJaw(delta);
 
     if (this.feedbackTimer <= 0) {
       this.feedbackTimer = 0.12;
@@ -443,6 +449,7 @@ export class SharkSystem {
       eyeFocus: [eyeFocus.x, eyeFocus.y, eyeFocus.z],
       toothFocus: [this.toothWorld.x, this.toothWorld.y, this.toothWorld.z],
       toothCount: this.toothCount,
+      jawOpen: this.jawOpen,
     };
   }
 
@@ -1181,6 +1188,21 @@ export class SharkSystem {
     this.mode = mode;
     this.phaseTime = 0;
     this.publishFeedback();
+  }
+
+  private updateJaw(delta: number): void {
+    let target = this.lifecycle === 'active' ? 0.06 : 0.48;
+    if (this.lifecycle === 'active' && this.mode === 'approaching') target = 0.16;
+    if (this.lifecycle === 'active' && this.mode === 'attacking') {
+      if (this.attackPhase === 'windup') target = 0.34 + this.attackProgress * 0.62;
+      else if (this.attackPhase === 'impact') target = 0.04;
+      else if (this.attackPhase === 'recovery') target = 0.26;
+    }
+    const blend = 1 - Math.exp(-Math.max(0, delta) * 13);
+    this.jawOpen = MathUtils.lerp(this.jawOpen, target, blend);
+    this.lowerJaw.rotation.x = -0.03 - this.jawOpen * 0.2;
+    this.lowerJaw.position.y = -0.18 - this.jawOpen * 0.022;
+    this.lowerJaw.position.z = -1.92 + this.jawOpen * 0.012;
   }
 
   private orientModelToward(target: Vector3): void {
