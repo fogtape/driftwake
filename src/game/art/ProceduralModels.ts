@@ -152,6 +152,27 @@ function shadowed<T extends Mesh>(mesh: T): T {
   return mesh;
 }
 
+function tintPbrMaterial(
+  source: MeshStandardMaterial,
+  color: number,
+  roughness: number,
+  name: string,
+): MeshStandardMaterial {
+  const material = source.clone();
+  material.name = name;
+  material.color.setHex(color);
+  material.roughness = roughness;
+  return material;
+}
+
+function pbrMaterialMapSignature(...materials: MeshStandardMaterial[]): string {
+  return materials.flatMap((material) => [
+    material.map?.name ?? 'none',
+    material.normalMap?.name ?? 'none',
+    material.roughnessMap?.name ?? 'none',
+  ]).join('|');
+}
+
 export function createHookModel(materials: MaterialLibrary): Group {
   const group = new Group();
   group.name = 'salvaged-hook';
@@ -427,16 +448,21 @@ export function createAxeModel(materials: MaterialLibrary, upgraded = false): Gr
 export function createFishingBobber(materials: MaterialLibrary): Group {
   const group = new Group();
   group.name = 'fishing-bobber';
-  const cream = new MeshStandardMaterial({ color: 0xe9dfbd, roughness: 0.72 });
-  const coral = new MeshStandardMaterial({ color: 0xd96652, roughness: 0.68 });
+  // The float needs its high-visibility colors, but it still shares the approved polymer PBR triplet.
+  const cream = tintPbrMaterial(materials.saltEtchedPolymer, 0xffe7ca, 0.48, 'fishing-bobber-cream-polymer');
+  const coral = tintPbrMaterial(materials.saltEtchedPolymer, 0xe86445, 0.52, 'fishing-bobber-coral-polymer');
   const body = shadowed(new Mesh(new SphereGeometry(0.115, 14, 10), cream));
+  body.name = 'fishing-bobber-body';
   body.scale.y = 1.22;
   const cap = shadowed(new Mesh(new CylinderGeometry(0.055, 0.075, 0.13, 10), coral));
+  cap.name = 'fishing-bobber-cap';
   cap.position.y = 0.13;
   const eye = shadowed(new Mesh(new TorusGeometry(0.026, 0.007, 5, 12), materials.metal));
+  eye.name = 'fishing-bobber-eye';
   eye.position.y = 0.23;
   eye.rotation.x = Math.PI / 2;
   group.add(body, cap, eye);
+  group.userData.materialMaps = pbrMaterialMapSignature(cream, coral);
   return group;
 }
 
@@ -1153,14 +1179,18 @@ function createTimberDebris(materials: MaterialLibrary): Group {
 function createPolymerDebris(materials: MaterialLibrary): Group {
   const group = new Group();
   const body = shadowed(new Mesh(new RoundedBoxGeometry(0.42, 0.52, 0.22, 4, 0.08), materials.polymer));
+  body.name = 'polymer-debris-body';
   body.rotation.z = 0.12;
   group.add(body);
   const neck = shadowed(new Mesh(new CylinderGeometry(0.07, 0.08, 0.12, 8), materials.polymer));
+  neck.name = 'polymer-debris-neck';
   neck.position.y = 0.31;
-  const capMaterial = new MeshStandardMaterial({ color: 0xe2b95b, roughness: 0.74 });
+  const capMaterial = tintPbrMaterial(materials.saltEtchedPolymer, 0xf0c96f, 0.68, 'polymer-debris-cap');
   const cap = shadowed(new Mesh(new CylinderGeometry(0.078, 0.078, 0.065, 10), capMaterial));
+  cap.name = 'polymer-debris-cap';
   cap.position.y = 0.4;
   group.add(neck, cap);
+  group.userData.materialMaps = pbrMaterialMapSignature(materials.polymer, capMaterial);
   return group;
 }
 

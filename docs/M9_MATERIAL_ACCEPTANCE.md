@@ -7,7 +7,7 @@
 
 ## 本轮范围
 
-本轮只处理 M9 历史材质队列中“第一人称工具与漂流物”P1 项，不把岛屿、水下、结构或生物微材质提前标记完成：
+本轮只处理 M9 历史材质队列中“第一人称工具、漂流物与钓鱼浮漂”P1 项，不把岛屿、水下、结构或生物微材质提前标记完成：
 
 1. 原 `darkWood / rope / metal / rustMetal / polymer` 不再是纯色最终材质；
 2. 新增潮缚索具与盐蚀工具钢两套原创 `gpt-image-2 high` 源图和独立 1024 PBR；
@@ -32,6 +32,7 @@
 - `rope`：潮缚索具 PBR，覆盖钩具、网具、浮包和设备绑扎；
 - `metal / rustMetal`：盐蚀工具钢同源，两套 metalness/roughness/色调分别表达维护钢与锈蚀五金；
 - `polymer`：盐蚀聚合物 PBR，覆盖聚合漂流物、网具浮子和回收容器；
+- `fishing-bobber`：主体与珊瑚顶帽克隆盐蚀聚合物三通道，只保留高可见性颜色与独立粗糙度；聚合漂流物瓶盖使用同一来源，避免小件回退为纯色；
 - `Materials.test.ts` 锁定新增纹理路径、唯一加载以及五类材质的 albedo/normal/roughness 绑定。
 
 ## 浏览器闭环
@@ -40,6 +41,7 @@
 
 ```sh
 CAPTURE_ONLY=salvage CAPTURE_FAST=1 npm run capture
+CAPTURE_ONLY=fishing FISHING_STAGE=variety CAPTURE_FAST=1 FISHING_ROUND_LIMIT=1 FISHING_CAPTURE_BOBBER=1 npm run capture
 ```
 
 当前证据：
@@ -51,6 +53,7 @@ CAPTURE_ONLY=salvage CAPTURE_FAST=1 npm run capture
 - 替代钩完成制作后恢复 `48/48`，状态为 `idle + held`，投射物和绳索均隐藏；
 - `salvage-pickup-canvas.png` 通过双 rAF 后的 WebGL framebuffer 直读生成，不使用 X11 空合成层冒充画面；雪松、深木、手套、索具、工具钢和回收包同场可见。
 - 当前场景 `renderer.info.memory.textures=20`，低于沿用的 M5 发布预算上限 32；门禁会在非有限值或超过 32 时直接失败。
+- 钓鱼单轮在 `1024x640` 软件 WebGL 通过从抛投、鱼讯、咬钩、拉力到结算；浮漂运行时签名为两组 `salt-etched-polymer-albedo|normal|roughness`，冻结帧保留完整钓线、浮漂、海况和 HUD，截图辅助不影响后续咬钩输入。
 
 ## 自动验证
 
@@ -64,6 +67,8 @@ git diff --check
 ```
 
 最终基线：50 个测试文件、322 项测试通过；生产构建和打捞浏览器闭环通过。新增运行时材质为 8 张 WebP（两套三图、雪松两张派生图），新增 2 张 2048 原创源 PNG；没有低质占位或纯色贴图进入该 P1 范围。
+
+`0.22.13` 补遗不新增位图或运行时纹理：以既有 TEX-024 替换浮漂和瓶盖的局部纯色，并通过 29 项受影响模型/漂流物/钓鱼测试、生产构建和实际单轮钓鱼浏览器闭环；本机图像只作为内容、构图与绑定证据，不替代目标真实 GPU。
 
 ## 外部门禁
 

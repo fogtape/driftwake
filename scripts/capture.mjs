@@ -12,6 +12,14 @@ const captureOnly = process.env.CAPTURE_ONLY ?? 'all';
 const desktopWidth = Number(process.env.CAPTURE_WIDTH ?? 1440);
 const desktopHeight = Number(process.env.CAPTURE_HEIGHT ?? 900);
 const captureQuality = process.env.CAPTURE_QUALITY;
+const FISHING_BOBBER_POLYMER_PBR = [
+  'salt-etched-polymer-albedo',
+  'salt-etched-polymer-normal',
+  'salt-etched-polymer-roughness',
+  'salt-etched-polymer-albedo',
+  'salt-etched-polymer-normal',
+  'salt-etched-polymer-roughness',
+].join('|');
 const outputDir = new URL('../artifacts/screenshots/', import.meta.url);
 
 if (captureQuality !== undefined && captureQuality !== 'low' && captureQuality !== 'high') {
@@ -3281,6 +3289,7 @@ async function waitForFishingTerminal(page, roundLabel, timeout = 360_000) {
 
 async function captureFishingRound(page, expected, options = {}) {
   const roundLabel = `${expected.label}/${expected.modelName}`;
+  const expectedRuntime = { ...expected, bobberMaterialMaps: FISHING_BOBBER_POLYMER_PBR };
   console.log(`Fishing round ${roundLabel}: casting`);
   await page.evaluate(() => {
     const canvas = document.querySelector('canvas');
@@ -3298,6 +3307,26 @@ async function captureFishingRound(page, expected, options = {}) {
     120_000,
   );
   console.log(`Fishing round ${roundLabel}: bite window`);
+  if (options.captureBobberVisual) {
+    await setCaptureTimeScale(page, 0.0001);
+    await page.waitForTimeout(150);
+    const bobberState = await page.evaluate(() => {
+      const data = document.querySelector('.game-mount')?.dataset;
+      return {
+        phase: data?.fishingPhase,
+        bobberMaterialMaps: data?.fishingBobberMaterialMaps,
+      };
+    });
+    if (
+      bobberState.phase !== 'nibble'
+      || bobberState.bobberMaterialMaps !== FISHING_BOBBER_POLYMER_PBR
+    ) {
+      throw new Error(`Fishing bobber visual gate failed: ${JSON.stringify(bobberState)}`);
+    }
+    await inspectCanvasPixels(page, 'fishing-bobber-nibble');
+    await captureCompositedPage(page, new URL('fishing-bobber-nibble-desktop.png', outputDir).pathname);
+    await setCaptureTimeScale(page, 4);
+  }
   await page.evaluate(() => {
     document.querySelector('canvas')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
   });
@@ -3309,8 +3338,9 @@ async function captureFishingRound(page, expected, options = {}) {
       && Number(data?.fishingPortions) === target.portions
       && Number(data?.fishingVisibleModels) === 1
       && data?.fishingModelName === target.modelName
-      && data?.fishingMaterialMaps === target.materialMaps;
-  }, 30_000, expected);
+      && data?.fishingMaterialMaps === target.materialMaps
+      && data?.fishingBobberMaterialMaps === target.bobberMaterialMaps;
+  }, 30_000, expectedRuntime);
   console.log(`Fishing round ${roundLabel}: hooked`);
   await page.evaluate(() => {
     document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
@@ -3331,6 +3361,7 @@ async function captureFishingRound(page, expected, options = {}) {
       modelName: data?.fishingModelName,
       modelScale: Number(data?.fishingModelScale),
       materialMaps: data?.fishingMaterialMaps,
+      bobberMaterialMaps: data?.fishingBobberMaterialMaps,
       visualsPrewarmed: data?.fishingVisualsPrewarmed,
       panel: panel ? { left: panel.left, top: panel.top, right: panel.right, bottom: panel.bottom } : null,
       hotbar: hotbar ? { top: hotbar.top, bottom: hotbar.bottom } : null,
@@ -3349,6 +3380,7 @@ async function captureFishingRound(page, expected, options = {}) {
     || profile.visualsPrewarmed !== 'true'
     || profile.pull < 0.12
     || profile.pull > 0.96
+    || profile.bobberMaterialMaps !== FISHING_BOBBER_POLYMER_PBR
     || !profile.label?.includes(expected.label)
   ) {
     throw new Error(`Fishing profile/layout gate failed: ${JSON.stringify({ expected, profile })}`);
@@ -3414,6 +3446,7 @@ async function captureFishingRound(page, expected, options = {}) {
         visibleModels: Number(data?.fishingVisibleModels),
         modelName: data?.fishingModelName,
         materialMaps: data?.fishingMaterialMaps,
+        bobberMaterialMaps: data?.fishingBobberMaterialMaps,
         daylight: Number(data?.daylight),
         weather: data?.weather,
       };
@@ -3423,6 +3456,7 @@ async function captureFishingRound(page, expected, options = {}) {
       || frozenCatch.visibleModels !== 1
       || frozenCatch.modelName !== expected.modelName
       || frozenCatch.materialMaps !== expected.materialMaps
+      || frozenCatch.bobberMaterialMaps !== FISHING_BOBBER_POLYMER_PBR
       || frozenCatch.daylight < 0.9
       || !['calm', 'clearing'].includes(frozenCatch.weather)
     ) {
@@ -3508,6 +3542,7 @@ async function captureFishingVariety() {
     throw new Error(`Unknown FISHING_STAGE: ${stage}`);
   }
   const visual = process.env.CAPTURE_FAST !== '1';
+  const captureBobberVisual = process.env.FISHING_CAPTURE_BOBBER === '1';
   const visualIds = ['silver-spine', 'sailtail-runner', 'amber-fin'];
   const requestedVisualIds = new Set(
     (process.env.FISHING_VISUAL_IDS ?? '')
@@ -3546,8 +3581,8 @@ async function captureFishingVariety() {
       customSave: varietySave,
       simulationTimeScale: 4,
       quality: 'low',
-      width: visual && !targetedVisual ? 1024 : 800,
-      height: visual && !targetedVisual ? 640 : 500,
+      width: captureBobberVisual || (visual && !targetedVisual) ? 1024 : 800,
+      height: captureBobberVisual || (visual && !targetedVisual) ? 640 : 500,
     });
     await enterGame(variety.page);
     await installNoticeHistory(variety.page);
@@ -3589,6 +3624,7 @@ async function captureFishingVariety() {
         captureFightVisual: captureVisual
           && index === 1
           && process.env.FISHING_CAPTURE_FIGHT !== '0',
+        captureBobberVisual: captureBobberVisual && index === 0,
       }));
     }
     await variety.context.close();

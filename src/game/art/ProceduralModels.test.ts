@@ -7,6 +7,7 @@ import {
   createDebrisModel,
   createExplorableIsland,
   createFishFilletModel,
+  createFishingBobber,
   createFishingFishModel,
   createFishingRodModel,
   createGrillModel,
@@ -255,6 +256,28 @@ describe('procedural model assets', () => {
       expect(mappedMeshes.some((mesh) => mesh.geometry.getAttribute('uv')?.count > 0)).toBe(true);
     });
   }, 15_000);
+
+  it('binds the fishing float and polymer salvage cap to the approved polymer PBR triplet', () => {
+    const materials = createTestMaterials();
+    const bobber = createFishingBobber(materials);
+    const polymerDebris = createDebrisModel('polymer', materials);
+    const surfaces = [
+      bobber.getObjectByName('fishing-bobber-body'),
+      bobber.getObjectByName('fishing-bobber-cap'),
+      polymerDebris.getObjectByName('polymer-debris-cap'),
+    ];
+
+    surfaces.forEach((surface) => {
+      expect(surface).toBeInstanceOf(Mesh);
+      const material = (surface as Mesh).material as MeshStandardMaterial;
+      expect(material).not.toBe(materials.saltEtchedPolymer);
+      expect(material.map).toBe(materials.saltEtchedPolymer.map);
+      expect(material.normalMap).toBe(materials.saltEtchedPolymer.normalMap);
+      expect(material.roughnessMap).toBe(materials.saltEtchedPolymer.roughnessMap);
+    });
+    expect(bobber.userData.materialMaps.split('|')).toHaveLength(6);
+    expect(polymerDebris.userData.materialMaps.split('|')).toHaveLength(6);
+  });
 
   it('builds readable purifier and grill assemblies with animated state references', () => {
     const materials = createTestMaterials();

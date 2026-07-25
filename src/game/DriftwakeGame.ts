@@ -309,6 +309,7 @@ export class DriftwakeGame {
     this.mount.dataset.fishingModelName = 'none';
     this.mount.dataset.fishingModelScale = '0';
     this.mount.dataset.fishingMaterialMaps = 'none';
+    this.mount.dataset.fishingBobberMaterialMaps = 'none';
     this.mount.dataset.sharkMaterialMaps = 'none';
     this.mount.dataset.sharkFacialFocus = '[]';
     this.mount.dataset.sharkEyeFocus = '[]';
@@ -1690,6 +1691,7 @@ export class DriftwakeGame {
     this.mount.dataset.fishingModelName = diagnostics?.modelName ?? 'none';
     this.mount.dataset.fishingModelScale = (diagnostics?.modelScale ?? 0).toFixed(3);
     this.mount.dataset.fishingMaterialMaps = diagnostics?.materialMaps ?? 'none';
+    this.mount.dataset.fishingBobberMaterialMaps = diagnostics?.bobberMaterialMaps ?? 'none';
     this.mount.dataset.fishingPhaseTime = (diagnostics?.phaseTime ?? 0).toFixed(3);
   }
 

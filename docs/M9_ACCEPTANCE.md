@@ -1,7 +1,7 @@
 # M9 完整性、存档与发布质量验收记录
 
 > 当前状态：`DOING`（三档存档、备份恢复、生命周期保存、无障碍输入、情境化早期引导、候选发布构建与真实 Context 生命周期，以及七批历史材质和代码原生 24 齿口腔 rig 已闭环；专用牙龈源图、最终可蒙皮 DCC、目标 GPU、长稳与外部玩家证据仍在后续切片）
-> 当前版本：`0.22.12`
+> 当前版本：`0.22.13`
 > 日期：2026-07-25
 
 ## 存档仓库合同
@@ -36,6 +36,12 @@
 - 口渴/饥饿且有补给时临时优先提示供给；鲨鱼、风暴、入水、上岛和首块扩筏完成后目标卡让位或退出；
 - `onboarding` 浏览器门禁验证 1024x640 新航次/冷凝态和 640x720 窄视口，目标卡与岛屿栏、航向栏、右上控制均无交叠；完整证据见 [M9 情境化早期航程引导验收](M9_ONBOARDING_ACCEPTANCE.md)。
 
+## 钓鱼与漂流物微材质闭环
+
+- 钓鱼浮漂主体/顶帽和聚合漂流物瓶盖移除局部纯色材质，改为克隆已批准 TEX-024 盐蚀聚合物的 albedo、normal、roughness；奶油、珊瑚和黄铜色调只服务于远海可见性，不绕过 PBR；
+- 浮漂诊断公开两组 `salt-etched-polymer-albedo|normal|roughness`；模型测试禁止三件表面直接共享可变源材质，浏览器门禁在抛投、鱼讯、咬钩、拉力与结算间持续验证该签名；
+- `FISHING_CAPTURE_BOBBER=1` 只冻结游戏时钟，不打开设置或丢失 Pointer Lock。`1024x640` 证据帧显示钓线、浮漂、风暴海况和 HUD 同时有效，随后同一轮正常结算 `2` 鲜鱼段、钓竿 `54` 耐久。
+
 ## 候选发布与异常恢复闭环
 
 - `release` 模式不携带 sourcemap；Barlow Condensed 与 Manrope 只打包实际需要的 Latin 子集，主 CSS 从约 106 KB 降至 83,243 bytes；
@@ -59,6 +65,7 @@ CAPTURE_ONLY=shark-loot-water CAPTURE_FAST=1 npm run capture
 CAPTURE_ONLY=underwater CAPTURE_FAST=1 npm run capture
 CAPTURE_ONLY=building BUILDING_PART=damage CAPTURE_FAST=1 npm run capture
 CAPTURE_ONLY=perimeter-defense-visual CAPTURE_FAST=1 npm run capture
+CAPTURE_ONLY=fishing FISHING_STAGE=variety CAPTURE_FAST=1 FISHING_ROUND_LIMIT=1 FISHING_CAPTURE_BOBBER=1 npm run capture
 RELEASE_REQUIRE_CLEAN=1 npm run release:check
 ```
 
@@ -67,7 +74,7 @@ RELEASE_REQUIRE_CLEAN=1 npm run release:check
 - `save-slots` 预置一号正常、二号主档损坏/备份有效、三号不可恢复损坏。桌面 `1440x900` 与窄屏 `640x720` 均验证三种状态、档位选择、按钮语义、无横向溢出和无 Canvas/世界 chunk。
 - `save-recovery` 实际进入二号备份航次，确认 `slot-2` 被锁定、恢复标记为真、二号主档重写为 v18、一号仍为 `4260s`、备份为 `1560s`，并验证 synthetic `pagehide` 将上一个主档轮换为备份且钩具为唯一手持状态。
 
-`ProceduralModels.test.ts` 保持对每个模型顶点的完整有限值扫描，但将逐坐标 matcher 聚合为一次失败断言，避免单线程候选发布下的测试框架开销超时；该文件从约 16.7 秒降至 0.4 秒。`0.22.12` 的干净发布检查得到 52 个测试文件、329 项通过、113 个运行时资产、45 个采用源、9 个生产依赖和 51,952,535-byte 候选包；生产 Context 恢复后保持 9/9 collider、有效非空 framebuffer、零外域资源和浏览器错误。Termux/Xvfb 仅用于逻辑、行为、构图和异常恢复正确性证据；真实 GPU 的双 profile、20 分钟长稳、音频输出和无说明玩家流程不以此通过。
+`ProceduralModels.test.ts` 保持对每个模型顶点的完整有限值扫描，但将逐坐标 matcher 聚合为一次失败断言，避免单线程候选发布下的测试框架开销超时；该文件从约 16.7 秒降至 0.4 秒。`0.22.13` 的干净发布检查得到 52 个测试文件、330 项通过、113 个运行时资产、45 个采用源、9 个生产依赖和 51,953,266-byte 候选包；生产 Context 恢复后保持 9/9 collider、有效非空 framebuffer、零外域资源和浏览器错误。Termux/Xvfb 仅用于逻辑、行为、构图和异常恢复正确性证据；真实 GPU 的双 profile、20 分钟长稳、音频输出和无说明玩家流程不以此通过。
 
 ## 后续发布门禁
 

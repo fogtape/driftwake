@@ -5,12 +5,14 @@ import { DebrisField } from './DebrisField';
 
 function createSalvageMaterials(): MaterialLibrary {
   const material = new MeshStandardMaterial();
+  const polymerMaterial = new MeshStandardMaterial();
   return {
     wood: [material, material, material],
     darkWood: material,
     rope: material,
     rustMetal: material,
-    polymer: material,
+    polymer: polymerMaterial,
+    saltEtchedPolymer: polymerMaterial,
     leaf: material,
   } as MaterialLibrary;
 }

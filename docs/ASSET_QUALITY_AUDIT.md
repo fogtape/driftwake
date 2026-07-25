@@ -29,7 +29,7 @@
 | M6 烹饪食材 | 鲜鱼肉、火烤熟鱼肉、焦黑鱼肉 | `APPROVED`：来源、独立 PBR、基础真实收取与三槽生/熟/焦同屏通过 |
 | M6 种植与鸟害 | 盐冠活叶/枯叶/潮果、盐翼体羽/飞羽/角质/虹膜 | `APPROVED`：来源、七套独立 PBR、三状态作物与盐翼鸟近景通过 |
 | M8 远海目的地 | 铁歌漂流阵共鸣青铜、风针观测标电气陶瓷 | `APPROVED`：两套 Image 2 high 源图、六张独立 PBR、2x2/边界/地图相关性与铁歌/风针近景通过 |
-| M9 工具与打捞基础材质 | 风化雪松 PBR、潮缚索具、盐蚀工具钢、盐蚀聚合物 | `APPROVED`：两套新增 Image 2 high 源图、雪松 PBR 补齐、12 张运行图绑定、2x2 与 framebuffer 近景通过 |
+| M9 工具与打捞基础材质 | 风化雪松 PBR、潮缚索具、盐蚀工具钢、盐蚀聚合物，以及钓鱼浮漂/聚合漂流物瓶盖 | `APPROVED`：两套新增 Image 2 high 源图、雪松 PBR 补齐；浮漂双色和瓶盖复用审定聚合物三通道，2x2、运行时绑定与钓鱼 framebuffer 近景通过 |
 | M9 岛屿与岸上资源 | 风暴冲刷岛岩、盐冠棕榈树皮/叶面、野生潮果、岸滩地表 | `APPROVED`：五套 Image 2 high 源图、15 个 PBR 槽、2x2、alpha roughness 精确打包与 `32/32` framebuffer 岛屿场景通过 |
 | M9 水下礁区与资源 | 浸水礁岩、暖/浅两类珊瑚、长叶海草、盐壳金属矿、潮红礁泥、盐冠礁鱼皮 | `APPROVED`：七套 Image 2 high 源图、21 个 PBR 槽、2x2、共享双图集/alpha roughness 与当前 `29/32` framebuffer/收割场景通过 |
 | M9 结构与防御 | 风暴撑紧固合金、风暴伤雪松横截面，并复用雪松/索具/工具钢/导航合金 | `APPROVED`：两套 Image 2 high 源图、临界真实断面、当前 15 区共享双图集、结构/周界 `30/32` 与水下 `29/32` framebuffer 通过 |
@@ -43,7 +43,7 @@
 | P0 | 鲜鱼段与熟鱼排 | 旧食物使用纯色肉材质，生熟焦变化缺少专用表面 | 三套同尺度 Image 2 鱼肉源图、PBR、UV、基础/三槽烹饪场景 | M6 烹饪 | `APPROVED` |
 | P0 | 作物与盐翼盗鸟 | 叶、枯叶、果实、羽毛、翼面和喙以纯色区分 | 作物叶脉/果皮、羽毛/翼面原创贴图组，生长/枯萎/鸟害场景统一 | M6 种植 | `APPROVED` |
 | P0 | 基础烤架、净水器与三槽烤台 | 通用纯色锈铁、金属、聚合物、暗木和绳材质近景重复 | 耐热折铁、盐蚀聚合物，并复用已审定雪松/编织纤维/耐火陶土/导航合金 | M6 烹饪 | `APPROVED` |
-| P1 | 第一人称工具与漂流物 | 原通用 metal / rustMetal / polymer / rope / darkWood 为纯色或不完整 PBR | 盐蚀工具钢、潮缚索具、盐蚀聚合物与三图雪松统一覆盖；普通钢/锈蚀五金使用不同 PBR 参数 | M2/M3/M5 回溯 | `APPROVED` |
+| P1 | 第一人称工具、漂流物与钓鱼浮漂 | 原通用 metal / rustMetal / polymer / rope / darkWood 为纯色或不完整 PBR；浮漂与聚合瓶盖曾遗留局部纯色 | 盐蚀工具钢、潮缚索具、盐蚀聚合物与三图雪松统一覆盖；浮漂保留可见色但复用完整聚合物 PBR | M2/M3/M5 回溯 | `APPROVED` |
 | P1 | 岛屿与岸上资源 | 原 leaf / rock / foliage 及部分采集节点以纯色和顶点色为主 | 岛岩、树皮、叶面、果皮、纤维、矿物与岸滩微表面原创 PBR 组 | M7 回溯 | `APPROVED` |
 | P1 | 水下礁区与资源 | reefRock / coral / seaweed / ore / clay / reefFish 多为纯色材质 | 礁岩、两类珊瑚、海草、矿砂/黏土及鱼群贴图组 | M7 回溯 | `APPROVED` |
 | P1 | 结构与防御设备 | 结构件主要依赖雪松，但连接件、金属、绳和受损变化仍有纯色复用 | 连接件/紧固件/受损截面专用 PBR，并与雪松保持统一 | M4/M5 回溯 | `APPROVED` |
@@ -52,6 +52,13 @@
 | P2 | 深潮鲨牙釉与代码原生 oral rig v1 | TEX-052 已用 Image 2 high 牙釉 PBR 替换帆布误用；上颌 13 / 下颌 11 颗双层实例、下颌 pivot、牙龈带和内腔在真实 windup 可见，战利品两齿板复用同材质 | 来源、1024 PBR、2x2、atlas 区域、24 实例、下颌阶段动画、战利品与浏览器画面/预算必须同时通过 | M9 | `APPROVED` |
 | P2 | 专用牙龈与最终可蒙皮 DCC 鲨齿/口腔层 | 代码原生层不冒充最终可蒙皮牙床、专用牙龈贴图、口腔容积或动画变形资产；四次历史 high 请求和 `0.22.12` 的一次三次有界请求均零输出，后者验证 SDK `Error code: 502` 退避识别；尚无新位图 | 交付专用牙龈 Image 2 high 源图或 DCC 审定贴图、DCC UV、牙床/牙龈/牙齿层、受击与浮尸动画，并在真实 GPU 复验近景 mip 和遮挡 | M9 发布 | `DOING` |
 | P2 | UI 位图与图标 | 当前主要为代码图标和 CSS，不得引入低质位图占位 | 新增位图同样执行 Image 2 high、来源和目标分辨率检查 | M9 | `WATCH` |
+
+## M9 0.22.13 聚合物复用补遗
+
+- 钓鱼浮漂主体/顶帽和聚合漂流物瓶盖不再各自创建无贴图 `MeshStandardMaterial`；它们克隆已批准 TEX-024 盐蚀聚合物的 albedo、normal、roughness，只覆盖可见性所需的奶油/珊瑚/黄铜色调与粗糙度；
+- `ProceduralModels.test.ts` 锁定三件表面均指向同一 PBR 三通道，且不能直接复用可变的源材质实例；
+- `FishingSystem` 将浮漂六槽签名公开给运行时，`CAPTURE_ONLY=fishing FISHING_STAGE=variety CAPTURE_FAST=1 FISHING_ROUND_LIMIT=1 FISHING_CAPTURE_BOBBER=1 npm run capture` 验证抛投、鱼讯、咬钩、拉力和结算全程，同时输出 `artifacts/screenshots/fishing-bobber-nibble-desktop.png`；
+- 本轮没有新位图、没有重采样或图集扩容，因此不记作新的 Image 2 采用源；provider 仍不可用时保持原有专用牙龈 `DOING` 门禁。
 
 ## M6 首批证据
 

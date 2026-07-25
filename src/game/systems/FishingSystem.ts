@@ -49,6 +49,7 @@ export interface FishingDiagnostics {
   modelName: string;
   modelScale: number;
   materialMaps: string;
+  bobberMaterialMaps: string;
   phaseTime: number;
 }
 
@@ -161,6 +162,7 @@ export class FishingSystem {
       modelName: visible[0]?.name ?? 'none',
       modelScale: visible[0]?.scale.x ?? 0,
       materialMaps: String(visible[0]?.userData.materialMaps ?? 'none'),
+      bobberMaterialMaps: String(this.bobber.userData.materialMaps ?? 'none'),
       phaseTime: this.phaseTime,
     };
   }
