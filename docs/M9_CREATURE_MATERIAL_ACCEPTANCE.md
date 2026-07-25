@@ -43,6 +43,8 @@ scripts/imagegen generate --model gpt-image-2 --quality high --size 2048x2048 \
 
 `0.22.10` 没有将未验证位图带入运行时。为专用牙龈 PBR 依次执行四次项目 CLI 请求（`gpt-image-2`、`high`、2048x2048，包含 generate 重试与既有口腔衬层的 edit 变体），provider 均以 `RemoteProtocolError: Server disconnected without sending a response` 失败，未产生可审计输出。未降低模型/质量、未采用程序贴图，也没有占用图集空格；当前 `sharkGum` 是独立材质对象，但透明复用已批准 TEX-050 `graywake-mouth-lining` PBR 的同一 atlas 区域。专用牙龈源图仍为 provider/DCC 交接项。
 
+`0.22.11` 只改进项目包装器的失败恢复：单次 `generate` / `edit` 对 `RemoteProtocolError`、断连、超时、临时服务错误和限流最多执行三次 2/4 秒退避，批量任务沿用上游逻辑，参数、提示词和文件错误立即失败。纯 Python 单元测试、shell 语法、非法配置拒绝和同一 `gpt-image-2 high 2048x2048` dry-run 已通过；本轮没有重发 provider 请求，因此四次零输出仍不构成资产进展。
+
 ## 最终提示词
 
 口缘与鳃衬：

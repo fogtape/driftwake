@@ -9,8 +9,9 @@ AUTH_FILE="$CODEX_HOME/auth.json"
 PYTHON="$PROJECT_ROOT/.venv/bin/python"
 IMAGE_GEN="$CODEX_HOME/skills/.system/imagegen/scripts/image_gen.py"
 COMPAT_PATH="$PROJECT_ROOT/scripts/imagegen_compat"
+RETRY_HELPER="$PROJECT_ROOT/scripts/imagegen_retry.py"
 
-for required in "$CONFIG_FILE" "$AUTH_FILE" "$PYTHON" "$IMAGE_GEN"; do
+for required in "$CONFIG_FILE" "$AUTH_FILE" "$PYTHON" "$IMAGE_GEN" "$RETRY_HELPER"; do
   if [ ! -e "$required" ]; then
     printf 'imagegen configuration is incomplete: missing %s\n' "$required" >&2
     exit 1
@@ -48,4 +49,4 @@ PY
 
 export PYTHONPATH="$COMPAT_PATH${PYTHONPATH:+:$PYTHONPATH}"
 
-exec "$PYTHON" "$IMAGE_GEN" "$@"
+exec "$PYTHON" "$RETRY_HELPER" "$IMAGE_GEN" "$@"

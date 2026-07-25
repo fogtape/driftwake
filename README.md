@@ -1,6 +1,6 @@
 # Driftwake
 
-原创桌面网页 3D 海上生存游戏。当前版本为 `0.22.10` 高质量纵向切片，不以基础 Demo 为完成标准。
+原创桌面网页 3D 海上生存游戏。当前版本为 `0.22.11` 高质量纵向切片，不以基础 Demo 为完成标准。
 
 ## 当前内容
 
@@ -118,6 +118,8 @@ M9 深潮鲨微材质门禁复现：`CAPTURE_ONLY=shark-facial-materials CAPTURE
 ```sh
 scripts/imagegen generate --prompt "..." --quality high --out output/imagegen/example.png
 ```
+
+单次 `generate` / `edit` 仅在 provider 传输断连、超时、临时服务错误或限流时自动重试，默认最多三次、退避为 2/4 秒；不会重试参数、提示词或文件错误，也不会重复整个批量任务。可通过 `IMAGEGEN_MAX_ATTEMPTS=1` 关闭重试。
 
 历史占位材质工具与审定源图的 normal/roughness 派生需要 Pillow。程序材质只能维持显式占位，不能通过最终资产门禁：
 
