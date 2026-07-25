@@ -1277,7 +1277,7 @@ TEX-041 至 TEX-052 与既有 TEX-035/TEX-009、TEX-019 鲨肉审计副本当前
 | CREATURE | 鲨鱼低频预兆、扑咬冲击、武器命中、失力低频、浮尸水层、分段割取和取尽/流失下沉；盐翼盗鸟警报、啄食和惊飞 | `src/game/systems/AudioSystem.ts` |
 | UI | 短促确认、拒绝和工具切换 | `src/game/systems/AudioSystem.ts` |
 
-设置界面分别控制 `master`、`music`、`ambience`、`effects`、`creatures` 和 `ui` 六个增益总线，偏好写入独立版本化配置。世界音效经过随相机世界位置、前向和上方向更新的监听器；M2 打捞事件使用 HRTF 反距离定位，UI 确认不进入空间节点。
+设置界面分别控制 `master`、`music`、`ambience`、`effects`、`creatures` 和 `ui` 六个增益总线，偏好写入独立版本化配置。世界音效经过随相机世界位置、前向和上方向更新的监听器；M2 打捞事件使用 HRTF 反距离定位，UI 确认不进入空间节点。世界低通与 UI 在主增益汇合后统一经过 `-10 dB / 12:1 / 3 ms attack / 200 ms release` 动态压缩器，防止雷声、鲨鱼、结构和 UI 瞬态叠加削波；鱼讯、断线、呼吸/生存警报、鲨鱼蓄势/咬击、鸟害和失败按 `notice / warning / critical / failure` 四级只暂降环境与音乐总线，效果、生态与 UI 提示本身不被压低。纯策略、真实 Chromium 音频图、失焦归零和恢复门禁见 `docs/M9_AUDIO_MIX_ACCEPTANCE.md`。
 
 ## 后续硬任务
 

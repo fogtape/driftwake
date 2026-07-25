@@ -768,11 +768,13 @@ export class DriftwakeGame {
 
   setAudioEnabled(enabled: boolean): void {
     this.audio.setEnabled(enabled);
+    this.syncAudioDiagnostics();
     if (enabled) void this.audio.begin();
   }
 
   setAudioMix(mix: AudioMix): void {
     this.audio.setMix(mix);
+    this.syncAudioDiagnostics();
   }
 
   setMuteOnFocusLoss(_enabled: boolean): void {
@@ -1226,6 +1228,7 @@ export class DriftwakeGame {
       next.advancePlayTime(1);
       this.simulationAccumulator -= 1;
     }
+    this.syncAudioDiagnostics();
   };
 
   private readonly update = (): void => {
@@ -1493,6 +1496,11 @@ export class DriftwakeGame {
       && (!this.windowFocused || document.visibilityState !== 'visible');
     this.audio.setFocusMuted(focusMuted);
     this.mount.dataset.audioFocusMuted = String(focusMuted);
+    this.syncAudioDiagnostics();
+  }
+
+  private syncAudioDiagnostics(): void {
+    this.mount.dataset.audioMixDiagnostics = JSON.stringify(this.audio.getMixDiagnostics());
   }
 
   private syncEquipment(): void {

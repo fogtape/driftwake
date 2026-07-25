@@ -16,6 +16,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const distDirectory = resolve(root, 'dist');
 const artifactDirectory = resolve(root, 'artifacts/release');
 const contextEvidencePath = resolve(artifactDirectory, 'context-lifecycle.json');
+const audioMixEvidencePath = resolve(artifactDirectory, 'audio-mix-lifecycle.json');
 const packageJson = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
 const packageLock = JSON.parse(await readFile(resolve(root, 'package-lock.json'), 'utf8'));
 const registry = JSON.parse(await readFile(resolve(root, 'release/runtime-dependencies.json'), 'utf8'));
@@ -29,6 +30,7 @@ let assetSummary = null;
 let dependencySummary = null;
 let bundleSummary = null;
 let contextLifecycle = null;
+let audioMixLifecycle = null;
 
 async function walkFiles(directory, base = directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -301,6 +303,39 @@ await runStep('production-context-lifecycle', async () => {
   };
 });
 
+await runStep('production-audio-mix-lifecycle', async () => {
+  if (process.env.RELEASE_SKIP_BROWSER === '1') throw new Error('browser audio mix gate was explicitly skipped');
+  const server = await startStaticServer();
+  try {
+    await runCommand('production audio mix lifecycle', process.execPath, ['scripts/audio-mix-regression.mjs'], {
+      env: {
+        DRIFTWAKE_URL: server.url,
+        AUDIO_MIX_EVIDENCE_PATH: audioMixEvidencePath,
+      },
+      timeoutMs: 180_000,
+    });
+  } finally {
+    await server.close();
+  }
+  audioMixLifecycle = JSON.parse(await readFile(audioMixEvidencePath, 'utf8'));
+  requireNoFailures('audio mix lifecycle evidence', [
+    audioMixLifecycle.status !== 'passed' ? 'audio mix browser probe did not pass' : null,
+    !audioMixLifecycle.running?.graphReady ? 'six-bus audio graph was not ready' : null,
+    audioMixLifecycle.running?.contextState !== 'running' ? 'audio context did not enter running state' : null,
+    !audioMixLifecycle.running?.limiter?.ready ? 'mastering limiter was not ready' : null,
+    audioMixLifecycle.muted?.masterTargetGain !== 0 ? 'focus mute did not target silence on the master bus' : null,
+    audioMixLifecycle.resumed?.masterTargetGain !== 0.78 ? 'master bus did not restore its configured target gain' : null,
+    audioMixLifecycle.errors?.length > 0 ? 'audio browser probe reported errors' : null,
+  ].filter(Boolean));
+  return {
+    graphReady: audioMixLifecycle.running.graphReady,
+    contextState: audioMixLifecycle.running.contextState,
+    limiter: audioMixLifecycle.running.limiter,
+    focusMuteTargetGain: audioMixLifecycle.muted.masterTargetGain,
+    resumedTargetGain: audioMixLifecycle.resumed.masterTargetGain,
+  };
+});
+
 if (process.env.RELEASE_REQUIRE_CLEAN === '1' && gitStatus) {
   failures.push(`clean-worktree: tracked or untracked files are present: ${gitStatus.replaceAll('\n', ' | ')}`);
 }
@@ -321,6 +356,7 @@ const report = {
     chunks: bundleSummary.chunks,
   } : null,
   contextLifecycle,
+  audioMixLifecycle,
   externalGates: {
     targetGpuProfiles: softwareRenderer ? 'pending-real-gpu' : 'requires-profile-review',
     twentyMinuteStability: 'pending-target-gpu',

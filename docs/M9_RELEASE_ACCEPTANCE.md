@@ -1,8 +1,8 @@
 # M9 候选发布与异常恢复验收
 
 > 日期：2026-07-25
-> 版本：`0.22.13`
-> 状态：`APPROVED`（候选构建、资产来源、第三方许可、包体预算和生产包 Context 生命周期闭环；目标 GPU、20 分钟长稳、外部玩家与项目自身许可仍是外部门禁）
+> 版本：`0.22.14`
+> 状态：`APPROVED`（候选构建、资产来源、第三方许可、包体预算、生产包 Context 与音频图生命周期闭环；目标 GPU、真实设备混音、20 分钟长稳、外部玩家与项目自身许可仍是外部门禁）
 
 ## 发布合同
 
@@ -11,7 +11,7 @@ npm ci
 RELEASE_REQUIRE_CLEAN=1 npm run release:check
 ```
 
-命令按顺序执行全量 Vitest、TypeScript 与 Vite `release` 构建、资产来源核对、生产依赖许可核对、包体预算和生产包浏览器生命周期门禁。任一阶段失败都会令命令非零退出，同时把失败阶段写入 `artifacts/release/latest.json`。
+命令按顺序执行全量 Vitest、TypeScript 与 Vite `release` 构建、资产来源核对、生产依赖许可核对、包体预算、生产包 Context 生命周期和音频图/母带生命周期门禁。任一阶段失败都会令命令非零退出，同时把失败阶段写入 `artifacts/release/latest.json`。
 
 `release` 模式不生成或引用 sourcemap；普通 `npm run build` 继续保留映射供本地诊断。字体入口收窄为 Barlow Condensed 与 Manrope 的 Latin 子集，中文继续使用现有系统字体回退，不改变字重或界面布局。
 
@@ -34,19 +34,19 @@ RELEASE_REQUIRE_CLEAN=1 npm run release:check
 - 显式 `public/assets` 路径 `28`；
 - 未登记 `0`，缺失 `0`。
 
-本切片没有新增或降级任何位图，因此没有触发新的 Image 2 采用；既有高质量运行时资产原样进入候选包。`0.22.13` 只将钓鱼浮漂和聚合漂流物瓶盖的局部纯色绑定改为既有 TEX-024 聚合物 PBR，未重采样、未扩图集。项目 `scripts/imagegen` 现将 SDK `Error code: 502/503/504` 识别为单次请求的可重试上游失败，纯 Python 回归与 `gpt-image-2 high 2048x2048` dry-run 通过；专用牙龈的一次有界请求三次均返回 upstream 502，未产生输出，不记作采用源图或资产进展。候选发布保留完整顶点有限值扫描并聚合为一次失败断言，`0.22.13` 的单线程基线为 52/330，不以放宽 timeout 掩盖问题。
+本切片没有新增或降级任何位图，因此没有触发新的 Image 2 采用；既有高质量运行时资产原样进入候选包。`0.22.13` 只将钓鱼浮漂和聚合漂流物瓶盖的局部纯色绑定改为既有 TEX-024 聚合物 PBR，未重采样、未扩图集；`0.22.14` 只改造 Web Audio 混音底盘。项目 `scripts/imagegen` 现将 SDK `Error code: 502/503/504` 识别为单次请求的可重试上游失败，纯 Python 回归与 `gpt-image-2 high 2048x2048` dry-run 通过；专用牙龈的一次有界请求三次均返回 upstream 502，未产生输出，不记作采用源图或资产进展。候选发布保留完整顶点有限值扫描并聚合为一次失败断言，`0.22.14` 的单线程基线为 53/334，不以放宽 timeout 掩盖问题。
 
 ## 包体证据
 
-候选包共 `130` 个文件、`51,953,266` bytes，零 `.map` 文件、零 `sourceMappingURL`。硬预算与实测如下：
+候选包共 `130` 个文件、`51,956,509` bytes，零 `.map` 文件、零 `sourceMappingURL`。硬预算与实测如下：
 
 | 分段 | 实测 bytes | 上限 bytes |
 | --- | ---: | ---: |
 | 入口 JavaScript | 408,506 | 471,040 |
-| 世界 JavaScript | 1,078,182 | 1,177,600 |
+| 世界 JavaScript | 1,081,419 | 1,177,600 |
 | Rapier JavaScript | 2,237,380 | 2,304,000 |
 | 应用 CSS | 83,243 | 114,688 |
-| 全候选包 | 51,953,266 | 54,525,952 |
+| 全候选包 | 51,956,509 | 54,525,952 |
 
 大纹理图集属于质量预算，不通过删 normal、降低分辨率或退回占位材质换取包体通过。后续任何分段越界必须解释增长、拆分加载或重新制定预算，不能静默放宽阈值。
 
@@ -59,14 +59,26 @@ RELEASE_REQUIRE_CLEAN=1 npm run release:check
 3. 完成真实跳跃、镜头设置切换和失焦/恢复；
 4. 调用 WebGL `WEBGL_lose_context.loseContext()`，确认 Context 不健康、模拟停止、单 Canvas 保留且继续按钮禁用；
 5. 调用同一扩展 `restoreContext()`，再次由玩家手势继续；
-6. `0.22.13` 最终九个动态筏格对应九个 collider，模拟活动且 framebuffer 有效非空，外域资源请求与浏览器错误均为零。
+6. `0.22.14` 最终九个动态筏格对应九个 collider，模拟活动且 framebuffer 有效非空，外域资源请求与浏览器错误均为零。
 
 本机为 `ANGLE / Mesa llvmpipe / OpenGL ES 3.2`。恢复测试会如实记录软件环境的固定步积压丢弃；这证明生产包能在真实浏览器扩展事件后恢复一致状态，不证明软件渲染达到实时性能。
+
+## 生产包音频生命周期
+
+检查器再用独立 Chromium 上下文从 `dist` 启动真实用户手势和 Web Audio 图：
+
+1. `music / ambience / effects / creatures / ui` 与 master 六级控制、世界低通和母带压缩器必须全部就绪，`AudioContext.state=running`；
+2. 压缩器参数必须为 `-10 dB / knee 5 / ratio 12:1 / attack 0.003s / release 0.2s`；
+3. 失焦后 `focusMuted=true` 且平滑 master 目标为 `0`；恢复焦点并由继续手势取回模拟后目标回到偏好值 `0.78`；
+4. 三态均不得出现页面或控制台错误。完整状态写入 `audio-mix-lifecycle.json` 与候选报告；四级提示让位的纯策略/时间线由 Vitest 锁定。
+
+该门禁验证拓扑、参数和生命周期，不产生真实设备录音，也不用于宣称响度、HRTF、频响或主观混音通过。
 
 ## 外部门禁
 
 - 真实桌面 GPU 的 1280x720/30 低档与 1920x1080/60 高档 profile，并各复跑 Context Lost/Restore；
 - 两档各 1200 秒原生 rAF 长稳、Heap/纹理/几何/帧率/动态分辨率证据；
+- 真实扬声器与耳机复核六总线、决策提示让位、水下低通、HRTF、峰值与泵音；
 - 3 至 5 名无说明玩家完成 30 至 60 分钟前期流程；
 - 项目所有者选择 Driftwake 原创代码与资产的发行许可，并完成商标/相似性法律复核；
 - 在最终 CDN/静态主机复跑 HTTPS、MIME、缓存、根路径与 localStorage 来源隔离检查。

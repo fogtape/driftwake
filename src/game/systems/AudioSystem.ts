@@ -7,6 +7,14 @@ import type { DebrisKind } from '../art/ProceduralModels';
 import type { FailureCause } from '../domain/failure';
 import type { ToolId } from '../domain/items';
 import type { SignalTargetId } from '../domain/navigation';
+import {
+  DECISION_DUCK_PROFILES,
+  MASTERING_COMPRESSOR,
+  resolveDecisionDuckTargets,
+  scheduleDecisionDuck,
+  shouldScheduleDecisionCue,
+  type DecisionCuePriority,
+} from '../audio/mix';
 
 export interface AudioPosition {
   x: number;
@@ -21,6 +29,23 @@ export interface SignalDestinationAudioDiagnostics {
   emphasized: boolean;
   layersReady: boolean;
   layerCount: number;
+}
+
+export interface AudioMixDiagnostics {
+  graphReady: boolean;
+  contextState: AudioContextState | 'uninitialized';
+  enabled: boolean;
+  focusMuted: boolean;
+  masterTargetGain: number;
+  worldLowpassHz: number;
+  limiter: typeof MASTERING_COMPRESSOR & { ready: boolean };
+  decisionCue: {
+    priority: DecisionCuePriority | null;
+    active: boolean;
+    ambienceTarget: number;
+    musicTarget: number;
+    releaseAt: number;
+  };
 }
 
 const SIGNAL_DESTINATION_GAINS: Record<SignalTargetId, number> = {
@@ -38,6 +63,7 @@ export class AudioSystem {
   private music: GainNode | null = null;
   private ui: GainNode | null = null;
   private worldFilter: BiquadFilterNode | null = null;
+  private limiter: DynamicsCompressorNode | null = null;
   private fireLoop: GainNode | null = null;
   private steamLoop: GainNode | null = null;
   private islandLoop: GainNode | null = null;
@@ -78,6 +104,8 @@ export class AudioSystem {
     creatures: 0.78,
     ui: 0.56,
   };
+  private lastDecisionCue: DecisionCuePriority | null = null;
+  private decisionDuckReleaseAt = 0;
 
   async begin(): Promise<void> {
     if (!this.context) {
@@ -89,6 +117,7 @@ export class AudioSystem {
       this.music = this.context.createGain();
       this.ui = this.context.createGain();
       this.worldFilter = this.context.createBiquadFilter();
+      this.limiter = this.context.createDynamicsCompressor();
       this.master.gain.value = this.effectiveMasterGain();
       this.ambience.gain.value = this.mix.ambience;
       this.effects.gain.value = this.mix.effects;
@@ -98,13 +127,18 @@ export class AudioSystem {
       this.worldFilter.type = 'lowpass';
       this.worldFilter.frequency.value = 18000;
       this.worldFilter.Q.value = 0.2;
+      this.limiter.threshold.value = MASTERING_COMPRESSOR.threshold;
+      this.limiter.knee.value = MASTERING_COMPRESSOR.knee;
+      this.limiter.ratio.value = MASTERING_COMPRESSOR.ratio;
+      this.limiter.attack.value = MASTERING_COMPRESSOR.attack;
+      this.limiter.release.value = MASTERING_COMPRESSOR.release;
       this.ambience.connect(this.worldFilter);
       this.effects.connect(this.worldFilter);
       this.creatures.connect(this.worldFilter);
       this.music.connect(this.worldFilter);
       this.worldFilter.connect(this.master);
       this.ui.connect(this.master);
-      this.master.connect(this.context.destination);
+      this.master.connect(this.limiter).connect(this.context.destination);
       this.startAmbientLayers();
       this.startDeviceLayers();
       this.startIslandLayer();
@@ -140,6 +174,40 @@ export class AudioSystem {
     this.effects?.gain.setTargetAtTime(mix.effects, now, 0.05);
     this.creatures?.gain.setTargetAtTime(mix.creatures, now, 0.05);
     this.ui?.gain.setTargetAtTime(mix.ui, now, 0.04);
+    if (this.lastDecisionCue && now < this.decisionDuckReleaseAt) this.applyDecisionDucking(this.lastDecisionCue, now);
+  }
+
+  getMixDiagnostics(): AudioMixDiagnostics {
+    const contextTime = this.context?.currentTime ?? 0;
+    const targets = this.lastDecisionCue
+      ? resolveDecisionDuckTargets(this.mix, this.lastDecisionCue)
+      : { ambience: this.mix.ambience, music: this.mix.music };
+    return {
+      graphReady: Boolean(
+        this.context
+        && this.master
+        && this.ambience
+        && this.effects
+        && this.creatures
+        && this.music
+        && this.ui
+        && this.worldFilter
+        && this.limiter
+      ),
+      contextState: this.context?.state ?? 'uninitialized',
+      enabled: this.enabled,
+      focusMuted: this.focusMuted,
+      masterTargetGain: this.effectiveMasterGain(),
+      worldLowpassHz: 18000 - this.underwaterActivity * 16950,
+      limiter: { ...MASTERING_COMPRESSOR, ready: Boolean(this.limiter) },
+      decisionCue: {
+        priority: this.lastDecisionCue,
+        active: Boolean(this.context && this.lastDecisionCue && contextTime < this.decisionDuckReleaseAt),
+        ambienceTarget: targets.ambience,
+        musicTarget: targets.music,
+        releaseAt: this.decisionDuckReleaseAt,
+      },
+    };
   }
 
   update(time: number): void {
@@ -189,6 +257,26 @@ export class AudioSystem {
   private applyMasterGain(timeConstant: number): void {
     if (!this.context || !this.master) return;
     this.master.gain.setTargetAtTime(this.effectiveMasterGain(), this.context.currentTime, timeConstant);
+  }
+
+  private duckDecisionCue(priority: DecisionCuePriority): void {
+    const now = this.context?.currentTime ?? 0;
+    if (!shouldScheduleDecisionCue(this.lastDecisionCue, this.decisionDuckReleaseAt, now, priority)) return;
+    this.lastDecisionCue = priority;
+    if (!this.context) return;
+    this.applyDecisionDucking(priority, now);
+  }
+
+  private applyDecisionDucking(priority: DecisionCuePriority, now: number): void {
+    const profile = DECISION_DUCK_PROFILES[priority];
+    const targets = resolveDecisionDuckTargets(this.mix, priority);
+    const ambienceRelease = this.ambience
+      ? scheduleDecisionDuck(this.ambience.gain, now, targets.ambience, this.mix.ambience, profile)
+      : now;
+    const musicRelease = this.music
+      ? scheduleDecisionDuck(this.music.gain, now, targets.music, this.mix.music, profile)
+      : now;
+    this.decisionDuckReleaseAt = Math.max(ambienceRelease, musicRelease);
   }
 
   playUi(): void {
@@ -342,6 +430,7 @@ export class AudioSystem {
 
   playHookBreak(): void {
     this.emitCaption('绳索断裂');
+    this.duckDecisionCue('warning');
     this.noiseBurst(0.16, 3350, 0.095, 'highpass');
     this.noiseBurst(0.09, 620, 0.065, 'bandpass');
     if (!this.context || !this.effects) return;
@@ -750,6 +839,7 @@ export class AudioSystem {
 
   playSignalArrival(): void {
     this.emitCaption('接收台捕获到新信号');
+    this.duckDecisionCue('notice');
     this.noiseBurst(0.38, 3200, 0.045, 'bandpass');
     if (!this.context || !this.effects) return;
     const now = this.context.currentTime;
@@ -907,6 +997,7 @@ export class AudioSystem {
 
   playBreathWarning(critical: boolean): void {
     this.emitCaption(critical ? '氧气危险' : '呼吸急促');
+    this.duckDecisionCue(critical ? 'critical' : 'warning');
     if (!this.context || !this.effects) return;
     const now = this.context.currentTime;
     for (let index = 0; index < (critical ? 3 : 2); index += 1) {
@@ -930,6 +1021,7 @@ export class AudioSystem {
 
   playSurvivalWarning(need: 'thirst' | 'hunger', critical: boolean): void {
     this.emitCaption(`${need === 'thirst' ? '缺水' : '饥饿'}${critical ? '危险' : '警报'}`);
+    this.duckDecisionCue(critical ? 'critical' : 'warning');
     if (!this.context || !this.effects) return;
     const now = this.context.currentTime;
     if (need === 'thirst') {
@@ -992,6 +1084,7 @@ export class AudioSystem {
   }
 
   playPlayerBite(): void {
+    this.duckDecisionCue('critical');
     this.noiseBurstTo(0.42, 220, 0.24, 'lowpass', this.creatures);
     this.noiseBurstTo(0.18, 1320, 0.11, 'bandpass', this.creatures);
   }
@@ -1278,6 +1371,7 @@ export class AudioSystem {
 
   playCropBirdWarning(): void {
     this.emitCaption('鸟翼逼近作物');
+    this.duckDecisionCue('warning');
     if (!this.context || !this.creatures) return;
     const now = this.context.currentTime;
     [1480, 1920, 1650].forEach((frequency, index) => {
@@ -1339,6 +1433,7 @@ export class AudioSystem {
 
   playNibble(sizeScale = 1): void {
     this.emitCaption(sizeScale >= 1.08 ? '强烈鱼讯' : '鱼讯');
+    this.duckDecisionCue(sizeScale >= 1.08 ? 'warning' : 'notice');
     if (!this.context || !this.effects) return;
     const now = this.context.currentTime;
     const weightPitch = Math.max(0.76, Math.min(1.12, 1.08 - (sizeScale - 0.78) * 0.34));
@@ -1391,6 +1486,7 @@ export class AudioSystem {
 
   playLineBreak(): void {
     this.emitCaption('钓线断裂');
+    this.duckDecisionCue('warning');
     this.noiseBurst(0.18, 2600, 0.08, 'highpass');
     this.noiseBurst(0.09, 520, 0.055, 'bandpass');
   }
@@ -1493,6 +1589,7 @@ export class AudioSystem {
 
   playSharkWarning(): void {
     this.emitCaption('水下搅动，鲨鱼接近');
+    this.duckDecisionCue('warning');
     if (!this.context || !this.creatures) return;
     const now = this.context.currentTime;
     const oscillator = this.context.createOscillator();
@@ -1513,6 +1610,7 @@ export class AudioSystem {
 
   playSharkWindup(playerTarget: boolean, secondBite: boolean): void {
     this.emitCaption(playerTarget ? '鲨鱼正向你蓄势' : secondBite ? '鲨鱼准备再次撕咬' : '鲨鱼正向筏体蓄势');
+    this.duckDecisionCue('critical');
     if (!this.context || !this.creatures) return;
     const now = this.context.currentTime;
     const oscillator = this.context.createOscillator();
@@ -1621,6 +1719,7 @@ export class AudioSystem {
 
   playFailure(cause: FailureCause): void {
     this.emitCaption(cause === 'drowning' ? '水流淹没了你' : cause === 'shark' ? '鲨鱼击倒了你' : '你失去了意识');
+    this.duckDecisionCue('failure');
     if (!this.context || !this.effects) return;
     const target = cause === 'shark' ? this.creatures ?? this.effects : this.effects;
     const underwater = cause === 'drowning';
@@ -1678,6 +1777,7 @@ export class AudioSystem {
     this.music = null;
     this.ui = null;
     this.worldFilter = null;
+    this.limiter = null;
     this.fireLoop = null;
     this.steamLoop = null;
     this.islandLoop = null;
@@ -1690,6 +1790,8 @@ export class AudioSystem {
       delete this.signalDestinationPanners[key as SignalTargetId];
     });
     this.signalDestinationAudio = { targetId: null, proximity: 0, pan: 0, emphasized: false };
+    this.lastDecisionCue = null;
+    this.decisionDuckReleaseAt = 0;
   }
 
   private startAmbientLayers(): void {

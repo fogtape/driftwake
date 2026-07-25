@@ -55,5 +55,14 @@ describe('signal destination audio state', () => {
       '鸟翼逼近作物',
       '鸟翼正在啄食作物',
     ]);
+    expect(audio.getMixDiagnostics()).toMatchObject({
+      graphReady: false,
+      contextState: 'uninitialized',
+      limiter: { ready: false },
+      decisionCue: {
+        priority: 'warning',
+        active: false,
+      },
+    });
   });
 });

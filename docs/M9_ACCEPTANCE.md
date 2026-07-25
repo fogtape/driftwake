@@ -1,7 +1,7 @@
 # M9 完整性、存档与发布质量验收记录
 
-> 当前状态：`DOING`（三档存档、备份恢复、生命周期保存、无障碍输入、情境化早期引导、候选发布构建与真实 Context 生命周期，以及七批历史材质和代码原生 24 齿口腔 rig 已闭环；专用牙龈源图、最终可蒙皮 DCC、目标 GPU、长稳与外部玩家证据仍在后续切片）
-> 当前版本：`0.22.13`
+> 当前状态：`DOING`（三档存档、备份恢复、生命周期保存、无障碍输入、情境化早期引导、候选发布构建与真实 Context 生命周期、全流程母带/决策提示混音，以及七批历史材质和代码原生 24 齿口腔 rig 已闭环；专用牙龈源图、最终可蒙皮 DCC、目标 GPU、长稳与外部玩家证据仍在后续切片）
+> 当前版本：`0.22.14`
 > 日期：2026-07-25
 
 ## 存档仓库合同
@@ -48,9 +48,16 @@
 - 发布检查递归读取 `package-lock.json`，九个生产依赖必须与结构化 SPDX/来源/许可文本清单完全一致；候选包生成完整 `THIRD_PARTY_NOTICES.txt`；
 - 113 个运行时资产、45 个采用 `-raw.png` 源图和 28 条显式运行时路径均通过来源门禁，无缺失或未登记文件；
 - 项目 `scripts/imagegen` 对单次 `generate` / `edit` 的已知传输失败增加有界退避，默认 3 次且不重放批量、参数或文件错误；`0.22.12` 补齐 OpenAI SDK `Error code: 502/503/504` 格式。专用牙龈的一次有界请求实际完成三次调用、均为 upstream 502，未产生新源图，也没有改变专用牙龈/DCC 发布门禁；
-- 候选包 130 个文件、51,952,535 bytes，每个文件写入 SHA-256 清单；入口、世界、Rapier 与 CSS 分别为 `408,506 / 1,077,451 / 2,237,380 / 83,243` bytes；
+- 候选包 130 个文件、51,956,509 bytes，每个文件写入 SHA-256 清单；入口、世界、Rapier 与 CSS 分别为 `408,506 / 1,081,419 / 2,237,380 / 83,243` bytes；
 - 从 `dist` 静态服务验证标题页无 Canvas/世界 chunk，进入世界后使用真实 `WEBGL_lose_context` 扩展丢失并恢复同一上下文；恢复后模拟、九块筏格碰撞和有效画面全部回归，外域资源请求为零；
 - 本机 renderer 为 llvmpipe，真实恢复耗时约 229.6 秒与 51.853 秒模拟积压丢弃只记录为软件正确性证据，不用于宣称目标 GPU 性能。完整合同见 [M9 候选发布与异常恢复验收](M9_RELEASE_ACCEPTANCE.md)。
+
+## 全流程混音与母带安全闭环
+
+- 世界四总线继续先经过水下低通，UI 保持直达主增益；汇合后的总输出新增 `-10 dB / 12:1 / 3 ms attack / 200 ms release` 压缩器，防止风暴、鲨鱼、结构和 UI 瞬态叠加削波；
+- 鱼讯/信号、断线/警报、氧气/鲨鱼蓄势/咬击和失败按四级只暂降环境与音乐，效果、生态和 UI 提示本身保持可读；重叠提示直接重排 Web Audio 参数时间线，只允许同级延长或更高等级抢占，不依赖页面定时器；
+- `test:audio-mix` 在 1024x640 真实 Chromium 用户手势后验证六总线图和压缩器运行；失焦主增益目标为 `0`，继续后恢复 `0.78`，两态图均保持就绪且零浏览器错误；
+- 同一探针已加入 `release:check` 并从生产 `dist` 独立复跑。它只证明图拓扑和状态正确，不替代真实扬声器/耳机听感。完整合同见 [M9 全流程混音与母带安全验收](M9_AUDIO_MIX_ACCEPTANCE.md)。
 
 ## 自动证据
 
@@ -66,6 +73,7 @@ CAPTURE_ONLY=underwater CAPTURE_FAST=1 npm run capture
 CAPTURE_ONLY=building BUILDING_PART=damage CAPTURE_FAST=1 npm run capture
 CAPTURE_ONLY=perimeter-defense-visual CAPTURE_FAST=1 npm run capture
 CAPTURE_ONLY=fishing FISHING_STAGE=variety CAPTURE_FAST=1 FISHING_ROUND_LIMIT=1 FISHING_CAPTURE_BOBBER=1 npm run capture
+npm run test:audio-mix
 RELEASE_REQUIRE_CLEAN=1 npm run release:check
 ```
 
@@ -74,12 +82,12 @@ RELEASE_REQUIRE_CLEAN=1 npm run release:check
 - `save-slots` 预置一号正常、二号主档损坏/备份有效、三号不可恢复损坏。桌面 `1440x900` 与窄屏 `640x720` 均验证三种状态、档位选择、按钮语义、无横向溢出和无 Canvas/世界 chunk。
 - `save-recovery` 实际进入二号备份航次，确认 `slot-2` 被锁定、恢复标记为真、二号主档重写为 v18、一号仍为 `4260s`、备份为 `1560s`，并验证 synthetic `pagehide` 将上一个主档轮换为备份且钩具为唯一手持状态。
 
-`ProceduralModels.test.ts` 保持对每个模型顶点的完整有限值扫描，但将逐坐标 matcher 聚合为一次失败断言，避免单线程候选发布下的测试框架开销超时；该文件从约 16.7 秒降至 0.4 秒。`0.22.13` 的干净发布检查得到 52 个测试文件、330 项通过、113 个运行时资产、45 个采用源、9 个生产依赖和 51,953,266-byte 候选包；生产 Context 恢复后保持 9/9 collider、有效非空 framebuffer、零外域资源和浏览器错误。Termux/Xvfb 仅用于逻辑、行为、构图和异常恢复正确性证据；真实 GPU 的双 profile、20 分钟长稳、音频输出和无说明玩家流程不以此通过。
+`ProceduralModels.test.ts` 保持对每个模型顶点的完整有限值扫描，但将逐坐标 matcher 聚合为一次失败断言，避免单线程候选发布下的测试框架开销超时；该文件从约 16.7 秒降至 0.4 秒。`0.22.14` 的候选发布检查得到 53 个测试文件、334 项通过、113 个运行时资产、45 个采用源、9 个生产依赖和 51,956,509-byte 候选包；生产 Context 恢复后保持 9/9 collider、有效非空 framebuffer、零外域资源和浏览器错误，独立音频页保持六总线/压缩器运行及失焦目标 `0`、恢复目标 `0.78`。Termux/Xvfb 仅用于逻辑、行为、构图、音频图和异常恢复正确性证据；真实 GPU 的双 profile、20 分钟长稳、真实音频输出和无说明玩家流程不以此通过。
 
 ## 后续发布门禁
 
 - 多语言文案与剩余辅助技术验收；无障碍输入、字幕、色觉与减少动态详见 [M9 无障碍验收记录](M9_ACCESSIBILITY_ACCEPTANCE.md)；
-- 全流程混音、灯光、其余历史材质回溯和最终 DCC 替换；工具/打捞整改详见 [M9 材质整改验收记录](M9_MATERIAL_ACCEPTANCE.md)，岛屿/岸上整改详见 [M9 岛屿材质验收记录](M9_ISLAND_MATERIAL_ACCEPTANCE.md)，水下礁区整改详见 [M9 水下材质验收记录](M9_UNDERWATER_MATERIAL_ACCEPTANCE.md)，结构/防御整改详见 [M9 结构与防御材质验收记录](M9_STRUCTURE_MATERIAL_ACCEPTANCE.md)，鲨鱼微材质详见 [M9 生物微材质验收记录](M9_CREATURE_MATERIAL_ACCEPTANCE.md)；
+- 真实设备混音、灯光、其余历史材质回溯和最终 DCC 替换；自动混音闭环见 [M9 全流程混音与母带安全验收](M9_AUDIO_MIX_ACCEPTANCE.md)，工具/打捞整改详见 [M9 材质整改验收记录](M9_MATERIAL_ACCEPTANCE.md)，岛屿/岸上整改详见 [M9 岛屿材质验收记录](M9_ISLAND_MATERIAL_ACCEPTANCE.md)，水下礁区整改详见 [M9 水下材质验收记录](M9_UNDERWATER_MATERIAL_ACCEPTANCE.md)，结构/防御整改详见 [M9 结构与防御材质验收记录](M9_STRUCTURE_MATERIAL_ACCEPTANCE.md)，鲨鱼微材质详见 [M9 生物微材质验收记录](M9_CREATURE_MATERIAL_ACCEPTANCE.md)；
 - 目标真实 GPU 重复 Context Lost/Restore、1280x720/30 与 1920x1080/60 双 profile、20 分钟长稳；
 - 项目所有者明确 Driftwake 原创代码/资产的发布许可，并在实际托管目标复跑静态路由、缓存与 HTTPS 部署检查；
 - 新玩家 30-60 分钟无说明流程、存档选择理解、删除确认理解和恢复信任度。
